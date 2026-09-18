@@ -10,12 +10,26 @@
 require_once dirname(__DIR__) . '/config/config.php';
 checkAuth();
 
-$dir = dirname(__DIR__) . '/photo_report_templates';
+// 🌟 STORAGE FIX: moved under uploads/, the only directory mounted to a persistent
+// Cloud Storage bucket (see cloudbuild.yaml). The old photo_report_templates/ dir
+// was container-local disk, so an uploaded template was lost on every recycle.
+$dir = dirname(__DIR__) . '/uploads/photo_report_templates';
 if (!is_dir($dir)) {
     @mkdir($dir, 0755, true);
 }
+// $filePath/$metaPath always point to the new persistent location and are the
+// ONLY paths ever written to (upload/delete). For reads (info/file), fall back to
+// the legacy container-local file below only if nothing has been uploaded yet
+// to the new location, so an already-uploaded template isn't hidden mid-transition.
 $filePath = $dir . '/YMR_Photo_Report_Template.docx';
 $metaPath = $dir . '/meta.json';
+$legacyDir = dirname(__DIR__) . '/photo_report_templates';
+$readFilePath = $filePath;
+$readMetaPath = $metaPath;
+if (!is_file($filePath) && is_file($legacyDir . '/YMR_Photo_Report_Template.docx')) {
+    $readFilePath = $legacyDir . '/YMR_Photo_Report_Template.docx';
+    $readMetaPath = $legacyDir . '/meta.json';
+}
 
 function prg_tpl_read_meta($metaPath) {
     if (!is_file($metaPath)) return [];
@@ -80,14 +94,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'delete') {
 // ── Info ─────────────────────────────────────────────────────────
 if ($action === 'info') {
     header('Content-Type: application/json; charset=utf-8');
-    if (!is_file($filePath)) {
+    if (!is_file($readFilePath)) {
         echo json_encode(['ok' => false, 'error' => 'not_found', 'is_admin' => ($role === 'Admin')]);
         exit;
     }
-    $meta = prg_tpl_read_meta($metaPath);
-    $name = $meta['name'] ?? basename($filePath);
-    $size = filesize($filePath);
-    $updated = $meta['updated_at'] ?? date('Y-m-d H:i:s', filemtime($filePath));
+    $meta = prg_tpl_read_meta($readMetaPath);
+    $name = $meta['name'] ?? basename($readFilePath);
+    $size = filesize($readFilePath);
+    $updated = $meta['updated_at'] ?? date('Y-m-d H:i:s', filemtime($readFilePath));
     echo json_encode([
         'ok' => true,
         'name' => $name,
@@ -100,19 +114,19 @@ if ($action === 'info') {
 
 // ── File download (binary for JSZip) ─────────────────────────────
 if ($action === 'file') {
-    if (!is_file($filePath)) {
+    if (!is_file($readFilePath)) {
         http_response_code(404);
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['ok' => false, 'error' => 'not_found']);
         exit;
     }
-    $meta = prg_tpl_read_meta($metaPath);
+    $meta = prg_tpl_read_meta($readMetaPath);
     $name = $meta['name'] ?? 'YMR_Photo_Report_Template.docx';
     header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    header('Content-Length: ' . filesize($filePath));
+    header('Content-Length: ' . filesize($readFilePath));
     header('Content-Disposition: inline; filename="' . rawurlencode($name) . '"');
     header('Cache-Control: private, max-age=60');
-    readfile($filePath);
+    readfile($readFilePath);
     exit;
 }
 
