@@ -81,7 +81,10 @@ if ($id > 0) {
             $completeDateRaw = $survey['survey_completed_date'];
             $completeDate = date('d M Y', strtotime($survey['survey_completed_date']));
         }
-        $backUrl = 'completed_detail.php?id=' . $id;
+        // Reachable from both Completed (completed_detail.php) and Pending
+        // Report (report_detail.php) now — send the back button to whichever
+        // one actually matches this survey's current status.
+        $backUrl = (($survey['status'] ?? '') === 'Completed' ? 'completed_detail.php' : 'report_detail.php') . '?id=' . $id;
     }
 }
 
@@ -155,6 +158,7 @@ include 'includes/header.php';
     ?>
 
     <form method="POST" action="generate_invoice.php" id="invoiceForm">
+        <?= csrf_field() ?>
         <input type="hidden" name="vessel" value="<?= sanitize($vesselName) ?>">
         <input type="hidden" name="client" value="<?= sanitize($clientName) ?>">
         <input type="hidden" name="invoice_no" value="<?= sanitize($reportNumber) ?>">

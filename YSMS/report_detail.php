@@ -263,6 +263,14 @@ include 'includes/header.php';
         </form>
     </div>
     <?php endif; ?>
+
+    <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
+    <div class="action-btn-container mb-4 px-3" style="display:flex;flex-direction:column;gap:10px;">
+        <a href="invoice_generator.php?id=<?= (int)$survey['id'] ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" data-testid="generate-invoice-button">
+            <i class="fa-solid fa-file-invoice-dollar me-1"></i> Generate Invoice
+        </a>
+    </div>
+    <?php endif; ?>
     </div><!-- /.detail-bottom-row -->
 
     <!-- 🌟 Confirmation modal shown when Upload and Move is clicked without a report document -->
