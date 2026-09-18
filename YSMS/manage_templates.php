@@ -29,11 +29,16 @@ $template_upload_success = false;
 $template_action_error = '';
 $template_action_success = '';
 
-$target_directory = __DIR__ . '/word_templates';
+// 🌟 STORAGE FIX: templates now live under `uploads/`, which is the ONLY directory
+// mounted to a persistent Cloud Storage bucket (see cloudbuild.yaml → ysms-uploads
+// volume → /var/www/html/YSMS/uploads). The old `word_templates/` and
+// `photo_report_templates/` directories were plain container-local disk, so
+// uploaded templates were silently lost whenever the Cloud Run instance recycled.
+$target_directory = __DIR__ . '/uploads/word_templates';
 if (!is_dir($target_directory)) mkdir($target_directory, 0755, true);
 
 // ── Photo Report Generator template (single system file) ─────────
-$photo_tpl_dir = __DIR__ . '/photo_report_templates';
+$photo_tpl_dir = __DIR__ . '/uploads/photo_report_templates';
 if (!is_dir($photo_tpl_dir)) mkdir($photo_tpl_dir, 0755, true);
 $photo_tpl_file = $photo_tpl_dir . '/YMR_Photo_Report_Template.docx';
 $photo_tpl_meta = $photo_tpl_dir . '/meta.json';
@@ -83,12 +88,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_photo_report_t
 }
 
 // 🌟 టెంప్లేట్ ఫైల్ పాత్ word_templates/ డైరెక్టరీ లోపలే ఉందని నిర్ధారించే హెల్పర్ (path traversal నుండి రక్షణ)
+// Accepts both the new persistent location (uploads/word_templates) and the old
+// container-local one (word_templates), so pre-existing DB rows can still resolve
+// if that file happens to still be present.
 function resolve_template_file_path($relative_path) {
-    $allowed_dir = realpath(__DIR__ . '/word_templates');
+    $allowed_dirs = array_filter([
+        realpath(__DIR__ . '/uploads/word_templates'),
+        realpath(__DIR__ . '/word_templates'),
+    ]);
     $full_path = __DIR__ . '/' . ltrim($relative_path, '/');
     $real_path = realpath($full_path);
-    if ($real_path === false || $allowed_dir === false) return false;
-    if (strpos($real_path, $allowed_dir . DIRECTORY_SEPARATOR) === 0) return $real_path;
+    if ($real_path === false || !$allowed_dirs) return false;
+    foreach ($allowed_dirs as $allowed_dir) {
+        if (strpos($real_path, $allowed_dir . DIRECTORY_SEPARATOR) === 0) return $real_path;
+    }
     return false;
 }
 
@@ -116,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_template'])) {
                         $template_name,
                         $survey_type !== '' ? $survey_type : null,
                         basename($destination),
-                        'word_templates/' . basename($destination),
+                        'uploads/word_templates/' . basename($destination),
                         $_SESSION['user_id'] ?? null,
                     ]);
                     $template_upload_success = true;

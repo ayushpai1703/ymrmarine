@@ -153,8 +153,19 @@ if ($action === 'get_template') {
         }
         $expected_path = __DIR__ . '/../' . $row['file_path'];
         $full_path = realpath($expected_path);
-        $templates_dir = realpath(__DIR__ . '/../word_templates');
-        if (!$full_path || !$templates_dir || strpos($full_path, $templates_dir . DIRECTORY_SEPARATOR) !== 0 || !is_file($full_path)) {
+        // 🌟 STORAGE FIX: templates now live under uploads/word_templates (mounted to a
+        // persistent Cloud Storage bucket per cloudbuild.yaml). The legacy word_templates/
+        // dir is still allowed here so pre-existing DB rows can resolve if that file
+        // happens to still be present on disk.
+        $allowed_dirs = array_filter([
+            realpath(__DIR__ . '/../uploads/word_templates'),
+            realpath(__DIR__ . '/../word_templates'),
+        ]);
+        $in_allowed_dir = false;
+        foreach ($allowed_dirs as $allowed_dir) {
+            if ($full_path && strpos($full_path, $allowed_dir . DIRECTORY_SEPARATOR) === 0) { $in_allowed_dir = true; break; }
+        }
+        if (!$full_path || !$in_allowed_dir || !is_file($full_path)) {
             json_out(['success' => false, 'message' => 'Template missing.', 'debug' => "DB has file_path='" . $row['file_path'] . "' but no file exists on disk at: " . $expected_path]);
         }
         json_out(['success' => true, 'data' => base64_encode(file_get_contents($full_path))]);
