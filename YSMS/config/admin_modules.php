@@ -105,6 +105,13 @@ return [
         ],
     ],
 
+    // 🌟 Add / Edit for Surveyors is handled by the dedicated add_surveyor.php
+    // page (full profile: personal/contact/employment/marine info, photo,
+    // password-reset-link, change history) — admin_controls.php redirects
+    // there instead of opening the generic modal for this module. This
+    // 'fields' list is still used for: the List/Search row rendering below,
+    // and as a fallback if ajax/admin_master.php's generic add/edit is ever
+    // called directly for this module.
     'surveyors' => [
         'label'      => 'Surveyors',
         'singular'   => 'Surveyor',
@@ -115,10 +122,13 @@ return [
         'where'      => 'role_id = 2',
         'order_by'   => 'full_name',
         'fields'     => [
-            ['name' => 'full_name', 'label' => 'Full Name', 'type' => 'text',     'required' => true],
-            ['name' => 'username',  'label' => 'Username',  'type' => 'text',     'required' => true],
-            ['name' => 'password',  'label' => 'Password',  'type' => 'password', 'required' => false, 'hint' => 'Leave blank to keep current password (when editing).'],
-            ['name' => 'status',    'label' => 'Status',    'type' => 'select',   'required' => true, 'options' => ['Active', 'Inactive']],
+            ['name' => 'full_name',   'label' => 'Full Name',   'type' => 'text',     'required' => true],
+            ['name' => 'username',    'label' => 'Username',    'type' => 'text',     'required' => true],
+            ['name' => 'password',    'label' => 'Password',    'type' => 'password', 'required' => false, 'hint' => 'Leave blank to keep current password (when editing).'],
+            ['name' => 'employee_id', 'label' => 'Employee ID', 'type' => 'text',     'required' => false],
+            ['name' => 'designation', 'label' => 'Designation', 'type' => 'text',     'required' => false],
+            ['name' => 'phone',       'label' => 'Phone',       'type' => 'text',     'required' => false],
+            ['name' => 'status',      'label' => 'Status',      'type' => 'select',   'required' => true, 'options' => ['Active', 'Inactive', 'Suspended']],
         ],
         'insert_extra' => ['role_id' => 2],
         'fk_checks'    => [
