@@ -32,6 +32,10 @@ if ($module === 'ports') {
     ensurePortsCountryColumn($db);
     ensurePortAnchorages($db);
 }
+if ($module === 'surveyors') {
+    require_once __DIR__ . '/../includes/surveyor_profile.php';
+    ensureSurveyorProfileColumns($db);
+}
 
 /**
  * Ensure clients.address_line1 / address_line2 exist.
@@ -88,9 +92,20 @@ try {
         $q = trim((string)($_GET['q'] ?? $_POST['q'] ?? ''));
         $extra = [];
         $params = [];
-        if ($q !== '') {
+        if ($q !== '' && $module === 'surveyors') {
+            // Search by name, username, email, Employee ID or phone.
+            $extra[] = "(full_name LIKE ? OR username LIKE ? OR email LIKE ? OR employee_id LIKE ? OR phone LIKE ?)";
+            array_push($params, "%$q%", "%$q%", "%$q%", "%$q%", "%$q%");
+        } elseif ($q !== '') {
             $extra[] = "`$nameField` LIKE ?";
             $params[] = "%$q%";
+        }
+        if ($module === 'surveyors') {
+            $statusFilter = trim((string)($_GET['status_filter'] ?? $_POST['status_filter'] ?? ''));
+            if ($statusFilter !== '' && in_array($statusFilter, ['Active', 'Inactive', 'Suspended'], true)) {
+                $extra[] = "status = ?";
+                $params[] = $statusFilter;
+            }
         }
         $sql = "SELECT * FROM `$table` " . buildWhere($where, $extra) . " ORDER BY `$orderBy` ASC";
         $stmt = $db->prepare($sql);
@@ -192,6 +207,14 @@ try {
                 $chk->execute([$data['username'], $id]);
                 if ($chk->fetchColumn()) {
                     echo json_encode(['success' => false, 'message' => 'Username already exists. Please choose another username.']);
+                    exit;
+                }
+            }
+            if (!empty($data['email'])) {
+                $chk = $db->prepare('SELECT id FROM users WHERE email = ? AND id != ?');
+                $chk->execute([$data['email'], $id]);
+                if ($chk->fetchColumn()) {
+                    echo json_encode(['success' => false, 'message' => 'That email address is already used by another account.']);
                     exit;
                 }
             }
