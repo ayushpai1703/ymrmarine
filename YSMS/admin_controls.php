@@ -179,14 +179,6 @@ include 'includes/header.php';
         <div class="admin-module-panel <?= $key === $default_module ? 'active' : '' ?>" data-module-panel="<?= sanitize($key) ?>" data-testid="admin-panel-<?= sanitize($key) ?>">
             <div class="admin-search-row">
                 <input type="text" class="admin-search-input" placeholder="Search <?= sanitize(strtolower($mod['label'])) ?>..." data-testid="admin-search-<?= sanitize($key) ?>">
-                <?php if ($key === 'surveyors'): ?>
-                    <select class="admin-status-filter" data-testid="admin-status-filter-<?= sanitize($key) ?>" style="flex:0 0 auto;border:1px solid var(--border-color);border-radius:10px;padding:0 10px;font-size:12.5px;background:#f8fafc;">
-                        <option value="">All Statuses</option>
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                        <option value="Suspended">Suspended</option>
-                    </select>
-                <?php endif; ?>
                 <button type="button" class="admin-add-btn" data-testid="admin-add-<?= sanitize($key) ?>"><i class="fa-solid fa-plus"></i> Add</button>
             </div>
             <div class="admin-list-container" data-testid="admin-list-<?= sanitize($key) ?>">
@@ -306,22 +298,19 @@ $(document).ready(function() {
     }
 
     function loadModule(moduleKey, searchTerm) {
-        const $panel = $('[data-module-panel="' + moduleKey + '"]');
-        const $container = $panel.find('.admin-list-container');
+        const $container = $('.admin-list-container').filter(function() {
+            return $(this).closest('[data-module-panel]').data('module-panel') === moduleKey;
+        });
         $container.html('<div class="admin-loading">Loading...</div>');
 
         const isSurveyModule = !!SURVEY_MODULES[moduleKey];
-        const listData = isSurveyModule
-            ? { type: moduleKey, action: 'list', q: searchTerm || '' }
-            : { module: moduleKey, action: 'list', q: searchTerm || '' };
-        if (moduleKey === 'surveyors') {
-            listData.status_filter = $panel.find('.admin-status-filter').val() || '';
-        }
 
         $.ajax({
             url: isSurveyModule ? 'ajax/admin_surveys.php' : 'ajax/admin_master.php',
             method: 'GET',
-            data: listData,
+            data: isSurveyModule
+                ? { type: moduleKey, action: 'list', q: searchTerm || '' }
+                : { module: moduleKey, action: 'list', q: searchTerm || '' },
             dataType: 'json'
         }).done(function(res) {
             if (!res || !res.success) {
@@ -577,12 +566,6 @@ $(document).ready(function() {
             return;
         }
         openForm(key, null);
-    });
-
-    // Surveyors status filter — reload the list on change
-    $('.admin-status-filter').on('change', function() {
-        const key = $(this).closest('[data-module-panel]').data('module-panel');
-        loadModule(key, $('[data-module-panel="' + key + '"] .admin-search-input').val());
     });
 
     // Submit add/edit form
