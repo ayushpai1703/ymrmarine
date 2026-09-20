@@ -21,45 +21,6 @@ $delete_targets = [
     'completed'       => ['status' => 'Completed',      'label' => 'Completed Vessels'],
 ];
 
-// 🌟 One-off Recovery fix (temporary, same lifespan as the rest of this
-// page): zero out VLSFO/LSMGO/Total recovery for specific vessels on
-// request. Shows current values first — Admin picks exactly which survey
-// row to zero, nothing is changed until that row's own button is clicked.
-$recovery_search_terms = ['VOSCO SUNLIGHT', 'STAR ATLAS'];
-$recovery_rows = [];
-function load_recovery_rows(PDO $db, array $terms): array {
-    $where = implode(' OR ', array_fill(0, count($terms), 'vessel_name LIKE ?'));
-    $params = array_map(fn($t) => "%$t%", $terms);
-    $stmt = $db->prepare("SELECT id, vessel_name, status, report_number, vlsfo_recovery, lsmgo_recovery, recovery_amount FROM surveys WHERE $where ORDER BY vessel_name, id");
-    $stmt->execute($params);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-try {
-    $recovery_rows = load_recovery_rows($db, $recovery_search_terms);
-} catch (Throwable $e) {
-    error_log('super_admin_controls recovery lookup: ' . $e->getMessage());
-}
-
-$recovery_message = '';
-$recovery_error = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['zero_recovery'])) {
-    $surveyId = (int)($_POST['survey_id'] ?? 0);
-    if ($surveyId <= 0) {
-        $recovery_error = 'Invalid record.';
-    } else {
-        try {
-            $upd = $db->prepare("UPDATE surveys SET vlsfo_recovery = 0.000, lsmgo_recovery = 0.000, recovery_amount = 0.000 WHERE id = ?");
-            $upd->execute([$surveyId]);
-            $recovery_message = 'Recovery (VLSFO, LSMGO, Total) set to 0.000 MT for survey #' . $surveyId . '.';
-            // Refresh the preview so the page reflects the new value immediately.
-            $recovery_rows = load_recovery_rows($db, $recovery_search_terms);
-        } catch (Throwable $e) {
-            error_log('super_admin_controls zero_recovery: ' . $e->getMessage());
-            $recovery_error = 'Could not update this record. Please try again.';
-        }
-    }
-}
-
 $messages = [];
 $errors = [];
 
@@ -120,25 +81,8 @@ include 'includes/header.php';
         padding: 10px 16px; font-weight: 650; font-size: 13px; white-space: nowrap;
     }
     @media (min-width: 992px) {
-        .sac-banner, .admin-danger-zone, .sac-recovery-zone { max-width: 900px; margin-left: auto; margin-right: auto; }
+        .sac-banner, .admin-danger-zone { max-width: 900px; margin-left: auto; margin-right: auto; }
     }
-    .sac-recovery-zone {
-        margin: 16px 16px 24px;
-        padding: 16px;
-        border: 1px solid var(--border-color);
-        background: #fff;
-        border-radius: 14px;
-    }
-    .sac-recovery-title { color: var(--text-dark); font-weight: 700; font-size: 13px; margin-bottom: 10px; }
-    .sac-recovery-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 10px 0; border-top: 1px dashed var(--border-color); }
-    .sac-recovery-row:first-of-type { border-top: none; }
-    .sac-recovery-label { font-weight: 650; font-size: 13.5px; color: var(--text-dark); }
-    .sac-recovery-copy { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-    .sac-recovery-btn {
-        flex: 0 0 auto; background: var(--accent-purple); color: #fff; border: none; border-radius: 10px;
-        padding: 8px 14px; font-weight: 650; font-size: 12.5px; white-space: nowrap;
-    }
-    .sac-recovery-btn:disabled { background: #94a3b8; }
 </style>
 
 <div class="scroll-content">
@@ -147,36 +91,6 @@ include 'includes/header.php';
     <div class="sac-banner" data-testid="sac-temporary-banner">
         <i class="fa-solid fa-triangle-exclamation"></i>
         <span>Temporary tool — for clearing test data before go-live only. Each action below permanently deletes every record in that category, with no way to undo it. Remove this page once testing is complete.</span>
-    </div>
-
-    <div class="sac-recovery-zone" data-testid="sac-recovery-zone">
-        <div class="sac-recovery-title"><i class="fa-solid fa-droplet text-primary me-1"></i> Zero Out Recovery (VOSCO SUNLIGHT / STAR ATLAS)</div>
-        <?php if ($recovery_message): ?><div class="alert alert-success py-2 mb-2"><?= sanitize($recovery_message) ?></div><?php endif; ?>
-        <?php if ($recovery_error): ?><div class="alert alert-danger py-2 mb-2"><?= sanitize($recovery_error) ?></div><?php endif; ?>
-        <?php if (empty($recovery_rows)): ?>
-            <div class="text-muted" style="font-size:12.5px;">No matching survey found.</div>
-        <?php else: ?>
-            <?php foreach ($recovery_rows as $r):
-                $vlsfo = $r['vlsfo_recovery'];
-                $lsmgo = $r['lsmgo_recovery'];
-                $total = $r['recovery_amount'];
-                $isZero = (abs((float)$vlsfo) < 0.0005) && (abs((float)$lsmgo) < 0.0005) && (abs((float)$total) < 0.0005);
-            ?>
-            <div class="sac-recovery-row" data-testid="sac-recovery-row-<?= (int)$r['id'] ?>">
-                <div>
-                    <div class="sac-recovery-label"><?= sanitize($r['vessel_name']) ?> <span class="text-muted" style="font-weight:500;">(#<?= (int)$r['id'] ?> · <?= sanitize($r['status']) ?><?= $r['report_number'] ? ' · ' . sanitize($r['report_number']) : '' ?>)</span></div>
-                    <div class="sac-recovery-copy">VLSFO: <?= $vlsfo === null ? '—' : sanitize(number_format((float)$vlsfo, 3)) ?> MT &nbsp;·&nbsp; LSMGO: <?= $lsmgo === null ? '—' : sanitize(number_format((float)$lsmgo, 3)) ?> MT &nbsp;·&nbsp; Total: <?= $total === null ? '—' : sanitize(number_format((float)$total, 3)) ?> MT</div>
-                </div>
-                <form method="POST" onsubmit="return confirm('Set VLSFO, LSMGO and Total recovery to 0.000 MT for <?= sanitize(addslashes($r['vessel_name'])) ?> (#<?= (int)$r['id'] ?>)?');">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="survey_id" value="<?= (int)$r['id'] ?>">
-                    <button type="submit" name="zero_recovery" class="sac-recovery-btn" data-testid="sac-zero-recovery-<?= (int)$r['id'] ?>" <?= $isZero ? 'disabled' : '' ?>>
-                        <?= $isZero ? 'Already 0.000' : 'Set to 0.000 MT' ?>
-                    </button>
-                </form>
-            </div>
-            <?php endforeach; ?>
-        <?php endif; ?>
     </div>
 
     <?php foreach ($delete_targets as $key => $cfg): ?>
