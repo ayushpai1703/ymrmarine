@@ -202,6 +202,16 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         </div>
     </div>
 
+    <div class="overview-section" style="margin-top:0;">
+        <div class="global-search-wrap">
+            <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="globalSearchInput" class="search-control" placeholder="Search vessel name, agent, client, port name..." autocomplete="off" data-testid="global-search-input">
+            </div>
+            <div id="globalSearchResults" class="global-search-results"></div>
+        </div>
+    </div>
+
     <div class="overview-section">
         <div class="section-title-row">
             <span class="section-title">Today's Overview</span>
@@ -544,9 +554,94 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
     <?php endif; ?>
 </div>
 
+<script>
+(function() {
+    var input = document.getElementById('globalSearchInput');
+    var box = document.getElementById('globalSearchResults');
+    if (!input || !box) return;
+
+    var statusClassMap = {
+        'Pending Vessel': 'gsr-status-pending-vessel',
+        'Pending Report': 'gsr-status-pending-report',
+        'Completed': 'gsr-status-completed',
+        'Cancelled': 'gsr-status-cancelled'
+    };
+
+    var debounceTimer = null;
+    var activeRequest = null;
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str == null ? '' : String(str);
+        return div.innerHTML;
+    }
+
+    function closeResults() {
+        box.classList.remove('open');
+        box.innerHTML = '';
+    }
+
+    function renderResults(results) {
+        if (!results.length) {
+            box.innerHTML = '<div class="gsr-empty">No matching vessel, agent, client or port found.</div>';
+            box.classList.add('open');
+            return;
+        }
+        var html = '';
+        results.forEach(function(r) {
+            var subParts = [];
+            if (r.client_name) subParts.push(r.client_name);
+            if (r.agent_name) subParts.push(r.agent_name);
+            if (r.port_name) subParts.push(r.port_name);
+            var statusClass = statusClassMap[r.status] || 'gsr-status-pending-vessel';
+            html += '<a class="gsr-item" href="' + escapeHtml(r.detail_url) + '">' +
+                        '<div class="gsr-item-main">' +
+                            '<div class="gsr-item-name">' + escapeHtml(r.vessel_name) + '</div>' +
+                            '<div class="gsr-item-sub">' + escapeHtml(subParts.join(' · ')) + '</div>' +
+                        '</div>' +
+                        '<span class="gsr-item-status ' + statusClass + '">' + escapeHtml(r.status) + '</span>' +
+                    '</a>';
+        });
+        box.innerHTML = html;
+        box.classList.add('open');
+    }
+
+    function runSearch(term) {
+        if (activeRequest) activeRequest.abort();
+        var controller = new AbortController();
+        activeRequest = controller;
+        box.innerHTML = '<div class="gsr-loading">Searching…</div>';
+        box.classList.add('open');
+        fetch('ajax/global_search.php?q=' + encodeURIComponent(term), { signal: controller.signal })
+            .then(function(res) { return res.json(); })
+            .then(function(data) { renderResults(data.results || []); })
+            .catch(function(err) { if (err.name !== 'AbortError') closeResults(); });
+    }
+
+    input.addEventListener('input', function() {
+        var term = input.value.trim();
+        clearTimeout(debounceTimer);
+        if (term.length < 2) { closeResults(); return; }
+        debounceTimer = setTimeout(function() { runSearch(term); }, 280);
+    });
+
+    input.addEventListener('focus', function() {
+        if (input.value.trim().length >= 2 && box.innerHTML !== '') box.classList.add('open');
+    });
+
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') { closeResults(); input.blur(); }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!box.contains(e.target) && e.target !== input) closeResults();
+    });
+})();
+</script>
+
 <?php include 'includes/recovery_detail.php'; ?>
 
-<?php 
+<?php
 include 'includes/nav.php';
 include 'includes/footer.php';
 ?>

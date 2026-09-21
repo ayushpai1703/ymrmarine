@@ -322,6 +322,47 @@ require_once __DIR__ . '/../config/config.php';
         .search-input-wrapper { position: relative; flex: 1; }
         .search-input-wrapper i { position: absolute; left: 12px; top: 12px; color: var(--text-muted); }
         .search-control { width: 100%; background: white; border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 10px 10px 35px; font-size: 13px; }
+
+        /* 🌟 Dashboard global search — vessel/agent/client/port lookup across
+           every stage (Pending Vessel, Pending Report, Completed, Cancelled),
+           with the result's current status shown on the right and a click
+           routing straight to that vessel's own detail page. */
+        .global-search-wrap { position: relative; }
+        .global-search-results {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0; right: 0;
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            box-shadow: 0 16px 34px rgba(15,23,42,.14);
+            z-index: 950;
+            max-height: 360px;
+            overflow-y: auto;
+        }
+        .global-search-results.open { display: block; }
+        .gsr-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 11px 14px;
+            text-decoration: none;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+        }
+        .gsr-item:last-child { border-bottom: none; }
+        .gsr-item:hover, .gsr-item:focus { background: #f8fafc; }
+        .gsr-item-main { min-width: 0; }
+        .gsr-item-name { font-size: 13.5px; font-weight: 700; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .gsr-item-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .gsr-item-status { flex: 0 0 auto; font-size: 10px; font-weight: 700; padding: 4px 9px; border-radius: 20px; white-space: nowrap; }
+        .gsr-status-pending-vessel { background: #eff6ff; color: #1e40af; }
+        .gsr-status-pending-report { background: #fff7ed; color: #c2410c; }
+        .gsr-status-completed { background: #f0fdf4; color: #166534; }
+        .gsr-status-cancelled { background: #fef2f2; color: #dc2626; }
+        .gsr-empty, .gsr-loading { padding: 14px; text-align: center; font-size: 12.5px; color: var(--text-muted); }
         .filter-btn { background: white; border: 1px solid var(--border-color); width: 42px; height: 42px; border-radius: 12px; display: flex; justify-content: center; align-items: center; color: var(--text-dark); }
         .vessel-list-container { padding: 0 20px; }
         .vessel-card { background: white; border-radius: 16px; padding: 15px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.01); cursor: pointer; }
