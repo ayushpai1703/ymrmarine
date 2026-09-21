@@ -239,10 +239,9 @@ include 'includes/header.php';
             padding: 16px 18px;
             box-shadow: 0 2px 8px rgba(15,23,42,.04);
         }
-        .status-update-card {
-            margin: 0 16px 16px !important;
+        .detail-main-row > .status-update-card {
+            margin: 0 !important;
             max-width: none !important;
-            width: calc(100% - 32px);
             padding: 14px 18px !important;
             height: auto !important;
             align-self: start;
@@ -359,20 +358,6 @@ include 'includes/header.php';
         </form>
     </div>
     <?php endif; ?>
-        </div><!-- /.detail-main-row -->
-        <?php if (!empty($remarks_full) && strlen($remarks_full) > 150): ?>
-        <div class="modal fade" id="remarksModal" tabindex="-1" aria-hidden="true" data-testid="vessel-detail-remarks-modal">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h6 class="modal-title fw-bold">Admin Remarks</h6>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body" style="font-size: 13.5px; white-space: pre-wrap;"><?= sanitize($remarks_full) ?></div>
-                </div>
-            </div>
-        </div>
-        <?php endif; ?>
 
     <div class="status-update-card shadow-sm">
         <form action="vessel_detail.php?id=<?= $survey['id'] ?>" method="POST">
@@ -394,7 +379,20 @@ include 'includes/header.php';
             </div>
         </form>
     </div>
-
+        </div><!-- /.detail-main-row -->
+        <?php if (!empty($remarks_full) && strlen($remarks_full) > 150): ?>
+        <div class="modal fade" id="remarksModal" tabindex="-1" aria-hidden="true" data-testid="vessel-detail-remarks-modal">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title fw-bold">Admin Remarks</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" style="font-size: 13.5px; white-space: pre-wrap;"><?= sanitize($remarks_full) ?></div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
 
 
 
