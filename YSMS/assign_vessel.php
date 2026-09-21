@@ -14,12 +14,6 @@ $db = getDB();
 $error = '';
 $success = '';
 
-// 🌟 Paste Email — Auto-fill: Admin only, and only on the "create new" form
-// (not while editing an existing assignment, and never for Client). Admin
-// pastes the raw email text and clicks Auto-fill; see
-// ajax/vessel_email_paste_autofill.php.
-$show_email_panel = !$is_client_role && empty($_GET['edit_id']);
-
 // 🌟 SAFETY NET: లైవ్ డేటాబేస్‌లో `survey_type_ids` కాలమ్ లేకపోతే (database/migration_multi_survey_type.sql
 // రన్ చేయకపోతే) ప్రతి assign attempt ఇక్కడే "Unknown column" SQL error తో ఫెయిల్ అవుతుంది —
 // దీన్నే యూజర్ "database error" గా చూస్తున్నారు. వర్క్‌ఫ్లో/లాజిక్/UI ఏమీ మార్చకుండా, కాలమ్
@@ -277,12 +271,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $agent_name = mb_strtoupper(trim($_POST['agent_name']), 'UTF-8');
     $port_id = (int)$_POST['port_id'];
 
-    // 🌟 Optional IMO Number (used for the Paste Email — Auto-fill panel's
-    // duplicate detection — see ajax/vessel_email_paste_autofill.php). Digits
-    // only, never blocks submission if missing/malformed since it's optional.
-    $imo_number_raw = preg_replace('/[^0-9]/', '', (string)($_POST['imo_number'] ?? ''));
-    $imo_number = ($imo_number_raw !== '' && $imo_number_raw !== null) ? substr($imo_number_raw, 0, 20) : null;
-
     // 🌟 బహుళ Survey Types (checkbox multi-select) — CSV గా వస్తుంది, ఉదా. "3,5,7"
     $survey_type_ids_csv = trim($_POST['survey_type_ids'] ?? '');
     $survey_type_ids_arr = array_values(array_unique(array_filter(array_map('intval', explode(',', $survey_type_ids_csv)))));
@@ -340,11 +328,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $upd = $db->prepare("
                     UPDATE surveys SET
-                        vessel_name = ?, imo_number = ?, client_id = ?, agent_name = ?, surveyor_id = ?,
+                        vessel_name = ?, client_id = ?, agent_name = ?, surveyor_id = ?,
                         survey_type_id = ?, survey_type_ids = ?, port_id = ?, remarks = ?
                     WHERE id = ?
                 ");
-                $upd->execute([$vessel_name, $imo_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $post_edit_id]);
+                $upd->execute([$vessel_name, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $post_edit_id]);
 
                 // Replace the surveyor assignment set entirely with whatever
                 // is selected now (full replace, matching "save this form's
@@ -422,12 +410,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $report_number = generateNextReportNumberForClient($db, (int)$client_id);
                 $stmt = $db->prepare("
-                    INSERT INTO surveys
-                    (vessel_name, imo_number, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?)
+                    INSERT INTO surveys 
+                    (vessel_name, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?)
                 ");
 
-                if ($stmt->execute([$vessel_name, $imo_number, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks])) {
+                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks])) {
                     // Capture id immediately after INSERT (before any other query)
                     $new_survey_id = (int)$db->lastInsertId();
                     if ($new_survey_id <= 0) {
@@ -901,24 +889,6 @@ include 'includes/header.php';
         .searchable-select.open { z-index: 400; }
         .searchable-select.open .ss-panel { z-index: 400; }
     }
-
-    /* Paste Email — Auto-fill panel */
-    .rve-panel { background:#fff; border:1px solid var(--border-color); border-radius:16px; padding:16px; }
-    .rve-header { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
-    .rve-title { font-weight:700; font-size:13.5px; color:var(--text-dark); }
-    .rve-hint { font-size:11px; color:var(--text-muted); margin-top:2px; }
-    .rve-textarea { width:100%; min-height:120px; border:1px solid var(--border-color); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--text-dark); background:#f8fafc; resize:vertical; font-family:inherit; }
-    .rve-textarea:focus { border-color:#3b32b3; background:#fff; outline:none; }
-    .rve-actions { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
-    .rve-fill-btn { flex:1 1 160px; background:#3b32b3; color:#fff; border:none; border-radius:10px; padding:10px 14px; font-weight:700; font-size:13px; }
-    .rve-fill-btn:disabled { opacity:0.6; }
-    .rve-clear-btn { flex:0 0 auto; background:#f1f5f9; color:#64748b; border:none; border-radius:10px; padding:10px 14px; font-weight:700; font-size:13px; }
-    .rve-banner { font-size:12px; padding:10px 12px; border-radius:10px; margin-top:10px; }
-    .rve-banner.rve-banner-error { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
-    .rve-banner.rve-banner-ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
-    @media (min-width: 992px) {
-        .rve-panel { max-width: 900px; margin: 16px auto 0; }
-    }
 </style>
 
 <?php
@@ -929,27 +899,6 @@ include 'includes/top_app_bar.php';
 ?>
 
 <div class="scroll-content">
-    <?php if ($show_email_panel): ?>
-    <!-- 🌟 Paste Email — Auto-fill: paste the vessel job email text, click
-         Auto-fill to populate the form below (including dropdown selections). -->
-    <div class="rve-panel mx-3 mt-3" data-testid="paste-email-panel">
-        <div class="rve-header">
-            <div>
-                <div class="rve-title"><i class="fa-solid fa-envelope-open-text"></i> Paste Email — Auto-fill</div>
-                <div class="rve-hint">Copy the vessel job email (subject + body) and paste it below.</div>
-            </div>
-        </div>
-        <textarea id="rveEmailText" class="rve-textarea" placeholder="Paste the email text here..." data-testid="paste-email-textarea"></textarea>
-        <div class="rve-actions">
-            <button type="button" class="rve-fill-btn" id="rveFillBtn" data-testid="paste-email-autofill-btn">
-                <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-fill
-            </button>
-            <button type="button" class="rve-clear-btn" id="rveClearBtn" data-testid="paste-email-clear-btn">Clear</button>
-        </div>
-        <div id="rveBanner" class="rve-banner" style="display:none;"></div>
-    </div>
-    <?php endif; ?>
-
     <!-- Feedback Alerts -->
     <?php if($success): ?>
         <div class="alert alert-success mx-3 mt-3 py-2" style="font-size:12px;"><?= sanitize($success) ?></div>
@@ -1003,14 +952,6 @@ include 'includes/top_app_bar.php';
             <div class="form-group-custom" id="vesselNameField">
                 <label for="vessel_name">Vessel Name *</label>
                 <input type="text" name="vessel_name" id="vessel_name" value="<?= $edit_mode ? sanitize($edit_survey['vessel_name']) : '' ?>" placeholder="e.g. MV Pacific Dawn" required autocomplete="off" inputmode="text" style="font-size:16px;min-height:48px;">
-                <div id="autoFilledBadge" class="text-success fw-bold" style="font-size:11px;margin-top:6px;display:none;" data-testid="auto-filled-badge">
-                    <i class="fa-solid fa-circle-check"></i> Auto-filled from survey@ymrmarine.com
-                </div>
-            </div>
-
-            <div class="form-group-custom">
-                <label for="imo_number">IMO Number <span class="text-muted fw-normal">(optional)</span></label>
-                <input type="text" name="imo_number" id="imo_number" value="<?= $edit_mode ? sanitize($edit_survey['imo_number'] ?? '') : '' ?>" placeholder="e.g. 9123456" maxlength="20" inputmode="numeric" autocomplete="off">
             </div>
 
                         <?php if ($is_client_role): ?>
@@ -1648,183 +1589,7 @@ include 'includes/top_app_bar.php';
     });
 </script>
 
-<?php if ($show_email_panel): ?>
-<!-- 🌟 "Vessel Already Exists" — exact match (IMO, or vessel name with no conflicting IMO) -->
-<div class="modal fade" id="emailDupExactModal" tabindex="-1" aria-hidden="true" data-testid="email-dup-exact-modal">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title fw-bold"><i class="fa-solid fa-triangle-exclamation text-warning me-1"></i> Vessel Already Exists</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" style="font-size:13.5px;">
-                <div class="bg-light rounded-3 p-2 mb-2" style="font-size:12.5px;">
-                    <div>Vessel: <strong id="edeVessel"></strong></div>
-                    <div>IMO: <strong id="edeImo"></strong></div>
-                    <div>Existing Job: <strong id="edeReportNumber"></strong></div>
-                    <div>Port: <strong id="edePort"></strong></div>
-                    <div>Survey Type: <strong id="edeSurveyType"></strong></div>
-                    <div>Surveyor: <strong id="edeSurveyor"></strong></div>
-                    <div>Status: <strong id="edeStatus"></strong></div>
-                    <div>Created: <strong id="edeCreated"></strong></div>
-                </div>
-            </div>
-            <div class="modal-footer flex-wrap">
-                <a href="#" id="edeOpenExisting" class="btn btn-light border" data-testid="email-dup-exact-open">Open Existing Job</a>
-                <button type="button" class="btn btn-light border" id="edeUseExisting" data-testid="email-dup-exact-use-existing">Use Existing Vessel</button>
-                <button type="button" class="btn btn-primary" id="edeCreateNew" style="background:#3b32b3;border-color:#3b32b3;" data-testid="email-dup-exact-create-new">Create New Assignment</button>
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-testid="email-dup-exact-cancel">Cancel</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 🌟 "Possible Duplicate" — vessel name matches but IMO conflicts -->
-<div class="modal fade" id="emailDupPossibleModal" tabindex="-1" aria-hidden="true" data-testid="email-dup-possible-modal">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title fw-bold"><i class="fa-solid fa-triangle-exclamation text-warning me-1"></i> Possible Duplicate</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" style="font-size:13.5px;">
-                <div class="bg-light rounded-3 p-2 mb-2" style="font-size:12.5px;">
-                    <div>Existing Vessel: <strong id="edpExistingVessel"></strong></div>
-                    <div>Existing IMO: <strong id="edpExistingImo"></strong></div>
-                    <div>Incoming Vessel: <strong id="edpIncomingVessel"></strong></div>
-                    <div>Incoming IMO: <strong id="edpIncomingImo"></strong></div>
-                </div>
-                <p class="mb-0 fw-bold">Is this the same vessel?</p>
-            </div>
-            <div class="modal-footer flex-wrap">
-                <button type="button" class="btn btn-light border" id="edpUseExisting" data-testid="email-dup-possible-use-existing">Yes - Use Existing</button>
-                <button type="button" class="btn btn-primary" id="edpCreateNew" style="background:#3b32b3;border-color:#3b32b3;" data-testid="email-dup-possible-create-new">No - Create New</button>
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-testid="email-dup-possible-cancel">Cancel</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-    const RVE_CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
-
-    $(document).ready(function() {
-        let rvePendingExtracted = null;
-
-        function rveAjax(url, data) {
-            return $.ajax({
-                url: url,
-                method: 'POST',
-                data: data,
-                dataType: 'json',
-                headers: { 'X-CSRF-Token': RVE_CSRF_TOKEN }
-            });
-        }
-
-        function rveFillForm(extracted, suggested) {
-            if (extracted.vessel_name) { $('#vessel_name').val(extracted.vessel_name); }
-            if (extracted.imo_number) { $('#imo_number').val(extracted.imo_number); }
-            if (extracted.agent) { $('input[name="agent_name"]').val(extracted.agent); }
-
-            // Extra fields the current form has no dedicated input for are
-            // appended to Remarks (free text) so nothing extracted is lost.
-            const extraLines = [];
-            const extraMap = {
-                'Call Sign': extracted.call_sign, 'ETA': extracted.eta, 'ETB': extracted.etb,
-                'Cargo': extracted.cargo, 'Client': extracted.client, 'Master': extracted.master_name,
-                'LOA': extracted.loa, 'Draft': extracted.draft, 'DWT': extracted.dwt, 'GT': extracted.gt,
-                'Survey Date': extracted.survey_date
-            };
-            Object.keys(extraMap).forEach(function(k) { if (extraMap[k]) extraLines.push(k + ': ' + extraMap[k]); });
-            if (extracted.additional_instructions) extraLines.push('Instructions: ' + extracted.additional_instructions);
-            if (extraLines.length) {
-                const $remarks = $('textarea[name="remarks"]');
-                const current = $.trim($remarks.val());
-                const block = '— From pasted email —\n' + extraLines.join('\n');
-                $remarks.val(current ? current + '\n\n' + block : block);
-            }
-
-            if (suggested) {
-                if (suggested.client_id) { $('[data-ss-root="client"] .ss-options .ss-option[data-value="' + suggested.client_id + '"]').trigger('click'); }
-                if (suggested.port_id) { $('[data-ss-root="port"] .ss-options .ss-option[data-value="' + suggested.port_id + '"]').trigger('click'); }
-                if (suggested.survey_type_id) { $('[data-ss-root="surveyType"] .ss-options .ss-option[data-value="' + suggested.survey_type_id + '"]').trigger('click'); }
-            }
-
-            $('#autoFilledBadge').show();
-            $('html, body').animate({ scrollTop: 0 }, 300);
-            try { $('.scroll-content')[0].scrollTop = 0; } catch (e) {}
-        }
-
-        $('#rveClearBtn').on('click', function() {
-            $('#rveEmailText').val('');
-            $('#rveBanner').hide();
-        });
-
-        $('#rveFillBtn').on('click', function() {
-            const $btn = $(this);
-            const text = $.trim($('#rveEmailText').val());
-            $('#rveBanner').hide();
-            if (!text) {
-                $('#rveBanner').removeClass('rve-banner-ok').addClass('rve-banner-error').text('Please paste the email text first.').show();
-                return;
-            }
-            $btn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Checking…');
-            rveAjax('ajax/vessel_email_paste_autofill.php', { email_text: text }).done(function(resp) {
-                $btn.prop('disabled', false).html('<i class="fa-solid fa-wand-magic-sparkles"></i> Auto-fill');
-                if (!resp || !resp.ok) {
-                    $('#rveBanner').removeClass('rve-banner-ok').addClass('rve-banner-error').text((resp && resp.error) || 'Could not process this email.').show();
-                    return;
-                }
-                if (resp.duplicate === 'check_failed') {
-                    $('#rveBanner').removeClass('rve-banner-ok').addClass('rve-banner-error').text('⚠ Unable to verify whether this vessel already exists. For safety, no field was auto-filled — please verify manually.').show();
-                    return;
-                }
-                if (resp.duplicate === 'exact' && resp.existing) {
-                    rvePendingExtracted = resp;
-                    $('#edeVessel').text(resp.existing.vessel_name || '—');
-                    $('#edeImo').text(resp.existing.imo_number || '—');
-                    $('#edeReportNumber').text(resp.existing.report_number || 'N/A');
-                    $('#edePort').text(resp.existing.port_name || 'N/A');
-                    $('#edeSurveyType').text(resp.existing.survey_type || 'N/A');
-                    $('#edeSurveyor').text(resp.existing.surveyor || 'N/A');
-                    $('#edeStatus').text(resp.existing.status || 'N/A');
-                    $('#edeCreated').text(resp.existing.created || 'N/A');
-                    $('#edeOpenExisting').attr('href', 'vessel_detail.php?id=' + resp.existing.survey_id);
-                    bootstrap.Modal.getOrCreateInstance(document.getElementById('emailDupExactModal')).show();
-                    return;
-                }
-                if (resp.duplicate === 'possible' && resp.existing) {
-                    rvePendingExtracted = resp;
-                    $('#edpExistingVessel').text(resp.existing.vessel_name || '—');
-                    $('#edpExistingImo').text(resp.existing.imo_number || 'Not available');
-                    $('#edpIncomingVessel').text(resp.extracted.vessel_name || '—');
-                    $('#edpIncomingImo').text(resp.extracted.imo_number || 'Not available');
-                    bootstrap.Modal.getOrCreateInstance(document.getElementById('emailDupPossibleModal')).show();
-                    return;
-                }
-                rveFillForm(resp.extracted, resp.suggested);
-                $('#rveBanner').removeClass('rve-banner-error').addClass('rve-banner-ok').text('✓ Form auto-filled from the pasted email.').show();
-            }).fail(function() {
-                $btn.prop('disabled', false).html('<i class="fa-solid fa-wand-magic-sparkles"></i> Auto-fill');
-                $('#rveBanner').removeClass('rve-banner-ok').addClass('rve-banner-error').text('⚠ Unable to reach the server.').show();
-            });
-        });
-
-        $('#edeCreateNew, #edpCreateNew').on('click', function() {
-            if (rvePendingExtracted) { rveFillForm(rvePendingExtracted.extracted, rvePendingExtracted.suggested); }
-            bootstrap.Modal.getInstance(document.getElementById('emailDupExactModal'))?.hide();
-            bootstrap.Modal.getInstance(document.getElementById('emailDupPossibleModal'))?.hide();
-        });
-        $('#edeUseExisting, #edpUseExisting').on('click', function() {
-            if (rvePendingExtracted && rvePendingExtracted.existing && rvePendingExtracted.existing.survey_id) {
-                window.location.href = 'vessel_detail.php?id=' + rvePendingExtracted.existing.survey_id;
-            }
-        });
-    });
-</script>
-<?php endif; ?>
-
-<?php
+<?php 
 include 'includes/nav.php';
 include 'includes/footer.php';
 ?>
