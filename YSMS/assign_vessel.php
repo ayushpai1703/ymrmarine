@@ -3,6 +3,7 @@ require_once 'config/config.php';
 require_once 'includes/mailer.php';
 require_once 'includes/report_number.php';
 require_once 'includes/notifications.php';
+require_once 'includes/email_account.php';
 checkAuth();
 if (!in_array($_SESSION['role'] ?? '', ['Admin', 'Client'], true)) {
     header('Location: index.php');
@@ -13,6 +14,13 @@ $is_client_role = (($_SESSION['role'] ?? '') === 'Client');
 $db = getDB();
 $error = '';
 $success = '';
+
+// 🌟 Automatic Vessel Assignment from survey@ymrmarine.com — Admin only,
+// and only on the "create new" form (not while editing an existing
+// assignment, and never for Client). See ajax/vessel_emails_list.php /
+// ajax/vessel_email_action.php.
+$show_email_panel = !$is_client_role && empty($_GET['edit_id']);
+$email_account_cfg = $show_email_panel ? getEmailAccount($db) : null;
 
 // 🌟 SAFETY NET: లైవ్ డేటాబేస్‌లో `survey_type_ids` కాలమ్ లేకపోతే (database/migration_multi_survey_type.sql
 // రన్ చేయకపోతే) ప్రతి assign attempt ఇక్కడే "Unknown column" SQL error తో ఫెయిల్ అవుతుంది —
@@ -271,6 +279,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $agent_name = mb_strtoupper(trim($_POST['agent_name']), 'UTF-8');
     $port_id = (int)$_POST['port_id'];
 
+    // 🌟 Optional IMO Number (used for automatic-vessel-assignment-from-email
+    // duplicate detection — see ajax/vessel_email_action.php). Digits only,
+    // never blocks submission if missing/malformed since it's optional.
+    $imo_number_raw = preg_replace('/[^0-9]/', '', (string)($_POST['imo_number'] ?? ''));
+    $imo_number = ($imo_number_raw !== '' && $imo_number_raw !== null) ? substr($imo_number_raw, 0, 20) : null;
+
     // 🌟 బహుళ Survey Types (checkbox multi-select) — CSV గా వస్తుంది, ఉదా. "3,5,7"
     $survey_type_ids_csv = trim($_POST['survey_type_ids'] ?? '');
     $survey_type_ids_arr = array_values(array_unique(array_filter(array_map('intval', explode(',', $survey_type_ids_csv)))));
@@ -328,11 +342,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $upd = $db->prepare("
                     UPDATE surveys SET
-                        vessel_name = ?, client_id = ?, agent_name = ?, surveyor_id = ?,
+                        vessel_name = ?, imo_number = ?, client_id = ?, agent_name = ?, surveyor_id = ?,
                         survey_type_id = ?, survey_type_ids = ?, port_id = ?, remarks = ?
                     WHERE id = ?
                 ");
-                $upd->execute([$vessel_name, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $post_edit_id]);
+                $upd->execute([$vessel_name, $imo_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $post_edit_id]);
 
                 // Replace the surveyor assignment set entirely with whatever
                 // is selected now (full replace, matching "save this form's
@@ -410,12 +424,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $report_number = generateNextReportNumberForClient($db, (int)$client_id);
                 $stmt = $db->prepare("
-                    INSERT INTO surveys 
-                    (vessel_name, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?)
+                    INSERT INTO surveys
+                    (vessel_name, imo_number, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?)
                 ");
 
-                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks])) {
+                if ($stmt->execute([$vessel_name, $imo_number, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks])) {
                     // Capture id immediately after INSERT (before any other query)
                     $new_survey_id = (int)$db->lastInsertId();
                     if ($new_survey_id <= 0) {
@@ -889,6 +903,33 @@ include 'includes/header.php';
         .searchable-select.open { z-index: 400; }
         .searchable-select.open .ss-panel { z-index: 400; }
     }
+
+    /* Recent Vessel Emails panel */
+    .rve-panel { background:#fff; border:1px solid var(--border-color); border-radius:16px; padding:16px; }
+    .rve-header { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .rve-title { font-weight:700; font-size:13.5px; color:var(--text-dark); }
+    .rve-source { font-size:11px; color:var(--text-muted); margin-top:2px; }
+    .rve-refresh-btn { flex-shrink:0; background:#eef2ff; color:#3b32b3; border:none; border-radius:10px; padding:8px 14px; font-weight:700; font-size:12px; white-space:nowrap; }
+    .rve-refresh-btn.rve-loading i { animation: rve-spin 0.8s linear infinite; }
+    @keyframes rve-spin { from { transform:rotate(0); } to { transform:rotate(360deg); } }
+    .rve-banner { font-size:12px; padding:10px 12px; border-radius:10px; margin-bottom:10px; }
+    .rve-banner.rve-banner-error { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+    .rve-empty { font-size:12.5px; color:var(--text-muted); padding:14px 4px; text-align:center; }
+    .rve-list { display:flex; flex-direction:column; gap:10px; max-height:360px; overflow-y:auto; }
+    .rve-card { border:1px solid var(--border-color); border-radius:12px; padding:12px 14px; background:#f8fafc; }
+    .rve-card-vessel { font-weight:700; font-size:13.5px; color:var(--text-dark); }
+    .rve-card-subject { font-size:12px; color:var(--text-dark); margin-top:2px; }
+    .rve-card-meta { font-size:11px; color:var(--text-muted); margin-top:4px; }
+    .rve-card-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .rve-card-actions button, .rve-card-actions a { flex:1 1 90px; border:none; border-radius:8px; padding:7px 8px; font-size:11.5px; font-weight:700; text-align:center; text-decoration:none; }
+    .rve-btn-use { background:#3b32b3; color:#fff; }
+    .rve-btn-view { background:#eef2ff; color:#3b32b3; }
+    .rve-btn-ignore { background:#f1f5f9; color:#64748b; }
+    .rve-settings-link { text-align:right; margin-top:10px; }
+    .rve-settings-link a { font-size:11px; color:var(--text-muted); text-decoration:none; }
+    @media (min-width: 992px) {
+        .rve-panel { max-width: 900px; margin: 16px auto 0; }
+    }
 </style>
 
 <?php
@@ -899,6 +940,28 @@ include 'includes/top_app_bar.php';
 ?>
 
 <div class="scroll-content">
+    <?php if ($show_email_panel): ?>
+    <!-- 🌟 Automatic Vessel Assignment from survey@ymrmarine.com -->
+    <div class="rve-panel mx-3 mt-3" data-testid="recent-vessel-emails-panel">
+        <div class="rve-header">
+            <div>
+                <div class="rve-title"><i class="fa-solid fa-envelope-open-text"></i> Recent Vessel Emails</div>
+                <div class="rve-source">📩 Source: <?= sanitize($email_account_cfg['mailbox_email'] ?? 'survey@ymrmarine.com') ?></div>
+            </div>
+            <button type="button" class="rve-refresh-btn" id="rveRefreshBtn" data-testid="rve-refresh-btn">
+                <i class="fa-solid fa-rotate"></i> Refresh
+            </button>
+        </div>
+        <div id="rveBanner" class="rve-banner" style="display:none;"></div>
+        <div id="rveList" class="rve-list">
+            <div class="rve-empty" data-testid="rve-loading">Loading recent emails…</div>
+        </div>
+        <div class="rve-settings-link">
+            <a href="admin_email_integration.php"><i class="fa-solid fa-gear"></i> Email Integration Settings</a>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <!-- Feedback Alerts -->
     <?php if($success): ?>
         <div class="alert alert-success mx-3 mt-3 py-2" style="font-size:12px;"><?= sanitize($success) ?></div>
@@ -952,6 +1015,14 @@ include 'includes/top_app_bar.php';
             <div class="form-group-custom" id="vesselNameField">
                 <label for="vessel_name">Vessel Name *</label>
                 <input type="text" name="vessel_name" id="vessel_name" value="<?= $edit_mode ? sanitize($edit_survey['vessel_name']) : '' ?>" placeholder="e.g. MV Pacific Dawn" required autocomplete="off" inputmode="text" style="font-size:16px;min-height:48px;">
+                <div id="autoFilledBadge" class="text-success fw-bold" style="font-size:11px;margin-top:6px;display:none;" data-testid="auto-filled-badge">
+                    <i class="fa-solid fa-circle-check"></i> Auto-filled from survey@ymrmarine.com
+                </div>
+            </div>
+
+            <div class="form-group-custom">
+                <label for="imo_number">IMO Number <span class="text-muted fw-normal">(optional)</span></label>
+                <input type="text" name="imo_number" id="imo_number" value="<?= $edit_mode ? sanitize($edit_survey['imo_number'] ?? '') : '' ?>" placeholder="e.g. 9123456" maxlength="20" inputmode="numeric" autocomplete="off">
             </div>
 
                         <?php if ($is_client_role): ?>
@@ -1589,7 +1660,235 @@ include 'includes/top_app_bar.php';
     });
 </script>
 
-<?php 
+<?php if ($show_email_panel): ?>
+<!-- 🌟 "Vessel Already Exists" — exact match (IMO, or vessel name with no conflicting IMO) -->
+<div class="modal fade" id="emailDupExactModal" tabindex="-1" aria-hidden="true" data-testid="email-dup-exact-modal">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold"><i class="fa-solid fa-triangle-exclamation text-warning me-1"></i> Vessel Already Exists</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px;">
+                <div class="bg-light rounded-3 p-2 mb-2" style="font-size:12.5px;">
+                    <div>Vessel: <strong id="edeVessel"></strong></div>
+                    <div>IMO: <strong id="edeImo"></strong></div>
+                    <div>Existing Job: <strong id="edeReportNumber"></strong></div>
+                    <div>Port: <strong id="edePort"></strong></div>
+                    <div>Survey Type: <strong id="edeSurveyType"></strong></div>
+                    <div>Surveyor: <strong id="edeSurveyor"></strong></div>
+                    <div>Status: <strong id="edeStatus"></strong></div>
+                    <div>Created: <strong id="edeCreated"></strong></div>
+                </div>
+            </div>
+            <div class="modal-footer flex-wrap">
+                <a href="#" id="edeOpenExisting" class="btn btn-light border" data-testid="email-dup-exact-open">Open Existing Job</a>
+                <button type="button" class="btn btn-light border" id="edeUseExisting" data-testid="email-dup-exact-use-existing">Use Existing Vessel</button>
+                <button type="button" class="btn btn-primary" id="edeCreateNew" style="background:#3b32b3;border-color:#3b32b3;" data-testid="email-dup-exact-create-new">Create New Assignment</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-testid="email-dup-exact-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🌟 "Possible Duplicate" — vessel name matches but IMO conflicts -->
+<div class="modal fade" id="emailDupPossibleModal" tabindex="-1" aria-hidden="true" data-testid="email-dup-possible-modal">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold"><i class="fa-solid fa-triangle-exclamation text-warning me-1"></i> Possible Duplicate</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px;">
+                <div class="bg-light rounded-3 p-2 mb-2" style="font-size:12.5px;">
+                    <div>Existing Vessel: <strong id="edpExistingVessel"></strong></div>
+                    <div>Existing IMO: <strong id="edpExistingImo"></strong></div>
+                    <div>Incoming Vessel: <strong id="edpIncomingVessel"></strong></div>
+                    <div>Incoming IMO: <strong id="edpIncomingImo"></strong></div>
+                </div>
+                <p class="mb-0 fw-bold">Is this the same vessel?</p>
+            </div>
+            <div class="modal-footer flex-wrap">
+                <button type="button" class="btn btn-light border" id="edpUseExisting" data-testid="email-dup-possible-use-existing">Yes - Use Existing</button>
+                <button type="button" class="btn btn-primary" id="edpCreateNew" style="background:#3b32b3;border-color:#3b32b3;" data-testid="email-dup-possible-create-new">No - Create New</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-testid="email-dup-possible-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const RVE_CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
+    const RVE_AUTO_REFRESH_SECONDS = <?= (int)($email_account_cfg['auto_refresh_seconds'] ?? 60) ?>;
+
+    $(document).ready(function() {
+        let rveAutoTimer = null;
+        let rvePendingExtracted = null;
+
+        function rveAjax(url, data) {
+            return $.ajax({
+                url: url,
+                method: 'POST',
+                data: data,
+                dataType: 'json',
+                headers: { 'X-CSRF-Token': RVE_CSRF_TOKEN }
+            });
+        }
+
+        function rveEscape(s) {
+            return $('<div>').text(s == null ? '' : s).html();
+        }
+
+        function rveRenderCards(emails) {
+            const $list = $('#rveList');
+            if (!emails || !emails.length) {
+                $list.html('<div class="rve-empty" data-testid="rve-empty">No recent vessel emails.</div>');
+                return;
+            }
+            let html = '';
+            emails.forEach(function(em) {
+                html += '<div class="rve-card" data-email-id="' + em.id + '">'
+                    + '<div class="rve-card-vessel">' + rveEscape(em.vessel_name || '(vessel name not found)') + '</div>'
+                    + '<div class="rve-card-subject">' + rveEscape(em.subject || '(no subject)') + '</div>'
+                    + '<div class="rve-card-meta">Received: ' + rveEscape(em.received_at) + (em.has_attachment ? ' · <i class="fa-solid fa-paperclip"></i> attachment' : '') + '</div>'
+                    + '<div class="rve-card-actions">'
+                    + '<button type="button" class="rve-btn-use" data-testid="rve-use-btn-' + em.id + '">Use This Email</button>'
+                    + '<a href="view_vessel_email.php?id=' + em.id + '" target="_blank" class="rve-btn-view" data-testid="rve-view-btn-' + em.id + '">View Email</a>'
+                    + '<button type="button" class="rve-btn-ignore" data-testid="rve-ignore-btn-' + em.id + '">Ignore</button>'
+                    + '</div></div>';
+            });
+            $list.html(html);
+        }
+
+        function rveLoad() {
+            const $btn = $('#rveRefreshBtn');
+            $btn.addClass('rve-loading').prop('disabled', true);
+            $('#rveBanner').hide();
+            rveAjax('ajax/vessel_emails_list.php', {}).done(function(resp) {
+                if (!resp || !resp.ok) {
+                    $('#rveBanner').addClass('rve-banner-error').text((resp && resp.error) || 'Unable to load recent emails.').show();
+                    $('#rveList').html('<div class="rve-empty">No recent vessel emails.</div>');
+                    return;
+                }
+                if (resp.fetch_error) {
+                    $('#rveBanner').addClass('rve-banner-error').text('⚠ Unable to read ' + resp.source + '. ' + resp.fetch_error).show();
+                }
+                rveRenderCards(resp.emails);
+            }).fail(function() {
+                $('#rveBanner').addClass('rve-banner-error').text('⚠ Unable to reach the server to load recent emails.').show();
+            }).always(function() {
+                $btn.removeClass('rve-loading').prop('disabled', false);
+            });
+        }
+
+        $('#rveRefreshBtn').on('click', rveLoad);
+        rveLoad();
+        if (RVE_AUTO_REFRESH_SECONDS > 0) {
+            rveAutoTimer = setInterval(rveLoad, RVE_AUTO_REFRESH_SECONDS * 1000);
+        }
+
+        function rveFillForm(extracted, suggested) {
+            if (extracted.vessel_name) { $('#vessel_name').val(extracted.vessel_name); }
+            if (extracted.imo_number) { $('#imo_number').val(extracted.imo_number); }
+            if (extracted.agent) { $('input[name="agent_name"]').val(extracted.agent); }
+
+            // Extra fields the current form has no dedicated input for are
+            // appended to Remarks (free text) so nothing extracted is lost.
+            const extraLines = [];
+            const extraMap = {
+                'Call Sign': extracted.call_sign, 'ETA': extracted.eta, 'ETB': extracted.etb,
+                'Cargo': extracted.cargo, 'Client': extracted.client, 'Master': extracted.master_name,
+                'LOA': extracted.loa, 'Draft': extracted.draft, 'DWT': extracted.dwt, 'GT': extracted.gt,
+                'Survey Date': extracted.survey_date
+            };
+            Object.keys(extraMap).forEach(function(k) { if (extraMap[k]) extraLines.push(k + ': ' + extraMap[k]); });
+            if (extracted.additional_instructions) extraLines.push('Instructions: ' + extracted.additional_instructions);
+            if (extraLines.length) {
+                const $remarks = $('textarea[name="remarks"]');
+                const current = $.trim($remarks.val());
+                const block = '— From survey@ymrmarine.com —\n' + extraLines.join('\n');
+                $remarks.val(current ? current + '\n\n' + block : block);
+            }
+
+            if (suggested) {
+                if (suggested.client_id) { $('[data-ss-root="client"] .ss-options .ss-option[data-value="' + suggested.client_id + '"]').trigger('click'); }
+                if (suggested.port_id) { $('[data-ss-root="port"] .ss-options .ss-option[data-value="' + suggested.port_id + '"]').trigger('click'); }
+                if (suggested.survey_type_id) { $('[data-ss-root="surveyType"] .ss-options .ss-option[data-value="' + suggested.survey_type_id + '"]').trigger('click'); }
+            }
+
+            $('#autoFilledBadge').show();
+            $('html, body').animate({ scrollTop: 0 }, 300);
+            try { $('.scroll-content')[0].scrollTop = 0; } catch (e) {}
+        }
+
+        $('#rveList').on('click', '.rve-btn-ignore', function() {
+            const $card = $(this).closest('.rve-card');
+            const id = $card.data('email-id');
+            rveAjax('ajax/vessel_email_action.php', { action: 'ignore', id: id }).done(function() {
+                $card.remove();
+            });
+        });
+
+        $('#rveList').on('click', '.rve-btn-use', function() {
+            const $btn = $(this);
+            const $card = $btn.closest('.rve-card');
+            const id = $card.data('email-id');
+            $btn.prop('disabled', true).text('Checking…');
+            rveAjax('ajax/vessel_email_action.php', { action: 'use', id: id }).done(function(resp) {
+                $btn.prop('disabled', false).text('Use This Email');
+                if (!resp || !resp.ok) {
+                    alert((resp && resp.error) || 'Could not use this email.');
+                    return;
+                }
+                if (resp.duplicate === 'check_failed') {
+                    alert('⚠ Unable to verify whether this vessel already exists.\n\nFor safety, no new assignment will be created automatically. Please verify manually.');
+                    return;
+                }
+                if (resp.duplicate === 'exact' && resp.existing) {
+                    rvePendingExtracted = resp;
+                    $('#edeVessel').text(resp.existing.vessel_name || '—');
+                    $('#edeImo').text(resp.existing.imo_number || '—');
+                    $('#edeReportNumber').text(resp.existing.report_number || 'N/A');
+                    $('#edePort').text(resp.existing.port_name || 'N/A');
+                    $('#edeSurveyType').text(resp.existing.survey_type || 'N/A');
+                    $('#edeSurveyor').text(resp.existing.surveyor || 'N/A');
+                    $('#edeStatus').text(resp.existing.status || 'N/A');
+                    $('#edeCreated').text(resp.existing.created || 'N/A');
+                    $('#edeOpenExisting').attr('href', 'vessel_detail.php?id=' + resp.existing.survey_id);
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('emailDupExactModal')).show();
+                    return;
+                }
+                if (resp.duplicate === 'possible' && resp.existing) {
+                    rvePendingExtracted = resp;
+                    $('#edpExistingVessel').text(resp.existing.vessel_name || '—');
+                    $('#edpExistingImo').text(resp.existing.imo_number || 'Not available');
+                    $('#edpIncomingVessel').text(resp.extracted.vessel_name || '—');
+                    $('#edpIncomingImo').text(resp.extracted.imo_number || 'Not available');
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('emailDupPossibleModal')).show();
+                    return;
+                }
+                rveFillForm(resp.extracted, resp.suggested);
+            }).fail(function() {
+                $btn.prop('disabled', false).text('Use This Email');
+                alert('Could not reach the server to use this email.');
+            });
+        });
+
+        $('#edeCreateNew, #edpCreateNew').on('click', function() {
+            if (rvePendingExtracted) { rveFillForm(rvePendingExtracted.extracted, rvePendingExtracted.suggested); }
+            bootstrap.Modal.getInstance(document.getElementById('emailDupExactModal'))?.hide();
+            bootstrap.Modal.getInstance(document.getElementById('emailDupPossibleModal'))?.hide();
+        });
+        $('#edeUseExisting, #edpUseExisting').on('click', function() {
+            if (rvePendingExtracted && rvePendingExtracted.existing && rvePendingExtracted.existing.survey_id) {
+                window.location.href = 'vessel_detail.php?id=' + rvePendingExtracted.existing.survey_id;
+            }
+        });
+    });
+</script>
+<?php endif; ?>
+
+<?php
 include 'includes/nav.php';
 include 'includes/footer.php';
 ?>

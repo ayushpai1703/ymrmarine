@@ -113,6 +113,10 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-user-shield"></i>
             <span>Admin Controls</span>
         </a>
+        <a href="admin_email_integration.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'admin_email_integration.php') ? 'active' : '' ?>" data-testid="sidebar-email-integration-link">
+            <i class="fa-solid fa-envelope-circle-check"></i>
+            <span>Email Integration</span>
+        </a>
 
         <!-- Inside the navbar.php file, inside the <ul> tag, add this li: -->
 

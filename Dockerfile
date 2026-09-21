@@ -17,11 +17,15 @@ FROM php:8.3-apache
 
 # Install MySQL/PDO support + gd + zip + fileinfo (phpspreadsheet needs gd for
 # images and zip since .xlsx files are ZIP archives internally; fileinfo is
-# needed by our own upload MIME-sniffing check, finfo_open())
+# needed by our own upload MIME-sniffing check, finfo_open()) + imap (reads
+# incoming vessel-assignment emails from survey@ymrmarine.com via IMAP — see
+# YSMS/includes/imap_client.php).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libpng-dev libjpeg62-turbo-dev libfreetype6-dev libzip-dev libmagic-dev \
+        libc-client-dev libkrb5-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo pdo_mysql gd zip fileinfo \
+    && docker-php-ext-configure imap --with-kerberos --with-imap-ssl \
+    && docker-php-ext-install pdo pdo_mysql gd zip fileinfo imap \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Configure Apache to listen on Cloud Run's port
