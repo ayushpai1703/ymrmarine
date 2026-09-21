@@ -90,6 +90,11 @@ function imapTestConnection(array $account): array {
  */
 function imapFetchRecentMessages(array $account, int $limit, int $sinceHours): array {
     $folderName = trim((string)$account['folder']) !== '' ? $account['folder'] : 'INBOX';
+    // Hard safety cap regardless of the configured fetch limit — MIME structure
+    // parsing on real-world mail (forwarded chains, signed messages, embedded
+    // images) can be memory-heavy per message; never process more than this
+    // many in one request.
+    $limit = min($limit, 30);
 
     $client = null;
     try {
@@ -111,60 +116,69 @@ function imapFetchRecentMessages(array $account, int $limit, int $sinceHours): a
                 ->get();
 
             $messages = [];
+            $totalAttachmentBytes = 0;
+            $attachmentByteBudget = 40 * 1024 * 1024; // across the whole batch — a defensive ceiling on top of memory_limit
             foreach ($found as $message) {
-                $messageId = trim((string)$message->getMessageId());
-                $uid = (string)$message->getUid();
-                if ($messageId === '') {
-                    $messageId = 'uid-' . $uid . '@' . $account['imap_host'];
-                }
-
-                $fromAttr = $message->getFrom();
-                $fromFirst = $fromAttr ? $fromAttr->first() : null;
-                $fromEmail = $fromFirst->mail ?? '';
-                $fromName = $fromFirst->personal ?? '';
-
-                $receivedAt = null;
                 try {
-                    $dateAttr = $message->getDate();
-                    if ($dateAttr) {
-                        $receivedAt = $dateAttr->toDate()->format('Y-m-d H:i:s');
+                    $messageId = trim((string)$message->getMessageId());
+                    $uid = (string)$message->getUid();
+                    if ($messageId === '') {
+                        $messageId = 'uid-' . $uid . '@' . $account['imap_host'];
                     }
-                } catch (\Throwable $de) {
+
+                    $fromAttr = $message->getFrom();
+                    $fromFirst = $fromAttr ? $fromAttr->first() : null;
+                    $fromEmail = $fromFirst->mail ?? '';
+                    $fromName = $fromFirst->personal ?? '';
+
                     $receivedAt = null;
-                }
-
-                $bodyText = '';
-                $bodyHtml = '';
-                try { if ($message->hasTextBody()) { $bodyText = $message->getTextBody(); } } catch (\Throwable $be) {}
-                try { if ($message->hasHTMLBody()) { $bodyHtml = $message->getHTMLBody(); } } catch (\Throwable $be) {}
-
-                $attachments = [];
-                try {
-                    if ($message->hasAttachments()) {
-                        foreach ($message->getAttachments() as $att) {
-                            $name = (string)($att->getName() ?: $att->getFilename() ?: 'attachment');
-                            $attachments[] = [
-                                'name' => $name,
-                                'mime' => (string)($att->getMimeType() ?: ''),
-                                'data' => (string)$att->getContent(),
-                            ];
+                    try {
+                        $dateAttr = $message->getDate();
+                        if ($dateAttr) {
+                            $receivedAt = $dateAttr->toDate()->format('Y-m-d H:i:s');
                         }
+                    } catch (\Throwable $de) {
+                        $receivedAt = null;
                     }
-                } catch (\Throwable $ae) {
-                    error_log('imapFetchRecentMessages attachment read: ' . $ae->getMessage());
-                }
 
-                $messages[] = [
-                    'uid'         => $uid,
-                    'message_id'  => $messageId,
-                    'from_email'  => $fromEmail,
-                    'from_name'   => $fromName,
-                    'subject'     => (string)$message->getSubject(),
-                    'received_at' => $receivedAt,
-                    'body_text'   => $bodyText,
-                    'body_html'   => $bodyHtml,
-                    'attachments' => $attachments,
-                ];
+                    $bodyText = '';
+                    $bodyHtml = '';
+                    try { if ($message->hasTextBody()) { $bodyText = $message->getTextBody(); } } catch (\Throwable $be) {}
+                    try { if ($message->hasHTMLBody()) { $bodyHtml = $message->getHTMLBody(); } } catch (\Throwable $be) {}
+
+                    $attachments = [];
+                    try {
+                        if ($totalAttachmentBytes < $attachmentByteBudget && $message->hasAttachments()) {
+                            foreach ($message->getAttachments() as $att) {
+                                if ($totalAttachmentBytes >= $attachmentByteBudget) break;
+                                $name = (string)($att->getName() ?: $att->getFilename() ?: 'attachment');
+                                $data = (string)$att->getContent();
+                                $totalAttachmentBytes += strlen($data);
+                                $attachments[] = [
+                                    'name' => $name,
+                                    'mime' => (string)($att->getMimeType() ?: ''),
+                                    'data' => $data,
+                                ];
+                            }
+                        }
+                    } catch (\Throwable $ae) {
+                        error_log('imapFetchRecentMessages attachment read: ' . $ae->getMessage());
+                    }
+
+                    $messages[] = [
+                        'uid'         => $uid,
+                        'message_id'  => $messageId,
+                        'from_email'  => $fromEmail,
+                        'from_name'   => $fromName,
+                        'subject'     => (string)$message->getSubject(),
+                        'received_at' => $receivedAt,
+                        'body_text'   => $bodyText,
+                        'body_html'   => $bodyHtml,
+                        'attachments' => $attachments,
+                    ];
+                } catch (\Throwable $me) {
+                    error_log('imapFetchRecentMessages: skipping one message that failed to parse: ' . $me->getMessage());
+                }
             }
 
             return ['ok' => true, 'error' => '', 'messages' => $messages];

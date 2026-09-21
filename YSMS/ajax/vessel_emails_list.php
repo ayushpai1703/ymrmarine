@@ -17,6 +17,10 @@ require_once __DIR__ . '/../includes/imap_client.php';
 require_once __DIR__ . '/../includes/email_extractor.php';
 require_once __DIR__ . '/../includes/pdf_extractor.php';
 checkAuth();
+// IMAP structure/MIME parsing on a real-world mailbox (forwarded chains,
+// signed messages, embedded images) can be far heavier than a typical page
+// request — give this endpoint more headroom than the site-wide default.
+@ini_set('memory_limit', '512M');
 header('Content-Type: application/json; charset=utf-8');
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
