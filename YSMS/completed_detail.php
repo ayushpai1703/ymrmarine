@@ -140,7 +140,8 @@ include 'includes/header.php';
         width: calc(100% - 32px);
         margin: 0 16px 8px;
     }
-    .detail-top-grid > .info-table-list {
+    .detail-top-grid > .info-table-list,
+    .detail-top-grid > .form-box {
         margin: 0 !important;
         max-width: none;
     }
@@ -215,7 +216,6 @@ include 'includes/header.php';
         <div class="info-row"><span class="info-label">Port of Operation</span><span class="info-value"><?= sanitize($survey['port_name']) ?></span></div>
         <div class="info-row"><span class="info-label">Agent Handle</span><span class="info-value"><?= sanitize($survey['agent_name']) ?></span></div>
     </div>
-    </div><!-- /.detail-top-grid -->
 
     <!-- Recovery -->
     <div class="info-table-list shadow-sm">
@@ -246,6 +246,7 @@ include 'includes/header.php';
         </form>
     </div>
     <?php endif; ?>
+    </div><!-- /.detail-top-grid -->
 
     <!-- Files -->
     <div class="px-3 mt-3 detail-files-wrap">
