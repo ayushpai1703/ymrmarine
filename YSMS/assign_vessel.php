@@ -77,6 +77,19 @@ try {
     $db->exec("ALTER TABLE surveys MODIFY COLUMN assign_date DATETIME NULL");
 } catch (Exception $e) {}
 
+// 🌟 SAFETY NET: client_submitted flag — lets Pending Vessels show Admin a
+// "Client assigned this — pick a surveyor" reminder for vessels a Client
+// submitted directly (surveyor_id stays the unassigned placeholder until
+// Admin picks a real one).
+try {
+    $cols = $db->query("SHOW COLUMNS FROM surveys LIKE 'client_submitted'")->fetchAll();
+    if (empty($cols)) {
+        $db->exec("ALTER TABLE surveys ADD COLUMN client_submitted TINYINT(1) NOT NULL DEFAULT 0");
+    }
+} catch (Exception $e) {
+    error_log('assign_vessel.php client_submitted column: ' . $e->getMessage());
+}
+
 
 
 
@@ -410,12 +423,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $report_number = generateNextReportNumberForClient($db, (int)$client_id);
                 $stmt = $db->prepare("
-                    INSERT INTO surveys 
-                    (vessel_name, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?)
+                    INSERT INTO surveys
+                    (vessel_name, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks, client_submitted)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?, ?)
                 ");
 
-                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks])) {
+                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $is_client_role ? 1 : 0])) {
                     // Capture id immediately after INSERT (before any other query)
                     $new_survey_id = (int)$db->lastInsertId();
                     if ($new_survey_id <= 0) {
