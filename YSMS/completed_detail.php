@@ -29,6 +29,7 @@ if (!$survey) {
 // view another company's completed vessel by changing ?id= in the URL.
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $role = $_SESSION['role'] ?? '';
+$is_admin = ($role === 'Admin');
 $has_full_access = in_array($role, ['Admin', 'Super Admin'], true);
 if (!$has_full_access && !isSurveyorAssignedToSurvey($db, $survey['id'], $current_user_id)) {
     $isOwnClient = ($role === 'Client') && (int)$survey['client_id'] === getClientIdForUser($db, $current_user_id);
@@ -59,6 +60,37 @@ if (!$has_full_access && !isSurveyorAssignedToSurvey($db, $survey['id'], $curren
         include 'includes/nav.php';
         include 'includes/footer.php';
         exit;
+    }
+}
+
+// 🌟 Recovery edit (Admin only): Total / VLSFO / LSMGO recovery for this
+// vessel. No redirect — re-renders the same request with the saved values.
+$recovery_message = '';
+$recovery_error = '';
+if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_recovery'])) {
+    $parseRecovery = function ($v) {
+        $v = trim((string)$v);
+        if ($v === '') return null;
+        if (!is_numeric($v) || (float)$v < 0) return false;
+        return round((float)$v, 3);
+    };
+    $totalVal = $parseRecovery($_POST['recovery_amount'] ?? '');
+    $vlsfoVal = $parseRecovery($_POST['vlsfo_recovery'] ?? '');
+    $lsmgoVal = $parseRecovery($_POST['lsmgo_recovery'] ?? '');
+    if ($totalVal === false || $vlsfoVal === false || $lsmgoVal === false) {
+        $recovery_error = 'Recovery values must be zero or a positive number.';
+    } else {
+        try {
+            $upd = $db->prepare("UPDATE surveys SET recovery_amount = ?, vlsfo_recovery = ?, lsmgo_recovery = ? WHERE id = ?");
+            $upd->execute([$totalVal, $vlsfoVal, $lsmgoVal, $id]);
+            $survey['recovery_amount'] = $totalVal;
+            $survey['vlsfo_recovery'] = $vlsfoVal;
+            $survey['lsmgo_recovery'] = $lsmgoVal;
+            $recovery_message = 'Recovery values updated.';
+        } catch (Throwable $e) {
+            error_log('completed_detail recovery update: ' . $e->getMessage());
+            $recovery_error = 'Could not save recovery values. Please try again.';
+        }
     }
 }
 
@@ -184,6 +216,36 @@ include 'includes/header.php';
         <div class="info-row"><span class="info-label">Agent Handle</span><span class="info-value"><?= sanitize($survey['agent_name']) ?></span></div>
     </div>
     </div><!-- /.detail-top-grid -->
+
+    <!-- Recovery -->
+    <div class="info-table-list shadow-sm">
+        <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
+        <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
+        <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
+    </div>
+
+    <?php if ($is_admin): ?>
+    <div class="form-box mx-3 my-3 p-3 bg-white rounded-3 border shadow-sm" data-testid="recovery-edit-box">
+        <div class="fw-bold text-dark mb-2" style="font-size: 13px;"><i class="fa-solid fa-droplet text-primary me-1"></i> Edit Recovery</div>
+        <?php if ($recovery_message): ?><div class="alert alert-success py-2 mb-2" style="font-size:12px;" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
+        <?php if ($recovery_error): ?><div class="alert alert-danger py-2 mb-2" style="font-size:12px;" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
+        <form method="POST"><?= csrf_field() ?>
+            <div class="mb-2">
+                <label class="form-label fw-bold text-secondary" style="font-size:11px;">Total Recovery (MT)</label>
+                <input type="number" step="0.001" min="0" name="recovery_amount" class="form-control form-control-sm" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)$survey['recovery_amount']) : '' ?>" data-testid="recovery-field-total">
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-bold text-secondary" style="font-size:11px;">VLSFO Recovery (MT)</label>
+                <input type="number" step="0.001" min="0" name="vlsfo_recovery" class="form-control form-control-sm" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)$survey['vlsfo_recovery']) : '' ?>" data-testid="recovery-field-vlsfo">
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-bold text-secondary" style="font-size:11px;">LSMGO Recovery (MT)</label>
+                <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)$survey['lsmgo_recovery']) : '' ?>" data-testid="recovery-field-lsmgo">
+            </div>
+            <button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
+        </form>
+    </div>
+    <?php endif; ?>
 
     <!-- Files -->
     <div class="px-3 mt-3 detail-files-wrap">
