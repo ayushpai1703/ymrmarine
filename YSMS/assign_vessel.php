@@ -77,6 +77,19 @@ try {
     $db->exec("ALTER TABLE surveys MODIFY COLUMN assign_date DATETIME NULL");
 } catch (Exception $e) {}
 
+// 🌟 SAFETY NET: client_submitted flag — lets Pending Vessels show Admin a
+// "Client assigned this — pick a surveyor" reminder for vessels a Client
+// submitted directly (surveyor_id stays the unassigned placeholder until
+// Admin picks a real one).
+try {
+    $cols = $db->query("SHOW COLUMNS FROM surveys LIKE 'client_submitted'")->fetchAll();
+    if (empty($cols)) {
+        $db->exec("ALTER TABLE surveys ADD COLUMN client_submitted TINYINT(1) NOT NULL DEFAULT 0");
+    }
+} catch (Exception $e) {
+    error_log('assign_vessel.php client_submitted column: ' . $e->getMessage());
+}
+
 
 
 
@@ -321,9 +334,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // deliberately left untouched (this is a correction tool, not a
         // re-assignment); everything else the create form can set is
         // editable here too. No surveyor email/WhatsApp/in-app notification
-        // is sent on an edit — those already fired when the vessel was
-        // first assigned, and re-notifying on every correction (e.g. a typo
-        // fix in remarks) would be noisy and unexpected.
+        // is sent on an ordinary edit — those already fired when the vessel
+        // was first assigned, and re-notifying on every correction (e.g. a
+        // typo fix in remarks) would be noisy and unexpected. The ONE
+        // exception: a Client-submitted vessel that was still unassigned
+        // (surveyor_id = 1, no real surveyor) is now getting a real
+        // surveyor for the first time — that surveyor must be notified,
+        // since nothing notified them when the vessel was first created.
         if (!empty($vessel_name) && $client_id > 0 && !empty($agent_name) && $port_id > 0 && !empty($survey_type_ids_arr) && !empty($surveyor_id)) {
             try {
                 $upd = $db->prepare("
@@ -347,6 +364,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 } catch (Throwable $sse) {
                     error_log('assign_vessel.php edit survey_surveyors sync: ' . $sse->getMessage());
+                }
+
+                // 🌟 First-time surveyor assignment on a previously-unassigned
+                // Client submission (surveyor_id was 1, no real surveyor in the
+                // junction table) — notify the newly assigned surveyor(s) now,
+                // exactly like the create-path does. Any other edit stays silent.
+                $wasUnassigned = (int)($edit_survey['surveyor_id'] ?? 0) === 1 && empty($edit_surveyor_ids);
+                if ($wasUnassigned && !empty($all_surveyor_ids)) {
+                    foreach ($all_surveyor_ids as $notify_sid) {
+                        if ($notify_sid <= 0) continue;
+                        try {
+                            $client_name = '';
+                            $port_name = '';
+                            $cst = $db->prepare('SELECT company_name FROM clients WHERE id = ?');
+                            $cst->execute([$client_id]);
+                            $client_name = (string)($cst->fetchColumn() ?: '');
+                            $pst = $db->prepare('SELECT port_name FROM ports WHERE id = ?');
+                            $pst->execute([$port_id]);
+                            $port_name = (string)($pst->fetchColumn() ?: '');
+                            $type_names = function_exists('getCombinedSurveyTypeNames')
+                                ? getCombinedSurveyTypeNames($db, $survey_type_ids_csv, '')
+                                : $survey_type_ids_csv;
+                            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                            $base = rtrim(str_replace('\\', '/', dirname($_SERVER['PHP_SELF'] ?? '')), '/');
+                            $app_url = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $base . '/vessel_detail.php?id=' . $post_edit_id;
+                            $admin_name = (string)($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Admin');
+                            $admin_email = '';
+                            try {
+                                $uid = (int)($_SESSION['user_id'] ?? 0);
+                                if ($uid > 0) {
+                                    $ast = $db->prepare('SELECT full_name, email FROM users WHERE id = ? LIMIT 1');
+                                    $ast->execute([$uid]);
+                                    $arow = $ast->fetch(PDO::FETCH_ASSOC);
+                                    if ($arow) {
+                                        if (!empty($arow['full_name'])) { $admin_name = (string)$arow['full_name']; }
+                                        $admin_email = trim((string)($arow['email'] ?? ''));
+                                    }
+                                }
+                            } catch (Throwable $ae) {
+                                error_log('assign_vessel edit admin email: ' . $ae->getMessage());
+                            }
+                            $job = [
+                                'vessel_name'       => $vessel_name,
+                                'report_number'     => $edit_survey['report_number'] ?? '',
+                                'client_name'       => $client_name,
+                                'port_name'         => $port_name,
+                                'survey_types'      => $type_names,
+                                'agent_name'        => $agent_name,
+                                'assign_date'       => date('d-m-Y'),
+                                'remarks'           => $remarks,
+                                'app_url'           => $app_url,
+                                'assigned_by_name'  => $admin_name,
+                                'assigned_by_email' => $admin_email,
+                            ];
+                            notifySurveyorOfAssignment($db, $notify_sid, $job);
+                            $actor = (string)($_SESSION['full_name'] ?? 'Admin');
+                            createNotification(
+                                $db,
+                                (int)$notify_sid,
+                                'New vessel assigned',
+                                $actor . ' assigned ' . $vessel_name . ' (' . ($edit_survey['report_number'] ?? '') . ') to you.',
+                                'assign',
+                                'vessel_detail.php?id=' . $post_edit_id,
+                                (int)($_SESSION['user_id'] ?? 0)
+                            );
+                        } catch (Throwable $ne) {
+                            error_log('assign_vessel edit first-assignment notify: ' . $ne->getMessage());
+                        }
+                    }
                 }
 
                 // 🌟 Any newly selected files are ADDED to the existing
@@ -410,12 +496,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $report_number = generateNextReportNumberForClient($db, (int)$client_id);
                 $stmt = $db->prepare("
-                    INSERT INTO surveys 
-                    (vessel_name, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?)
+                    INSERT INTO surveys
+                    (vessel_name, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks, client_submitted)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?, ?)
                 ");
 
-                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks])) {
+                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $is_client_role ? 1 : 0])) {
                     // Capture id immediately after INSERT (before any other query)
                     $new_survey_id = (int)$db->lastInsertId();
                     if ($new_survey_id <= 0) {
@@ -496,13 +582,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
 
-                    // 🌟 Client submitted a vessel with no surveyor yet — alert admins to assign one
+                    // 🌟 Client submitted a vessel with no surveyor yet — alert admins
+                    // to assign one, both in-app (banner) and by email, immediately.
                     if ($is_client_role && $new_survey_id > 0) {
+                        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                        $base = rtrim(str_replace('\\', '/', dirname($_SERVER['PHP_SELF'] ?? '')), '/');
+                        $client_vessel_url = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $base . '/vessel_detail.php?id=' . $new_survey_id;
                         try {
                             notifyAllAdmins($db, 'New vessel from client — needs a surveyor',
                                 $vessel_name . ' (' . $report_number . ') was submitted by a client and is waiting for a surveyor to be assigned.',
                                 'assign', 'vessel_detail.php?id=' . (int)$new_survey_id, (int)($_SESSION['user_id'] ?? 0));
                         } catch (Throwable $cne) { error_log('client assign notif: ' . $cne->getMessage()); }
+                        try {
+                            $cst2 = $db->prepare('SELECT company_name FROM clients WHERE id = ?');
+                            $cst2->execute([$client_id]);
+                            $pst2 = $db->prepare('SELECT port_name FROM ports WHERE id = ?');
+                            $pst2->execute([$port_id]);
+                            notifyAdminsOfClientVesselRequest($db, [
+                                'vessel_name'   => $vessel_name,
+                                'report_number' => $report_number,
+                                'client_name'   => (string)($cst2->fetchColumn() ?: ''),
+                                'port_name'     => (string)($pst2->fetchColumn() ?: ''),
+                                'survey_types'  => getCombinedSurveyTypeNames($db, $survey_type_ids_csv, ''),
+                                'agent_name'    => $agent_name,
+                                'app_url'       => $client_vessel_url,
+                            ]);
+                        } catch (Throwable $cme) { error_log('client assign admin email: ' . $cme->getMessage()); }
                     }
 
                     // 📧📱 Auto-notify assigned surveyor(s) (email + optional WhatsApp)

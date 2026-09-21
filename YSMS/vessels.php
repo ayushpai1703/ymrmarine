@@ -35,6 +35,10 @@ try {
     if (empty($cols)) {
         $db->exec("ALTER TABLE surveys ADD COLUMN status_updated_at DATETIME NULL DEFAULT NULL");
     }
+    $cols = $db->query("SHOW COLUMNS FROM surveys LIKE 'client_submitted'")->fetchAll();
+    if (empty($cols)) {
+        $db->exec("ALTER TABLE surveys ADD COLUMN client_submitted TINYINT(1) NOT NULL DEFAULT 0");
+    }
 } catch (Exception $e) {
     error_log('vessels.php live-status column check: ' . $e->getMessage());
 }
@@ -239,6 +243,22 @@ include 'includes/header.php';
         text-decoration: none;
         margin-top: 8px;
     }
+    /* 🌟 Client-submitted, still-unassigned reminder — visible chip, not a
+       hover-only tooltip, so it works on mobile too. */
+    .badge-needs-surveyor {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        color: #92400e;
+        padding: 4px 9px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 10.5px;
+        margin: 4px 0;
+    }
+    .badge-needs-surveyor i { font-size: 10px; }
     .vessel-edit-btn:hover { background: #00a3df; color: #fff; }
     .scroll-content { padding-bottom: 70px; }
     .vessel-card-top-content {
@@ -408,6 +428,7 @@ include 'includes/header.php';
                         $vessel_name = !empty($survey['vessel_name']) ? $survey['vessel_name'] : 'Vessel';
                         $vessel_status_flag = !empty($survey['custom_live_status']) ? 'updated' : 'pending';
                         $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
+                        $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                     ?>
                     <div class="vessel-card vessel-card--stacked" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize($survey['type_name'] ?? '') ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= strtotime($survey['assign_date'] ?? '1970-01-01') ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
                         <div class="vessel-card-top-content">
@@ -418,6 +439,9 @@ include 'includes/header.php';
                                     <p class="vessel-client-sub">Agent: <?= sanitize($survey['agent_name']) ?></p>
                                     <?php if ($is_full_access): ?>
                                         <p class="vessel-client-sub">Surveyor: <?= sanitize($surveyorNames) ?></p>
+                                    <?php endif; ?>
+                                    <?php if ($needsSurveyor): ?>
+                                        <span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -523,6 +547,7 @@ include 'includes/header.php';
                                 $vessel_name = $survey['vessel_name'] ?: 'Vessel';
                                 $typeLabel = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
                                 $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
+                                $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                                 $date_src = $survey['report_uploaded_date'] ?? $survey['survey_completed_date'] ?? $survey['assign_date'] ?? '';
                                 $date_disp = (!empty($date_src) && $date_src !== '0000-00-00' && $date_src !== '0000-00-00 00:00:00')
                                     ? date('d M Y H:i', strtotime($date_src)) : '—';
@@ -546,6 +571,9 @@ include 'includes/header.php';
                                 <td>
                                     <div><?= sanitize($survey['company_name'] ?? '') ?></div>
                                     <div class="vd-sub">Agent: <?= sanitize($survey['agent_name'] ?? '—') ?></div>
+                                    <?php if ($needsSurveyor): ?>
+                                        <span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> Assign a surveyor</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <span class="vd-badge"><?= sanitize($typeLabel) ?></span>

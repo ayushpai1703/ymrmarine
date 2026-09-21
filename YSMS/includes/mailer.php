@@ -584,6 +584,80 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
 }
 
 /**
+ * Email all admins the moment a Client submits a vessel assignment request
+ * directly (no surveyor picked yet — Admin still needs to assign one).
+ *
+ * $info keys: vessel_name, report_number, client_name, port_name,
+ * survey_types, agent_name, app_url
+ */
+function notifyAdminsOfClientVesselRequest(PDO $db, array $info): string {
+    $admins = getAdminRecipients($db);
+    if (empty($admins)) {
+        return 'No admin email on file.';
+    }
+
+    $safe = static function ($v) {
+        return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+    };
+
+    $subject = 'New vessel from ' . ($info['client_name'] ?? 'Client') . ' — needs a surveyor: ' . ($info['vessel_name'] ?? '');
+
+    $html = '
+        <div style="font-family:Lexend,Arial,sans-serif;max-width:520px;margin:auto;color:#1e293b;">
+            <h2 style="color:#0b1e46;margin-bottom:8px;">New Vessel — Needs a Surveyor</h2>
+            <p>A client submitted a vessel assignment directly. Please assign a surveyor.</p>
+            <table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;">
+                <tr><td style="padding:6px 0;color:#64748b;">Vessel</td><td style="padding:6px 0;font-weight:600;">' . $safe($info['vessel_name'] ?? '') . '</td></tr>
+                <tr><td style="padding:6px 0;color:#64748b;">Report No</td><td style="padding:6px 0;font-weight:600;">' . $safe($info['report_number'] ?? '') . '</td></tr>
+                <tr><td style="padding:6px 0;color:#64748b;">Client</td><td style="padding:6px 0;">' . $safe($info['client_name'] ?? '') . '</td></tr>
+                <tr><td style="padding:6px 0;color:#64748b;">Port</td><td style="padding:6px 0;">' . $safe($info['port_name'] ?? '') . '</td></tr>
+                <tr><td style="padding:6px 0;color:#64748b;">Survey type</td><td style="padding:6px 0;">' . $safe($info['survey_types'] ?? '') . '</td></tr>
+                <tr><td style="padding:6px 0;color:#64748b;">Agent</td><td style="padding:6px 0;">' . $safe($info['agent_name'] ?? '') . '</td></tr>
+            </table>';
+    if (!empty($info['app_url'])) {
+        $html .= '<p style="text-align:center;margin:24px 0;">
+            <a href="' . $safe($info['app_url']) . '" style="background:#3b32b3;color:#fff;text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:600;display:inline-block;">Assign a Surveyor</a>
+        </p>';
+    }
+    $html .= '<p style="color:#64748b;font-size:12px;">YMR Survey Management System</p></div>';
+
+    $altLines = [
+        'New Vessel — Needs a Surveyor',
+        'Vessel: ' . ($info['vessel_name'] ?? ''),
+        'Report No: ' . ($info['report_number'] ?? ''),
+        'Client: ' . ($info['client_name'] ?? ''),
+        'Port: ' . ($info['port_name'] ?? ''),
+        'Survey type: ' . ($info['survey_types'] ?? ''),
+    ];
+    if (!empty($info['app_url'])) {
+        $altLines[] = 'Assign: ' . $info['app_url'];
+    }
+    $alt = implode("\n", $altLines);
+
+    $sent = 0;
+    $failed = 0;
+    foreach ($admins as $admin) {
+        $to = trim((string)($admin['email'] ?? ''));
+        if ($to === '') continue;
+        if (sendHtmlEmail($to, (string)($admin['full_name'] ?? 'Admin'), $subject, $html, $alt)) {
+            $sent++;
+        } else {
+            $failed++;
+        }
+    }
+
+    if ($sent === 0) {
+        $err = !empty($GLOBALS['ysms_last_mail_error']) ? $GLOBALS['ysms_last_mail_error'] : 'check SMTP';
+        return 'Admin email failed: ' . $err;
+    }
+    $msg = 'Admin notified by email (' . $sent . ')';
+    if ($failed) {
+        $msg .= ', ' . $failed . ' failed';
+    }
+    return $msg . '.';
+}
+
+/**
  * Load survey + client/port/surveyor names for notification emails.
  */
 function loadSurveyNotifyContext(PDO $db, int $surveyId): array {
