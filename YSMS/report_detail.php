@@ -99,11 +99,6 @@ include 'includes/header.php';
 
 <style>
 @media (min-width: 992px) {
-    .scroll-content > .info-table-list {
-        max-width: none;
-        width: calc(100% - 32px);
-        margin: 10px 16px 8px !important;
-    }
     .detail-bottom-row {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -113,6 +108,7 @@ include 'includes/header.php';
         margin: 8px 16px 20px;
         align-items: stretch; /* equal height cards */
     }
+    .detail-bottom-row > .info-table-list,
     .detail-bottom-row > .detail-files-panel,
     .detail-bottom-row > .form-box {
         margin: 0 !important;
@@ -215,8 +211,9 @@ include 'includes/header.php';
 <div class="scroll-content">
     <?php $page_title = 'Pending Report Details'; $back_url = 'reports.php'; $page_testid = 'report-detail'; include 'includes/top_app_bar.php'; ?>
 
+    <div class="detail-bottom-row">
     <!-- Read-Only Info Table -->
-    <div class="info-table-list shadow-sm" style="margin-bottom: 10px;">
+    <div class="info-table-list shadow-sm">
         <div class="info-row"><span class="info-label">Vessel Name</span><span class="info-value"><?= sanitize($survey['vessel_name']) ?></span></div>
         <div class="info-row"><span class="info-label">Report No</span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
         <div class="info-row"><span class="info-label">Client Name</span><span class="info-value"><?= sanitize($survey['company_name']) ?></span></div>
@@ -228,14 +225,36 @@ include 'includes/header.php';
         <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
     </div>
 
-    <div class="detail-bottom-row">
+    <?php if ($is_admin): ?>
+    <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm" data-testid="recovery-edit-box">
+        <div class="fw-bold text-dark mb-2" style="font-size: 13px;"><i class="fa-solid fa-droplet text-primary me-1"></i> Edit Recovery</div>
+        <?php if ($recovery_message): ?><div class="alert alert-success py-2 mb-2" style="font-size:12px;" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
+        <?php if ($recovery_error): ?><div class="alert alert-danger py-2 mb-2" style="font-size:12px;" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
+        <form method="POST"><?= csrf_field() ?>
+            <div class="mb-2">
+                <label class="form-label fw-bold text-secondary" style="font-size:11px;">Total Recovery (MT)</label>
+                <input type="number" step="0.001" min="0" name="recovery_amount" class="form-control form-control-sm" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)$survey['recovery_amount']) : '' ?>" data-testid="recovery-field-total">
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-bold text-secondary" style="font-size:11px;">VLSFO Recovery (MT)</label>
+                <input type="number" step="0.001" min="0" name="vlsfo_recovery" class="form-control form-control-sm" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)$survey['vlsfo_recovery']) : '' ?>" data-testid="recovery-field-vlsfo">
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-bold text-secondary" style="font-size:11px;">LSMGO Recovery (MT)</label>
+                <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)$survey['lsmgo_recovery']) : '' ?>" data-testid="recovery-field-lsmgo">
+            </div>
+            <button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
+        </form>
+    </div>
+    <?php endif; ?>
+
     <!-- 🌟 DOWNLOAD SECTION — visible to every role that can reach this page,
          including Client (their own company's reports only, enforced above). -->
     <div class="detail-files-panel px-3 my-3">
         <div class="fw-bold text-dark mb-2" style="font-size: 13px;"><i class="fa-solid fa-folder-open text-warning me-1"></i> Download Pre-Uploaded Survey Files</div>
         <?php if(count($uploaded_files) > 0): ?>
             <?php foreach($uploaded_files as $file): ?>
-                <?php 
+                <?php
                     $raw_name = $file['file_name'] ?? '';
                     $clean_name = preg_replace('/^[0-9]+_/', '', $raw_name);
                     if ($clean_name === '' || $clean_name === null) $clean_name = $raw_name;
@@ -261,7 +280,7 @@ include 'includes/header.php';
     <!-- ✍️ UPLOAD FORM SECTION: కనీసం ఒక WORD FORMAT (.docx) అప్‌లోడ్ చేయాలి -->
     <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm">
         <div class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fa-solid fa-cloud-arrow-up text-primary"></i> Upload Final Documentation</div>
-        
+
         <form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data" id="reportUploadForm"><?= csrf_field() ?>
             <input type="hidden" name="survey_id" value="<?= $survey['id'] ?>">
             <input type="hidden" name="current_status" value="<?= $survey['status'] ?>">
@@ -303,29 +322,6 @@ include 'includes/header.php';
         <a href="invoice_generator.php?id=<?= (int)$survey['id'] ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" data-testid="generate-invoice-button">
             <i class="fa-solid fa-file-invoice-dollar me-1"></i> Generate Invoice
         </a>
-    </div>
-    <?php endif; ?>
-
-    <?php if ($is_admin): ?>
-    <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm" data-testid="recovery-edit-box">
-        <div class="fw-bold text-dark mb-2" style="font-size: 13px;"><i class="fa-solid fa-droplet text-primary me-1"></i> Edit Recovery</div>
-        <?php if ($recovery_message): ?><div class="alert alert-success py-2 mb-2" style="font-size:12px;" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
-        <?php if ($recovery_error): ?><div class="alert alert-danger py-2 mb-2" style="font-size:12px;" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
-        <form method="POST"><?= csrf_field() ?>
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">Total Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="recovery_amount" class="form-control form-control-sm" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)$survey['recovery_amount']) : '' ?>" data-testid="recovery-field-total">
-            </div>
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">VLSFO Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="vlsfo_recovery" class="form-control form-control-sm" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)$survey['vlsfo_recovery']) : '' ?>" data-testid="recovery-field-vlsfo">
-            </div>
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">LSMGO Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)$survey['lsmgo_recovery']) : '' ?>" data-testid="recovery-field-lsmgo">
-            </div>
-            <button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
-        </form>
     </div>
     <?php endif; ?>
     </div><!-- /.detail-bottom-row -->
