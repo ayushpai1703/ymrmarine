@@ -937,10 +937,13 @@ input, select, textarea, .form-control { font-size: 16px; } /* prevents iOS auto
 
     <?php
     // 🌟 Dismissible top alert banner — replaces the old bell/notification
-    // panel entirely. Only two alerts ever show here: "New vessel assigned"
-    // to a Surveyor, and "Report uploaded by X" to an Admin. Opening the
-    // link or tapping X marks the notification read, so it never shows
-    // again (a fresh assignment/upload creates a new one).
+    // panel entirely. Shows on every page (this include is shared), so it's
+    // what makes a fresh notification visible on the dashboard too. Three
+    // alerts show here: "New vessel assigned" to a Surveyor, "Report
+    // uploaded by X" to an Admin, and "New vessel from client — needs a
+    // surveyor" to an Admin. Opening the link or tapping X marks the
+    // notification read, so it never shows again (a fresh
+    // assignment/upload/client-submission creates a new one).
     if (!empty($_SESSION['user_id'])) {
         $__bannerNotif = null;
         try {
@@ -948,7 +951,7 @@ input, select, textarea, .form-control { font-size: 16px; } /* prevents iOS auto
                 require_once __DIR__ . '/notifications.php';
             }
             $__bannerRole = $_SESSION['role'] ?? '';
-            $__bannerTypes = $__bannerRole === 'Admin' ? ['upload', 'report'] : ($__bannerRole === 'Surveyor' ? ['assign'] : []);
+            $__bannerTypes = $__bannerRole === 'Admin' ? ['upload', 'report', 'assign'] : ($__bannerRole === 'Surveyor' ? ['assign'] : []);
             if (!empty($__bannerTypes) && function_exists('getDB')) {
                 $__bannerDb = getDB();
                 $__bannerNotif = getTopBannerNotification($__bannerDb, (int)$_SESSION['user_id'], $__bannerTypes);
