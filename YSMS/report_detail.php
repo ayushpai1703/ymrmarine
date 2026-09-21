@@ -5,6 +5,16 @@ checkAuth();
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $db = getDB();
 
+// 🌟 SAFETY NET: hsfo_recovery column, same as ajax/upload_handler.php —
+// covers an Admin editing recovery here before any file has been uploaded
+// since this column was added.
+try {
+    $cols = $db->query("SHOW COLUMNS FROM surveys LIKE 'hsfo_recovery'")->fetchAll();
+    if (empty($cols)) {
+        $db->exec("ALTER TABLE surveys ADD COLUMN hsfo_recovery DECIMAL(12,3) DEFAULT NULL");
+    }
+} catch (Exception $e) { error_log('report_detail.php hsfo_recovery column: ' . $e->getMessage()); }
+
 $stmt = $db->prepare("
     SELECT s.*, c.company_name, u.full_name as surveyor_name, p.port_name, t.type_name
     FROM surveys s 
@@ -72,15 +82,17 @@ if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_r
     $totalVal = $parseRecovery($_POST['recovery_amount'] ?? '');
     $vlsfoVal = $parseRecovery($_POST['vlsfo_recovery'] ?? '');
     $lsmgoVal = $parseRecovery($_POST['lsmgo_recovery'] ?? '');
-    if ($totalVal === false || $vlsfoVal === false || $lsmgoVal === false) {
+    $hsfoVal = $parseRecovery($_POST['hsfo_recovery'] ?? '');
+    if ($totalVal === false || $vlsfoVal === false || $lsmgoVal === false || $hsfoVal === false) {
         $recovery_error = 'Recovery values must be zero or a positive number.';
     } else {
         try {
-            $upd = $db->prepare("UPDATE surveys SET recovery_amount = ?, vlsfo_recovery = ?, lsmgo_recovery = ? WHERE id = ?");
-            $upd->execute([$totalVal, $vlsfoVal, $lsmgoVal, $id]);
+            $upd = $db->prepare("UPDATE surveys SET recovery_amount = ?, vlsfo_recovery = ?, lsmgo_recovery = ?, hsfo_recovery = ? WHERE id = ?");
+            $upd->execute([$totalVal, $vlsfoVal, $lsmgoVal, $hsfoVal, $id]);
             $survey['recovery_amount'] = $totalVal;
             $survey['vlsfo_recovery'] = $vlsfoVal;
             $survey['lsmgo_recovery'] = $lsmgoVal;
+            $survey['hsfo_recovery'] = $hsfoVal;
             $recovery_message = 'Recovery values updated.';
         } catch (Throwable $e) {
             error_log('report_detail recovery update: ' . $e->getMessage());
@@ -223,6 +235,7 @@ include 'includes/header.php';
         <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
+        <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
     </div>
 
     <?php if ($is_admin): ?>
@@ -242,6 +255,10 @@ include 'includes/header.php';
             <div class="mb-2">
                 <label class="form-label fw-bold text-secondary" style="font-size:11px;">LSMGO Recovery (MT)</label>
                 <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)$survey['lsmgo_recovery']) : '' ?>" data-testid="recovery-field-lsmgo">
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-bold text-secondary" style="font-size:11px;">HSFO Recovery (MT)</label>
+                <input type="number" step="0.001" min="0" name="hsfo_recovery" class="form-control form-control-sm" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)$survey['hsfo_recovery']) : '' ?>" data-testid="recovery-field-hsfo">
             </div>
             <button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
         </form>

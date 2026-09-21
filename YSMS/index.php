@@ -6,6 +6,17 @@ $db = getDB();
 $role = $_SESSION['role'];
 $user_id = $_SESSION['user_id'];
 
+// 🌟 SAFETY NET: hsfo_recovery column (TABLES 54B!N20), same as
+// ajax/upload_handler.php — the dashboard's SUM(hsfo_recovery) queries
+// below need this column to exist even before the first Excel is
+// (re-)uploaded after this feature ships.
+try {
+    $cols = $db->query("SHOW COLUMNS FROM surveys LIKE 'hsfo_recovery'")->fetchAll();
+    if (empty($cols)) {
+        $db->exec("ALTER TABLE surveys ADD COLUMN hsfo_recovery DECIMAL(12,3) DEFAULT NULL");
+    }
+} catch (Exception $e) { error_log('index.php hsfo_recovery column: ' . $e->getMessage()); }
+
 // 🌟 Client's own client_id (needed to scope their dashboard/vessel data)
 $client_row_id = 0;
 if ($role === 'Client') {
@@ -33,6 +44,9 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
 
     // అడ్మిన్ కి O20 (LSMGO) రికవరీ సమ్
     $total_lsmgo = $db->query("SELECT SUM(lsmgo_recovery) FROM surveys WHERE lsmgo_recovery IS NOT NULL")->fetchColumn();
+
+    // అడ్మిన్ కి N20 (HSFO) రికవరీ సమ్
+    $total_hsfo = $db->query("SELECT SUM(hsfo_recovery) FROM surveys WHERE hsfo_recovery IS NOT NULL")->fetchColumn();
 } elseif ($role === 'Client') {
     // క్లయింట్ కి కేవలం తన కంపెనీ వెసెల్స్ మాత్రమే
     $stmt_v = $db->prepare("SELECT COUNT(*) FROM surveys WHERE status = 'Pending Vessel' AND client_id = ?");
@@ -64,6 +78,10 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $stmt_lsmgo = $db->prepare("SELECT SUM(lsmgo_recovery) FROM surveys WHERE lsmgo_recovery IS NOT NULL AND client_id = ?");
     $stmt_lsmgo->execute([$client_row_id]);
     $total_lsmgo = $stmt_lsmgo->fetchColumn();
+
+    $stmt_hsfo = $db->prepare("SELECT SUM(hsfo_recovery) FROM surveys WHERE hsfo_recovery IS NOT NULL AND client_id = ?");
+    $stmt_hsfo->execute([$client_row_id]);
+    $total_hsfo = $stmt_hsfo->fetchColumn();
 } else {
     // సర్వేయర్ కి కేవలం తనకు assign చేసినవి మాత్రమే — primary surveys.surveyor_id
     // మరియు survey_surveyors జంక్షన్ టేబుల్ (multi-surveyor) రెండూ కలిపి.
@@ -99,19 +117,24 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $stmt_lsmgo = $db->prepare("SELECT SUM(lsmgo_recovery) FROM surveys WHERE lsmgo_recovery IS NOT NULL AND $assignedSql");
     $stmt_lsmgo->execute([$user_id, $user_id]);
     $total_lsmgo = $stmt_lsmgo->fetchColumn();
+
+    // సర్వేయర్ కి తన HSFO (N20) రికవరీ సమ్ మాత్రమే
+    $stmt_hsfo = $db->prepare("SELECT SUM(hsfo_recovery) FROM surveys WHERE hsfo_recovery IS NOT NULL AND $assignedSql");
+    $stmt_hsfo->execute([$user_id, $user_id]);
+    $total_hsfo = $stmt_hsfo->fetchColumn();
 }
 
 
 // 🌟 Recent Survey Recovery (latest vessel with recovery)
 if (in_array($role, ['Admin', 'Super Admin'], true)) {
-    $recent_row = $db->query("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, recovery_amount FROM surveys WHERE recovery_amount IS NOT NULL ORDER BY COALESCE(survey_completed_date, report_uploaded_date) DESC, id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    $recent_row = $db->query("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE recovery_amount IS NOT NULL ORDER BY COALESCE(survey_completed_date, report_uploaded_date) DESC, id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
     $avg_ships = $db->query("SELECT COUNT(*) FROM surveys WHERE status = 'Completed'")->fetchColumn();
     $months_span = $db->query("SELECT GREATEST(1, TIMESTAMPDIFF(MONTH, MIN(COALESCE(survey_completed_date, report_uploaded_date, assign_date)), CURDATE()) + 1) FROM surveys WHERE status IN ('Completed','Pending Report')")->fetchColumn();
     $avg_ships_per_month = $months_span > 0 ? round(((float)$avg_ships) / (float)$months_span, 1) : 0;
     $avg_recovery_per_ship = $db->query("SELECT AVG(recovery_amount) FROM surveys WHERE recovery_amount IS NOT NULL AND recovery_amount > 0")->fetchColumn();
     $avg_recovery_per_surveyor = $db->query("SELECT AVG(t.s) FROM (SELECT SUM(recovery_amount) AS s FROM surveys WHERE recovery_amount IS NOT NULL GROUP BY surveyor_id) t")->fetchColumn();
 } elseif ($role === 'Client') {
-    $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, recovery_amount FROM surveys WHERE recovery_amount IS NOT NULL AND client_id = ? ORDER BY COALESCE(survey_completed_date, report_uploaded_date) DESC, id DESC LIMIT 1");
+    $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE recovery_amount IS NOT NULL AND client_id = ? ORDER BY COALESCE(survey_completed_date, report_uploaded_date) DESC, id DESC LIMIT 1");
     $stmt_recent->execute([$client_row_id]);
     $recent_row = $stmt_recent->fetch(PDO::FETCH_ASSOC);
     // (గతంలో ఇక్కడ avg_ships_per_month 0 హార్డ్‌కోడ్ చేయబడింది — బగ్ ఫిక్స్)
@@ -126,7 +149,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $avg_recovery_per_surveyor = null;
 } else {
     $assignedSql = "(surveyor_id = ? OR id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))";
-    $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, recovery_amount FROM surveys WHERE recovery_amount IS NOT NULL AND $assignedSql ORDER BY COALESCE(survey_completed_date, report_uploaded_date) DESC, id DESC LIMIT 1");
+    $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE recovery_amount IS NOT NULL AND $assignedSql ORDER BY COALESCE(survey_completed_date, report_uploaded_date) DESC, id DESC LIMIT 1");
     $stmt_recent->execute([$user_id, $user_id]);
     $recent_row = $stmt_recent->fetch(PDO::FETCH_ASSOC);
     $stmt_avg = $db->prepare("SELECT COUNT(*) FROM surveys WHERE status = 'Completed' AND $assignedSql");
@@ -142,6 +165,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
 $recent_vessel_name = $recent_row['vessel_name'] ?? '—';
 $recent_vlsfo = !empty($recent_row['vlsfo_recovery']) ? number_format((float)$recent_row['vlsfo_recovery'], 3) . ' MT' : '0.000 MT';
 $recent_lsmgo = !empty($recent_row['lsmgo_recovery']) ? number_format((float)$recent_row['lsmgo_recovery'], 3) . ' MT' : '0.000 MT';
+$recent_hsfo = !empty($recent_row['hsfo_recovery']) ? number_format((float)$recent_row['hsfo_recovery'], 3) . ' MT' : '0.000 MT';
 $avg_ships_per_month_disp = number_format((float)$avg_ships_per_month, 1);
 $avg_recovery_per_ship_disp = !empty($avg_recovery_per_ship) ? number_format((float)$avg_recovery_per_ship, 3) . ' MT' : '0.000 MT';
 $avg_recovery_per_surveyor_disp = !empty($avg_recovery_per_surveyor) ? number_format((float)$avg_recovery_per_surveyor, 3) . ' MT' : '0.000 MT';
@@ -151,6 +175,7 @@ $total_recovery = !empty($total_recovery) ? number_format((float)$total_recovery
 $month_recovery = !empty($month_recovery) ? number_format((float)$month_recovery, 3) . ' MT' : '0.000 MT';
 $total_vlsfo = !empty($total_vlsfo) ? number_format((float)$total_vlsfo, 3) . ' MT' : '0.000 MT';
 $total_lsmgo = !empty($total_lsmgo) ? number_format((float)$total_lsmgo, 3) . ' MT' : '0.000 MT';
+$total_hsfo = !empty($total_hsfo) ? number_format((float)$total_hsfo, 3) . ' MT' : '0.000 MT';
 
 include 'includes/header.php';
 
@@ -273,10 +298,15 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             <span class="stat-title">Recovery in LSMGO</span>
             <div class="stat-val"><?= $total_lsmgo ?></div>
         </div>
+        <!-- 🌟 కొత్త కార్డ్: Recovery in HSFO (TABLES 54B - N20 సెల్ నుండి) -->
+        <div class="stat-card">
+            <span class="stat-title">Recovery in HSFO</span>
+            <div class="stat-val"><?= $total_hsfo ?></div>
+        </div>
         <div class="stat-card" data-testid="recent-survey-recovery-card">
             <span class="stat-title">Recent Survey Recovery</span>
             <div class="stat-val" style="font-size:14px;"><?= sanitize($recent_vessel_name) ?></div>
-            <div class="text-muted mt-1" style="font-size:11px;">VLSFO: <?= $recent_vlsfo ?> · LSMGO: <?= $recent_lsmgo ?></div>
+            <div class="text-muted mt-1" style="font-size:11px;">VLSFO: <?= $recent_vlsfo ?> · LSMGO: <?= $recent_lsmgo ?> · HSFO: <?= $recent_hsfo ?></div>
         </div>
         <div class="stat-card" data-testid="avg-ships-per-month-card">
             <span class="stat-title">Average Ships Per Month</span>
