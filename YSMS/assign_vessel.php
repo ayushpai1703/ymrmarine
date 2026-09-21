@@ -3,7 +3,6 @@ require_once 'config/config.php';
 require_once 'includes/mailer.php';
 require_once 'includes/report_number.php';
 require_once 'includes/notifications.php';
-require_once 'includes/email_account.php';
 checkAuth();
 if (!in_array($_SESSION['role'] ?? '', ['Admin', 'Client'], true)) {
     header('Location: index.php');
@@ -15,12 +14,11 @@ $db = getDB();
 $error = '';
 $success = '';
 
-// 🌟 Automatic Vessel Assignment from survey@ymrmarine.com — Admin only,
-// and only on the "create new" form (not while editing an existing
-// assignment, and never for Client). See ajax/vessel_emails_list.php /
-// ajax/vessel_email_action.php.
+// 🌟 Paste Email — Auto-fill: Admin only, and only on the "create new" form
+// (not while editing an existing assignment, and never for Client). Admin
+// pastes the raw email text and clicks Auto-fill; see
+// ajax/vessel_email_paste_autofill.php.
 $show_email_panel = !$is_client_role && empty($_GET['edit_id']);
-$email_account_cfg = $show_email_panel ? getEmailAccount($db) : null;
 
 // 🌟 SAFETY NET: లైవ్ డేటాబేస్‌లో `survey_type_ids` కాలమ్ లేకపోతే (database/migration_multi_survey_type.sql
 // రన్ చేయకపోతే) ప్రతి assign attempt ఇక్కడే "Unknown column" SQL error తో ఫెయిల్ అవుతుంది —
@@ -279,9 +277,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $agent_name = mb_strtoupper(trim($_POST['agent_name']), 'UTF-8');
     $port_id = (int)$_POST['port_id'];
 
-    // 🌟 Optional IMO Number (used for automatic-vessel-assignment-from-email
-    // duplicate detection — see ajax/vessel_email_action.php). Digits only,
-    // never blocks submission if missing/malformed since it's optional.
+    // 🌟 Optional IMO Number (used for the Paste Email — Auto-fill panel's
+    // duplicate detection — see ajax/vessel_email_paste_autofill.php). Digits
+    // only, never blocks submission if missing/malformed since it's optional.
     $imo_number_raw = preg_replace('/[^0-9]/', '', (string)($_POST['imo_number'] ?? ''));
     $imo_number = ($imo_number_raw !== '' && $imo_number_raw !== null) ? substr($imo_number_raw, 0, 20) : null;
 
@@ -904,29 +902,20 @@ include 'includes/header.php';
         .searchable-select.open .ss-panel { z-index: 400; }
     }
 
-    /* Recent Vessel Emails panel */
+    /* Paste Email — Auto-fill panel */
     .rve-panel { background:#fff; border:1px solid var(--border-color); border-radius:16px; padding:16px; }
     .rve-header { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
     .rve-title { font-weight:700; font-size:13.5px; color:var(--text-dark); }
-    .rve-source { font-size:11px; color:var(--text-muted); margin-top:2px; }
-    .rve-refresh-btn { flex-shrink:0; background:#eef2ff; color:#3b32b3; border:none; border-radius:10px; padding:8px 14px; font-weight:700; font-size:12px; white-space:nowrap; }
-    .rve-refresh-btn.rve-loading i { animation: rve-spin 0.8s linear infinite; }
-    @keyframes rve-spin { from { transform:rotate(0); } to { transform:rotate(360deg); } }
-    .rve-banner { font-size:12px; padding:10px 12px; border-radius:10px; margin-bottom:10px; }
+    .rve-hint { font-size:11px; color:var(--text-muted); margin-top:2px; }
+    .rve-textarea { width:100%; min-height:120px; border:1px solid var(--border-color); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--text-dark); background:#f8fafc; resize:vertical; font-family:inherit; }
+    .rve-textarea:focus { border-color:#3b32b3; background:#fff; outline:none; }
+    .rve-actions { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+    .rve-fill-btn { flex:1 1 160px; background:#3b32b3; color:#fff; border:none; border-radius:10px; padding:10px 14px; font-weight:700; font-size:13px; }
+    .rve-fill-btn:disabled { opacity:0.6; }
+    .rve-clear-btn { flex:0 0 auto; background:#f1f5f9; color:#64748b; border:none; border-radius:10px; padding:10px 14px; font-weight:700; font-size:13px; }
+    .rve-banner { font-size:12px; padding:10px 12px; border-radius:10px; margin-top:10px; }
     .rve-banner.rve-banner-error { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
-    .rve-empty { font-size:12.5px; color:var(--text-muted); padding:14px 4px; text-align:center; }
-    .rve-list { display:flex; flex-direction:column; gap:10px; max-height:360px; overflow-y:auto; }
-    .rve-card { border:1px solid var(--border-color); border-radius:12px; padding:12px 14px; background:#f8fafc; }
-    .rve-card-vessel { font-weight:700; font-size:13.5px; color:var(--text-dark); }
-    .rve-card-subject { font-size:12px; color:var(--text-dark); margin-top:2px; }
-    .rve-card-meta { font-size:11px; color:var(--text-muted); margin-top:4px; }
-    .rve-card-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-    .rve-card-actions button, .rve-card-actions a { flex:1 1 90px; border:none; border-radius:8px; padding:7px 8px; font-size:11.5px; font-weight:700; text-align:center; text-decoration:none; }
-    .rve-btn-use { background:#3b32b3; color:#fff; }
-    .rve-btn-view { background:#eef2ff; color:#3b32b3; }
-    .rve-btn-ignore { background:#f1f5f9; color:#64748b; }
-    .rve-settings-link { text-align:right; margin-top:10px; }
-    .rve-settings-link a { font-size:11px; color:var(--text-muted); text-decoration:none; }
+    .rve-banner.rve-banner-ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
     @media (min-width: 992px) {
         .rve-panel { max-width: 900px; margin: 16px auto 0; }
     }
@@ -941,24 +930,23 @@ include 'includes/top_app_bar.php';
 
 <div class="scroll-content">
     <?php if ($show_email_panel): ?>
-    <!-- 🌟 Automatic Vessel Assignment from survey@ymrmarine.com -->
-    <div class="rve-panel mx-3 mt-3" data-testid="recent-vessel-emails-panel">
+    <!-- 🌟 Paste Email — Auto-fill: paste the vessel job email text, click
+         Auto-fill to populate the form below (including dropdown selections). -->
+    <div class="rve-panel mx-3 mt-3" data-testid="paste-email-panel">
         <div class="rve-header">
             <div>
-                <div class="rve-title"><i class="fa-solid fa-envelope-open-text"></i> Recent Vessel Emails</div>
-                <div class="rve-source">📩 Source: <?= sanitize($email_account_cfg['mailbox_email'] ?? 'survey@ymrmarine.com') ?></div>
+                <div class="rve-title"><i class="fa-solid fa-envelope-open-text"></i> Paste Email — Auto-fill</div>
+                <div class="rve-hint">Copy the vessel job email (subject + body) and paste it below.</div>
             </div>
-            <button type="button" class="rve-refresh-btn" id="rveRefreshBtn" data-testid="rve-refresh-btn">
-                <i class="fa-solid fa-rotate"></i> Refresh
+        </div>
+        <textarea id="rveEmailText" class="rve-textarea" placeholder="Paste the email text here..." data-testid="paste-email-textarea"></textarea>
+        <div class="rve-actions">
+            <button type="button" class="rve-fill-btn" id="rveFillBtn" data-testid="paste-email-autofill-btn">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-fill
             </button>
+            <button type="button" class="rve-clear-btn" id="rveClearBtn" data-testid="paste-email-clear-btn">Clear</button>
         </div>
         <div id="rveBanner" class="rve-banner" style="display:none;"></div>
-        <div id="rveList" class="rve-list">
-            <div class="rve-empty" data-testid="rve-loading">Loading recent emails…</div>
-        </div>
-        <div class="rve-settings-link">
-            <a href="admin_email_integration.php"><i class="fa-solid fa-gear"></i> Email Integration Settings</a>
-        </div>
     </div>
     <?php endif; ?>
 
@@ -1719,10 +1707,8 @@ include 'includes/top_app_bar.php';
 
 <script>
     const RVE_CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
-    const RVE_AUTO_REFRESH_SECONDS = <?= (int)($email_account_cfg['auto_refresh_seconds'] ?? 60) ?>;
 
     $(document).ready(function() {
-        let rveAutoTimer = null;
         let rvePendingExtracted = null;
 
         function rveAjax(url, data) {
@@ -1733,58 +1719,6 @@ include 'includes/top_app_bar.php';
                 dataType: 'json',
                 headers: { 'X-CSRF-Token': RVE_CSRF_TOKEN }
             });
-        }
-
-        function rveEscape(s) {
-            return $('<div>').text(s == null ? '' : s).html();
-        }
-
-        function rveRenderCards(emails) {
-            const $list = $('#rveList');
-            if (!emails || !emails.length) {
-                $list.html('<div class="rve-empty" data-testid="rve-empty">No recent vessel emails.</div>');
-                return;
-            }
-            let html = '';
-            emails.forEach(function(em) {
-                html += '<div class="rve-card" data-email-id="' + em.id + '">'
-                    + '<div class="rve-card-vessel">' + rveEscape(em.vessel_name || '(vessel name not found)') + '</div>'
-                    + '<div class="rve-card-subject">' + rveEscape(em.subject || '(no subject)') + '</div>'
-                    + '<div class="rve-card-meta">Received: ' + rveEscape(em.received_at) + (em.has_attachment ? ' · <i class="fa-solid fa-paperclip"></i> attachment' : '') + '</div>'
-                    + '<div class="rve-card-actions">'
-                    + '<button type="button" class="rve-btn-use" data-testid="rve-use-btn-' + em.id + '">Use This Email</button>'
-                    + '<a href="view_vessel_email.php?id=' + em.id + '" target="_blank" class="rve-btn-view" data-testid="rve-view-btn-' + em.id + '">View Email</a>'
-                    + '<button type="button" class="rve-btn-ignore" data-testid="rve-ignore-btn-' + em.id + '">Ignore</button>'
-                    + '</div></div>';
-            });
-            $list.html(html);
-        }
-
-        function rveLoad() {
-            const $btn = $('#rveRefreshBtn');
-            $btn.addClass('rve-loading').prop('disabled', true);
-            $('#rveBanner').hide();
-            rveAjax('ajax/vessel_emails_list.php', {}).done(function(resp) {
-                if (!resp || !resp.ok) {
-                    $('#rveBanner').addClass('rve-banner-error').text((resp && resp.error) || 'Unable to load recent emails.').show();
-                    $('#rveList').html('<div class="rve-empty">No recent vessel emails.</div>');
-                    return;
-                }
-                if (resp.fetch_error) {
-                    $('#rveBanner').addClass('rve-banner-error').text('⚠ Unable to read ' + resp.source + '. ' + resp.fetch_error).show();
-                }
-                rveRenderCards(resp.emails);
-            }).fail(function() {
-                $('#rveBanner').addClass('rve-banner-error').text('⚠ Unable to reach the server to load recent emails.').show();
-            }).always(function() {
-                $btn.removeClass('rve-loading').prop('disabled', false);
-            });
-        }
-
-        $('#rveRefreshBtn').on('click', rveLoad);
-        rveLoad();
-        if (RVE_AUTO_REFRESH_SECONDS > 0) {
-            rveAutoTimer = setInterval(rveLoad, RVE_AUTO_REFRESH_SECONDS * 1000);
         }
 
         function rveFillForm(extracted, suggested) {
@@ -1806,7 +1740,7 @@ include 'includes/top_app_bar.php';
             if (extraLines.length) {
                 const $remarks = $('textarea[name="remarks"]');
                 const current = $.trim($remarks.val());
-                const block = '— From survey@ymrmarine.com —\n' + extraLines.join('\n');
+                const block = '— From pasted email —\n' + extraLines.join('\n');
                 $remarks.val(current ? current + '\n\n' + block : block);
             }
 
@@ -1821,27 +1755,28 @@ include 'includes/top_app_bar.php';
             try { $('.scroll-content')[0].scrollTop = 0; } catch (e) {}
         }
 
-        $('#rveList').on('click', '.rve-btn-ignore', function() {
-            const $card = $(this).closest('.rve-card');
-            const id = $card.data('email-id');
-            rveAjax('ajax/vessel_email_action.php', { action: 'ignore', id: id }).done(function() {
-                $card.remove();
-            });
+        $('#rveClearBtn').on('click', function() {
+            $('#rveEmailText').val('');
+            $('#rveBanner').hide();
         });
 
-        $('#rveList').on('click', '.rve-btn-use', function() {
+        $('#rveFillBtn').on('click', function() {
             const $btn = $(this);
-            const $card = $btn.closest('.rve-card');
-            const id = $card.data('email-id');
-            $btn.prop('disabled', true).text('Checking…');
-            rveAjax('ajax/vessel_email_action.php', { action: 'use', id: id }).done(function(resp) {
-                $btn.prop('disabled', false).text('Use This Email');
+            const text = $.trim($('#rveEmailText').val());
+            $('#rveBanner').hide();
+            if (!text) {
+                $('#rveBanner').removeClass('rve-banner-ok').addClass('rve-banner-error').text('Please paste the email text first.').show();
+                return;
+            }
+            $btn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Checking…');
+            rveAjax('ajax/vessel_email_paste_autofill.php', { email_text: text }).done(function(resp) {
+                $btn.prop('disabled', false).html('<i class="fa-solid fa-wand-magic-sparkles"></i> Auto-fill');
                 if (!resp || !resp.ok) {
-                    alert((resp && resp.error) || 'Could not use this email.');
+                    $('#rveBanner').removeClass('rve-banner-ok').addClass('rve-banner-error').text((resp && resp.error) || 'Could not process this email.').show();
                     return;
                 }
                 if (resp.duplicate === 'check_failed') {
-                    alert('⚠ Unable to verify whether this vessel already exists.\n\nFor safety, no new assignment will be created automatically. Please verify manually.');
+                    $('#rveBanner').removeClass('rve-banner-ok').addClass('rve-banner-error').text('⚠ Unable to verify whether this vessel already exists. For safety, no field was auto-filled — please verify manually.').show();
                     return;
                 }
                 if (resp.duplicate === 'exact' && resp.existing) {
@@ -1868,9 +1803,10 @@ include 'includes/top_app_bar.php';
                     return;
                 }
                 rveFillForm(resp.extracted, resp.suggested);
+                $('#rveBanner').removeClass('rve-banner-error').addClass('rve-banner-ok').text('✓ Form auto-filled from the pasted email.').show();
             }).fail(function() {
-                $btn.prop('disabled', false).text('Use This Email');
-                alert('Could not reach the server to use this email.');
+                $btn.prop('disabled', false).html('<i class="fa-solid fa-wand-magic-sparkles"></i> Auto-fill');
+                $('#rveBanner').removeClass('rve-banner-ok').addClass('rve-banner-error').text('⚠ Unable to reach the server.').show();
             });
         });
 
