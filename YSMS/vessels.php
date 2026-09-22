@@ -305,18 +305,26 @@ include 'includes/header.php';
        already display:none on desktop).
 
        The header itself reuses the shared includes/top_app_bar.php
-       component as-is (hamburger left, title centered, profile right) —
-       just reskinned blue here — instead of a custom bar, specifically
-       so it inherits the SAME position:sticky;top:0 rule already proven
-       to stay pinned while the page scrolls on every other page in the
-       app (report_detail.php, completed_detail.php, …). */
+       component as-is (hamburger left, title centered, profile right),
+       just reskinned blue below — position:fixed (not the shared
+       position:sticky) so it's pinned to the viewport unconditionally,
+       independent of .mobile-container/.scroll-content's own height/flex
+       sizing. .vessels-mobile-view gets a matching padding-top so page
+       content isn't hidden underneath it. */
     @media (max-width: 991.98px) {
+        /* position:fixed (not sticky) — guarantees the bar stays pinned to
+           the viewport regardless of any ancestor flex/height quirks in
+           .mobile-container/.scroll-content; .vessels-mobile-view gets a
+           matching padding-top below so content isn't hidden under it. */
         .top-app-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 900;
             background: linear-gradient(160deg, #1d6fe0 0%, #123f99 65%, #0b1e46 100%);
             border-bottom: none;
             box-shadow: 0 6px 18px rgba(11,30,70,.25);
         }
-        .top-app-bar-title { color: #fff; }
+        .top-app-bar-title { color: #fff; font-size: 22px; font-weight: 800; letter-spacing: .02em; }
         .top-app-bar .hamburger-menu-btn {
             background: rgba(255,255,255,.16);
             border: 1px solid rgba(255,255,255,.32);
@@ -330,9 +338,10 @@ include 'includes/header.php';
             width: 11px; height: 11px; border-radius: 50%;
             background: #22c55e; border: 2px solid #1560c9;
         }
+        .vessels-mobile-view { padding-top: 74px; }
 
         .pv-title-card {
-            display: flex; align-items: center; gap: 12px;
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
             background: #fff; border-radius: 18px;
             margin: 14px 14px 16px; padding: 14px 16px;
             box-shadow: 0 6px 18px rgba(15,23,42,.08);
@@ -342,7 +351,6 @@ include 'includes/header.php';
             background: #eaf3ff; color: #1d6fe0; font-size: 19px;
             display: flex; align-items: center; justify-content: center;
         }
-        .pv-title-text { flex: 1 1 auto; font-size: 19px; font-weight: 800; color: var(--text-dark); }
         .pv-title-count { text-align: center; background: #eaf3ff; border-radius: 14px; padding: 6px 14px; flex: none; }
         .pv-title-count-num { display: block; font-size: 18px; font-weight: 800; color: #1d6fe0; line-height: 1.1; }
         .pv-title-count-label { display: block; font-size: 9.5px; font-weight: 700; color: #1d6fe0; text-transform: uppercase; letter-spacing: .04em; }
@@ -503,7 +511,6 @@ include 'includes/header.php';
     <div class="vessels-mobile-view">
         <div class="pv-title-card" data-testid="pending-vessels-title-card">
             <div class="pv-title-icon"><i class="fa-solid fa-ship"></i></div>
-            <div class="pv-title-text">Pending Vessels</div>
             <div class="pv-title-count"><span class="pv-title-count-num"><?= count($surveys) ?></span><span class="pv-title-count-label">Pending</span></div>
         </div>
 
