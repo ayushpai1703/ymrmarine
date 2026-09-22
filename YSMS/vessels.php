@@ -90,6 +90,11 @@ if ($is_full_access) {
 }
 $surveys = $stmt->fetchAll();
 
+// 🌟 Mobile "Pending Vessels" hero header — same logo file the desktop
+// sidebar brand uses (assets/images/logo.png), shown only if present.
+$pv_logo_path = 'assets/images/logo.png';
+$pv_has_logo = is_file(__DIR__ . '/' . $pv_logo_path);
+
 $survey_types_filter = [];
 $survey_places_filter = [];
 $survey_clients_filter = [];
@@ -296,6 +301,131 @@ include 'includes/header.php';
         .vessel-card-top-content { display: flex; justify-content: space-between; align-items: center; padding: 15px 15px 5px 15px; }
     }
 
+    /* ═══ Mobile "Pending Vessels" hero header + modern card redesign ═══
+       Page-scoped (this <style> block only loads on vessels.php), so none
+       of this leaks into reports.php/completed.php/cancelled.php even
+       though they share the same .vessel-card/.badge-place/etc. class
+       names. Desktop (≥992px) is untouched — .pv-topbar/.pv-title-card
+       simply don't render there (they live inside .vessels-mobile-view,
+       already display:none on desktop), and the standard white
+       .top-app-bar is hidden below only under the mobile breakpoint. */
+    @media (max-width: 991.98px) {
+        .top-app-bar { display: none; }
+
+        .pv-topbar {
+            position: sticky;
+            top: 0;
+            z-index: 860;
+            display: grid;
+            grid-template-columns: 44px 1fr 44px;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 16px 26px;
+            background: linear-gradient(160deg, #1d6fe0 0%, #123f99 65%, #0b1e46 100%);
+            box-shadow: 0 6px 18px rgba(11,30,70,.25);
+        }
+        .pv-hamburger {
+            background: rgba(255,255,255,.16);
+            border: 1px solid rgba(255,255,255,.32);
+            color: #fff;
+            width: 42px; height: 42px;
+        }
+        .pv-hamburger:hover { background: rgba(255,255,255,.26); }
+        .pv-brand { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; }
+        .pv-brand-logo-wrap {
+            width: 38px; height: 38px; border-radius: 11px; background: #fff;
+            display: flex; align-items: center; justify-content: center; flex: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,.18);
+        }
+        .pv-brand-logo-wrap img { width: 26px; height: 26px; object-fit: contain; }
+        .pv-brand-text { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+        .pv-brand-title { color: #fff; font-weight: 800; font-size: 19px; letter-spacing: .03em; }
+        .pv-brand-sub { color: rgba(255,255,255,.78); font-size: 9px; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; margin-top: 2px; }
+        .pv-topbar-right { display: flex; justify-content: flex-end; }
+        .pv-topbar-right .profile-menu-trigger { position: relative; }
+        .pv-topbar-right .profile-avatar { border: 2px solid rgba(255,255,255,.85); }
+        .pv-topbar-right .profile-menu-trigger::after {
+            content: ''; position: absolute; bottom: 1px; right: 1px;
+            width: 11px; height: 11px; border-radius: 50%;
+            background: #22c55e; border: 2px solid #1560c9;
+        }
+
+        .pv-title-card {
+            display: flex; align-items: center; gap: 12px;
+            background: #fff; border-radius: 18px;
+            margin: -18px 14px 16px; padding: 14px 16px;
+            box-shadow: 0 10px 26px rgba(15,23,42,.12);
+            position: relative; z-index: 5;
+        }
+        .pv-title-icon {
+            width: 46px; height: 46px; border-radius: 14px; flex: none;
+            background: #eaf3ff; color: #1d6fe0; font-size: 19px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .pv-title-text { flex: 1 1 auto; font-size: 19px; font-weight: 800; color: var(--text-dark); }
+        .pv-title-count { text-align: center; background: #eaf3ff; border-radius: 14px; padding: 6px 14px; flex: none; }
+        .pv-title-count-num { display: block; font-size: 18px; font-weight: 800; color: #1d6fe0; line-height: 1.1; }
+        .pv-title-count-label { display: block; font-size: 9.5px; font-weight: 700; color: #1d6fe0; text-transform: uppercase; letter-spacing: .04em; }
+
+        .search-filter-row { padding: 0 14px 12px; }
+        .search-control { border-radius: 14px; padding: 12px 12px 12px 38px; }
+        .search-input-wrapper i { top: 14px; }
+        .filter-btn { border-radius: 14px; }
+
+        .pv-actions-row { display: flex; gap: 10px; padding: 0 14px 14px; }
+        .pv-export-btn {
+            flex: 1 1 auto;
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            background: linear-gradient(90deg, #16a34a, #0ea5b0);
+            color: #fff; text-decoration: none; font-weight: 700; font-size: 13.5px;
+            border-radius: 14px; padding: 12px 14px;
+            box-shadow: 0 8px 18px rgba(16,163,74,.25);
+        }
+        .pv-sort-wrap {
+            flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+            background: #fff; border: 1px solid var(--border-color); border-radius: 14px;
+            padding: 0 12px 0 14px; color: var(--text-dark);
+        }
+        .pv-sort-wrap i { font-size: 13px; color: #1d6fe0; }
+        .pv-sort-select {
+            border: none; background: transparent; appearance: none; -webkit-appearance: none;
+            font-weight: 700; font-size: 13px; color: var(--text-dark);
+            padding: 12px 18px 12px 6px;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%231d6fe0'/></svg>");
+            background-repeat: no-repeat; background-position: right 0 center;
+        }
+
+        /* Vessel card body redesign */
+        .vessel-card { border: none; border-radius: 20px; box-shadow: 0 8px 22px rgba(15,23,42,.08); }
+        .pv-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 16px 16px 10px; }
+        .pv-card-headline { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .pv-ship-icon {
+            width: 40px; height: 40px; border-radius: 12px; flex: none;
+            background: #eaf3ff; color: #1d6fe0; font-size: 17px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .pv-vessel-name { font-size: 16.5px; font-weight: 800; color: var(--text-dark); word-break: break-word; }
+        .pv-type-pill { flex: none; max-width: 46%; text-align: right; }
+        .pv-card-body { display: flex; align-items: stretch; gap: 12px; padding: 0 16px 12px; }
+        .pv-info-rows { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+        .pv-info-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dark); }
+        .pv-info-row i { width: 16px; text-align: center; color: #94a3b8; font-size: 12px; flex: none; }
+        .pv-info-label { color: var(--text-muted); flex: none; }
+        .pv-info-val { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
+        .pv-info-row .badge-place { margin: 0; }
+        .pv-card-image {
+            flex: 0 0 108px; width: 108px; height: 92px; border-radius: 14px; overflow: hidden;
+            background: #eff6ff; align-self: center;
+        }
+        .pv-card-image img { width: 100%; height: 100%; object-fit: cover; }
+        .vessel-live-status-bar {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            background: #fffaf0; border-top: none; padding: 12px 16px;
+        }
+        .pv-footer-text { flex: 1 1 auto; min-width: 0; }
+        .pv-edit-btn { margin: 0; flex: none; }
+    }
+
     /* Hide desktop table on mobile; hide mobile cards on desktop */
     .vessels-desktop-view { display: none; }
     .vessels-mobile-view { display: block; }
@@ -395,8 +525,33 @@ include 'includes/header.php';
 <div class="scroll-content" data-list-scope data-testid="pending-vessels-page">
     <?php $page_title = 'Pending Vessels'; $back_url = 'index.php'; $page_testid = 'pending-vessels'; include 'includes/top_app_bar.php'; ?>
 
-    <!-- ══════════════ MOBILE VIEW (cards — original) ══════════════ -->
+    <!-- ══════════════ MOBILE VIEW (modern card redesign) ══════════════ -->
     <div class="vessels-mobile-view">
+        <div class="pv-topbar" data-testid="pending-vessels-hero-topbar">
+            <button type="button" class="hamburger-menu-btn pv-hamburger" aria-label="Open navigation" aria-expanded="false" data-testid="pending-vessels-hamburger-button">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div class="pv-brand">
+                <?php if ($pv_has_logo): ?>
+                    <div class="pv-brand-logo-wrap"><img src="<?= sanitize($pv_logo_path) ?>" alt="YMR logo"></div>
+                <?php endif; ?>
+                <div class="pv-brand-text">
+                    <span class="pv-brand-title">YMR</span>
+                    <span class="pv-brand-sub">Survey Management System</span>
+                </div>
+            </div>
+            <div class="pv-topbar-right"><?php include 'includes/profile_dropdown.php'; ?></div>
+        </div>
+        <!-- Sidebar overlay + .sidebar-page class already come from the
+             includes/top_app_bar.php call above (kept, just visually
+             hidden on mobile) — no need to duplicate them here. -->
+
+        <div class="pv-title-card" data-testid="pending-vessels-title-card">
+            <div class="pv-title-icon"><i class="fa-solid fa-ship"></i></div>
+            <div class="pv-title-text">Pending Vessels</div>
+            <div class="pv-title-count"><span class="pv-title-count-num"><?= count($surveys) ?></span><span class="pv-title-count-label">Pending</span></div>
+        </div>
+
         <div class="search-filter-row">
             <div class="search-input-wrapper">
                 <i class="fa-solid fa-magnifying-glass"></i>
@@ -405,7 +560,6 @@ include 'includes/header.php';
             <button type="button" class="filter-btn" data-filter-toggle aria-expanded="false" data-testid="pending-vessels-filter-button"><i class="fa-solid fa-sliders"></i></button>
         </div>
         <div class="list-controls-panel" data-controls-panel data-testid="pending-vessels-controls-panel">
-            <select data-list-sort data-testid="pending-vessels-sort-select"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name-asc">Vessel A–Z</option><option value="name-desc">Vessel Z–A</option></select>
             <select data-filter-type data-testid="pending-vessels-type-filter"><option value="">All survey types</option><?php foreach ($survey_types_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
             <select data-filter-place data-testid="pending-vessels-place-filter"><option value="">All survey places</option><?php foreach ($survey_places_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
             <select data-filter-client data-testid="pending-vessels-client-filter"><option value="">All clients</option><?php foreach ($survey_clients_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
@@ -415,10 +569,20 @@ include 'includes/header.php';
             <?php endif; ?>
             <button type="button" class="clear-filters-btn" data-clear-filters data-testid="pending-vessels-clear-filters"><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
         </div>
-        <div class="px-3 mb-3">
-            <a href="export_vessels.php" class="btn btn-success w-100" style="background-color: #28a745; border: none; font-weight: 600; padding: 8px;">
-                <i class="fa-solid fa-file-excel me-2"></i> Export to Excel
+
+        <div class="pv-actions-row">
+            <a href="export_vessels.php" class="pv-export-btn" data-testid="pending-vessels-export-link">
+                <i class="fa-solid fa-file-excel"></i> Export to Excel
             </a>
+            <div class="pv-sort-wrap">
+                <i class="fa-solid fa-arrow-down-wide-short"></i>
+                <select class="pv-sort-select" data-list-sort data-testid="pending-vessels-sort-select">
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="name-asc">Vessel A–Z</option>
+                    <option value="name-desc">Vessel Z–A</option>
+                </select>
+            </div>
         </div>
 
         <div class="vessel-list-container" id="vesselListContainer" data-list-container data-testid="pending-vessels-list">
@@ -431,41 +595,45 @@ include 'includes/header.php';
                         $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                     ?>
                     <div class="vessel-card vessel-card--stacked" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize($survey['type_name'] ?? '') ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= strtotime($survey['assign_date'] ?? '1970-01-01') ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
-                        <div class="vessel-card-top-content">
-                            <div class="vessel-avatar-info">
-                                <div>
-                                    <h4 class="vessel-name-title"><?= sanitize($vessel_name) ?></h4>
-                                    <p class="vessel-client-sub">Client: <?= sanitize($survey['company_name']) ?></p>
-                                    <p class="vessel-client-sub">Agent: <?= sanitize($survey['agent_name']) ?></p>
-                                    <?php if ($is_full_access): ?>
-                                        <p class="vessel-client-sub">Surveyor: <?= sanitize($surveyorNames) ?></p>
-                                    <?php endif; ?>
-                                    <?php if ($needsSurveyor): ?>
-                                        <span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span>
-                                    <?php endif; ?>
-                                </div>
+                        <div class="pv-card-top">
+                            <div class="pv-card-headline">
+                                <div class="pv-ship-icon"><i class="fa-solid fa-ship"></i></div>
+                                <div class="pv-vessel-name"><?= sanitize($vessel_name) ?></div>
                             </div>
-                            <div class="vessel-badge-date text-end">
-                                <span class="badge-assigned"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A')) ?></span>
-                                <div><span class="badge-place" data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
-                                <?php if ($can_edit): ?>
-                                    <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vessel-edit-btn" onclick="event.stopPropagation();" data-testid="pending-vessel-edit-<?= (int)$survey['id'] ?>">
-                                        <i class="fa-solid fa-pen"></i> Edit
-                                    </a>
+                            <span class="badge-assigned pv-type-pill"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A')) ?></span>
+                        </div>
+                        <div class="pv-card-body">
+                            <div class="pv-info-rows">
+                                <div class="pv-info-row"><i class="fa-solid fa-user"></i><span class="pv-info-label">Client</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['company_name']) ?></span></div>
+                                <div class="pv-info-row"><i class="fa-solid fa-people-group"></i><span class="pv-info-label">Agent</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['agent_name']) ?></span></div>
+                                <?php if ($is_full_access): ?>
+                                    <div class="pv-info-row"><i class="fa-solid fa-user-tie"></i><span class="pv-info-label">Surveyor</span><span>:</span><span class="pv-info-val"><?= sanitize($surveyorNames) ?></span></div>
+                                <?php endif; ?>
+                                <div class="pv-info-row"><i class="fa-solid fa-location-dot"></i><span class="pv-info-label">Port</span><span>:</span><span class="badge-place" data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
+                                <?php if ($needsSurveyor): ?>
+                                    <span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span>
                                 <?php endif; ?>
                             </div>
+                            <div class="pv-card-image"><img src="assets/images/display_vessel.jpg" alt="" loading="lazy"></div>
                         </div>
                         <div class="vessel-live-status-bar">
-                            <?php if (!empty($survey['custom_live_status'])): ?>
-                                <div class="text-dark fw-semibold mb-1">
-                                    <i class="fa-solid fa-comment-dots text-primary me-1"></i> Latest Update : <?= sanitize($survey['custom_live_status']) ?>
-                                </div>
-                                <div class="text-muted" style="font-size: 10px;">
-                                    <span class="fw-bold"><?= !empty($survey['status_updated_at']) ? formatLatestUpdateWhen($survey['status_updated_at']) : '—' ?></span>
-                                    By <span class="text-primary fw-bold"><?= !empty($survey['modifier_name']) ? sanitize($survey['modifier_name']) : 'User' ?></span>
-                                </div>
-                            <?php else: ?>
-                                <div class="text-muted italic" style="font-size: 11px;"><i class="fa-solid fa-info-circle text-warning"></i> No updates recorded yet.</div>
+                            <div class="pv-footer-text">
+                                <?php if (!empty($survey['custom_live_status'])): ?>
+                                    <div class="text-dark fw-semibold mb-1">
+                                        <i class="fa-solid fa-comment-dots text-primary me-1"></i> Latest Update : <?= sanitize($survey['custom_live_status']) ?>
+                                    </div>
+                                    <div class="text-muted" style="font-size: 10px;">
+                                        <span class="fw-bold"><?= !empty($survey['status_updated_at']) ? formatLatestUpdateWhen($survey['status_updated_at']) : '—' ?></span>
+                                        By <span class="text-primary fw-bold"><?= !empty($survey['modifier_name']) ? sanitize($survey['modifier_name']) : 'User' ?></span>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="text-muted italic" style="font-size: 11px;"><i class="fa-solid fa-info-circle text-warning"></i> No updates recorded yet.</div>
+                                <?php endif; ?>
+                            </div>
+                            <?php if ($can_edit): ?>
+                                <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vessel-edit-btn pv-edit-btn" onclick="event.stopPropagation();" data-testid="pending-vessel-edit-<?= (int)$survey['id'] ?>">
+                                    <i class="fa-solid fa-pen"></i> Edit
+                                </a>
                             <?php endif; ?>
                         </div>
                     </div>
