@@ -90,11 +90,6 @@ if ($is_full_access) {
 }
 $surveys = $stmt->fetchAll();
 
-// 🌟 Mobile "Pending Vessels" hero header — same logo file the desktop
-// sidebar brand uses (assets/images/logo.png), shown only if present.
-$pv_logo_path = 'assets/images/logo.png';
-$pv_has_logo = is_file(__DIR__ . '/' . $pv_logo_path);
-
 $survey_types_filter = [];
 $survey_places_filter = [];
 $survey_clients_filter = [];
@@ -332,15 +327,9 @@ include 'includes/header.php';
         }
         .pv-hamburger:hover { background: rgba(255,255,255,.26); }
         .pv-brand { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; }
-        .pv-brand-logo-wrap {
-            width: 38px; height: 38px; border-radius: 11px; background: #fff;
-            display: flex; align-items: center; justify-content: center; flex: none;
-            box-shadow: 0 2px 8px rgba(0,0,0,.18);
-        }
-        .pv-brand-logo-wrap img { width: 26px; height: 26px; object-fit: contain; }
         .pv-brand-text { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
-        .pv-brand-title { color: #fff; font-weight: 800; font-size: 19px; letter-spacing: .03em; }
-        .pv-brand-sub { color: rgba(255,255,255,.78); font-size: 9px; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; margin-top: 2px; }
+        .pv-brand-title { color: #fff; font-weight: 800; font-size: 23px; letter-spacing: .04em; }
+        .pv-brand-sub { color: rgba(255,255,255,.82); font-size: 10.5px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; margin-top: 3px; }
         .pv-topbar-right { display: flex; justify-content: flex-end; }
         .pv-topbar-right .profile-menu-trigger { position: relative; }
         .pv-topbar-right .profile-avatar { border: 2px solid rgba(255,255,255,.85); }
@@ -406,18 +395,12 @@ include 'includes/header.php';
         }
         .pv-vessel-name { font-size: 16.5px; font-weight: 800; color: var(--text-dark); word-break: break-word; }
         .pv-type-pill { flex: none; max-width: 46%; text-align: right; }
-        .pv-card-body { display: flex; align-items: stretch; gap: 12px; padding: 0 16px 12px; }
-        .pv-info-rows { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+        .pv-info-rows { display: flex; flex-direction: column; gap: 7px; padding: 0 16px 14px; }
         .pv-info-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dark); }
         .pv-info-row i { width: 16px; text-align: center; color: #94a3b8; font-size: 12px; flex: none; }
         .pv-info-label { color: var(--text-muted); flex: none; }
         .pv-info-val { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
         .pv-info-row .badge-place { margin: 0; }
-        .pv-card-image {
-            flex: 0 0 108px; width: 108px; height: 92px; border-radius: 14px; overflow: hidden;
-            background: #eff6ff; align-self: center;
-        }
-        .pv-card-image img { width: 100%; height: 100%; object-fit: cover; }
         .vessel-live-status-bar {
             display: flex; align-items: center; justify-content: space-between; gap: 10px;
             background: #fffaf0; border-top: none; padding: 12px 16px;
@@ -532,9 +515,6 @@ include 'includes/header.php';
                 <i class="fa-solid fa-bars"></i>
             </button>
             <div class="pv-brand">
-                <?php if ($pv_has_logo): ?>
-                    <div class="pv-brand-logo-wrap"><img src="<?= sanitize($pv_logo_path) ?>" alt="YMR logo"></div>
-                <?php endif; ?>
                 <div class="pv-brand-text">
                     <span class="pv-brand-title">YMR</span>
                     <span class="pv-brand-sub">Survey Management System</span>
@@ -602,19 +582,16 @@ include 'includes/header.php';
                             </div>
                             <span class="badge-assigned pv-type-pill"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A')) ?></span>
                         </div>
-                        <div class="pv-card-body">
-                            <div class="pv-info-rows">
-                                <div class="pv-info-row"><i class="fa-solid fa-user"></i><span class="pv-info-label">Client</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['company_name']) ?></span></div>
-                                <div class="pv-info-row"><i class="fa-solid fa-people-group"></i><span class="pv-info-label">Agent</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['agent_name']) ?></span></div>
-                                <?php if ($is_full_access): ?>
-                                    <div class="pv-info-row"><i class="fa-solid fa-user-tie"></i><span class="pv-info-label">Surveyor</span><span>:</span><span class="pv-info-val"><?= sanitize($surveyorNames) ?></span></div>
-                                <?php endif; ?>
-                                <div class="pv-info-row"><i class="fa-solid fa-location-dot"></i><span class="pv-info-label">Port</span><span>:</span><span class="badge-place" data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
-                                <?php if ($needsSurveyor): ?>
-                                    <span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="pv-card-image"><img src="assets/images/display_vessel.jpg" alt="" loading="lazy"></div>
+                        <div class="pv-info-rows">
+                            <div class="pv-info-row"><i class="fa-solid fa-user"></i><span class="pv-info-label">Client</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['company_name']) ?></span></div>
+                            <div class="pv-info-row"><i class="fa-solid fa-people-group"></i><span class="pv-info-label">Agent</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['agent_name']) ?></span></div>
+                            <?php if ($is_full_access): ?>
+                                <div class="pv-info-row"><i class="fa-solid fa-user-tie"></i><span class="pv-info-label">Surveyor</span><span>:</span><span class="pv-info-val"><?= sanitize($surveyorNames) ?></span></div>
+                            <?php endif; ?>
+                            <div class="pv-info-row"><i class="fa-solid fa-location-dot"></i><span class="pv-info-label">Port</span><span>:</span><span class="badge-place" data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
+                            <?php if ($needsSurveyor): ?>
+                                <span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span>
+                            <?php endif; ?>
                         </div>
                         <div class="vessel-live-status-bar">
                             <div class="pv-footer-text">
