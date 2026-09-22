@@ -16,6 +16,7 @@
                                 <th>Survey Type</th>
                                 <th class="text-end">VLSFO (MT)</th>
                                 <th class="text-end">LSMGO (MT)</th>
+                                <th class="text-end">HSFO (MT)</th>
                                 <th class="text-end">Total (MT)</th>
                             </tr>
                         </thead>
@@ -70,6 +71,7 @@ function openRecoveryModal(period) {
                     '<td>' + escapeHtml(row.survey_type) + '</td>' +
                     '<td class="text-end">' + escapeHtml(row.vlsfo_recovery) + '</td>' +
                     '<td class="text-end">' + escapeHtml(row.lsmgo_recovery) + '</td>' +
+                    '<td class="text-end">' + escapeHtml(row.hsfo_recovery) + '</td>' +
                     '<td class="text-end fw-bold">' + escapeHtml(row.total_recovery) + '</td>';
                 tbody.appendChild(tr);
             });

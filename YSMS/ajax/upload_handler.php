@@ -27,6 +27,15 @@ try {
     $db->exec("ALTER TABLE surveys MODIFY COLUMN survey_completed_date DATETIME NULL");
     $db->exec("ALTER TABLE surveys MODIFY COLUMN report_uploaded_date DATETIME NULL");
 } catch (Exception $e) { /* ignore if already datetime or no permission */ }
+
+// 🌟 SAFETY NET: hsfo_recovery column (TABLES 54B!N20) alongside the
+// existing vlsfo_recovery/lsmgo_recovery columns.
+try {
+    $cols = $db->query("SHOW COLUMNS FROM surveys LIKE 'hsfo_recovery'")->fetchAll();
+    if (empty($cols)) {
+        $db->exec("ALTER TABLE surveys ADD COLUMN hsfo_recovery DECIMAL(12,3) DEFAULT NULL");
+    }
+} catch (Exception $e) { error_log('upload_handler.php hsfo_recovery column: ' . $e->getMessage()); }
     require_once __DIR__ . '/../includes/mailer.php';
 require_once __DIR__ . '/../includes/notifications.php';
     $files_uploaded = 0;
@@ -56,10 +65,11 @@ require_once __DIR__ . '/../includes/notifications.php';
         }
     }
 
-    // 2. 📂 కంపల్సరీ EXCEL ప్రాసెసింగ్ మరియు TABLES 54 ట్యాబ్ లోని O21 (Recovery), M20 (VLSFO), O20 (LSMGO) వాల్యూస్ రీడింగ్
+    // 2. 📂 కంపల్సరీ EXCEL ప్రాసెసింగ్ మరియు TABLES 54 ట్యాబ్ లోని O21 (Recovery), M20 (VLSFO), O20 (LSMGO), N20 (HSFO) వాల్యూస్ రీడింగ్
     $recovery_val = 0.00;
     $vlsfo_val = 0.00;
     $lsmgo_val = 0.00;
+    $hsfo_val = 0.00;
     if (isset($_FILES['excel_report']) && $_FILES['excel_report']['error'] == 0 && $isAllowedExt($_FILES['excel_report']['name'], ['xlsx', 'xls', 'xlsm'])) {
         $excel_orig = basename($_FILES['excel_report']['name']);
         $excel_name = time() . "_" . preg_replace('/[^A-Za-z0-9._-]/', '_', $excel_orig);
@@ -91,21 +101,24 @@ require_once __DIR__ . '/../includes/notifications.php';
                     $raw_recovery = $worksheet->getCell('O21')->getCalculatedValue();
                     $raw_vlsfo = $worksheet->getCell('M20')->getCalculatedValue();
                     $raw_lsmgo = $worksheet->getCell('O20')->getCalculatedValue();
-                    
+                    $raw_hsfo = $worksheet->getCell('N20')->getCalculatedValue();
+
                     // ఒకవేళ వాల్యూ లో స్ట్రింగ్స్ లేదా కరెన్సీ సింబల్స్ ఉంటే క్లీన్ చేసి, నెగటివ్ అయితే ABS() తో పాజిటివ్ చేయడం
                     $recovery_val = abs((float)preg_replace('/[^0-9.\-]/', '', (string)$raw_recovery));
                     $vlsfo_val = abs((float)preg_replace('/[^0-9.\-]/', '', (string)$raw_vlsfo));
                     $lsmgo_val = abs((float)preg_replace('/[^0-9.\-]/', '', (string)$raw_lsmgo));
+                    $hsfo_val = abs((float)preg_replace('/[^0-9.\-]/', '', (string)$raw_hsfo));
                     $found_via_phpspreadsheet = true;
-                } catch (Exception $e) { 
-                    $recovery_val = 0.00; 
+                } catch (Exception $e) {
+                    $recovery_val = 0.00;
                     $vlsfo_val = 0.00;
                     $lsmgo_val = 0.00;
+                    $hsfo_val = 0.00;
                 }
             }
-            
+
             // --- ఆప్షన్ బి: ఒకవేళ PhpSpreadsheet లేకపోయినా/అన్ని విలువలు 0 వచ్చినా ఫైల్ డేటా నుండి నేరుగా స్కాన్ చేసే ఫాల్‌బ్యాక్ ---
-            if (!$found_via_phpspreadsheet || ($recovery_val == 0.00 && $vlsfo_val == 0.00 && $lsmgo_val == 0.00)) {
+            if (!$found_via_phpspreadsheet || ($recovery_val == 0.00 && $vlsfo_val == 0.00 && $lsmgo_val == 0.00 && $hsfo_val == 0.00)) {
                 try {
                     // ఎక్సెల్ ఫైల్ జిప్ కంటెంట్‌ను రీడ్ చేసి అందులోని షీట్స్ డేటాను రా గా స్కాన్ చేయడం
                     $zip = new ZipArchive();
@@ -132,11 +145,13 @@ require_once __DIR__ . '/../includes/notifications.php';
                                 $found_o21 = $readCellRaw($content, 'O21');
                                 $found_m20 = $readCellRaw($content, 'M20');
                                 $found_o20 = $readCellRaw($content, 'O20');
-                                
-                                if ($found_o21 !== null || $found_m20 !== null || $found_o20 !== null) {
+                                $found_n20 = $readCellRaw($content, 'N20');
+
+                                if ($found_o21 !== null || $found_m20 !== null || $found_o20 !== null || $found_n20 !== null) {
                                     if ($found_o21 !== null) $recovery_val = abs($found_o21);
                                     if ($found_m20 !== null) $vlsfo_val = abs($found_m20);
                                     if ($found_o20 !== null) $lsmgo_val = abs($found_o20);
+                                    if ($found_n20 !== null) $hsfo_val = abs($found_n20);
                                     break;
                                 }
                             }
@@ -153,9 +168,9 @@ require_once __DIR__ . '/../includes/notifications.php';
             $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Formal Report Excel', ?, '245 KB')");
             $stmt->execute([$survey_id, $excel_orig, "uploads/" . $excel_name]);
             
-            // surveys టేబుల్ లో recovery_amount, vlsfo_recovery, lsmgo_recovery ని అప్‌డేట్ చేయడం
-            $stmt_rec = $db->prepare("UPDATE surveys SET recovery_amount = ?, vlsfo_recovery = ?, lsmgo_recovery = ? WHERE id = ?");
-            $stmt_rec->execute([$recovery_val, $vlsfo_val, $lsmgo_val, $survey_id]);
+            // surveys టేబుల్ లో recovery_amount, vlsfo_recovery, lsmgo_recovery, hsfo_recovery ని అప్‌డేట్ చేయడం
+            $stmt_rec = $db->prepare("UPDATE surveys SET recovery_amount = ?, vlsfo_recovery = ?, lsmgo_recovery = ?, hsfo_recovery = ? WHERE id = ?");
+            $stmt_rec->execute([$recovery_val, $vlsfo_val, $lsmgo_val, $hsfo_val, $survey_id]);
             
             $files_uploaded++;
             $uploaded_labels[] = 'Excel: ' . $excel_orig;

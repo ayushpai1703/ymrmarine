@@ -27,7 +27,7 @@ $period = isset($_GET['period']) && $_GET['period'] === 'month' ? 'month' : 'tot
 
 $sql = "
     SELECT s.vessel_name, s.survey_type_ids, t.type_name,
-           s.vlsfo_recovery, s.lsmgo_recovery, s.recovery_amount, s.report_uploaded_date
+           s.vlsfo_recovery, s.lsmgo_recovery, s.hsfo_recovery, s.recovery_amount, s.report_uploaded_date
     FROM surveys s
     LEFT JOIN survey_types t ON s.survey_type_id = t.id
     WHERE s.recovery_amount IS NOT NULL
@@ -63,6 +63,7 @@ foreach ($rows as $row) {
         'survey_type'    => getCombinedSurveyTypeNames($db, $row['survey_type_ids'] ?? '', $row['type_name'] ?? 'N/A'),
         'vlsfo_recovery' => $row['vlsfo_recovery'] !== null ? number_format((float)$row['vlsfo_recovery'], 3) : '0.000',
         'lsmgo_recovery' => $row['lsmgo_recovery'] !== null ? number_format((float)$row['lsmgo_recovery'], 3) : '0.000',
+        'hsfo_recovery'  => $row['hsfo_recovery'] !== null ? number_format((float)$row['hsfo_recovery'], 3) : '0.000',
         'total_recovery' => $row['recovery_amount'] !== null ? number_format((float)$row['recovery_amount'], 3) : '0.000',
     ];
 }

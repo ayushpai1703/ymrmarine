@@ -11,3 +11,10 @@
 ALTER TABLE `surveys`
     ADD COLUMN `vlsfo_recovery` DECIMAL(12,3) DEFAULT NULL,
     ADD COLUMN `lsmgo_recovery` DECIMAL(12,3) DEFAULT NULL;
+
+-- Recovery in HSFO card (TABLES 54B!N20). The app also adds this column
+-- itself on demand (SHOW COLUMNS safety net in index.php, report_detail.php,
+-- completed_detail.php and ajax/upload_handler.php), so running this by
+-- hand is optional — it's here for reference only.
+ALTER TABLE `surveys`
+    ADD COLUMN `hsfo_recovery` DECIMAL(12,3) DEFAULT NULL;

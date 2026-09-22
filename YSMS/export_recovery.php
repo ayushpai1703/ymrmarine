@@ -49,7 +49,7 @@ try {
 
     $sql = "
         SELECT s.vessel_name, s.survey_type_ids, t.type_name,
-               s.vlsfo_recovery, s.lsmgo_recovery, s.recovery_amount, s.report_uploaded_date
+               s.vlsfo_recovery, s.lsmgo_recovery, s.hsfo_recovery, s.recovery_amount, s.report_uploaded_date
         FROM surveys s
         LEFT JOIN survey_types t ON s.survey_type_id = t.id
         WHERE s.recovery_amount IS NOT NULL
@@ -81,7 +81,7 @@ try {
     $sheet = $spreadsheet->getActiveSheet();
     $sheet->setTitle($period === 'month' ? 'This Month Recovery' : 'Total Recovery');
 
-    $headers = ['Vessel Name', 'Survey Type', 'VLSFO Recovery', 'LSMGO Recovery', 'Total Recovery'];
+    $headers = ['Vessel Name', 'Survey Type', 'VLSFO Recovery', 'LSMGO Recovery', 'HSFO Recovery', 'Total Recovery'];
     $sheet->fromArray([$headers], null, 'A1');
 
     $rowNum = 2;
@@ -94,11 +94,12 @@ try {
         $sheet->setCellValue('B' . $rowNum, $typeLabel);
         $sheet->setCellValue('C' . $rowNum, !empty($row['vlsfo_recovery']) ? (float)$row['vlsfo_recovery'] : 0);
         $sheet->setCellValue('D' . $rowNum, !empty($row['lsmgo_recovery']) ? (float)$row['lsmgo_recovery'] : 0);
-        $sheet->setCellValue('E' . $rowNum, !empty($row['recovery_amount']) ? (float)$row['recovery_amount'] : 0);
+        $sheet->setCellValue('E' . $rowNum, !empty($row['hsfo_recovery']) ? (float)$row['hsfo_recovery'] : 0);
+        $sheet->setCellValue('F' . $rowNum, !empty($row['recovery_amount']) ? (float)$row['recovery_amount'] : 0);
         $rowNum++;
     }
 
-    foreach (range('A', 'E') as $col) {
+    foreach (range('A', 'F') as $col) {
         $sheet->getColumnDimension($col)->setAutoSize(true);
     }
 
