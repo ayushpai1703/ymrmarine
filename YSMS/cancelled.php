@@ -198,7 +198,7 @@ include 'includes/header.php';
             background-repeat: no-repeat; background-position: right 0 center;
         }
 
-        .vessel-card { border: none; border-radius: 20px; box-shadow: 0 8px 22px rgba(15,23,42,.08); background: #fff; }
+        .vessel-card { display: flex; flex-direction: column; align-items: stretch; border: none; border-radius: 20px; box-shadow: 0 8px 22px rgba(15,23,42,.08); background: #fff; }
         .pv-card-top { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 16px 16px 10px; }
         .pv-card-headline { display: flex; align-items: center; gap: 10px; min-width: 0; }
         .pv-ship-icon {

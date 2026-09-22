@@ -359,7 +359,7 @@ include 'includes/header.php';
             background-repeat: no-repeat; background-position: right 0 center;
         }
 
-        .vessel-card { border: none; border-radius: 20px; box-shadow: 0 8px 22px rgba(15,23,42,.08); }
+        .vessel-card { display: flex; flex-direction: column; align-items: stretch; border: none; border-radius: 20px; box-shadow: 0 8px 22px rgba(15,23,42,.08); }
         .pv-card-top { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 16px 16px 10px; }
         .pv-card-headline { display: flex; align-items: center; gap: 10px; min-width: 0; }
         .pv-ship-icon {
@@ -478,11 +478,15 @@ include 'includes/header.php';
 .vessel-name-title { margin:0; font-size:14px; font-weight:700; }
 .vessel-client-sub { margin:2px 0 0; font-size:12px; color:#64748b; }
 
-/* Re-assert the mobile card redesign's border/shape here (same
-   specificity as the unconditional .vessel-card rule just above, so
-   source order — this coming last — is what decides the winner). */
+/* Re-assert the mobile card redesign's shape here (same specificity as
+   the unconditional .vessel-card rule just above, so source order — this
+   coming last — is what decides the winner). flex-direction:column is
+   the important part: without it, the shared header.php default
+   (display:flex with no flex-direction, i.e. row) puts the card's two
+   top-level children — the name/pill header and the info rows — side by
+   side instead of stacked, overflowing the card on narrow screens. */
 @media (max-width: 991.98px) {
-    .vessel-card { border: none; border-radius: 20px; box-shadow: 0 8px 22px rgba(15,23,42,.08); }
+    .vessel-card { display: flex; flex-direction: column; align-items: stretch; border: none; border-radius: 20px; box-shadow: 0 8px 22px rgba(15,23,42,.08); }
 }
 </style>
 <div class="scroll-content" data-list-scope data-testid="pending-reports-page">
