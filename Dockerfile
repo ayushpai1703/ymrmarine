@@ -17,10 +17,7 @@ FROM php:8.3-apache
 
 # Install MySQL/PDO support + gd + zip + fileinfo (phpspreadsheet needs gd for
 # images and zip since .xlsx files are ZIP archives internally; fileinfo is
-# needed by our own upload MIME-sniffing check, finfo_open()). Incoming email
-# (survey@ymrmarine.com) uses the pure-PHP webklex/php-imap composer package
-# instead of the PHP imap system extension — Debian trixie (this image's
-# base) dropped libc-client-dev, so ext-imap can no longer be built here.
+# needed by our own upload MIME-sniffing check, finfo_open())
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libpng-dev libjpeg62-turbo-dev libfreetype6-dev libzip-dev libmagic-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
