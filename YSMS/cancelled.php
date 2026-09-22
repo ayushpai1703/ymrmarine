@@ -199,15 +199,15 @@ include 'includes/header.php';
         }
 
         .vessel-card { border: none; border-radius: 20px; box-shadow: 0 8px 22px rgba(15,23,42,.08); background: #fff; }
-        .pv-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 16px 16px 10px; }
+        .pv-card-top { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 16px 16px 10px; }
         .pv-card-headline { display: flex; align-items: center; gap: 10px; min-width: 0; }
         .pv-ship-icon {
             width: 40px; height: 40px; border-radius: 12px; flex: none;
             background: #fee2e2; color: #b91c1c; font-size: 17px;
             display: flex; align-items: center; justify-content: center;
         }
-        .pv-vessel-name { font-size: 16.5px; font-weight: 800; color: var(--text-dark); word-break: break-word; }
-        .pv-type-pill { flex: none; max-width: 46%; text-align: right; background: #ef4444; }
+        .pv-vessel-name { font-size: 16.5px; font-weight: 800; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
+        .pv-type-pill { align-self: flex-end; max-width: 100%; text-align: right; background: #ef4444; }
         .pv-info-rows { display: flex; flex-direction: column; gap: 7px; padding: 0 16px 16px; }
         .pv-info-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dark); }
         .pv-info-row i { width: 16px; text-align: center; color: #94a3b8; font-size: 12px; flex: none; }
