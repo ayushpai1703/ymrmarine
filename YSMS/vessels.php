@@ -300,9 +300,7 @@ include 'includes/header.php';
        Page-scoped (this <style> block only loads on vessels.php), so none
        of this leaks into reports.php/completed.php/cancelled.php even
        though they share the same .top-app-bar/.vessel-card/.badge-place/
-       etc. class names. Desktop (≥992px) is untouched — .pv-title-card
-       simply doesn't render there (lives inside .vessels-mobile-view,
-       already display:none on desktop).
+       etc. class names. Desktop (≥992px) is untouched.
 
        The header itself reuses the shared includes/top_app_bar.php
        component as-is (hamburger left, title centered, profile right),
@@ -338,22 +336,7 @@ include 'includes/header.php';
             width: 11px; height: 11px; border-radius: 50%;
             background: #22c55e; border: 2px solid #1560c9;
         }
-        .vessels-mobile-view { padding-top: 74px; }
-
-        .pv-title-card {
-            display: flex; align-items: center; justify-content: space-between; gap: 12px;
-            background: #fff; border-radius: 18px;
-            margin: 14px 14px 16px; padding: 14px 16px;
-            box-shadow: 0 6px 18px rgba(15,23,42,.08);
-        }
-        .pv-title-icon {
-            width: 46px; height: 46px; border-radius: 14px; flex: none;
-            background: #eaf3ff; color: #1d6fe0; font-size: 19px;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .pv-title-count { text-align: center; background: #eaf3ff; border-radius: 14px; padding: 6px 14px; flex: none; }
-        .pv-title-count-num { display: block; font-size: 18px; font-weight: 800; color: #1d6fe0; line-height: 1.1; }
-        .pv-title-count-label { display: block; font-size: 9.5px; font-weight: 700; color: #1d6fe0; text-transform: uppercase; letter-spacing: .04em; }
+        .vessels-mobile-view { padding-top: 88px; }
 
         .search-filter-row { padding: 0 14px 12px; }
         .search-control { border-radius: 14px; padding: 12px 12px 12px 38px; }
@@ -509,11 +492,6 @@ include 'includes/header.php';
 
     <!-- ══════════════ MOBILE VIEW (modern card redesign) ══════════════ -->
     <div class="vessels-mobile-view">
-        <div class="pv-title-card" data-testid="pending-vessels-title-card">
-            <div class="pv-title-icon"><i class="fa-solid fa-ship"></i></div>
-            <div class="pv-title-count"><span class="pv-title-count-num"><?= count($surveys) ?></span><span class="pv-title-count-label">Pending</span></div>
-        </div>
-
         <div class="search-filter-row">
             <div class="search-input-wrapper">
                 <i class="fa-solid fa-magnifying-glass"></i>
