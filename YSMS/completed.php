@@ -144,6 +144,87 @@ include 'includes/header.php';
 
 <style>
 
+    /* ═══ Mobile modern header + card redesign (same pattern as
+       vessels.php) — page-scoped, only applies while this page's own
+       <style> block is loaded, so it doesn't leak into other pages even
+       though they share .top-app-bar/.vessel-card/.badge-place/etc.
+       class names. Desktop (≥992px) is untouched. */
+    @media (max-width: 991.98px) {
+        .top-app-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 900;
+            background: linear-gradient(160deg, #1d6fe0 0%, #123f99 65%, #0b1e46 100%);
+            border-bottom: none;
+            box-shadow: 0 6px 18px rgba(11,30,70,.25);
+        }
+        .top-app-bar-title { color: #fff; font-size: 22px; font-weight: 800; letter-spacing: .02em; }
+        .top-app-bar .hamburger-menu-btn {
+            background: rgba(255,255,255,.16);
+            border: 1px solid rgba(255,255,255,.32);
+            color: #fff;
+        }
+        .top-app-bar .hamburger-menu-btn:hover { background: rgba(255,255,255,.26); }
+        .top-app-bar .profile-menu-trigger { position: relative; }
+        .top-app-bar .profile-avatar { border: 2px solid rgba(255,255,255,.85); }
+        .top-app-bar .profile-menu-trigger::after {
+            content: ''; position: absolute; bottom: 1px; right: 1px;
+            width: 11px; height: 11px; border-radius: 50%;
+            background: #22c55e; border: 2px solid #1560c9;
+        }
+        .list-mobile-view { padding-top: 88px; }
+
+        .search-filter-row { padding: 0 14px 12px; }
+        .search-control { border-radius: 14px; padding: 12px 12px 12px 38px; }
+        .search-input-wrapper i { top: 14px; }
+        .filter-btn { border-radius: 14px; }
+
+        .pv-actions-row { display: flex; gap: 10px; padding: 0 14px 14px; }
+        .pv-export-btn {
+            flex: 1 1 auto;
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            background: linear-gradient(90deg, #16a34a, #0ea5b0);
+            color: #fff; text-decoration: none; font-weight: 700; font-size: 13.5px;
+            border-radius: 14px; padding: 12px 14px;
+            box-shadow: 0 8px 18px rgba(16,163,74,.25);
+        }
+        .pv-sort-wrap {
+            flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+            background: #fff; border: 1px solid var(--border-color); border-radius: 14px;
+            padding: 0 12px 0 14px; color: var(--text-dark);
+        }
+        .pv-sort-wrap i { font-size: 13px; color: #1d6fe0; }
+        .pv-sort-select {
+            border: none; background: transparent; appearance: none; -webkit-appearance: none;
+            font-weight: 700; font-size: 13px; color: var(--text-dark);
+            padding: 12px 18px 12px 6px;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%231d6fe0'/></svg>");
+            background-repeat: no-repeat; background-position: right 0 center;
+        }
+
+        .vessel-card { border: none; border-radius: 20px; box-shadow: 0 8px 22px rgba(15,23,42,.08); background: #fff; }
+        .pv-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 16px 16px 10px; }
+        .pv-card-headline { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .pv-ship-icon {
+            width: 40px; height: 40px; border-radius: 12px; flex: none;
+            background: #d1fae5; color: #047857; font-size: 17px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .pv-vessel-name { font-size: 16.5px; font-weight: 800; color: var(--text-dark); word-break: break-word; }
+        .pv-type-pill { flex: none; max-width: 46%; text-align: right; background: #10b981; }
+        .pv-info-rows { display: flex; flex-direction: column; gap: 7px; padding: 0 16px 16px; }
+        .pv-info-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dark); }
+        .pv-info-row i { width: 16px; text-align: center; color: #94a3b8; font-size: 12px; flex: none; }
+        .pv-info-label { color: var(--text-muted); flex: none; }
+        .pv-info-val { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
+        .pv-info-row .badge-place { margin: 0; }
+        .pv-status-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7;
+            font-size: 10px; padding: 4px 9px; border-radius: 50px; font-weight: 700;
+        }
+    }
+
     .list-desktop-view { display: none; }
     .list-mobile-view { display: block; }
     @media (min-width: 992px) {
@@ -236,7 +317,7 @@ include 'includes/header.php';
 .vd-badge { background: #d1fae5 !important; color: #065f46 !important; }
 </style>
 <div class="scroll-content" data-list-scope data-testid="completed-surveys-page">
-    <?php $page_title = 'Completed Surveys'; $back_url = 'index.php'; $page_testid = 'completed-surveys'; include 'includes/top_app_bar.php'; ?>
+    <?php $page_title = 'Completed Surveys'; $back_url = ''; $page_testid = 'completed-surveys'; include 'includes/top_app_bar.php'; ?>
 
     <div class="list-mobile-view">
     <div class="search-filter-row">
@@ -247,7 +328,6 @@ include 'includes/header.php';
         <button type="button" class="filter-btn" style="background:#ecfdf5;color:#047857;" data-filter-toggle aria-expanded="false"><i class="fa-solid fa-sliders"></i></button>
     </div>
     <div class="list-controls-panel" data-controls-panel>
-        <select data-list-sort><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name-asc">Vessel A–Z</option><option value="name-desc">Vessel Z–A</option></select>
         <select data-filter-type><option value="">All survey types</option><?php foreach ($survey_types_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
         <select data-filter-place><option value="">All survey places</option><?php foreach ($survey_places_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
         <select data-filter-client><option value="">All clients</option><?php foreach ($survey_clients_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
@@ -256,17 +336,24 @@ include 'includes/header.php';
         <?php endif; ?>
         <button type="button" class="clear-filters-btn" data-clear-filters><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
     </div>
-    <div class="px-3 mb-3">
-        <a href="export_completed.php" class="btn btn-success w-100" style="background-color:#28a745;border:none;font-weight:600;padding:8px;">
-            <i class="fa-solid fa-file-excel me-2"></i> Export to Excel
-        </a>
+    <div class="pv-actions-row">
+        <a href="export_completed.php" class="pv-export-btn"><i class="fa-solid fa-file-excel"></i> Export to Excel</a>
+        <div class="pv-sort-wrap">
+            <i class="fa-solid fa-arrow-down-wide-short"></i>
+            <select class="pv-sort-select" data-list-sort>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="name-asc">Vessel A–Z</option>
+                <option value="name-desc">Vessel Z–A</option>
+            </select>
+        </div>
     </div>
     <div class="vessel-list-container" data-list-container>
         <?php if (count($surveys) > 0): foreach ($surveys as $survey):
             $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
+            $typeLabel = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
         ?>
-        <div class="vessel-card completed-list-card" onclick="location.href='completed_detail.php?id=<?= (int)$survey['id'] ?>'"
-             style="background:white;border-radius:16px;padding:15px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;border-left:4px solid #10b981;cursor:pointer;"
+        <div class="vessel-card" onclick="location.href='completed_detail.php?id=<?= (int)$survey['id'] ?>'"
              data-survey-card
              data-name="<?= sanitize(strtolower($survey['vessel_name'] ?? '')) ?>"
              data-type="<?= sanitize($survey['type_name'] ?? '') ?>"
@@ -276,19 +363,21 @@ include 'includes/header.php';
              data-status="completed"
              data-date="<?= strtotime($survey['report_uploaded_date'] ?? '1970-01-01') ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$survey['vessel_name'] ?? '', $survey['company_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>">
-            <div style="display:flex;align-items:center;gap:12px;">
-                <div style="width:42px;height:42px;border-radius:50%;background:#e6f4ea;color:#137333;display:flex;justify-content:center;align-items:center;font-weight:700;">
-                    <?= strtoupper(substr($survey['vessel_name'] ?? 'X', 0, 1)) ?>
+            <div class="pv-card-top">
+                <div class="pv-card-headline">
+                    <div class="pv-ship-icon"><i class="fa-solid fa-ship"></i></div>
+                    <div class="pv-vessel-name"><?= sanitize($survey['vessel_name']) ?></div>
                 </div>
-                <div>
-                    <h4 style="margin:0;font-size:14px;font-weight:700;"><?= sanitize($survey['vessel_name']) ?></h4>
-                    <p style="margin:2px 0 0;font-size:12px;color:#64748b;">Client: <?= sanitize($survey['company_name'] ?? '') ?></p>
-                    <p style="margin:2px 0 0;font-size:11px;">Type: <span style="color:#047857;font-weight:600;"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></p>
-                </div>
+                <span class="badge-assigned pv-type-pill"><?= sanitize($typeLabel) ?></span>
             </div>
-            <div style="text-align:right;">
-                <span style="font-size:10px;padding:3px 8px;border-radius:6px;font-weight:600;background:#d1fae5;color:#065f46;"><i class="fa-solid fa-user-check"></i> Completed</span>
-                <div style="font-size:11.5px;font-weight:700;color:#64748b;margin-top:4px;"><?= sanitize($surveyorNames) ?></div>
+            <div class="pv-info-rows">
+                <div class="pv-info-row"><i class="fa-solid fa-user"></i><span class="pv-info-label">Client</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['company_name'] ?? '') ?></span></div>
+                <div class="pv-info-row"><i class="fa-solid fa-people-group"></i><span class="pv-info-label">Agent</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['agent_name'] ?? '') ?></span></div>
+                <?php if ($is_full_access): ?>
+                    <div class="pv-info-row"><i class="fa-solid fa-user-tie"></i><span class="pv-info-label">Surveyor</span><span>:</span><span class="pv-info-val"><?= sanitize($surveyorNames) ?></span></div>
+                <?php endif; ?>
+                <div class="pv-info-row"><i class="fa-solid fa-location-dot"></i><span class="pv-info-label">Port</span><span>:</span><span class="badge-place"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
+                <div class="pv-info-row"><i class="fa-solid fa-circle-check"></i><span class="pv-info-label">Status</span><span>:</span><span class="pv-status-pill"><i class="fa-solid fa-check"></i> Completed</span></div>
             </div>
         </div>
         <?php endforeach; ?>
