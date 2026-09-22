@@ -299,41 +299,33 @@ include 'includes/header.php';
     /* ═══ Mobile "Pending Vessels" hero header + modern card redesign ═══
        Page-scoped (this <style> block only loads on vessels.php), so none
        of this leaks into reports.php/completed.php/cancelled.php even
-       though they share the same .vessel-card/.badge-place/etc. class
-       names. Desktop (≥992px) is untouched — .pv-topbar/.pv-title-card
-       simply don't render there (they live inside .vessels-mobile-view,
-       already display:none on desktop), and the standard white
-       .top-app-bar is hidden below only under the mobile breakpoint. */
-    @media (max-width: 991.98px) {
-        .top-app-bar { display: none; }
+       though they share the same .top-app-bar/.vessel-card/.badge-place/
+       etc. class names. Desktop (≥992px) is untouched — .pv-title-card
+       simply doesn't render there (lives inside .vessels-mobile-view,
+       already display:none on desktop).
 
-        .pv-topbar {
-            position: sticky;
-            top: 0;
-            z-index: 860;
-            display: grid;
-            grid-template-columns: 44px 1fr 44px;
-            align-items: center;
-            gap: 10px;
-            padding: 16px 16px 26px;
+       The header itself reuses the shared includes/top_app_bar.php
+       component as-is (hamburger left, title centered, profile right) —
+       just reskinned blue here — instead of a custom bar, specifically
+       so it inherits the SAME position:sticky;top:0 rule already proven
+       to stay pinned while the page scrolls on every other page in the
+       app (report_detail.php, completed_detail.php, …). */
+    @media (max-width: 991.98px) {
+        .top-app-bar {
             background: linear-gradient(160deg, #1d6fe0 0%, #123f99 65%, #0b1e46 100%);
+            border-bottom: none;
             box-shadow: 0 6px 18px rgba(11,30,70,.25);
         }
-        .pv-hamburger {
+        .top-app-bar-title { color: #fff; }
+        .top-app-bar .hamburger-menu-btn {
             background: rgba(255,255,255,.16);
             border: 1px solid rgba(255,255,255,.32);
             color: #fff;
-            width: 42px; height: 42px;
         }
-        .pv-hamburger:hover { background: rgba(255,255,255,.26); }
-        .pv-brand { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; }
-        .pv-brand-text { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
-        .pv-brand-title { color: #fff; font-weight: 800; font-size: 23px; letter-spacing: .04em; }
-        .pv-brand-sub { color: rgba(255,255,255,.82); font-size: 10.5px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; margin-top: 3px; }
-        .pv-topbar-right { display: flex; justify-content: flex-end; }
-        .pv-topbar-right .profile-menu-trigger { position: relative; }
-        .pv-topbar-right .profile-avatar { border: 2px solid rgba(255,255,255,.85); }
-        .pv-topbar-right .profile-menu-trigger::after {
+        .top-app-bar .hamburger-menu-btn:hover { background: rgba(255,255,255,.26); }
+        .top-app-bar .profile-menu-trigger { position: relative; }
+        .top-app-bar .profile-avatar { border: 2px solid rgba(255,255,255,.85); }
+        .top-app-bar .profile-menu-trigger::after {
             content: ''; position: absolute; bottom: 1px; right: 1px;
             width: 11px; height: 11px; border-radius: 50%;
             background: #22c55e; border: 2px solid #1560c9;
@@ -342,9 +334,8 @@ include 'includes/header.php';
         .pv-title-card {
             display: flex; align-items: center; gap: 12px;
             background: #fff; border-radius: 18px;
-            margin: -18px 14px 16px; padding: 14px 16px;
-            box-shadow: 0 10px 26px rgba(15,23,42,.12);
-            position: relative; z-index: 5;
+            margin: 14px 14px 16px; padding: 14px 16px;
+            box-shadow: 0 6px 18px rgba(15,23,42,.08);
         }
         .pv-title-icon {
             width: 46px; height: 46px; border-radius: 14px; flex: none;
@@ -506,26 +497,10 @@ include 'includes/header.php';
 </style>
 
 <div class="scroll-content" data-list-scope data-testid="pending-vessels-page">
-    <?php $page_title = 'Pending Vessels'; $back_url = 'index.php'; $page_testid = 'pending-vessels'; include 'includes/top_app_bar.php'; ?>
+    <?php $page_title = 'Pending Vessels'; $back_url = ''; $page_testid = 'pending-vessels'; include 'includes/top_app_bar.php'; ?>
 
     <!-- ══════════════ MOBILE VIEW (modern card redesign) ══════════════ -->
     <div class="vessels-mobile-view">
-        <div class="pv-topbar" data-testid="pending-vessels-hero-topbar">
-            <button type="button" class="hamburger-menu-btn pv-hamburger" aria-label="Open navigation" aria-expanded="false" data-testid="pending-vessels-hamburger-button">
-                <i class="fa-solid fa-bars"></i>
-            </button>
-            <div class="pv-brand">
-                <div class="pv-brand-text">
-                    <span class="pv-brand-title">YMR</span>
-                    <span class="pv-brand-sub">Survey Management System</span>
-                </div>
-            </div>
-            <div class="pv-topbar-right"><?php include 'includes/profile_dropdown.php'; ?></div>
-        </div>
-        <!-- Sidebar overlay + .sidebar-page class already come from the
-             includes/top_app_bar.php call above (kept, just visually
-             hidden on mobile) — no need to duplicate them here. -->
-
         <div class="pv-title-card" data-testid="pending-vessels-title-card">
             <div class="pv-title-icon"><i class="fa-solid fa-ship"></i></div>
             <div class="pv-title-text">Pending Vessels</div>
