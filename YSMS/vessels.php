@@ -376,7 +376,13 @@ include 'includes/header.php';
             display: flex; align-items: center; justify-content: center;
         }
         .pv-vessel-name { font-size: 16.5px; font-weight: 800; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
-        .pv-type-pill { align-self: flex-end; max-width: 100%; text-align: right; }
+        /* Compound selector so this always beats the legacy unconditional
+           .badge-assigned rule near the top of this file's <style> block
+           (kept for the old pre-redesign card markup) — both apply to the
+           same span (class="badge-assigned pv-type-pill"), and a plain
+           .pv-type-pill rule has lower specificity than .badge-assigned
+           alone, so the old cyan color was winning. */
+        .badge-assigned.pv-type-pill { align-self: flex-end; max-width: 100%; text-align: right; background: #eff6ff; color: #1e40af; box-shadow: none; }
         .pv-info-rows { display: flex; flex-direction: column; gap: 7px; padding: 0 16px 14px; }
         .pv-info-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dark); }
         .pv-info-row i { width: 16px; text-align: center; color: #94a3b8; font-size: 12px; flex: none; }
