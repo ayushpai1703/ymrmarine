@@ -53,10 +53,27 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
     </div>
 
     <div class="desktop-sidebar-nav-scroll">
-        <div class="desktop-sidebar-section-label drawer-reveal">Main</div>
+
+        <!-- ═══════════════ PROFILE (mobile drawer only) ═══════════════ -->
+        <div class="drawer-section-label drawer-only-nav drawer-reveal">Profile</div>
+        <a href="profile.php" class="nav-item-btn drawer-profile-row drawer-only-nav drawer-reveal" data-testid="drawer-profile-link" aria-label="User Profile: <?= htmlspecialchars($sidebar_user_name, ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars($user_role ?: 'User', ENT_QUOTES, 'UTF-8') ?>">
+            <?php if ($sidebar_avatar): ?>
+                <img src="<?= sanitize($sidebar_avatar) ?>" alt="" class="drawer-profile-avatar-img">
+            <?php else: ?>
+                <div class="drawer-profile-avatar" aria-hidden="true"><?= strtoupper(substr($sidebar_user_name, 0, 1)) ?></div>
+            <?php endif; ?>
+            <div class="drawer-profile-meta">
+                <div class="drawer-profile-eyebrow">User Profile</div>
+                <div class="drawer-profile-name"><?= htmlspecialchars($sidebar_user_name, ENT_QUOTES, 'UTF-8') ?></div>
+                <div class="drawer-profile-role"><?= htmlspecialchars($user_role ?: 'User', ENT_QUOTES, 'UTF-8') ?></div>
+            </div>
+        </a>
+
+        <!-- ═══════════════ MAIN MENU ═══════════════ -->
+        <div class="desktop-sidebar-section-label drawer-reveal">Main Menu</div>
         <a href="index.php" class="nav-item-btn <?= ($current_page == 'index.php') ? 'active' : '' ?>" data-testid="navigation-home-link">
             <i class="fa-solid fa-house"></i>
-            <span>Home</span>
+            <span>Dashboard</span>
         </a>
         <a href="vessels.php" class="nav-item-btn <?= ($current_page == 'vessels.php') ? 'active' : '' ?>" data-testid="navigation-vessels-link">
             <i class="fa-solid fa-ship"></i>
@@ -83,7 +100,7 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         </a>
         <a href="completed.php" class="nav-item-btn <?= ($current_page == 'completed.php') ? 'active' : '' ?>" data-testid="navigation-completed-link">
             <i class="fa-solid fa-circle-check"></i>
-            <span>Completed</span>
+            <span>Completed Vessels</span>
         </a>
         <?php
         // Admin, Super Admin and Client: hide Cancelled on mobile bottom bar
@@ -95,6 +112,26 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         <a href="cancelled.php" class="nav-item-btn<?= $cancelled_bn_class ?> <?= ($current_page == 'cancelled.php') ? 'active' : '' ?>" data-testid="navigation-cancelled-link">
             <i class="fa-solid fa-ban"></i>
             <span>Cancelled</span>
+        </a>
+
+        <!-- Mobile drawer only — no dedicated page yet, routed to the
+             existing generic "Coming Soon" placeholder (same pattern already
+             used elsewhere in the app for not-yet-built features). -->
+        <a href="coming_soon.php?feature=Vessel+Search" class="nav-item-btn drawer-only-nav drawer-reveal" data-testid="drawer-vessel-search-link">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <span>Vessel Search</span>
+        </a>
+        <a href="coming_soon.php?feature=Survey+Reports" class="nav-item-btn drawer-only-nav drawer-reveal" data-testid="drawer-survey-reports-link">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>Survey Reports</span>
+        </a>
+        <a href="coming_soon.php?feature=Templates" class="nav-item-btn drawer-only-nav drawer-reveal" data-testid="drawer-templates-link">
+            <i class="fa-solid fa-copy"></i>
+            <span>Templates</span>
+        </a>
+        <a href="coming_soon.php?feature=Export+Data" class="nav-item-btn drawer-only-nav drawer-reveal" data-testid="drawer-export-data-link">
+            <i class="fa-solid fa-file-export"></i>
+            <span>Export Data</span>
         </a>
 
         <?php if ($user_role === 'Admin'): ?>
@@ -150,6 +187,34 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-user"></i>
             <span>My Profile</span>
         </a>
+
+        <!-- ═══════════════ GENERAL (mobile drawer only) ═══════════════ -->
+        <div class="drawer-section-label drawer-only-nav drawer-reveal">General</div>
+        <a href="settings.php" class="nav-item-btn drawer-only-nav drawer-reveal <?= ($current_page == 'settings.php') ? 'active' : '' ?>" data-testid="drawer-settings-link">
+            <i class="fa-solid fa-gear"></i>
+            <span>Settings</span>
+        </a>
+        <div class="nav-item-btn dm-toggle-row drawer-only-nav drawer-reveal" data-testid="drawer-dark-mode-row">
+            <span class="dm-toggle-label"><i class="fa-solid fa-moon"></i><span>Dark Mode</span></span>
+            <button type="button" class="ios-switch" id="darkModeToggleBtn" role="switch" aria-checked="false" aria-label="Toggle dark mode" data-testid="dark-mode-toggle-button"></button>
+        </div>
+        <button type="button" class="nav-item-btn drawer-only-nav drawer-reveal" id="supportTriggerBtn" data-testid="drawer-support-trigger">
+            <i class="fa-solid fa-headset"></i>
+            <span>Support</span>
+        </button>
+
+        <!-- ═══════════════ ACCOUNT (mobile drawer only — desktop keeps its
+             own profile+logout footer below, so these aren't duplicated
+             on desktop) ═══════════════ -->
+        <div class="drawer-section-label drawer-only-nav drawer-reveal">Account</div>
+        <a href="profile.php" class="nav-item-btn drawer-only-nav drawer-reveal" data-testid="drawer-account-profile-link">
+            <i class="fa-solid fa-user"></i>
+            <span>Profile</span>
+        </a>
+        <a href="logout.php" class="nav-item-btn drawer-only-nav drawer-reveal drawer-logout-row" data-testid="drawer-account-logout-link">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+            <span>Logout</span>
+        </a>
     </div>
 
     <!-- Desktop only: profile photo + name (click → profile) + logout at bottom of sidebar -->
@@ -164,10 +229,6 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
                 <div class="desktop-sidebar-user-name" title="<?= htmlspecialchars($sidebar_user_name, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($sidebar_user_name, ENT_QUOTES, 'UTF-8') ?></div>
                 <div class="desktop-sidebar-user-role"><?= htmlspecialchars($user_role ?: 'User', ENT_QUOTES, 'UTF-8') ?></div>
             </div>
-        </a>
-        <a href="coming_soon.php?feature=Support" class="mobile-drawer-support-link" data-testid="drawer-support-link">
-            <i class="fa-solid fa-circle-question"></i>
-            <span>Support</span>
         </a>
         <a href="logout.php" class="desktop-sidebar-logout" data-testid="sidebar-logout-link">
             <i class="fa-solid fa-arrow-right-from-bracket"></i>
