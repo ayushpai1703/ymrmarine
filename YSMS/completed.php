@@ -211,7 +211,7 @@ include 'includes/header.php';
             display: flex; align-items: center; justify-content: center;
         }
         .pv-vessel-name { font-size: 16.5px; font-weight: 800; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
-        .pv-type-pill { align-self: flex-end; max-width: 100%; text-align: right; }
+        .pv-type-pill { align-self: flex-end; max-width: 100%; text-align: right; background: #6b8e23; color: #fff; }
         .pv-info-rows { display: flex; flex-direction: column; gap: 7px; padding: 0 16px 16px; }
         .pv-info-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dark); }
         .pv-info-row i { width: 16px; text-align: center; color: #94a3b8; font-size: 12px; flex: none; }
