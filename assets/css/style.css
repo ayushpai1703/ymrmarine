@@ -620,23 +620,37 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 
 .about-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 2.5rem; }
 .astat {
+  position: relative;
   background: var(--card);
   border: 1px solid var(--border-lt);
-  border-radius: var(--radius);
-  padding: 1.35rem 1.5rem;
+  border-radius: var(--radius-lg);
+  padding: 1.5rem 1.6rem;
+  overflow: hidden;
   box-shadow: var(--shadow-sm);
-  transition: border-color 0.3s var(--ease), transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
+  transition: border-color 0.3s var(--ease), transform 0.3s var(--ease), box-shadow 0.3s var(--ease), background 0.3s var(--ease);
 }
-.astat:hover { border-color: rgba(2,187,255,0.35); transform: translateY(-3px); box-shadow: var(--shadow-md); }
+.astat::before {
+  content: '';
+  position: absolute; top: 0; right: 0; width: 70px; height: 70px;
+  background: radial-gradient(circle at top right, rgba(2,187,255,0.14), transparent 70%);
+  pointer-events: none;
+}
+.astat:hover {
+  border-color: rgba(2,187,255,0.4);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  background: linear-gradient(155deg, var(--card), var(--card2));
+}
 .astat-val {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 2rem;
-  font-weight: 700;
+  font-size: 2.2rem;
+  font-weight: 800;
   color: var(--accent);
   line-height: 1;
-  margin-bottom: 0.25rem;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.3rem;
 }
-.astat-label { font-size: 0.8rem; color: var(--ink-soft); font-weight: 500; }
+.astat-label { font-size: 0.8rem; color: var(--ink-soft); font-weight: 600; }
 
 /* ─────────────────────────────────────────
    SERVICES
@@ -798,26 +812,42 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 ───────────────────────────────────────── */
 .team-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-top: 3.5rem; }
 .team-card {
+  position: relative;
   background: var(--card);
   border: 1px solid var(--border-lt);
   border-radius: var(--radius-lg);
-  padding: 2.1rem 1.5rem;
+  padding: 2.2rem 1.5rem;
   text-align: center;
+  overflow: hidden;
   box-shadow: var(--shadow-sm);
   transition: border-color 0.3s var(--ease), transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
 }
+.team-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 64px;
+  background: linear-gradient(135deg, var(--navy2), var(--navy));
+  opacity: 0; transition: opacity 0.3s var(--ease);
+}
 .team-card:hover { border-color: rgba(2,187,255,0.35); transform: translateY(-7px); box-shadow: var(--shadow-lg); }
-.team-avatar {
-  width: 84px; height: 84px;
-  margin: 0 auto 1.1rem;
+.team-card:hover::before { opacity: 1; }
+.team-avatar, .team-avatar-img {
+  position: relative;
+  width: 88px; height: 88px;
+  margin: 0 auto 1.15rem;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
-  font-size: 1.6rem;
+  font-size: 1.65rem;
   color: var(--white);
   background: linear-gradient(135deg, var(--accent), var(--accent2));
-  box-shadow: 0 10px 26px rgba(2,187,255,0.3);
+  box-shadow: 0 0 0 5px var(--card), 0 10px 26px rgba(2,187,255,0.32);
+  transition: box-shadow 0.3s var(--ease), transform 0.3s var(--ease);
+}
+.team-avatar-img { object-fit: cover; display: block; }
+.team-card:hover .team-avatar, .team-card:hover .team-avatar-img {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 5px var(--card), 0 14px 32px rgba(2,187,255,0.42);
 }
 .team-name { font-family: 'Space Grotesk', sans-serif; font-size: 1rem; font-weight: 700; color: var(--ink); margin-bottom: 0.25rem; }
 .team-role {
@@ -1041,6 +1071,36 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 /* Map */
 .map-frame { border-radius: var(--radius); overflow: hidden; margin-top: 1.5rem; border: 1px solid rgba(2,187,255,0.14); box-shadow: var(--shadow-sm); }
 .map-frame iframe { display: block; width: 100%; border: 0; }
+
+/* ─────────────────────────────────────────
+   CTA BANNER — reusable dark closing-statement card, used near the
+   bottom of every page (about/ports/index) for a consistent, bold
+   "next version" close before the footer. Applied as an extra class on
+   an existing .section div — no markup restructuring, just an add-on
+   look for the same tag/heading/paragraph/button already there.
+───────────────────────────────────────── */
+.section.cta-banner-wrap {
+  position: relative;
+  max-width: 1180px;
+  padding: 3.75rem 3rem;
+  border-radius: var(--radius-lg);
+  text-align: center;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--navy2) 0%, var(--navy) 100%);
+  box-shadow: 0 30px 70px rgba(3,10,20,0.25);
+}
+.cta-banner-wrap::before {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 55% 70% at 15% 0%, rgba(2,187,255,0.28), transparent 65%),
+              radial-gradient(ellipse 45% 60% at 100% 100%, rgba(2,187,255,0.14), transparent 65%);
+}
+.cta-banner-wrap > * { position: relative; }
+.cta-banner-wrap .tag { color: var(--accent); background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.16); margin-left: auto; margin-right: auto; }
+.cta-banner-wrap .sec-h2 { color: var(--white); }
+.cta-banner-wrap .sec-body { color: var(--slate); margin-left: auto; margin-right: auto; text-align: center; }
+.cta-banner-wrap .btn-primary-hero { margin: 0 auto; }
+@media (max-width: 640px) { .section.cta-banner-wrap { padding: 2.75rem 1.5rem; } }
 
 /* ─────────────────────────────────────────
    FOOTER

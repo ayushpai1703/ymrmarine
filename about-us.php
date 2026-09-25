@@ -93,7 +93,7 @@ require __DIR__ . '/includes/public_layout_start.php';
 
 <div class="section-alt">
 <section>
-  <div class="section reveal">
+  <div class="section reveal cta-banner-wrap">
     <div class="tag">Next Step</div>
     <h2 class="sec-h2">Need a survey at your next port call?</h2>
     <p class="sec-body" style="margin-bottom:1.5rem;">Share vessel details and we will confirm surveyor availability and scope.</p>
