@@ -177,15 +177,6 @@ $copyright = getSetting('copyright');
   </div>
 </section>
 
-<section>
-  <div class="section reveal cta-banner-wrap">
-    <div class="tag">Ready When You Are</div>
-    <h2 class="sec-h2">Get a surveyor confirmed today</h2>
-    <p class="sec-body">Share your vessel and port details — our team responds with availability within the hour, day or night.</p>
-    <a href="<?= e($hero['btn1_link'] ?? 'contact.php') ?>" class="btn-primary-hero" style="display:inline-flex;"><?= e($hero['btn1_text'] ?? 'Request a Survey') ?> <i class="fas fa-arrow-right"></i></a>
-  </div>
-</section>
-
 <!-- ════════ TEAM ════════ -->
 <section id="team">
   <div class="section">
@@ -198,7 +189,7 @@ $copyright = getSetting('copyright');
       <?php foreach ($team as $i => $m): ?>
       <div class="team-card reveal reveal-delay-<?= ($i % 4) + 1 ?>">
         <?php if ($m['photo']): ?>
-          <img src="<?= e($m['photo']) ?>" alt="<?= e($m['name']) ?>" class="team-avatar-img">
+          <img src="<?= e($m['photo']) ?>" alt="<?= e($m['name']) ?>" style="width:84px;height:84px;border-radius:50%;object-fit:cover;margin:0 auto 1.1rem;display:block;">
         <?php else: ?>
           <div class="team-avatar"><?= e($m['avatar_initials']) ?></div>
         <?php endif; ?>

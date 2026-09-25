@@ -94,7 +94,7 @@ require __DIR__ . '/includes/public_layout_start.php';
 
 <div class="section-alt">
 <section>
-  <div class="section reveal cta-banner-wrap">
+  <div class="section reveal">
     <div class="tag">Mobilisation</div>
     <h2 class="sec-h2">Planning a call at a listed port?</h2>
     <p class="sec-body" style="margin-bottom:1.5rem;">Send vessel name, ETA and survey type — we confirm attendance quickly.</p>
