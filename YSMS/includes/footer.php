@@ -64,55 +64,6 @@ $fab_user_role = $user_role ?? ($_SESSION['role'] ?? '');
     </div>
 </div>
 
-<!-- 🌟 Support modal — triggered from the hamburger drawer's GENERAL section
-     (includes/nav.php #supportTriggerBtn). Exact contact details per spec;
-     functional mailto:/tel: links with copy-to-clipboard. -->
-<div class="support-modal-overlay" id="supportModalOverlay" data-testid="support-modal-overlay">
-    <div class="support-modal-card" role="dialog" aria-modal="true" aria-labelledby="supportModalTitle" data-testid="support-modal-card">
-        <div class="support-modal-header">
-            <div class="support-modal-icon"><i class="fa-solid fa-headset" aria-hidden="true"></i></div>
-            <h2 class="support-modal-title" id="supportModalTitle">Support</h2>
-            <button type="button" class="support-modal-close" id="supportModalCloseX" aria-label="Close support" data-testid="support-modal-close-x">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-        <div class="support-modal-body">
-            <p class="support-modal-company">YMR Marine Solutions LLP</p>
-
-            <div class="support-contact-row">
-                <div class="support-contact-icon"><i class="fa-solid fa-envelope" aria-hidden="true"></i></div>
-                <div class="support-contact-main">
-                    <p class="support-contact-label">Email</p>
-                    <a href="mailto:ashok@ymrmarine.com" class="support-contact-value" id="supportEmailLink" data-testid="support-email-link">ashok@ymrmarine.com</a>
-                </div>
-                <button type="button" class="support-copy-btn" data-copy-value="ashok@ymrmarine.com" aria-label="Copy email address" data-testid="support-email-copy-button">
-                    <i class="fa-regular fa-copy"></i>
-                </button>
-            </div>
-
-            <div class="support-contact-row">
-                <div class="support-contact-icon"><i class="fa-solid fa-phone" aria-hidden="true"></i></div>
-                <div class="support-contact-main">
-                    <p class="support-contact-label">Phone</p>
-                    <a href="tel:+917842261230" class="support-contact-value" id="supportPhoneLink" data-testid="support-phone-link">+91 7842261230</a>
-                </div>
-                <button type="button" class="support-copy-btn" data-copy-value="+917842261230" aria-label="Copy phone number" data-testid="support-phone-copy-button">
-                    <i class="fa-regular fa-copy"></i>
-                </button>
-            </div>
-        </div>
-        <div class="support-modal-actions">
-            <a href="mailto:ashok@ymrmarine.com" class="support-action-btn email-btn" data-testid="support-email-action-button">
-                <i class="fa-solid fa-envelope"></i> Email Support
-            </a>
-            <a href="tel:+917842261230" class="support-action-btn call-btn" data-testid="support-call-action-button">
-                <i class="fa-solid fa-phone"></i> Call Support
-            </a>
-        </div>
-        <button type="button" class="support-modal-close-full" id="supportModalCloseBtn" data-testid="support-modal-close-button">Close</button>
-    </div>
-</div>
-
 <!-- Scripts Loader -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

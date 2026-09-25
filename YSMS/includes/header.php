@@ -14,18 +14,6 @@ require_once __DIR__ . '/../config/config.php';
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <!-- 🌙 Dark mode FOUC guard — applies the saved theme before first paint,
-         so the page never flashes light before switching to dark. -->
-    <script>
-        (function() {
-            try {
-                if (localStorage.getItem('ysms-theme') === 'dark') {
-                    document.documentElement.setAttribute('data-theme', 'dark');
-                }
-            } catch (e) {}
-        })();
-    </script>
-
     <style>
         :root {
             --primary-bg: #0b1e46;
@@ -43,23 +31,7 @@ require_once __DIR__ . '/../config/config.php';
             --font-primary: 'Lexend', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
-        /* 🌙 Dark mode palette — exact spec colors. Kept purple/blue accents
-           unchanged across both themes. Scoped to includes/header.php's own
-           shared components (hamburger, drawer, bottom nav, dashboard cards,
-           search, modals, inputs) — the large separate <style> blocks in
-           vessels.php/reports.php/completed.php/cancelled.php are out of
-           scope for this pass. */
-        :root[data-theme="dark"] {
-            --app-bg: #0B1120;
-            --card-bg: #111827;
-            --text-dark: #F9FAFB;
-            --text-muted: #9CA3AF;
-            --border-color: #1F2937;
-        }
-
         * { -webkit-tap-highlight-color: transparent; }
-
-        html, body { transition: background-color .25s ease, color .25s ease; }
 
         body {
             font-family: var(--font-primary);
@@ -110,12 +82,12 @@ require_once __DIR__ . '/../config/config.php';
             font-weight: 600;
             letter-spacing: -.005em;
             margin: 0;
-            color: var(--text-dark);
+            color: #111827;
         }
 
         .user-welcome p {
             font-size: 14px;
-            color: var(--text-muted);
+            color: #6B7280;
             margin: 4px 0 0;
         }
 
@@ -130,7 +102,7 @@ require_once __DIR__ . '/../config/config.php';
         .profile-menu-wrap { position: relative; flex: 0 0 45px; z-index: 1200; }
         .profile-menu-trigger { width: 45px; height: 45px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; transition: transform .2s ease, box-shadow .2s ease; }
         .profile-menu-trigger:hover, .profile-menu-trigger:focus-visible { transform: translateY(-1px); box-shadow: 0 0 0 3px rgba(59,50,179,.14); outline: none; }
-        .profile-dropdown-menu { position: absolute; top: calc(100% + 10px); right: 0; min-width: 178px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 7px; box-shadow: 0 16px 34px rgba(15,23,42,.16); opacity: 0; visibility: hidden; transform: translateY(-8px) scale(.98); transform-origin: top right; transition: opacity .2s ease, transform .2s ease, visibility .2s ease; }
+        .profile-dropdown-menu { position: absolute; top: calc(100% + 10px); right: 0; min-width: 178px; background: #fff; border: 1px solid var(--border-color); border-radius: 14px; padding: 7px; box-shadow: 0 16px 34px rgba(15,23,42,.16); opacity: 0; visibility: hidden; transform: translateY(-8px) scale(.98); transform-origin: top right; transition: opacity .2s ease, transform .2s ease, visibility .2s ease; }
         .profile-menu-wrap.open .profile-dropdown-menu { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
         .profile-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 10px; color: var(--text-dark); text-decoration: none; font-size: 13px; font-weight: 600; transition: background-color .18s ease, transform .18s ease; }
         .profile-dropdown-item:hover { background: #f1f5f9; color: var(--accent-purple); transform: translateX(2px); }
@@ -138,7 +110,7 @@ require_once __DIR__ . '/../config/config.php';
         .profile-dropdown-item.logout-item { color: #dc2626; }
         .profile-dropdown-item.logout-item:hover { background: #fef2f2; color: #b91c1c; }
 
-        .top-app-bar { position: sticky; top: 0; z-index: 850; min-height: 70px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); padding: 12px 20px; display: grid; grid-template-columns: minmax(76px, 1fr) auto minmax(76px, 1fr); align-items: center; }
+        .top-app-bar { position: sticky; top: 0; z-index: 850; min-height: 70px; background: #fff; border-bottom: 1px solid var(--border-color); padding: 12px 20px; display: grid; grid-template-columns: minmax(76px, 1fr) auto minmax(76px, 1fr); align-items: center; }
         .top-app-bar-left { display: flex; align-items: center; gap: 15px; justify-self: start; }
         .top-app-bar-title { margin: 0; color: var(--text-dark); font-size: 18px; font-weight: 700; text-align: center; white-space: nowrap; }
         .top-app-bar > .profile-menu-wrap { justify-self: end; }
@@ -242,17 +214,17 @@ require_once __DIR__ . '/../config/config.php';
             font-size: 16px;
             font-weight: 600;
             letter-spacing: -.005em;
-            color: var(--text-dark);
+            color: #111827;
         }
 
         .date-select-badge {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
+            background: #ffffff;
+            border: 1px solid #E5E7EB;
             padding: 6px 12px;
             border-radius: 12px;
             font-size: 12.5px;
             font-weight: 500;
-            color: var(--text-muted);
+            color: #374151;
             box-shadow: 0 1px 3px rgba(15,23,42,.04);
         }
 
@@ -264,8 +236,8 @@ require_once __DIR__ . '/../config/config.php';
             left: 18px; color: #9CA3AF; font-size: 15px;
         }
         .global-search-wrap .search-control {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
+            background: #fff;
+            border: 1px solid #EEF0F6;
             border-radius: 18px;
             padding: 15px 16px 15px 46px;
             font-size: 14px;
@@ -285,7 +257,7 @@ require_once __DIR__ . '/../config/config.php';
         }
 
         .ov-card {
-            background: var(--card-bg);
+            background: white;
             border-radius: 20px;
             padding: 18px 12px;
             text-align: left;
@@ -322,7 +294,7 @@ require_once __DIR__ . '/../config/config.php';
         .ov-label {
             font-size: 11.5px;
             font-weight: 500;
-            color: var(--text-muted);
+            color: #4B5563;
             line-height: 1.25;
         }
 
@@ -335,7 +307,7 @@ require_once __DIR__ . '/../config/config.php';
         }
 
         .stat-card {
-            background: var(--card-bg);
+            background: white;
             border-radius: 20px;
             padding: 16px;
             box-shadow: 0 2px 10px rgba(15,23,42,.04);
@@ -372,7 +344,7 @@ require_once __DIR__ . '/../config/config.php';
             font-weight: 600;
             letter-spacing: -.005em;
             margin: 10px 0 2px 0;
-            color: var(--text-dark);
+            color: #111827;
         }
 
         .stat-change {
@@ -470,7 +442,7 @@ require_once __DIR__ . '/../config/config.php';
         .search-filter-row { display: flex; gap: 10px; padding: 15px 20px; }
         .search-input-wrapper { position: relative; flex: 1; }
         .search-input-wrapper i { position: absolute; left: 12px; top: 12px; color: var(--text-muted); }
-        .search-control { width: 100%; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 10px 10px 35px; font-size: 13px; color: var(--text-dark); }
+        .search-control { width: 100%; background: white; border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 10px 10px 35px; font-size: 13px; }
 
         /* 🌟 Dashboard global search — vessel/agent/client/port lookup across
            every stage (Pending Vessel, Pending Report, Completed, Cancelled),
@@ -482,7 +454,7 @@ require_once __DIR__ . '/../config/config.php';
             position: absolute;
             top: calc(100% + 6px);
             left: 0; right: 0;
-            background: var(--card-bg);
+            background: #fff;
             border: 1px solid var(--border-color);
             border-radius: 14px;
             box-shadow: 0 16px 34px rgba(15,23,42,.14);
@@ -512,9 +484,9 @@ require_once __DIR__ . '/../config/config.php';
         .gsr-status-completed { background: #f0fdf4; color: #166534; }
         .gsr-status-cancelled { background: #fef2f2; color: #dc2626; }
         .gsr-empty, .gsr-loading { padding: 14px; text-align: center; font-size: 12.5px; color: var(--text-muted); }
-        .filter-btn { background: var(--card-bg); border: 1px solid var(--border-color); width: 42px; height: 42px; border-radius: 12px; display: flex; justify-content: center; align-items: center; color: var(--text-dark); }
+        .filter-btn { background: white; border: 1px solid var(--border-color); width: 42px; height: 42px; border-radius: 12px; display: flex; justify-content: center; align-items: center; color: var(--text-dark); }
         .vessel-list-container { padding: 0 20px; }
-        .vessel-card { background: var(--card-bg); border-radius: 16px; padding: 15px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.01); cursor: pointer; }
+        .vessel-card { background: white; border-radius: 16px; padding: 15px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.01); cursor: pointer; }
         .vessel-avatar-info { display: flex; align-items: center; gap: 12px; }
         .vessel-initial-avatar { width: 42px; height: 42px; border-radius: 50%; background: #eff6ff; color: #1e40af; display: flex; justify-content: center; align-items: center; font-weight: 700; font-size: 16px; }
         .vessel-name-title { font-size: 14px; font-weight: 700; color: var(--text-dark); margin: 0; }
@@ -526,9 +498,9 @@ require_once __DIR__ . '/../config/config.php';
         .badge-overdue { background: #fef2f2; color: #dc2626; }
         .badge-date-text { font-size: 11px; font-weight: 600; color: var(--text-dark); margin-top: 4px; }
         .badge-place { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-size: 10px; padding: 4px 9px; border-radius: 50px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; }
-        .list-controls-panel { display: none; margin: -5px 20px 15px; padding: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 20px rgba(15,23,42,.08); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .list-controls-panel { display: none; margin: -5px 20px 15px; padding: 12px; background: #fff; border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 20px rgba(15,23,42,.08); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
         .list-controls-panel.open { display: grid; animation: controlsReveal .2s ease-out; }
-        .list-controls-panel select { min-width: 0; width: 100%; padding: 9px 10px; border: 1px solid var(--border-color); border-radius: 9px; color: var(--text-dark); background: var(--app-bg); font-size: 12px; }
+        .list-controls-panel select { min-width: 0; width: 100%; padding: 9px 10px; border: 1px solid var(--border-color); border-radius: 9px; color: var(--text-dark); background: #f8fafc; font-size: 12px; }
         @keyframes controlsReveal { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
         .list-empty-state { display: none; }
 
@@ -551,28 +523,25 @@ require_once __DIR__ . '/../config/config.php';
                transition to finish, then removes .drawer-mode so the element
                returns to being the normal fixed bottom bar. */
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode {
-                display: flex; position: fixed; top: 0; bottom: 0; right: 0; left: auto;
-                width: min(85vw, 380px); height: 100vh;
+                display: flex; position: fixed; top: 0; bottom: 0; left: 0; right: auto;
+                width: min(86vw, 360px); height: 100vh;
                 padding: 20px 0 24px;
                 flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 0;
-                border: 0; border-radius: 22px 0 0 22px;
+                border: 0; border-radius: 0 22px 22px 0;
                 background: linear-gradient(180deg, #0f172a 0%, #0b1e46 55%, #071428 100%);
                 -webkit-backdrop-filter: none; backdrop-filter: none;
-                box-shadow: -18px 0 40px rgba(4,10,24,.35);
-                transform: translate3d(105%, 0, 0);
+                box-shadow: 18px 0 40px rgba(4,10,24,.35);
+                transform: translate3d(-105%, 0, 0);
                 transition: transform .4s cubic-bezier(0.22, 1, 0.36, 1);
                 will-change: transform;
                 z-index: 1100;
             }
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open { transform: translate3d(0, 0, 0); }
 
-            /* Reveal the brand/section-label/quick-action blocks that are
-               hidden by default on mobile — only inside the open drawer.
-               .desktop-sidebar-footer is NOT revealed here on purpose: on
-               mobile its profile+logout job is now done by the drawer's own
-               ACCOUNT section (a normal part of the scrollable list), so the
-               footer stays desktop-only and isn't duplicated. */
-            .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-brand {
+            /* Reveal the brand/profile/section-label/quick-action blocks that
+               are hidden by default on mobile — only inside the open drawer. */
+            .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-brand,
+            .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-footer {
                 display: flex !important;
             }
             .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-section-label.drawer-reveal {
@@ -582,11 +551,6 @@ require_once __DIR__ . '/../config/config.php';
             .mobile-container.sidebar-page .bottom-nav-bar.open .nav-item-btn.drawer-reveal,
             .mobile-container.sidebar-page .bottom-nav-bar.open .mobile-drawer-support-link {
                 display: flex !important;
-            }
-            .mobile-container.sidebar-page .bottom-nav-bar.open .drawer-section-label {
-                display: block !important;
-                font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
-                color: rgba(255,255,255,.35); padding: 14px 14px 6px; margin: 0;
             }
 
             .mobile-container.sidebar-page .desktop-sidebar-brand {
@@ -624,40 +588,6 @@ require_once __DIR__ . '/../config/config.php';
                 color: #fff; box-shadow: inset 3px 0 0 #818cf8;
             }
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn.active i { color: #a5b4fc; }
-
-            /* PROFILE row — a normal drawer row (not a floating card), just a
-               bigger avatar + two-line name/role in place of a single icon. */
-            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .drawer-profile-row {
-                padding: 10px 14px; margin-bottom: 4px;
-            }
-            .drawer-profile-avatar {
-                width: 38px; height: 38px; border-radius: 11px; flex: none;
-                background: linear-gradient(135deg, #6366f1, #3b32b3);
-                color: #fff; font-weight: 700; font-size: 15px;
-                display: flex; align-items: center; justify-content: center;
-            }
-            .drawer-profile-avatar-img { width: 38px; height: 38px; border-radius: 11px; object-fit: cover; flex: none; border: 2px solid rgba(255,255,255,.15); }
-            .drawer-profile-meta { min-width: 0; flex: 1; }
-            .drawer-profile-eyebrow { color: rgba(255,255,255,.4); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 2px; }
-            .drawer-profile-name { color: #fff; font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .drawer-profile-role { color: rgba(255,255,255,.45); font-size: 11.5px; margin-top: 1px; }
-
-            /* Dark-mode toggle + Support rows: no navigation chevron */
-            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .dm-toggle-row::after {
-                display: none;
-            }
-            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .dm-toggle-row:active {
-                transform: none; background: transparent;
-            }
-
-            /* ACCOUNT section Logout row — same red treatment as the
-               desktop sidebar's own logout button. */
-            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .drawer-logout-row {
-                color: #fca5a5;
-            }
-            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .drawer-logout-row i { color: #f87171; }
-            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .drawer-logout-row::after { display: none; }
-
             .mobile-container.sidebar-page .desktop-sidebar-section-label {
                 font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
                 color: rgba(255,255,255,.35); padding: 14px 14px 6px; margin: 0;
@@ -748,7 +678,7 @@ require_once __DIR__ . '/../config/config.php';
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-brand,
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-footer,
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > * {
-                opacity: 0; transform: translate3d(12px, 0, 0);
+                opacity: 0; transform: translate3d(-12px, 0, 0);
                 transition: opacity .3s ease, transform .3s cubic-bezier(0.22, 1, 0.36, 1);
             }
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open > .desktop-sidebar-brand,
@@ -791,14 +721,14 @@ require_once __DIR__ . '/../config/config.php';
            🌟 DETAILS SCREENS PIXEL-PERFECT CSS (Vessel, Report & Completed Details)
            ========================================================================== */
         .detail-header-card {
-            background: var(--card-bg);
+            background: white;
             padding: 22px 20px;
             text-align: center;
             border-bottom: 1px solid var(--border-color);
         }
 
         .info-table-list {
-            background: var(--card-bg);
+            background: white;
             margin: 15px 20px;
             border-radius: 16px;
             overflow: hidden;
@@ -870,7 +800,7 @@ require_once __DIR__ . '/../config/config.php';
            sheet itself also gets its own max-height + scroll so a long
            option list scrolls internally instead of growing off-screen. */
         .fab-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(11, 30, 70, 0.6); z-index: 999; display: none; justify-content: center; align-items: flex-end; }
-        .fab-popup-sheet { background: var(--card-bg); width: 100%; border-top-left-radius: 30px; border-top-right-radius: 30px; padding: 25px; box-shadow: 0 -10px 25px rgba(0,0,0,0.1); transform: translateY(100%); transition: transform 0.3s ease-out; max-height: 80vh; overflow-y: auto; }
+        .fab-popup-sheet { background: white; width: 100%; border-top-left-radius: 30px; border-top-right-radius: 30px; padding: 25px; box-shadow: 0 -10px 25px rgba(0,0,0,0.1); transform: translateY(100%); transition: transform 0.3s ease-out; max-height: 80vh; overflow-y: auto; }
         .fab-option-item { display: flex; align-items: center; gap: 15px; padding: 15px 10px; border-bottom: 1px solid var(--border-color); color: var(--text-dark); text-decoration: none; font-weight: 600; }
 
 /* Desktop-only helpers (hidden on mobile by default) */
@@ -882,22 +812,6 @@ require_once __DIR__ . '/../config/config.php';
 }
 .mobile-drawer-support-link {
     display: none !important;
-}
-/* 🌟 Mobile-drawer-EXCLUSIVE items (never shown on the closed bottom bar,
-   never shown on the desktop sidebar — unlike .desktop-only-nav, this has
-   no @media(min-width:992px) reveal rule at all). Always paired with
-   .drawer-reveal, whose existing "inside the open drawer" rule (below,
-   inside @media(max-width:991px)) is what actually reveals it. */
-.drawer-only-nav {
-    display: none !important;
-}
-/* Section labels exclusive to the mobile drawer (PROFILE / GENERAL /
-   ACCOUNT) — deliberately NOT .desktop-sidebar-section-label, whose desktop
-   media query shows every instance of that class unconditionally. This one
-   has no rule outside the open-drawer mobile block below, so it can never
-   leak onto the desktop sidebar. */
-.drawer-section-label {
-    display: none;
 }
 /* Brand badge/logo/text visuals — identical on the desktop sidebar and the
    mobile drawer (both navy), so these are unconditional (single source of
@@ -959,8 +873,8 @@ require_once __DIR__ . '/../config/config.php';
         margin-right: 0;
         padding: 12px 16px;
         min-height: 60px;
-        border-bottom: 1px solid var(--border-color);
-        background: var(--card-bg);
+        border-bottom: 1px solid #e2e8f0;
+        background: #fff;
         position: sticky;
         top: 0;
         z-index: 850;
@@ -1358,147 +1272,6 @@ a:active, button:active, .btn:active { transform: scale(0.97); }
 input, select, textarea, .form-control { font-size: 16px; } /* prevents iOS auto-zoom on focus */
 @media (max-width: 480px) {
     .btn, button:not(.profile-menu-trigger):not(.hamburger-menu-btn) { min-height: 44px; }
-}
-
-/* 🌙 Dark mode — explicit overrides for surfaces that use hardcoded literal
-   colors rather than the CSS variables above (translucent/rgba backgrounds,
-   status-tinted badges left as-is, native form controls). Scoped to the
-   shared components this file defines: top bar, hamburger/drawer, bottom
-   nav, dashboard cards, search, FAB sheet, profile dropdown, list controls,
-   detail screens, and the Support modal below. */
-:root[data-theme="dark"] body { background-color: #05070d; }
-:root[data-theme="dark"] .top-alert-banner { background: #1e3a8a; }
-:root[data-theme="dark"] .nativeAppToast,
-:root[data-theme="dark"] #nativeAppToast { background: #1e293b; }
-:root[data-theme="dark"] .gsr-item { border-bottom-color: #1f2937; }
-:root[data-theme="dark"] .gsr-item:hover, :root[data-theme="dark"] .gsr-item:focus { background: #1a2233; }
-:root[data-theme="dark"] .profile-dropdown-item:hover { background: #1a2233; }
-:root[data-theme="dark"] .list-controls-panel select { background: #0b1120; }
-:root[data-theme="dark"] .info-row { border-bottom-color: #1f2937; }
-:root[data-theme="dark"] input, :root[data-theme="dark"] select, :root[data-theme="dark"] textarea {
-    color-scheme: dark;
-}
-@media (max-width: 991px) {
-    :root[data-theme="dark"] .bottom-nav-bar:not(.drawer-mode) {
-        background: rgba(17,24,39,.92);
-        border-top-color: rgba(255,255,255,.06);
-    }
-}
-@media (min-width: 992px) {
-    :root[data-theme="dark"] .mobile-container,
-    :root[data-theme="dark"] body { background-color: #05070d; }
-}
-
-/* ══════════════════════════════════════════════════════════════════════
-   🌙 Dark-mode toggle switch (iOS style) — GENERAL section, drawer only
-   ══════════════════════════════════════════════════════════════════════ */
-.dm-toggle-row { cursor: default; justify-content: space-between !important; }
-.dm-toggle-row .dm-toggle-label { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
-.ios-switch {
-    position: relative;
-    width: 44px; height: 26px; flex: none;
-    background: rgba(255,255,255,.14);
-    border-radius: 999px;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    transition: background-color .25s ease;
-}
-.ios-switch::before {
-    content: '';
-    position: absolute;
-    top: 3px; left: 3px;
-    width: 20px; height: 20px;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 2px 4px rgba(0,0,0,.25);
-    transition: transform .25s cubic-bezier(.4,0,.2,1);
-}
-.ios-switch.is-on { background: var(--accent-purple); }
-.ios-switch.is-on::before { transform: translateX(18px); }
-.ios-switch:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
-
-/* ══════════════════════════════════════════════════════════════════════
-   💬 Support modal / bottom sheet — exact contact details, mailto/tel,
-   copy-to-clipboard. Theme-aware (light + dark), 20–24px radius, soft
-   shadow, smooth open/close animation.
-   ══════════════════════════════════════════════════════════════════════ */
-.support-modal-overlay {
-    position: fixed; inset: 0; z-index: 1300;
-    background: rgba(5,15,35,.5);
-    -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
-    display: flex; align-items: flex-end; justify-content: center;
-    opacity: 0; visibility: hidden;
-    transition: opacity .25s ease, visibility .25s ease;
-}
-.support-modal-overlay.open { opacity: 1; visibility: visible; }
-.support-modal-card {
-    background: var(--card-bg);
-    width: 100%; max-width: 420px;
-    border-radius: 22px 22px 0 0;
-    padding: 26px 22px calc(22px + env(safe-area-inset-bottom, 0px));
-    box-shadow: 0 -20px 50px rgba(4,10,24,.35);
-    transform: translateY(100%);
-    transition: transform .32s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.support-modal-overlay.open .support-modal-card { transform: translateY(0); }
-@media (min-width: 560px) {
-    .support-modal-overlay { align-items: center; }
-    .support-modal-card {
-        border-radius: 22px;
-        transform: translateY(16px) scale(.97);
-        opacity: 0;
-        transition: transform .28s cubic-bezier(0.22, 1, 0.36, 1), opacity .22s ease;
-    }
-    .support-modal-overlay.open .support-modal-card { transform: translateY(0) scale(1); opacity: 1; }
-}
-.support-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
-.support-modal-icon {
-    width: 46px; height: 46px; border-radius: 14px; flex: none;
-    background: rgba(91,45,238,.12); color: var(--accent-purple);
-    display: flex; align-items: center; justify-content: center; font-size: 19px;
-}
-.support-modal-title { font-size: 18px; font-weight: 700; color: var(--text-dark); margin: 0; }
-.support-modal-close {
-    width: 34px; height: 34px; min-width: 34px; border-radius: 10px; border: 1px solid var(--border-color);
-    background: transparent; color: var(--text-muted); display: flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 14px; transition: background-color .18s ease;
-}
-.support-modal-close:hover { background: rgba(15,23,42,.06); }
-.support-modal-body { margin-bottom: 20px; }
-.support-modal-company { font-size: 14.5px; font-weight: 700; color: var(--text-dark); margin: 0 0 14px; }
-.support-contact-row {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 4px; border-bottom: 1px solid var(--border-color);
-}
-.support-contact-row:last-child { border-bottom: none; }
-.support-contact-icon {
-    width: 36px; height: 36px; border-radius: 10px; flex: none;
-    background: rgba(37,99,235,.12); color: var(--accent-blue);
-    display: flex; align-items: center; justify-content: center; font-size: 14px;
-}
-.support-contact-main { flex: 1; min-width: 0; }
-.support-contact-label { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 2px; }
-.support-contact-value { font-size: 13.5px; font-weight: 650; color: var(--text-dark); text-decoration: none; display: block; overflow-wrap: anywhere; }
-.support-contact-value:hover { color: var(--accent-purple); }
-.support-copy-btn {
-    width: 34px; height: 34px; min-width: 34px; border-radius: 9px; border: 1px solid var(--border-color);
-    background: transparent; color: var(--text-muted); display: flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 12.5px; flex: none; transition: background-color .18s ease, color .18s ease;
-}
-.support-copy-btn:hover { background: rgba(91,45,238,.1); color: var(--accent-purple); }
-.support-copy-btn.copied { color: #16A34A; border-color: #16A34A; }
-.support-modal-actions { display: flex; gap: 10px; margin-bottom: 10px; }
-.support-action-btn {
-    flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 13px; border-radius: 12px; font-size: 13.5px; font-weight: 650;
-    text-decoration: none; border: none; cursor: pointer;
-}
-.support-action-btn.email-btn { background: var(--accent-purple); color: #fff; }
-.support-action-btn.call-btn { background: rgba(37,99,235,.12); color: var(--accent-blue); }
-.support-modal-close-full {
-    width: 100%; padding: 13px; border-radius: 12px; border: 1px solid var(--border-color);
-    background: transparent; color: var(--text-muted); font-size: 13.5px; font-weight: 650; cursor: pointer;
 }
     </style>
 </head>

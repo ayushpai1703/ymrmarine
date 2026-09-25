@@ -58,7 +58,7 @@ $(document).ready(function() {
             openSidebar();
         }
     });
-    $(document).on('click', '.sidebar-screen-overlay, .bottom-nav-bar.drawer-mode .nav-item-btn:not(.dm-toggle-row), .drawer-close-btn', closeSidebar);
+    $(document).on('click', '.sidebar-screen-overlay, .bottom-nav-bar.drawer-mode .nav-item-btn, .drawer-close-btn', closeSidebar);
     $(document).on('keydown', function(e) {
         if (e.key === 'Escape' && $('.bottom-nav-bar').hasClass('open')) {
             closeSidebar();
@@ -157,79 +157,5 @@ $(document).ready(function() {
         scope.find('[data-filter-type], [data-filter-place], [data-filter-client], [data-filter-status], [data-filter-surveyor]').val('');
         scope.find('[data-list-sort]').val('newest');
         updateSurveyList(scope);
-    });
-
-    // ── 🌙 Dark mode — persisted via localStorage, applied as
-    // documentElement[data-theme="dark"]. A tiny inline <script> in
-    // includes/header.php's <head> already applies the saved theme before
-    // first paint (FOUC guard); this just keeps the toggle switch in sync
-    // and handles the actual click.
-    var THEME_KEY = 'ysms-theme';
-    function isDarkOn() {
-        return document.documentElement.getAttribute('data-theme') === 'dark';
-    }
-    function syncDarkToggleUI() {
-        var on = isDarkOn();
-        $('#darkModeToggleBtn').toggleClass('is-on', on).attr('aria-checked', on ? 'true' : 'false');
-    }
-    function setDarkMode(on) {
-        if (on) {
-            document.documentElement.setAttribute('data-theme', 'dark');
-        } else {
-            document.documentElement.removeAttribute('data-theme');
-        }
-        try { localStorage.setItem(THEME_KEY, on ? 'dark' : 'light'); } catch (e) {}
-        syncDarkToggleUI();
-    }
-    syncDarkToggleUI();
-    $(document).on('click', '.dm-toggle-row', function() {
-        setDarkMode(!isDarkOn());
-    });
-
-    // ── 💬 Support modal — open/close + copy-to-clipboard for the email and
-    // phone number (see includes/footer.php for the modal markup and
-    // includes/nav.php for the #supportTriggerBtn drawer row that opens it).
-    function openSupportModal() {
-        $('#supportModalOverlay').addClass('open');
-        document.body.style.overflow = 'hidden';
-    }
-    function closeSupportModal() {
-        $('#supportModalOverlay').removeClass('open');
-        if (!$('.bottom-nav-bar').hasClass('open')) {
-            document.body.style.overflow = '';
-        }
-    }
-    $(document).on('click', '#supportTriggerBtn', function() {
-        closeSidebar();
-        setTimeout(openSupportModal, 200);
-    });
-    $(document).on('click', '#supportModalCloseX, #supportModalCloseBtn', closeSupportModal);
-    $(document).on('click', '#supportModalOverlay', function(e) {
-        if (e.target === this) closeSupportModal();
-    });
-    $(document).on('keydown', function(e) {
-        if (e.key === 'Escape' && $('#supportModalOverlay').hasClass('open')) {
-            closeSupportModal();
-        }
-    });
-    $(document).on('click', '.support-copy-btn', function() {
-        var $btn = $(this);
-        var value = $btn.attr('data-copy-value') || '';
-        function showCopied() {
-            var $icon = $btn.find('i');
-            $btn.addClass('copied');
-            $icon.removeClass('fa-copy').addClass('fa-check');
-            setTimeout(function() {
-                $btn.removeClass('copied');
-                $icon.removeClass('fa-check').addClass('fa-copy');
-            }, 1600);
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(value).then(showCopied).catch(function() {});
-        } else {
-            var $tmp = $('<input>').val(value).appendTo('body').select();
-            try { document.execCommand('copy'); showCopied(); } catch (e) {}
-            $tmp.remove();
-        }
     });
 });
