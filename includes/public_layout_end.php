@@ -84,5 +84,6 @@ if (revealEls.length) {
   revealEls.forEach(el => io.observe(el));
 }
 </script>
+<?php require_once __DIR__ . '/callback_widget.php'; ?>
 </body>
 </html>

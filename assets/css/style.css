@@ -1052,6 +1052,136 @@ footer {
 .toast.show { transform: translateY(0); opacity: 1; }
 .toast i { color:  #02bbff; font-size: 1.1rem; }
 
+/* ─────────────────────────────────────────
+   REQUEST CALLBACK — floating button + modal
+───────────────────────────────────────── */
+.callback-fab {
+  position: fixed;
+  right: 1.75rem;
+  bottom: 1.75rem;
+  z-index: 998;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: linear-gradient(135deg, #02bbff, var(--accent2));
+  color: var(--navy);
+  border: none;
+  padding: 0.85rem 1.4rem;
+  border-radius: 50px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(0,168,216,0.45);
+  transition: transform 0.25s, box-shadow 0.25s;
+}
+.callback-fab:hover { transform: translateY(-3px); box-shadow: 0 16px 38px rgba(0,168,216,0.55); }
+.callback-fab:active { transform: translateY(-1px) scale(0.97); }
+.callback-fab i { font-size: 1.05rem; }
+
+.callback-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6,15,23,0.72);
+  backdrop-filter: blur(3px);
+  z-index: 2000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+.callback-modal-overlay.open { display: flex; }
+.callback-modal {
+  background: var(--card);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 2rem 1.75rem 1.75rem;
+  position: relative;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+  animation: callbackModalIn 0.25s ease-out;
+}
+@keyframes callbackModalIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.callback-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg-light2);
+  border: none;
+  color: var(--ink-soft);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+.callback-modal-close:hover { background: #dce8ef; color: var(--ink); }
+.callback-modal-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: rgba(0,168,216,0.12);
+  color: #02bbff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  margin-bottom: 1rem;
+}
+.callback-modal h3 { font-family: 'Space Grotesk', sans-serif; font-size: 1.3rem; font-weight: 700; color: var(--ink); margin-bottom: 0.4rem; }
+.callback-modal-sub { font-size: 0.88rem; color: var(--ink-soft); margin-bottom: 1.4rem; }
+.callback-field-error { color: #dc2626; font-size: 0.78rem; margin-top: 0.3rem; display: none; }
+.callback-field-error.show { display: block; }
+.form-input.invalid { border-color: #dc2626; }
+.callback-form-error-box {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+  display: none;
+}
+.callback-form-error-box.show { display: block; }
+.callback-modal-body.hide { display: none; }
+.callback-success { text-align: center; padding: 1rem 0 0.5rem; display: none; }
+.callback-success.show { display: block; }
+.callback-success-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #dcfce7;
+  color: #16a34a;
+  font-size: 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+}
+.callback-success h3 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; color: var(--ink); margin-bottom: 0.5rem; }
+.callback-success p { color: var(--ink-soft); font-size: 0.9rem; }
+.btn-submit:disabled { opacity: 0.65; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+@media (max-width: 768px) {
+  .callback-modal { padding: 1.75rem 1.25rem 1.5rem; }
+}
+@media (max-width: 480px) {
+  .callback-fab { right: 1rem; bottom: 1rem; padding: 0.85rem; }
+  .callback-fab i { font-size: 1.25rem; }
+  .callback-fab .callback-fab-text { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, .ticker-track, .reveal { animation: none !important; transition: none !important; }
 }

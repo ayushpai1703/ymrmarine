@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/includes/admin_header.php';
+require_once __DIR__ . '/../includes/callback_helpers.php';
 $pdo = getDB();
+ensureCallbackRequestsTable($pdo);
 
 $counts = [
     'services' => $pdo->query('SELECT COUNT(*) FROM services')->fetchColumn(),
@@ -8,6 +10,7 @@ $counts = [
     'ports' => $pdo->query('SELECT COUNT(*) FROM ports')->fetchColumn(),
     'testimonials' => $pdo->query('SELECT COUNT(*) FROM testimonials')->fetchColumn(),
     'messages' => $pdo->query('SELECT COUNT(*) FROM contact_submissions WHERE is_read = 0')->fetchColumn(),
+    'callbacks' => $pdo->query("SELECT COUNT(*) FROM callback_requests WHERE status = 'Pending'")->fetchColumn(),
 ];
 $recent = $pdo->query('SELECT * FROM contact_submissions ORDER BY created_at DESC LIMIT 5')->fetchAll();
 ?>
@@ -17,6 +20,7 @@ $recent = $pdo->query('SELECT * FROM contact_submissions ORDER BY created_at DES
   <div class="stat-card"><div class="val"><?= $counts['ports'] ?></div><div class="lbl">Ports / Regions</div></div>
   <div class="stat-card"><div class="val"><?= $counts['testimonials'] ?></div><div class="lbl">Testimonials</div></div>
   <div class="stat-card"><div class="val"><?= $counts['messages'] ?></div><div class="lbl">Unread Messages</div></div>
+  <div class="stat-card"><div class="val"><?= $counts['callbacks'] ?></div><div class="lbl">Pending Callback Requests</div></div>
 </div>
 
 <div class="card">
@@ -49,6 +53,7 @@ $recent = $pdo->query('SELECT * FROM contact_submissions ORDER BY created_at DES
 <div class="card">
   <div class="card-title">Quick Links</div>
   <div style="display:flex;flex-wrap:wrap;gap:0.75rem;">
+    <a href="callbacks.php" class="btn btn-secondary"><i class="fas fa-phone-volume"></i> Callback Requests<?= $counts['callbacks'] > 0 ? ' (' . $counts['callbacks'] . ')' : '' ?></a>
     <a href="analytics.php" class="btn btn-secondary"><i class="fas fa-chart-line"></i> View Analytics</a>
     <a href="hero.php" class="btn btn-secondary"><i class="fas fa-home"></i> Edit Hero</a>
     <a href="services.php" class="btn btn-secondary"><i class="fas fa-ship"></i> Manage Services</a>

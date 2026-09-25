@@ -208,3 +208,19 @@ CREATE TABLE IF NOT EXISTS contact_submissions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_read TINYINT(1) DEFAULT 0
 );
+
+-- Request Callback submissions (floating button + popup form)
+CREATE TABLE IF NOT EXISTS callback_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    company_name VARCHAR(150) NULL,
+    mobile_number VARCHAR(20) NOT NULL,
+    alternate_mobile_number VARCHAR(20) NULL,
+    status ENUM('Pending','Contacted','Closed') NOT NULL DEFAULT 'Pending',
+    admin_notes TEXT NULL,
+    called_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_status (status),
+    KEY idx_created_at (created_at)
+);

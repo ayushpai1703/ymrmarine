@@ -430,5 +430,6 @@ document.getElementById('contactForm').addEventListener('submit', function(e) {
   // Let it submit normally to process_contact.php, or use AJAX if preferred
 });
 </script>
+<?php require_once __DIR__ . '/includes/callback_widget.php'; ?>
 </body>
 </html>
