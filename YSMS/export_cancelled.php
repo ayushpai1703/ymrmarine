@@ -17,6 +17,7 @@ register_shutdown_function(function () {
 
 require 'vendor/autoload.php';
 require_once 'config/config.php';
+require_once __DIR__ . '/includes/excel_export_helpers.php';
 checkAuth();
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -74,37 +75,25 @@ try {
     $sheet->setTitle('Cancelled Vessels');
 
     $headers = ['Vessel Name', 'Report No', 'Client', 'Agent', 'Port', 'Country', 'Survey Type', 'Surveyor', 'Assigned Date'];
-    $sheet->fromArray([$headers], null, 'A1');
-
-    $rowNum = 2;
+    $rows = [];
     foreach ($surveys as $row) {
-        $sheet->setCellValue('A' . $rowNum, $row['vessel_name'] ?? '');
-        $sheet->setCellValue('B' . $rowNum, $row['report_number'] ?? '');
-        $sheet->setCellValue('C' . $rowNum, $row['company_name'] ?? '');
-        $sheet->setCellValue('D' . $rowNum, $row['agent_name'] ?? 'N/A');
-        $sheet->setCellValue('E' . $rowNum, $row['port_name'] ?? 'N/A');
-        $sheet->setCellValue('F' . $rowNum, $row['country'] ?? 'India');
-        $sheet->setCellValue('G' . $rowNum, getCombinedSurveyTypeNames($db, $row['survey_type_ids'] ?? '', $row['type_name'] ?? 'N/A'));
-        $sheet->setCellValue('H' . $rowNum, getCombinedSurveyorNames($db, $row['id'] ?? 0, $row['surveyor_name'] ?? 'N/A'));
-        $sheet->setCellValue('I' . $rowNum, !empty($row['assign_date']) ? date('d-m-Y H:i', strtotime($row['assign_date'])) : '');
-        $rowNum++;
+        $country = $row['country'] ?? 'India';
+        $rows[] = [
+            'country' => $country,
+            'cells' => [
+                $row['vessel_name'] ?? '',
+                $row['report_number'] ?? '',
+                $row['company_name'] ?? '',
+                $row['agent_name'] ?? 'N/A',
+                $row['port_name'] ?? 'N/A',
+                $country,
+                getCombinedSurveyTypeNames($db, $row['survey_type_ids'] ?? '', $row['type_name'] ?? 'N/A'),
+                getCombinedSurveyorNames($db, $row['id'] ?? 0, $row['surveyor_name'] ?? 'N/A'),
+                !empty($row['assign_date']) ? date('d-m-Y H:i', strtotime($row['assign_date'])) : '',
+            ],
+        ];
     }
-
-    foreach (range('A', 'I') as $col) {
-        $sheet->getColumnDimension($col)->setAutoSize(true);
-    }
-
-    $lastCol = 'I';
-    $lastRow = max(1, $sheet->getHighestRow());
-    $headerRange = 'A1:' . $lastCol . '1';
-    $dataRange = 'A1:' . $lastCol . $lastRow;
-    $sheet->getStyle($headerRange)->getFont()->setBold(true)->getColor()->setRGB('FF0000');
-    $sheet->getStyle($headerRange)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFF00');
-    if ($lastRow >= 2) {
-        $sheet->getStyle('A2:' . $lastCol . $lastRow)->getFont()->getColor()->setRGB('000000');
-        $sheet->getStyle('A2:' . $lastCol . $lastRow)->getFill()->setFillType(Fill::FILL_NONE);
-    }
-    $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('000000');
+    writeCountryGroupedSheet($sheet, $headers, $rows);
 
     while (ob_get_level() > 0) { ob_end_clean(); }
 

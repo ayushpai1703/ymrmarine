@@ -17,6 +17,7 @@ register_shutdown_function(function () {
 
 require 'vendor/autoload.php';
 require_once 'config/config.php';
+require_once __DIR__ . '/includes/excel_export_helpers.php';
 checkAuth();
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -47,11 +48,15 @@ try {
     @set_time_limit(120);
     @ini_set('memory_limit', '256M');
 
+    // p.country isn't shown as a column here (headers below are unchanged) — it's
+    // only used to group the sheet into country sections, same as the other exports.
     $sql = "
         SELECT s.vessel_name, s.survey_type_ids, t.type_name,
-               s.vlsfo_recovery, s.lsmgo_recovery, s.hsfo_recovery, s.recovery_amount, s.report_uploaded_date
+               s.vlsfo_recovery, s.lsmgo_recovery, s.hsfo_recovery, s.recovery_amount, s.report_uploaded_date,
+               p.country
         FROM surveys s
         LEFT JOIN survey_types t ON s.survey_type_id = t.id
+        LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.recovery_amount IS NOT NULL
     ";
     $params = [];
@@ -82,38 +87,25 @@ try {
     $sheet->setTitle($period === 'month' ? 'This Month Recovery' : 'Total Recovery');
 
     $headers = ['Vessel Name', 'Survey Type', 'VLSFO Recovery', 'LSMGO Recovery', 'HSFO Recovery', 'Total Recovery'];
-    $sheet->fromArray([$headers], null, 'A1');
-
-    $rowNum = 2;
+    $rows = [];
     foreach ($surveys as $row) {
         $typeLabel = $row['type_name'] ?? 'N/A';
         if (function_exists('getCombinedSurveyTypeNames')) {
             $typeLabel = getCombinedSurveyTypeNames($db, $row['survey_type_ids'] ?? '', $row['type_name'] ?? 'N/A');
         }
-        $sheet->setCellValue('A' . $rowNum, $row['vessel_name'] ?? '');
-        $sheet->setCellValue('B' . $rowNum, $typeLabel);
-        $sheet->setCellValue('C' . $rowNum, !empty($row['vlsfo_recovery']) ? (float)$row['vlsfo_recovery'] : 0);
-        $sheet->setCellValue('D' . $rowNum, !empty($row['lsmgo_recovery']) ? (float)$row['lsmgo_recovery'] : 0);
-        $sheet->setCellValue('E' . $rowNum, !empty($row['hsfo_recovery']) ? (float)$row['hsfo_recovery'] : 0);
-        $sheet->setCellValue('F' . $rowNum, !empty($row['recovery_amount']) ? (float)$row['recovery_amount'] : 0);
-        $rowNum++;
+        $rows[] = [
+            'country' => $row['country'] ?? 'India',
+            'cells' => [
+                $row['vessel_name'] ?? '',
+                $typeLabel,
+                !empty($row['vlsfo_recovery']) ? (float)$row['vlsfo_recovery'] : 0,
+                !empty($row['lsmgo_recovery']) ? (float)$row['lsmgo_recovery'] : 0,
+                !empty($row['hsfo_recovery']) ? (float)$row['hsfo_recovery'] : 0,
+                !empty($row['recovery_amount']) ? (float)$row['recovery_amount'] : 0,
+            ],
+        ];
     }
-
-    foreach (range('A', 'F') as $col) {
-        $sheet->getColumnDimension($col)->setAutoSize(true);
-    }
-
-    $lastCol = $sheet->getHighestColumn();
-    $lastRow = max(1, $sheet->getHighestRow());
-    $headerRange = 'A1:' . $lastCol . '1';
-    $dataRange = 'A1:' . $lastCol . $lastRow;
-    $sheet->getStyle($headerRange)->getFont()->setBold(true)->getColor()->setRGB('FF0000');
-    $sheet->getStyle($headerRange)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFF00');
-    if ($lastRow >= 2) {
-        $sheet->getStyle('A2:' . $lastCol . $lastRow)->getFont()->getColor()->setRGB('000000');
-        $sheet->getStyle('A2:' . $lastCol . $lastRow)->getFill()->setFillType(Fill::FILL_NONE);
-    }
-    $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('000000');
+    writeCountryGroupedSheet($sheet, $headers, $rows);
 
     while (ob_get_level() > 0) { ob_end_clean(); }
 

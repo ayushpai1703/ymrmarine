@@ -90,15 +90,19 @@ try {
 $headers = ['Vessel Name', 'Client', 'Agent', 'Port', 'Country', 'Survey Type', 'Surveyor', 'Latest Update'];
 $rows = [];
 foreach ($surveys as $row) {
+    $country = $row['country'] ?? 'India';
     $rows[] = [
-        $row['vessel_name'] ?? '',
-        $row['company_name'] ?? '',
-        $row['agent_name'] ?? 'N/A',
-        $row['port_name'] ?? 'N/A',
-        $row['country'] ?? 'India',
-        getCombinedSurveyTypeNames($db, $row['survey_type_ids'] ?? '', $row['type_name'] ?? 'N/A'),
-        getCombinedSurveyorNames($db, $row['id'] ?? 0, $row['surveyor_name'] ?? 'N/A'),
-        $row['custom_live_status'] ?? '',
+        'country' => $country,
+        'cells' => [
+            $row['vessel_name'] ?? '',
+            $row['company_name'] ?? '',
+            $row['agent_name'] ?? 'N/A',
+            $row['port_name'] ?? 'N/A',
+            $country,
+            getCombinedSurveyTypeNames($db, $row['survey_type_ids'] ?? '', $row['type_name'] ?? 'N/A'),
+            getCombinedSurveyorNames($db, $row['id'] ?? 0, $row['surveyor_name'] ?? 'N/A'),
+            $row['custom_live_status'] ?? '',
+        ],
     ];
 }
 
@@ -110,25 +114,11 @@ if (is_file($autoload)) {
     try {
         require_once $autoload;
         if (class_exists('PhpOffice\\PhpSpreadsheet\\Spreadsheet')) {
+            require_once __DIR__ . '/includes/excel_export_helpers.php';
             $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
             $sheet = $spreadsheet->getActiveSheet();
             $sheet->setTitle('Pending Vessels');
-            $sheet->fromArray([$headers], null, 'A1');
-            $r = 2;
-            foreach ($rows as $row) {
-                $sheet->fromArray([$row], null, 'A' . $r);
-                $r++;
-            }
-            foreach (range('A', 'H') as $col) {
-                $sheet->getColumnDimension($col)->setAutoSize(true);
-            }
-            $lastRow = max(1, $sheet->getHighestRow());
-            $sheet->getStyle('A1:H1')->getFont()->setBold(true)->getColor()->setRGB('FF0000');
-            $sheet->getStyle('A1:H1')->getFill()
-                ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
-                ->getStartColor()->setRGB('FFFF00');
-            $sheet->getStyle('A1:H' . $lastRow)->getBorders()->getAllBorders()
-                ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
+            writeCountryGroupedSheet($sheet, $headers, $rows);
 
             while (ob_get_level() > 0) { ob_end_clean(); }
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -154,11 +144,16 @@ header('Cache-Control: private, max-age=0, must-revalidate');
 header('Pragma: public');
 header('Expires: 0');
 
+require_once __DIR__ . '/includes/excel_export_helpers.php';
 $out = fopen('php://output', 'w');
 fwrite($out, "\xEF\xBB\xBF");
-fputcsv($out, $headers);
-foreach ($rows as $row) {
-    fputcsv($out, $row);
+foreach (groupRowsByCountry($rows) as $countryName => $countryRows) {
+    fputcsv($out, [$countryName]);
+    fputcsv($out, $headers);
+    foreach ($countryRows as $cells) {
+        fputcsv($out, $cells);
+    }
+    fputcsv($out, []);
 }
 fclose($out);
 exit;
