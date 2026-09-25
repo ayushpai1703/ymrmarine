@@ -76,6 +76,7 @@ $flash = getFlash();
       <a href="ports.php" class="<?= $current==='ports'?'active':'' ?>"><i class="fas fa-anchor"></i> Ports</a>
       <a href="testimonials.php" class="<?= $current==='testimonials'?'active':'' ?>"><i class="fas fa-quote-left"></i> Testimonials</a>
       <a href="messages.php" class="<?= $current==='messages'?'active':'' ?>"><i class="fas fa-envelope"></i> Messages</a>
+      <a href="callbacks.php" class="<?= $current==='callbacks'?'active':'' ?>"><i class="fas fa-phone-volume"></i> Callback Requests</a>
       <a href="../index.php" target="_blank"><i class="fas fa-external-link-alt"></i> View Website</a>
     </nav>
     <div class="sidebar-footer">

@@ -546,5 +546,6 @@ const io = new IntersectionObserver((entries) => {
 }, { threshold: 0.12 });
 revealEls.forEach(el => io.observe(el));
 </script>
+<?php require_once __DIR__ . '/includes/callback_widget.php'; ?>
 </body>
 </html>
