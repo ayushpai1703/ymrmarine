@@ -353,12 +353,16 @@ require_once __DIR__ . '/../config/config.php';
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             gap: 2px;
+            height: 58px;
             color: var(--text-muted);
             font-size: 10.5px;
             font-weight: 600;
+            line-height: 1.15;
+            text-align: center;
             text-decoration: none;
-            padding: 6px 10px;
+            padding: 6px 8px;
             border-radius: 12px;
             transition: color .18s ease;
         }
@@ -541,7 +545,7 @@ require_once __DIR__ . '/../config/config.php';
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn {
                 position: relative;
                 flex-direction: row; justify-content: flex-start; gap: 14px;
-                width: 100%; padding: 12px 14px; border-radius: 12px; font-size: 14px; font-weight: 550;
+                width: 100%; height: auto; padding: 12px 14px; border-radius: 12px; font-size: 14px; font-weight: 550;
                 color: rgba(255,255,255,.72);
             }
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn i { margin: 0; width: 22px; font-size: 16px; color: rgba(255,255,255,.5); }
