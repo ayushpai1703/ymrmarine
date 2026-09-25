@@ -52,20 +52,6 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         </button>
     </div>
 
-    <!-- Mobile-drawer-only profile card (desktop keeps its own footer profile block) -->
-    <a href="profile.php" class="mobile-drawer-profile" data-testid="drawer-profile-card">
-        <?php if ($sidebar_avatar): ?>
-            <img src="<?= sanitize($sidebar_avatar) ?>" alt="Profile" class="mobile-drawer-profile-avatar-img">
-        <?php else: ?>
-            <div class="mobile-drawer-profile-avatar"><?= strtoupper(substr($sidebar_user_name, 0, 1)) ?></div>
-        <?php endif; ?>
-        <div class="mobile-drawer-profile-meta">
-            <div class="mobile-drawer-profile-name" title="<?= htmlspecialchars($sidebar_user_name, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($sidebar_user_name, ENT_QUOTES, 'UTF-8') ?></div>
-            <div class="mobile-drawer-profile-role"><?= htmlspecialchars($user_role ?: 'User', ENT_QUOTES, 'UTF-8') ?></div>
-        </div>
-        <i class="fa-solid fa-chevron-right mobile-drawer-profile-arrow"></i>
-    </a>
-
     <div class="desktop-sidebar-nav-scroll">
         <div class="desktop-sidebar-section-label drawer-reveal">Main</div>
         <a href="index.php" class="nav-item-btn <?= ($current_page == 'index.php') ? 'active' : '' ?>" data-testid="navigation-home-link">

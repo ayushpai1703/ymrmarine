@@ -78,9 +78,9 @@ require_once __DIR__ . '/../config/config.php';
         }
 
         .user-welcome h2 {
-            font-size: 25px;
-            font-weight: 800;
-            letter-spacing: -.01em;
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -.005em;
             margin: 0;
             color: #111827;
         }
@@ -197,32 +197,6 @@ require_once __DIR__ . '/../config/config.php';
         .drawer-close-btn:hover { background: rgba(255,255,255,.16); }
         .drawer-close-btn:active { transform: scale(.92); }
 
-        /* Drawer profile card — mobile only, sits just below the brand row */
-        .mobile-drawer-profile {
-            align-items: center; gap: 12px;
-            margin: 4px 18px 14px; padding: 12px 14px;
-            border-radius: 14px;
-            background: rgba(255,255,255,.06);
-            border: 1px solid rgba(255,255,255,.08);
-            text-decoration: none;
-            transition: background-color .18s ease;
-        }
-        .mobile-drawer-profile:hover { background: rgba(255,255,255,.1); }
-        .mobile-drawer-profile-avatar,
-        .mobile-drawer-profile-avatar-img {
-            width: 42px; height: 42px; border-radius: 12px; flex: none;
-        }
-        .mobile-drawer-profile-avatar {
-            background: linear-gradient(135deg, #6366f1, #3b32b3);
-            color: #fff; font-weight: 700; font-size: 16px;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .mobile-drawer-profile-avatar-img { object-fit: cover; border: 2px solid rgba(255,255,255,.2); }
-        .mobile-drawer-profile-meta { min-width: 0; flex: 1; }
-        .mobile-drawer-profile-name { color: #fff; font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .mobile-drawer-profile-role { color: rgba(255,255,255,.5); font-size: 11.5px; margin-top: 1px; }
-        .mobile-drawer-profile-arrow { color: rgba(255,255,255,.35); font-size: 13px; flex: none; }
-
         /* Overview Grid */
         .overview-section {
             padding: 0 20px;
@@ -237,9 +211,9 @@ require_once __DIR__ . '/../config/config.php';
         }
 
         .section-title {
-            font-size: 17px;
-            font-weight: 800;
-            letter-spacing: -.01em;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: -.005em;
             color: #111827;
         }
 
@@ -249,7 +223,7 @@ require_once __DIR__ . '/../config/config.php';
             padding: 6px 12px;
             border-radius: 12px;
             font-size: 12.5px;
-            font-weight: 600;
+            font-weight: 500;
             color: #374151;
             box-shadow: 0 1px 3px rgba(15,23,42,.04);
         }
@@ -308,8 +282,8 @@ require_once __DIR__ . '/../config/config.php';
 
         .ov-count {
             font-size: 26px;
-            font-weight: 800;
-            letter-spacing: -.01em;
+            font-weight: 650;
+            letter-spacing: -.005em;
             margin-bottom: 4px;
         }
 
@@ -319,7 +293,7 @@ require_once __DIR__ . '/../config/config.php';
 
         .ov-label {
             font-size: 11.5px;
-            font-weight: 600;
+            font-weight: 500;
             color: #4B5563;
             line-height: 1.25;
         }
@@ -350,7 +324,7 @@ require_once __DIR__ . '/../config/config.php';
             background: #ECFDF3;
             padding: 4px 10px 4px 4px;
             border-radius: 999px;
-            font-weight: 650;
+            font-weight: 550;
         }
         .stat-title-icon {
             width: 20px; height: 20px; border-radius: 50%; flex: none;
@@ -366,9 +340,9 @@ require_once __DIR__ . '/../config/config.php';
         .stat-title.stat-title--purple .stat-title-icon { background: rgba(91,45,238,.14); color: #5B2DEE; }
 
         .stat-val {
-            font-size: 20px;
-            font-weight: 800;
-            letter-spacing: -.01em;
+            font-size: 19px;
+            font-weight: 600;
+            letter-spacing: -.005em;
             margin: 10px 0 2px 0;
             color: #111827;
         }
@@ -567,7 +541,6 @@ require_once __DIR__ . '/../config/config.php';
             /* Reveal the brand/profile/section-label/quick-action blocks that
                are hidden by default on mobile — only inside the open drawer. */
             .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-brand,
-            .mobile-container.sidebar-page .bottom-nav-bar.open .mobile-drawer-profile,
             .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-footer {
                 display: flex !important;
             }
@@ -620,10 +593,10 @@ require_once __DIR__ . '/../config/config.php';
                 color: rgba(255,255,255,.35); padding: 14px 14px 6px; margin: 0;
             }
 
+            /* The "+" stays a bottom-bar-only action — it's not shown as a
+               drawer menu row (the drawer already lists everything it opens). */
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .center-fab-btn {
-                order: 5; width: 100%; height: 46px; margin: 8px 0 4px; border-radius: 12px;
-                background: rgba(129,140,248,.16); border: 1px solid rgba(129,140,248,.3);
-                box-shadow: none; font-size: 18px;
+                display: none;
             }
 
             /* These are the desktop sidebar's own footer/avatar/logout styles,
@@ -701,22 +674,19 @@ require_once __DIR__ . '/../config/config.php';
                direct bottom-bar siblings there); inside drawer-mode it's now a
                real flex column, so its children are staggered relative to each
                other, while the true direct children of .bottom-nav-bar
-               (brand/profile/footer) are staggered separately. */
+               (brand/footer) are staggered separately. */
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-brand,
-            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .mobile-drawer-profile,
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-footer,
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > * {
                 opacity: 0; transform: translate3d(-12px, 0, 0);
                 transition: opacity .3s ease, transform .3s cubic-bezier(0.22, 1, 0.36, 1);
             }
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open > .desktop-sidebar-brand,
-            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open > .mobile-drawer-profile,
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open > .desktop-sidebar-footer,
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open .desktop-sidebar-nav-scroll > * {
                 opacity: 1; transform: translate3d(0, 0, 0);
             }
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-brand { transition-delay: .04s; }
-            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .mobile-drawer-profile { transition-delay: .09s; }
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-footer { transition-delay: .3s; }
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(1) { transition-delay: .13s; }
             .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(2) { transition-delay: .16s; }
@@ -838,12 +808,6 @@ require_once __DIR__ . '/../config/config.php';
 .desktop-sidebar-brand,
 .desktop-sidebar-footer,
 .desktop-sidebar-section-label {
-    display: none !important;
-}
-/* Mobile-drawer-only profile card — hidden everywhere except the open drawer
-   (see the max-width:991px block above); desktop keeps its existing footer
-   profile block only, no duplicate. */
-.mobile-drawer-profile {
     display: none !important;
 }
 .mobile-drawer-support-link {
