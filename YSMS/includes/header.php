@@ -17,11 +17,15 @@ require_once __DIR__ . '/../config/config.php';
     <style>
         :root {
             --primary-bg: #0b1e46;
-            --app-bg: #f4f6fa;
+            --app-bg: #F7F8FC;
             --card-bg: #ffffff;
             --text-dark: #1e293b;
             --text-muted: #64748b;
-            --accent-purple: #3b32b3;
+            --accent-purple: #5B2DEE;
+            --accent-purple2: #6C4CF1;
+            --accent-blue: #2563EB;
+            --accent-green: #16A34A;
+            --accent-orange: #EA580C;
             --btn-blue: #1e3a8a;
             --border-color: #e2e8f0;
             --font-primary: 'Lexend', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -66,31 +70,33 @@ require_once __DIR__ . '/../config/config.php';
 
         /* Dashboard Header */
         .dash-header {
-            background: white;
-            padding: 20px;
+            background: transparent;
+            padding: 22px 20px 6px;
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
         }
 
         .user-welcome h2 {
-            font-size: 20px;
-            font-weight: 700;
+            font-size: 25px;
+            font-weight: 800;
+            letter-spacing: -.01em;
             margin: 0;
-            color: var(--text-dark);
+            color: #111827;
         }
 
         .user-welcome p {
-            font-size: 13px;
-            color: var(--text-muted);
-            margin: 0;
+            font-size: 14px;
+            color: #6B7280;
+            margin: 4px 0 0;
         }
 
         .profile-avatar {
-            width: 45px;
-            height: 45px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             object-fit: cover;
+            box-shadow: 0 2px 8px rgba(15,23,42,.1);
         }
 
         .profile-menu-wrap { position: relative; flex: 0 0 45px; z-index: 1200; }
@@ -231,18 +237,43 @@ require_once __DIR__ . '/../config/config.php';
         }
 
         .section-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--text-dark);
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: -.01em;
+            color: #111827;
         }
 
         .date-select-badge {
             background: #ffffff;
-            border: 1px solid var(--border-color);
-            padding: 4px 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            color: var(--text-dark);
+            border: 1px solid #E5E7EB;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: #374151;
+            box-shadow: 0 1px 3px rgba(15,23,42,.04);
+        }
+
+        /* Premium rounded search bar — scoped to the dashboard's own global
+           search (.global-search-wrap) only, so vessels.php/reports.php/etc's
+           own per-page filter search bars (same .search-control class,
+           different wrapper) are untouched. */
+        .global-search-wrap .search-input-wrapper i {
+            left: 18px; color: #9CA3AF; font-size: 15px;
+        }
+        .global-search-wrap .search-control {
+            background: #fff;
+            border: 1px solid #EEF0F6;
+            border-radius: 18px;
+            padding: 15px 16px 15px 46px;
+            font-size: 14px;
+            box-shadow: 0 2px 10px rgba(15,23,42,.05);
+            transition: box-shadow .18s ease, border-color .18s ease;
+        }
+        .global-search-wrap .search-control:focus {
+            outline: none;
+            border-color: rgba(91,45,238,.35);
+            box-shadow: 0 4px 16px rgba(91,45,238,.12);
         }
 
         .overview-grid {
@@ -253,21 +284,33 @@ require_once __DIR__ . '/../config/config.php';
 
         .ov-card {
             background: white;
-            border-radius: 16px;
-            padding: 15px 10px;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            border-radius: 20px;
+            padding: 18px 12px;
+            text-align: left;
+            box-shadow: 0 2px 10px rgba(15,23,42,.04);
             cursor: pointer;
+            transition: transform .15s ease, box-shadow .15s ease;
         }
+        .ov-card:active { transform: scale(.97); }
 
-        .ov-card.pending-vessel { background: #eff6ff; }
-        .ov-card.pending-report { background: #fff7ed; }
-        .ov-card.completed { background: #f0fdf4; }
+        .ov-card.pending-vessel { background: #EEF2FF; }
+        .ov-card.pending-report { background: #FFF1E8; }
+        .ov-card.completed { background: #ECFDF3; }
+
+        .ov-icon {
+            width: 38px; height: 38px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px; margin-bottom: 14px;
+        }
+        .ov-card.pending-vessel .ov-icon { background: rgba(37,99,235,.14); color: #2563EB; }
+        .ov-card.pending-report .ov-icon { background: rgba(234,88,12,.14); color: #EA580C; }
+        .ov-card.completed .ov-icon { background: rgba(22,163,74,.16); color: #16A34A; }
 
         .ov-count {
-            font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 2px;
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -.01em;
+            margin-bottom: 4px;
         }
 
         .ov-card.pending-vessel .ov-count { color: #1e40af; }
@@ -275,47 +318,59 @@ require_once __DIR__ . '/../config/config.php';
         .ov-card.completed .ov-count { color: #166534; }
 
         .ov-label {
-            font-size: 11px;
+            font-size: 11.5px;
             font-weight: 600;
-            color: var(--text-dark);
-            line-height: 1.2;
+            color: #4B5563;
+            line-height: 1.25;
         }
 
         /* Statistics Grid */
         .stat-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
+            gap: 14px;
             padding: 0 20px;
         }
 
         .stat-card {
             background: white;
-            border-radius: 16px;
-            padding: 15px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            border-radius: 20px;
+            padding: 16px;
+            box-shadow: 0 2px 10px rgba(15,23,42,.04);
         }
 
+        /* Small pastel icon + label pill. Color defaults to green; a
+           stat-title--blue/orange/purple modifier (added in index.php per
+           metric) overrides it — this replaces the old odd/even nth-child
+           alternation with colors that actually match each metric. */
         .stat-title {
+            display: inline-flex; align-items: center; gap: 6px;
             font-size: 11px;
             color: #166534;
-            background: #f0fdf4;
-            padding: 3px 8px;
-            border-radius: 6px;
-            display: inline-block;
-            font-weight: 600;
+            background: #ECFDF3;
+            padding: 4px 10px 4px 4px;
+            border-radius: 999px;
+            font-weight: 650;
         }
-
-        .stat-card:nth-child(2n) .stat-title {
-            color: #1e40af;
-            background: #eff6ff;
+        .stat-title-icon {
+            width: 20px; height: 20px; border-radius: 50%; flex: none;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 10px;
+            background: rgba(22,163,74,.16); color: #16A34A;
         }
+        .stat-title.stat-title--blue { color: #1e40af; background: #EEF2FF; }
+        .stat-title.stat-title--blue .stat-title-icon { background: rgba(37,99,235,.14); color: #2563EB; }
+        .stat-title.stat-title--orange { color: #c2410c; background: #FFF1E8; }
+        .stat-title.stat-title--orange .stat-title-icon { background: rgba(234,88,12,.14); color: #EA580C; }
+        .stat-title.stat-title--purple { color: #5B21B6; background: #F3EEFE; }
+        .stat-title.stat-title--purple .stat-title-icon { background: rgba(91,45,238,.14); color: #5B2DEE; }
 
         .stat-val {
-            font-size: 18px;
-            font-weight: 700;
-            margin: 8px 0 2px 0;
-            color: var(--text-dark);
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: -.01em;
+            margin: 10px 0 2px 0;
+            color: #111827;
         }
 
         .stat-change {

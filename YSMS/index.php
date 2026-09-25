@@ -247,14 +247,17 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         
         <div class="overview-grid">
             <div class="ov-card pending-vessel" onclick="location.href='vessels.php'">
+                <div class="ov-icon"><i class="fa-solid fa-ship"></i></div>
                 <div class="ov-count"><?= $pending_vessels ?></div>
                 <div class="ov-label">Pending<br>Vessel's</div>
             </div>
             <div class="ov-card pending-report" onclick="location.href='reports.php'">
+                <div class="ov-icon"><i class="fa-solid fa-file-lines"></i></div>
                 <div class="ov-count"><?= $pending_reports ?></div>
                 <div class="ov-label">Pending<br>Reports</div>
             </div>
             <div class="ov-card completed" onclick="location.href='completed.php'">
+                <div class="ov-icon"><i class="fa-solid fa-check"></i></div>
                 <div class="ov-count"><?= $completed_vessels ?></div>
                 <div class="ov-label">Completed<br>Vessels</div>
             </div>
@@ -269,56 +272,56 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
 
     <div class="stat-grid">
         <div class="stat-card" role="button" style="cursor:pointer;" onclick="openRecoveryModal('total')" data-testid="total-recovery-card">
-            <span class="stat-title">Total Recovery</span>
+            <span class="stat-title"><i class="fa-solid fa-arrow-trend-up stat-title-icon"></i>Total Recovery</span>
             <!-- 🌟 $ సింబల్ తీసివేసి కేవలం వాల్యూ (MT తో కలిపి) డిస్‌ప్లే అవుతుంది -->
             <div class="stat-val"><?= $total_recovery ?></div>
             <div class="mt-2" style="height: 30px; overflow: hidden;">
                 <svg viewBox="0 0 100 30" width="100%" height="100%" preserveAspectRatio="none">
-                    <path d="M0,25 Q15,5 30,20 T60,10 T90,15 T100,5" fill="none" stroke="#166534" stroke-width="2"/>
+                    <path d="M0,25 Q15,5 30,20 T60,10 T90,15 T100,5" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round"/>
                 </svg>
             </div>
         </div>
         <div class="stat-card" role="button" style="cursor:pointer;" onclick="openRecoveryModal('month')" data-testid="month-recovery-card">
-            <span class="stat-title">This Month Recovery</span>
+            <span class="stat-title stat-title--blue"><i class="fa-solid fa-chart-column stat-title-icon"></i>This Month Recovery</span>
             <!-- 🌟 $ సింబల్ తీసివేసి కేవలం వాల్యూ (MT తో కలిపి) డిస్‌ప్లే అవుతుంది -->
             <div class="stat-val"><?= $month_recovery ?></div>
             <div class="mt-2" style="height: 30px; overflow: hidden;">
                 <svg viewBox="0 0 100 30" width="100%" height="100%" preserveAspectRatio="none">
-                    <path d="M0,20 Q20,25 40,10 T70,18 T100,8" fill="none" stroke="#1e40af" stroke-width="2"/>
+                    <path d="M0,20 Q20,25 40,10 T70,18 T100,8" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/>
                 </svg>
             </div>
         </div>
         <!-- 🌟 కొత్త కార్డ్: Recovery in VLSFO (TABLES 54B - M20 సెల్ నుండి) -->
         <div class="stat-card">
-            <span class="stat-title">Recovery in VLSFO</span>
+            <span class="stat-title"><i class="fa-solid fa-droplet stat-title-icon"></i>Recovery in VLSFO</span>
             <div class="stat-val"><?= $total_vlsfo ?></div>
         </div>
         <!-- 🌟 కొత్త కార్డ్: Recovery in LSMGO (TABLES 54B - O20 సెల్ నుండి) -->
         <div class="stat-card">
-            <span class="stat-title">Recovery in LSMGO</span>
+            <span class="stat-title stat-title--blue"><i class="fa-solid fa-droplet stat-title-icon"></i>Recovery in LSMGO</span>
             <div class="stat-val"><?= $total_lsmgo ?></div>
         </div>
         <!-- 🌟 కొత్త కార్డ్: Recovery in HSFO (TABLES 54B - N20 సెల్ నుండి) -->
         <div class="stat-card">
-            <span class="stat-title">Recovery in HSFO</span>
+            <span class="stat-title stat-title--orange"><i class="fa-solid fa-droplet stat-title-icon"></i>Recovery in HSFO</span>
             <div class="stat-val"><?= $total_hsfo ?></div>
         </div>
         <div class="stat-card" data-testid="recent-survey-recovery-card">
-            <span class="stat-title">Recent Survey Recovery</span>
+            <span class="stat-title stat-title--purple"><i class="fa-solid fa-ship stat-title-icon"></i>Recent Survey Recovery</span>
             <div class="stat-val" style="font-size:14px;"><?= sanitize($recent_vessel_name) ?></div>
             <div class="text-muted mt-1" style="font-size:11px;">VLSFO: <?= $recent_vlsfo ?> · LSMGO: <?= $recent_lsmgo ?> · HSFO: <?= $recent_hsfo ?></div>
         </div>
         <div class="stat-card" data-testid="avg-ships-per-month-card">
-            <span class="stat-title">Average Ships Per Month</span>
+            <span class="stat-title stat-title--blue"><i class="fa-solid fa-calendar-days stat-title-icon"></i>Average Ships Per Month</span>
             <div class="stat-val"><?= $avg_ships_per_month_disp ?></div>
         </div>
         <?php if (in_array($role, ['Admin', 'Super Admin'], true)): ?>
         <div class="stat-card" data-testid="avg-recovery-per-ship-card">
-            <span class="stat-title">Average Recovery Per Ship</span>
+            <span class="stat-title"><i class="fa-solid fa-anchor stat-title-icon"></i>Average Recovery Per Ship</span>
             <div class="stat-val"><?= $avg_recovery_per_ship_disp ?></div>
         </div>
         <div class="stat-card" data-testid="avg-recovery-per-surveyor-card">
-            <span class="stat-title">Average Recovery Per Surveyor</span>
+            <span class="stat-title stat-title--purple"><i class="fa-solid fa-user-tie stat-title-icon"></i>Average Recovery Per Surveyor</span>
             <div class="stat-val"><?= $avg_recovery_per_surveyor_disp ?></div>
         </div>
         <?php endif; ?>
@@ -437,15 +440,15 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
 
     <div class="stat-grid" data-testid="super-admin-average-ships-grid">
         <div class="stat-card" data-testid="avg-ships-per-year-card">
-            <span class="stat-title">Average Ships Per Year</span>
+            <span class="stat-title stat-title--blue"><i class="fa-solid fa-calendar stat-title-icon"></i>Average Ships Per Year</span>
             <div class="stat-val"><?= number_format($sa_avg_per_year, 1) ?></div>
         </div>
         <div class="stat-card" data-testid="avg-ships-per-month-super-card">
-            <span class="stat-title">Average Ships Per Month</span>
+            <span class="stat-title"><i class="fa-solid fa-calendar-days stat-title-icon"></i>Average Ships Per Month</span>
             <div class="stat-val"><?= number_format($sa_avg_per_month, 1) ?></div>
         </div>
         <div class="stat-card" data-testid="avg-ships-per-day-card">
-            <span class="stat-title">Average Ships Per Day</span>
+            <span class="stat-title stat-title--orange"><i class="fa-solid fa-calendar-day stat-title-icon"></i>Average Ships Per Day</span>
             <div class="stat-val"><?= number_format($sa_avg_per_day, 2) ?></div>
         </div>
     </div>
