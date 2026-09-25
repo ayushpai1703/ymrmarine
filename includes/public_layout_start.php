@@ -53,36 +53,38 @@ $activeNav = $activeNav ?? '';
 <style>
 :root { --accent: <?= e($c['primary']) ?>; }
 .page-hero {
-  position: relative; min-height: 42vh; display: flex; align-items: flex-end;
-  padding: 7rem 0 3rem; color: #fff;
-  background: linear-gradient(135deg, rgba(11,30,45,0.97) 0%, rgba(11,30,45,0.8) 55%, rgba(11,30,45,0.5) 100%),
+  position: relative; min-height: 46vh; display: flex; align-items: flex-end;
+  padding: 8rem 0 3.5rem; color: #fff; overflow: hidden;
+  background: linear-gradient(135deg, rgba(7,21,34,0.97) 0%, rgba(7,21,34,0.82) 55%, rgba(7,21,34,0.48) 100%),
               url('<?= e($heroImage ?? pageDefaultHero('about')) ?>') center/cover no-repeat;
 }
-.page-hero .section { width: 100%; max-width: 1280px; margin: 0 auto; padding: 0 1.5rem; }
+.page-hero::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 55% 45% at 12% 10%, rgba(2,187,255,0.16), transparent 70%);
+}
+.page-hero .section { position: relative; z-index: 1; width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 1.5rem; }
 .page-breadcrumb {
-  font-size: 0.82rem; color: rgba(255,255,255,0.7); margin-bottom: 1.1rem;
+  font-size: 0.82rem; color: rgba(255,255,255,0.68); margin-bottom: 1.2rem;
   display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
 }
-.page-breadcrumb a { color: rgba(255,255,255,0.85); text-decoration: none; }
+.page-breadcrumb a { color: rgba(255,255,255,0.85); text-decoration: none; transition: color 0.2s; }
 .page-breadcrumb a:hover { color: var(--accent); }
 .page-eyebrow {
   display: inline-flex; align-items: center; gap: 0.5rem;
-  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--accent); margin-bottom: 0.75rem;
+  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 0.85rem;
 }
 .page-h1 {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
-  font-weight: 700; line-height: 1.15; max-width: 720px; margin-bottom: 0.85rem;
+  font-size: clamp(1.9rem, 4.2vw, 2.75rem);
+  font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; max-width: 740px; margin-bottom: 0.9rem;
 }
 .page-lead {
-  font-size: 1.02rem; line-height: 1.65; color: rgba(255,255,255,0.82);
-  max-width: 620px; margin-bottom: 1.5rem;
+  font-size: 1.03rem; line-height: 1.7; color: rgba(255,255,255,0.82);
+  max-width: 620px; margin-bottom: 1.6rem;
 }
 .page-cta-row { display: flex; flex-wrap: wrap; gap: 0.85rem; }
-.nav-links a.active, .nav-mobile a.active { color: var(--accent); }
 .port-card-link { text-decoration: none; color: inherit; display: block; }
-.port-card-link:hover .port-card { border-color: var(--accent); transform: translateY(-2px); }
 </style>
 <?php if (!empty($schemaJson)): ?>
 <script type="application/ld+json"><?= $schemaJson ?></script>
