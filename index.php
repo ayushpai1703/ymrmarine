@@ -59,6 +59,19 @@ $copyright = getSetting('copyright');
         </div>
       </div>
     </div>
+    <div class="hero-right">
+      <div class="hero-visual-card">
+        <img src="<?= e($hero['bg_image'] ?: 'https://images.unsplash.com/photo-1520277739336-7bf67edfa768?q=80&w=1000&auto=format&fit=crop') ?>" alt="Marine survey vessel" class="hero-visual-img" loading="eager">
+        <div class="hero-float-badge hero-float-badge--top">
+          <div class="hfb-icon"><i class="fas fa-shield-halved"></i></div>
+          <div><div class="hfb-val"><?= e($hero['stat1_value'] ?? '18+') ?></div><div class="hfb-label"><?= e($hero['stat1_label'] ?? 'Years Active') ?></div></div>
+        </div>
+        <div class="hero-float-badge hero-float-badge--bottom">
+          <div class="hfb-icon"><i class="fas fa-circle-check"></i></div>
+          <div><div class="hfb-val"><?= e($hero['stat4_value'] ?? '24/7') ?></div><div class="hfb-label"><?= e($hero['stat4_label'] ?? 'Availability') ?></div></div>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="ticker-wrap">
     <div class="ticker-track" id="ticker"></div>
