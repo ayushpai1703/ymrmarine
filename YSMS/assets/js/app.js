@@ -12,18 +12,65 @@ $(document).ready(function() {
     });
 
     // Responsive existing navigation drawer
+    // .drawer-mode is what actually switches .bottom-nav-bar from the fixed
+    // bottom bar into the fixed/off-screen drawer layout (see header.php); it's
+    // only ever present while opening/closing, never left on, so the same
+    // element resting between opens is always the plain bottom bar.
+    var bodyScrollLockedBy = null; // remembers body's own inline overflow so we restore it exactly
+    var drawerCloseTimer = null;
+    var DRAWER_TRANSITION_MS = 420; // matches the .4s transform transition + a little slack
+
     function closeSidebar() {
-        $('.bottom-nav-bar, .sidebar-screen-overlay').removeClass('open');
-        $('.hamburger-menu-btn').attr('aria-expanded', 'false');
+        var $bar = $('.bottom-nav-bar');
+        if (!$bar.hasClass('drawer-mode')) return; // already closed (or never opened) — nothing to do
+        clearTimeout(drawerCloseTimer);
+        $bar.removeClass('open');
+        $('.sidebar-screen-overlay').removeClass('open');
+        $('.hamburger-menu-btn').attr('aria-expanded', 'false').attr('aria-label', 'Open navigation menu').removeClass('is-open');
+        if (bodyScrollLockedBy !== null) {
+            document.body.style.overflow = bodyScrollLockedBy;
+            bodyScrollLockedBy = null;
+        }
+        drawerCloseTimer = setTimeout(function() {
+            $bar.removeClass('drawer-mode');
+        }, DRAWER_TRANSITION_MS);
+    }
+    function openSidebar() {
+        var $bar = $('.bottom-nav-bar');
+        clearTimeout(drawerCloseTimer);
+        $bar.addClass('drawer-mode');
+        // Force a reflow so the browser commits the off-screen transform from
+        // .drawer-mode before .open is added — otherwise there's nothing to
+        // animate FROM and the drawer just appears instead of sliding in.
+        void $bar[0].offsetHeight;
+        requestAnimationFrame(function() {
+            $bar.addClass('open');
+            $('.sidebar-screen-overlay').addClass('open');
+        });
+        $('.hamburger-menu-btn').attr('aria-expanded', 'true').attr('aria-label', 'Close navigation menu').addClass('is-open');
+        bodyScrollLockedBy = document.body.style.overflow || '';
+        document.body.style.overflow = 'hidden';
     }
     $(document).on('click', '.hamburger-menu-btn', function() {
-        $('.bottom-nav-bar, .sidebar-screen-overlay').toggleClass('open');
-        $(this).attr('aria-expanded', $('.bottom-nav-bar').hasClass('open') ? 'true' : 'false');
+        if ($('.bottom-nav-bar').hasClass('open')) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
     });
-    $(document).on('click', '.sidebar-screen-overlay, .bottom-nav-bar .nav-item-btn', closeSidebar);
+    $(document).on('click', '.sidebar-screen-overlay, .bottom-nav-bar.drawer-mode .nav-item-btn, .drawer-close-btn', closeSidebar);
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Escape' && $('.bottom-nav-bar').hasClass('open')) {
+            closeSidebar();
+        }
+    });
 
     // Global FAB Bottom Drawer Action Animation Engine Match
     $('#globalFabTrigger').on('click', function() {
+        var $fab = $(this);
+        $fab.addClass('fab-tap');
+        setTimeout(function() { $fab.removeClass('fab-tap'); }, 380);
+
         $('#fabActionOverlay').css('display', 'flex');
         setTimeout(function() {
             $('#fabPopupSheet').css('transform', 'translateY(0)');

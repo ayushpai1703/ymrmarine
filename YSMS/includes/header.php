@@ -153,10 +153,69 @@ require_once __DIR__ . '/../config/config.php';
         }
 
 
-        .hamburger-menu-btn { width: 42px; height: 42px; border: 1px solid var(--border-color); border-radius: 12px; background: #fff; color: var(--text-dark); display: inline-flex; align-items: center; justify-content: center; font-size: 17px; cursor: pointer; transition: background-color .2s ease, transform .2s ease; }
-        .hamburger-menu-btn:hover { background: #f1f5f9; transform: translateY(-1px); }
+        /* ── Hamburger — premium glass circular button with animated 3-line → X icon ── */
+        .hamburger-menu-btn {
+            width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+            border: 1px solid rgba(15,23,42,.08);
+            border-radius: 14px;
+            background: rgba(255,255,255,.72);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            color: var(--text-dark);
+            display: inline-flex; align-items: center; justify-content: center;
+            cursor: pointer; padding: 0;
+            box-shadow: 0 2px 10px rgba(15,23,42,.06);
+            transition: background-color .2s ease, box-shadow .2s ease, transform .15s ease;
+        }
+        .hamburger-menu-btn:hover { background: #fff; box-shadow: 0 4px 14px rgba(15,23,42,.1); }
+        .hamburger-menu-btn:active { transform: scale(.93); }
+        .hamburger-lines { position: relative; width: 18px; height: 13px; display: inline-block; }
+        .hb-line {
+            position: absolute; left: 0; width: 18px; height: 2px; border-radius: 2px;
+            background: var(--text-dark);
+            transition: transform .3s cubic-bezier(.4,0,.2,1), opacity .2s ease, top .3s cubic-bezier(.4,0,.2,1);
+        }
+        .hb-line-top { top: 0; }
+        .hb-line-mid { top: 5.5px; }
+        .hb-line-bottom { top: 11px; }
+        .hamburger-menu-btn.is-open .hb-line-top { top: 5.5px; transform: rotate(45deg); }
+        .hamburger-menu-btn.is-open .hb-line-mid { opacity: 0; transform: scale(0); }
+        .hamburger-menu-btn.is-open .hb-line-bottom { top: 5.5px; transform: rotate(-45deg); }
         .detail-back-btn { width: 28px; height: 38px; display: inline-flex; align-items: center; text-decoration: none; }
         .sidebar-screen-overlay { display: none; }
+        .drawer-close-btn {
+            width: 34px; height: 34px; min-width: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14);
+            background: rgba(255,255,255,.08); color: #fff; display: none; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 14px; transition: background-color .18s ease, transform .15s ease;
+        }
+        .drawer-close-btn:hover { background: rgba(255,255,255,.16); }
+        .drawer-close-btn:active { transform: scale(.92); }
+
+        /* Drawer profile card — mobile only, sits just below the brand row */
+        .mobile-drawer-profile {
+            align-items: center; gap: 12px;
+            margin: 4px 18px 14px; padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.08);
+            text-decoration: none;
+            transition: background-color .18s ease;
+        }
+        .mobile-drawer-profile:hover { background: rgba(255,255,255,.1); }
+        .mobile-drawer-profile-avatar,
+        .mobile-drawer-profile-avatar-img {
+            width: 42px; height: 42px; border-radius: 12px; flex: none;
+        }
+        .mobile-drawer-profile-avatar {
+            background: linear-gradient(135deg, #6366f1, #3b32b3);
+            color: #fff; font-weight: 700; font-size: 16px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .mobile-drawer-profile-avatar-img { object-fit: cover; border: 2px solid rgba(255,255,255,.2); }
+        .mobile-drawer-profile-meta { min-width: 0; flex: 1; }
+        .mobile-drawer-profile-name { color: #fff; font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mobile-drawer-profile-role { color: rgba(255,255,255,.5); font-size: 11.5px; margin-top: 1px; }
+        .mobile-drawer-profile-arrow { color: rgba(255,255,255,.35); font-size: 13px; flex: none; }
 
         /* Overview Grid */
         .overview-section {
@@ -266,15 +325,22 @@ require_once __DIR__ . '/../config/config.php';
         }
 
         /* Bottom Nav Fixed - విండో/స్క్రీన్ బాటమ్‌కి ఎప్పుడూ ఫిక్స్‌గా ఉండటానికి position: fixed వాడాం
-           (position: absolute వాడితే పేజీ కంటెంట్ ఎక్కువగా ఉన్నప్పుడు నావ్‌బార్ కిందకి జారిపోతుంది) */
+           (position: absolute వాడితే పేజీ కంటెంట్ ఎక్కువగా ఉన్నప్పుడు నావ్‌బార్ కిందకి జారిపోతుంది)
+           Premium floating card: rounded top corners, subtle shadow, blur —
+           default (closed) mobile state only; the drawer/desktop-sidebar
+           states below fully override this via more specific selectors. */
         .bottom-nav-bar {
             position: fixed;
             bottom: 0; left: 0; right: 0;
             max-width: 100%;
             margin: 0 auto;
-            height: 70px;
-            background: #ffffff;
-            border-top: 1px solid var(--border-color);
+            height: 76px;
+            background: rgba(255,255,255,.92);
+            -webkit-backdrop-filter: saturate(180%) blur(16px);
+            backdrop-filter: saturate(180%) blur(16px);
+            border-top: 1px solid rgba(15,23,42,.06);
+            border-radius: 22px 22px 0 0;
+            box-shadow: 0 -8px 28px rgba(15,23,42,.08);
             display: flex;
             justify-content: space-around;
             align-items: center;
@@ -283,38 +349,60 @@ require_once __DIR__ . '/../config/config.php';
         }
 
         .nav-item-btn {
+            position: relative;
             display: flex;
             flex-direction: column;
             align-items: center;
+            gap: 2px;
             color: var(--text-muted);
-            font-size: 10px;
+            font-size: 10.5px;
             font-weight: 600;
             text-decoration: none;
+            padding: 6px 10px;
+            border-radius: 12px;
+            transition: color .18s ease;
         }
 
         .nav-item-btn.active {
             color: var(--accent-purple);
         }
+        /* Understated active indicator — a small pill under the icon, not a big block */
+        .nav-item-btn.active::before {
+            content: '';
+            position: absolute;
+            top: -2px; left: 50%; transform: translateX(-50%);
+            width: 18px; height: 3px; border-radius: 3px;
+            background: var(--accent-purple);
+        }
 
         .nav-item-btn i {
             font-size: 18px;
-            margin-bottom: 3px;
+            margin-bottom: 1px;
         }
 
         .center-fab-btn {
-            width: 56px;
-            height: 56px;
-            background: var(--accent-purple);
+            width: 58px;
+            height: 58px;
+            background: linear-gradient(155deg, #4d43d6, var(--accent-purple));
             border-radius: 50%;
             display: flex;
             justify-content: center;
             align-items: center;
             color: white;
-            font-size: 24px;
-            margin-top: -32px;
-            box-shadow: 0 4px 10px rgba(59, 50, 179, 0.4);
+            font-size: 22px;
+            margin-top: -34px;
+            box-shadow: 0 8px 20px rgba(59, 50, 179, .42), 0 0 0 5px rgba(255,255,255,.9);
             cursor: pointer;
             border: none;
+            transition: transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s ease;
+        }
+        .center-fab-btn:active { transform: scale(.93); }
+        .center-fab-btn.fab-tap { animation: fabTap .38s cubic-bezier(.34,1.56,.64,1); }
+        @keyframes fabTap {
+            0% { transform: scale(1); }
+            35% { transform: scale(.92); }
+            70% { transform: scale(1.03); }
+            100% { transform: scale(1); }
         }
 
         /* List Items CSS */
@@ -384,13 +472,158 @@ require_once __DIR__ . '/../config/config.php';
         .list-empty-state { display: none; }
 
         @media (max-width: 991px) {
-            .mobile-container.sidebar-page .bottom-nav-bar { display: flex; position: fixed; top: 0; bottom: 0; left: 0; right: auto; width: min(82vw, 300px); height: 100vh; padding: 86px 20px 30px; flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 10px; border: 0; box-shadow: 14px 0 35px rgba(15,23,42,.2); transform: translateX(-105%); transition: transform .3s ease; z-index: 1100; }
-            .mobile-container.sidebar-page .bottom-nav-bar.open { transform: translateX(0); }
-            .mobile-container.sidebar-page .nav-item-btn { flex-direction: row; justify-content: flex-start; gap: 14px; width: 100%; padding: 12px 14px; border-radius: 10px; font-size: 14px; }
-            .mobile-container.sidebar-page .nav-item-btn i { margin: 0; width: 22px; }
-            .mobile-container.sidebar-page .center-fab-btn { order: 5; width: 100%; height: 45px; margin: 12px 0 0; border-radius: 10px; }
-            .mobile-container.sidebar-page .sidebar-screen-overlay { position: fixed; inset: 0; display: block; background: rgba(11,30,70,.52); opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility .3s ease; z-index: 1050; }
-            .mobile-container.sidebar-page .sidebar-screen-overlay.open { opacity: 1; visibility: visible; }
+            /* The drawer (z-index 1100) sits above the top app bar's normal
+               z-index (850) — without this, the drawer would visually cover the
+               hamburger button once open, making it impossible to tap the now-X
+               icon again to close it. */
+            .top-app-bar { z-index: 1150; }
+
+            /* ── Premium slide-in drawer ── the same .bottom-nav-bar element that
+               renders the bottom bar becomes the drawer. Gated behind .drawer-mode
+               (added by JS only while opening/closing) rather than the permanent
+               .sidebar-page marker — .sidebar-page never toggles off once the page
+               loads, so gating the fixed/off-screen positioning on it directly
+               would leave the horizontal bottom bar permanently transformed
+               off-screen (verified: it never shows). JS adds .drawer-mode, forces
+               a reflow, then adds .open on the next frame so the slide-in still
+               animates from off-screen; on close it removes .open, waits for the
+               transition to finish, then removes .drawer-mode so the element
+               returns to being the normal fixed bottom bar. */
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode {
+                display: flex; position: fixed; top: 0; bottom: 0; left: 0; right: auto;
+                width: min(86vw, 360px); height: 100vh;
+                padding: 20px 0 24px;
+                flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 0;
+                border: 0; border-radius: 0 22px 22px 0;
+                background: linear-gradient(180deg, #0f172a 0%, #0b1e46 55%, #071428 100%);
+                -webkit-backdrop-filter: none; backdrop-filter: none;
+                box-shadow: 18px 0 40px rgba(4,10,24,.35);
+                transform: translate3d(-105%, 0, 0);
+                transition: transform .4s cubic-bezier(0.22, 1, 0.36, 1);
+                will-change: transform;
+                z-index: 1100;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open { transform: translate3d(0, 0, 0); }
+
+            /* Reveal the brand/profile/section-label/quick-action blocks that
+               are hidden by default on mobile — only inside the open drawer. */
+            .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-brand,
+            .mobile-container.sidebar-page .bottom-nav-bar.open .mobile-drawer-profile,
+            .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-footer {
+                display: flex !important;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-section-label.drawer-reveal {
+                display: block !important;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.open a.drawer-reveal,
+            .mobile-container.sidebar-page .bottom-nav-bar.open .nav-item-btn.drawer-reveal,
+            .mobile-container.sidebar-page .bottom-nav-bar.open .mobile-drawer-support-link {
+                display: flex !important;
+            }
+
+            .mobile-container.sidebar-page .desktop-sidebar-brand {
+                justify-content: space-between; padding: 4px 18px 18px; border-bottom-color: rgba(255,255,255,.08);
+            }
+            .mobile-container.sidebar-page .drawer-close-btn { display: inline-flex; }
+
+            /* Everything below this point styles the vertical drawer ROW look for
+               nav-item-btn/section-label/fab/nav-scroll. These are only requested
+               while .drawer-mode is present (added by JS only during open/close),
+               because .desktop-sidebar-nav-scroll is display:contents — its
+               children (nav-item-btn, the FAB) are the SAME elements the closed
+               bottom bar shows horizontally, so an ungated rule here would also
+               restyle the always-visible bottom bar. */
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll {
+                display: flex; flex-direction: column;
+                flex: 1 1 auto; min-height: 0;
+                padding: 8px 12px; gap: 2px; overflow-y: auto; overflow-x: hidden;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn {
+                position: relative;
+                flex-direction: row; justify-content: flex-start; gap: 14px;
+                width: 100%; padding: 12px 14px; border-radius: 12px; font-size: 14px; font-weight: 550;
+                color: rgba(255,255,255,.72);
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn i { margin: 0; width: 22px; font-size: 16px; color: rgba(255,255,255,.5); }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn::before { display: none; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn::after {
+                content: '\f054'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 10px;
+                margin-left: auto; color: rgba(255,255,255,.28); transition: transform .18s ease;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn:active { transform: scale(.98); background: rgba(255,255,255,.05); }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn.active {
+                background: linear-gradient(90deg, rgba(99,102,241,.32), rgba(99,102,241,.06));
+                color: #fff; box-shadow: inset 3px 0 0 #818cf8;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn.active i { color: #a5b4fc; }
+            .mobile-container.sidebar-page .desktop-sidebar-section-label {
+                font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+                color: rgba(255,255,255,.35); padding: 14px 14px 6px; margin: 0;
+            }
+
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .center-fab-btn {
+                order: 5; width: 100%; height: 46px; margin: 8px 0 4px; border-radius: 12px;
+                background: rgba(129,140,248,.16); border: 1px solid rgba(129,140,248,.3);
+                box-shadow: none; font-size: 18px;
+            }
+
+            /* These are the desktop sidebar's own footer/avatar/logout styles,
+               normally scoped to @media (min-width:992px) — duplicated here
+               (not modified there) so the same footer block also looks right
+               revealed inside the mobile drawer, without touching desktop. */
+            .mobile-container.sidebar-page .desktop-sidebar-footer {
+                flex-direction: column; gap: 10px; padding: 14px 18px 4px;
+                border-top: 1px solid rgba(255,255,255,.08);
+                background: transparent;
+            }
+            .mobile-container.sidebar-page .desktop-sidebar-user {
+                display: flex; align-items: center; gap: 10px; min-width: 0;
+                text-decoration: none; color: inherit; border-radius: 10px; padding: 4px; margin: -4px;
+            }
+            .mobile-container.sidebar-page .desktop-sidebar-user-avatar {
+                width: 36px; height: 36px; border-radius: 10px;
+                background: linear-gradient(135deg, #6366f1, #3b32b3);
+                color: #fff; font-weight: 700; font-size: 14px;
+                display: flex; align-items: center; justify-content: center; flex: none;
+            }
+            .mobile-container.sidebar-page .desktop-sidebar-user-avatar-img {
+                width: 36px; height: 36px; border-radius: 10px; object-fit: cover; flex: none;
+                border: 2px solid rgba(255,255,255,.2);
+            }
+            .mobile-container.sidebar-page .desktop-sidebar-user-meta { min-width: 0; flex: 1; }
+            .mobile-container.sidebar-page .desktop-sidebar-user-name {
+                color: #fff; font-size: 13px; font-weight: 650;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            .mobile-container.sidebar-page .desktop-sidebar-user-role { color: rgba(255,255,255,.45); font-size: 11px; margin-top: 1px; }
+            .mobile-container.sidebar-page .desktop-sidebar-logout {
+                display: flex; align-items: center; justify-content: center; gap: 8px;
+                padding: 10px 12px; border-radius: 10px;
+                background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.25);
+                color: #fca5a5; text-decoration: none; font-size: 13px; font-weight: 650;
+            }
+            .mobile-container.sidebar-page .mobile-drawer-support-link {
+                align-items: center; justify-content: center; gap: 8px;
+                padding: 10px 12px; border-radius: 10px;
+                background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+                color: rgba(255,255,255,.7); text-decoration: none;
+                font-size: 13px; font-weight: 650;
+                transition: background-color .18s ease, color .18s ease;
+            }
+            .mobile-container.sidebar-page .mobile-drawer-support-link:hover { background: rgba(255,255,255,.1); color: #fff; }
+
+            .mobile-container.sidebar-page .sidebar-screen-overlay {
+                position: fixed; inset: 0; display: block;
+                background: rgba(5,20,40,.45);
+                -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0);
+                opacity: 0; visibility: hidden;
+                transition: opacity .35s ease, visibility .35s ease, -webkit-backdrop-filter .35s ease, backdrop-filter .35s ease;
+                z-index: 1050;
+            }
+            .mobile-container.sidebar-page .sidebar-screen-overlay.open {
+                opacity: 1; visibility: visible;
+                -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+            }
 
             /* Admin: hide Cancelled on mobile bottom bar only; show again in open sidebar drawer */
             .bottom-nav-bar:not(.open) .hide-cancelled-on-mobile-bn {
@@ -398,6 +631,50 @@ require_once __DIR__ . '/../config/config.php';
             }
             .bottom-nav-bar.open .hide-cancelled-on-mobile-bn {
                 display: flex !important;
+            }
+
+            /* Staggered reveal — GPU-friendly opacity/transform only, and only
+               while .drawer-mode is present (see note above: nav-scroll's
+               children are shared with the always-visible bottom bar, so this
+               must never apply to the plain closed bottom-bar state). Two
+               nth-child scopes because .desktop-sidebar-nav-scroll is
+               display:contents outside of drawer-mode (children lay out as
+               direct bottom-bar siblings there); inside drawer-mode it's now a
+               real flex column, so its children are staggered relative to each
+               other, while the true direct children of .bottom-nav-bar
+               (brand/profile/footer) are staggered separately. */
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-brand,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .mobile-drawer-profile,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-footer,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > * {
+                opacity: 0; transform: translate3d(-12px, 0, 0);
+                transition: opacity .3s ease, transform .3s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open > .desktop-sidebar-brand,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open > .mobile-drawer-profile,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open > .desktop-sidebar-footer,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open .desktop-sidebar-nav-scroll > * {
+                opacity: 1; transform: translate3d(0, 0, 0);
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-brand { transition-delay: .04s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .mobile-drawer-profile { transition-delay: .09s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-footer { transition-delay: .3s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(1) { transition-delay: .13s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(2) { transition-delay: .16s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(3) { transition-delay: .19s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(4) { transition-delay: .22s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(5) { transition-delay: .25s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(6) { transition-delay: .28s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(7) { transition-delay: .31s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(8) { transition-delay: .34s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(9) { transition-delay: .37s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(10) { transition-delay: .4s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(n+11) { transition-delay: .42s; }
+
+            /* Closing: fade/slide back out quickly, no stagger needed */
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode:not(.open) > *,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode:not(.open) .desktop-sidebar-nav-scroll > * {
+                transition-delay: 0s !important;
             }
         }
 
@@ -504,6 +781,33 @@ require_once __DIR__ . '/../config/config.php';
 .desktop-sidebar-section-label {
     display: none !important;
 }
+/* Mobile-drawer-only profile card — hidden everywhere except the open drawer
+   (see the max-width:991px block above); desktop keeps its existing footer
+   profile block only, no duplicate. */
+.mobile-drawer-profile {
+    display: none !important;
+}
+.mobile-drawer-support-link {
+    display: none !important;
+}
+/* Brand badge/logo/text visuals — identical on the desktop sidebar and the
+   mobile drawer (both navy), so these are unconditional (single source of
+   truth) rather than duplicated inside each breakpoint's block. Only
+   .desktop-sidebar-brand's own display/show-hide stays breakpoint-gated. */
+.desktop-sidebar-brand { align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.08); flex: 0 0 auto; }
+.desktop-sidebar-mark {
+    width: 40px; height: 40px; border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1, #3b32b3);
+    color: #fff; font-weight: 800; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 16px rgba(59,50,179,.45);
+    flex: none; overflow: hidden;
+}
+.desktop-sidebar-mark.has-logo { background: #fff; box-shadow: 0 2px 8px rgba(15,23,42,.18); }
+.desktop-sidebar-mark i { font-size: 18px; color: #fff; }
+.desktop-sidebar-logo-img { width: 100%; height: 100%; object-fit: contain; display: block; padding: 4px; }
+.desktop-sidebar-brand-text b { display: block; color: #fff; font-size: 15px; font-weight: 700; line-height: 1.2; }
+.desktop-sidebar-brand-text span { display: block; color: rgba(255,255,255,.5); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; margin-top: 2px; }
 /* On mobile, unwrap scroll container so bottom-nav stays horizontal flex */
 .desktop-sidebar-nav-scroll {
     display: contents;
