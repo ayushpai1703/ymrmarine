@@ -124,6 +124,28 @@ if ($diagUsername !== '') {
                     $totalStmt = $db->prepare('SELECT COUNT(*) FROM surveys WHERE client_id = ?');
                     $totalStmt->execute([$clientId]);
                     $diag['total_surveys'] = (int)$totalStmt->fetchColumn();
+
+                    // Zero surveys on the linked row could also mean the real
+                    // data sits under a differently-spelled clients row for
+                    // the same company (e.g. "Norden" vs "Norden A/S") — the
+                    // exact-match duplicate scan below wouldn't catch that.
+                    // Surface any similarly-named row so it can be confirmed
+                    // and fixed by hand rather than guessed at automatically.
+                    if ($diag['total_surveys'] === 0) {
+                        $firstWord = trim((string)strtok((string)$diag['company_name'], " \t"));
+                        if (mb_strlen($firstWord) >= 3) {
+                            $simStmt = $db->prepare("
+                                SELECT c.id, c.company_name, c.user_id, u.username,
+                                       (SELECT COUNT(*) FROM surveys s WHERE s.client_id = c.id) AS survey_count
+                                FROM clients c
+                                LEFT JOIN users u ON u.id = c.user_id
+                                WHERE c.company_name LIKE ? AND c.id != ?
+                                ORDER BY c.id
+                            ");
+                            $simStmt->execute(['%' . $firstWord . '%', $clientId]);
+                            $diag['similar_clients'] = $simStmt->fetchAll(PDO::FETCH_ASSOC);
+                        }
+                    }
                 }
             } else {
                 $diag['note'] = 'This login\'s role is "' . $diag['role'] . '", not Client — the client-dashboard filter doesn\'t apply to it.';
@@ -310,6 +332,18 @@ include 'includes/header.php';
                         </div>
                     <?php elseif ((int)$diag['total_surveys'] === 0): ?>
                         <div class="text-muted mt-1">No surveys exist anywhere in <b><?= sanitize($dbIdentityRow['db_name'] ?? 'this database') ?></b> with client_id = <?= (int)$diag['client_id'] ?>. Nothing has actually been assigned to "<?= sanitize($diag['company_name'] ?? '') ?>" in THIS environment yet — check Assign Vessel / Pending Vessels here, not in a different environment (staging and production are separate databases).</div>
+                        <?php if (!empty($diag['similar_clients'])): ?>
+                        <div class="mt-2" style="border-top:1px dashed var(--border-color); padding-top:8px;">
+                            <b>Similarly-named client rows found</b> — the real data may be sitting under one of these instead (different spelling of the same company name, so the automatic duplicate check above didn't group them together):
+                            <?php foreach ($diag['similar_clients'] as $sc): ?>
+                                <div class="mt-1">
+                                    Client #<?= (int)$sc['id'] ?> — "<?= sanitize($sc['company_name']) ?>":
+                                    <b><?= (int)$sc['survey_count'] ?></b> survey(s)<?= $sc['username'] ? ', login: ' . sanitize($sc['username']) : ', no login' ?>
+                                </div>
+                            <?php endforeach; ?>
+                            <div class="text-muted mt-1">If one of these clearly has the real vessels, rename it (Admin Controls → Clients) to exactly match "<?= sanitize($diag['company_name'] ?? '') ?>" — the Duplicate Client Companies tool below will then pick it up for a safe Merge, without touching data by hand.</div>
+                        </div>
+                        <?php endif; ?>
                     <?php endif; ?>
                 <?php endif; ?>
             <?php endif; ?>
