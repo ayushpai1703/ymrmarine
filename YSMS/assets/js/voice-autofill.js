@@ -191,64 +191,34 @@
         }
 
         // ── Transcript parsing ──────────────────────────────────────────
-        // Chrome's SpeechRecognition normally returns plain, unpunctuated
-        // text (no commas even for a long spoken sentence), so parsing
-        // cannot rely on comma-separated segments. Instead this scans the
-        // WHOLE transcript once for every known field label, in whatever
-        // order they actually occur, and slices the text between one
-        // label and the next as that field's value. This is what makes
-        // the requested fixed format reliable:
-        //   "Vessel name ... Client Name ... Agent name ... Port name ...
-        //    Type of Survey ..."
-        // — but it isn't order-dependent: labels can appear in any order
-        // and it still works, since each field's value simply runs from
-        // right after its own label to the start of whichever label comes
-        // next in the spoken text.
-        // Deliberately a SHORT, low-collision list matching the exact
-        // requested format (Vessel name / Client Name / Agent name / Port
-        // name / Type of Survey). Wider synonyms ('shipping agent', bare
-        // 'survey', 'cargo' as a product word, etc.) were tried and
-        // removed: they kept false-matching *inside* an adjacent field's
-        // own spoken value — e.g. "...ABC Shipping agent name..." made
-        // "Shipping agent" look like its own label, and a survey type
-        // literally named "Cargo Survey" made "cargo" (a product synonym)
-        // and the bare word "survey" both look like new labels mid-value.
-        // Quantity/product are intentionally NOT keyword-scanned at all —
-        // they're only ever found via the number+unit regex below, which
-        // has no such collision risk.
+        // Longer/more specific phrases listed first within each field so
+        // e.g. "shipping agent" is recognised before the bare "agent".
         var FIELD_KEYWORDS = [
-            { field: 'vessel', words: ['vessel name', 'vessel'] },
-            { field: 'client', words: ['client name', 'client'] },
-            { field: 'agent', words: ['agent name', 'agent'] },
-            { field: 'port', words: ['port name', 'port'] },
-            { field: 'survey', words: ['type of survey', 'survey type'] }
+            { field: 'vessel', words: ['vessel name', 'ship name', 'vessel', 'ship'] },
+            { field: 'port', words: ['port name', 'port', 'location', 'berth', 'anchorage'] },
+            { field: 'client', words: ['client name', 'client', 'principal', 'customer'] },
+            { field: 'agent', words: ['shipping agent', 'local agent', 'agent name', 'agent'] },
+            { field: 'survey', words: ['survey type', 'job type', 'survey'] },
+            { field: 'quantity', words: ['quantity', 'qty', 'amount'] },
+            { field: 'product', words: ['product', 'grade', 'fuel', 'cargo'] }
         ];
         var QTY_RE = /(\d+(?:\.\d+)?)\s*(metric\s*tons?|mts?\b|tons?\b|kgs?\b|kilograms?\b|liters?\b|litres?\b|kls?\b)/i;
 
-        function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-
-        // Flat, longest-phrase-first list so e.g. "vessel name" is matched
-        // whole instead of stopping at the shorter "vessel".
-        var KEYWORD_TO_FIELD = {};
-        var ALL_KEYWORD_PHRASES = [];
-        FIELD_KEYWORDS.forEach(function (g) {
-            g.words.forEach(function (w) {
-                KEYWORD_TO_FIELD[w] = g.field;
-                ALL_KEYWORD_PHRASES.push(w);
-            });
-        });
-        ALL_KEYWORD_PHRASES.sort(function (a, b) { return b.length - a.length; });
-        var KEYWORD_SCAN_SOURCE = '\\b(' + ALL_KEYWORD_PHRASES.map(escapeRegex).join('|') + ')\\b';
-
-        function scanKeywordPositions(text) {
-            var re = new RegExp(KEYWORD_SCAN_SOURCE, 'gi');
-            var matches = [];
-            var m;
-            while ((m = re.exec(text)) !== null) {
-                matches.push({ field: KEYWORD_TO_FIELD[m[1].toLowerCase()], start: m.index, end: m.index + m[0].length });
-                if (m.index === re.lastIndex) re.lastIndex++;
+        function matchLeadingKeyword(segment) {
+            var norm = segment.trim();
+            var lower = norm.toLowerCase();
+            for (var i = 0; i < FIELD_KEYWORDS.length; i++) {
+                var group = FIELD_KEYWORDS[i];
+                for (var j = 0; j < group.words.length; j++) {
+                    var kw = group.words[j];
+                    if (lower === kw || lower.indexOf(kw + ' ') === 0) {
+                        var rest = norm.slice(kw.length).trim();
+                        rest = rest.replace(/^(is|are|=|:|-)\s*/i, '').trim();
+                        return { field: group.field, value: rest };
+                    }
+                }
             }
-            return matches;
+            return null;
         }
 
         function tryAssignTemplate(text) {
@@ -268,66 +238,50 @@
             return { quantity: m[1], unit: unit, matchText: m[0] };
         }
 
-        // Field values sliced from raw speech can accidentally swallow a
-        // trailing quantity ("...type of survey bunker survey 450 MT
-        // VLSFO" — with nothing labelling the quantity, "survey" would
-        // otherwise run to the end of the string). Cut any field's value
-        // off at the first place a quantity pattern appears in it.
-        function stripQuantityTail(value) {
-            if (!value) return value;
-            var m = value.match(QTY_RE);
-            return m ? value.slice(0, m.index).trim() : value;
-        }
-
         function parseTranscript(raw) {
-            var out = { vessel: '', port: '', client: '', agent: '', survey: '', quantity: '', unit: '', productText: '', _needsVocabScan: false };
+            var out = { vessel: '', port: '', client: '', agent: '', survey: '', quantity: '', unit: '', productText: '', _unclaimed: [], _needsVocabScan: false };
 
-            var matches = scanKeywordPositions(raw).sort(function (a, b) { return a.start - b.start; });
-
-            if (matches.length) {
-                for (var i = 0; i < matches.length; i++) {
-                    var field = matches[i].field;
-                    var valueEnd = (i + 1 < matches.length) ? matches[i + 1].start : raw.length;
-                    var value = raw.slice(matches[i].end, valueEnd).trim();
-                    value = value.replace(/^(is|are|=|:|-|,)\s*/i, '').replace(/[,;.]+$/, '').trim();
-                    if (!value) continue;
-                    if (field === 'vessel' && !out.vessel) out.vessel = value;
-                    else if (field === 'client' && !out.client) out.client = value;
-                    else if (field === 'agent' && !out.agent) out.agent = value;
-                    else if (field === 'port' && !out.port) out.port = value;
-                    else if (field === 'survey' && !out.survey) out.survey = value;
-                    else if (field === 'product' && !out.productText) out.productText = value;
-                }
-            } else {
-                var tmpl = tryAssignTemplate(raw);
-                if (tmpl) {
-                    out.vessel = tmpl.vessel; out.port = tmpl.port; out.client = tmpl.client; out.agent = tmpl.agent;
-                }
+            var tmpl = tryAssignTemplate(raw);
+            if (tmpl) {
+                out.vessel = tmpl.vessel; out.port = tmpl.port; out.client = tmpl.client; out.agent = tmpl.agent;
             }
 
-            out.vessel = stripQuantityTail(out.vessel);
-            out.client = stripQuantityTail(out.client);
-            out.agent = stripQuantityTail(out.agent);
-            out.port = stripQuantityTail(out.port);
-            out.survey = stripQuantityTail(out.survey);
+            var segments = raw.split(/\s*(?:,|;|\.(?!\d)|\band\b)\s*/i).map(function (s) { return s.trim(); }).filter(Boolean);
+            var hadAnyKeyword = !!tmpl;
+            segments.forEach(function (seg) {
+                var m = matchLeadingKeyword(seg);
+                if (m) {
+                    hadAnyKeyword = true;
+                    if (m.value) {
+                        if (m.field === 'vessel' && !out.vessel) out.vessel = m.value;
+                        else if (m.field === 'port' && !out.port) out.port = m.value;
+                        else if (m.field === 'client' && !out.client) out.client = m.value;
+                        else if (m.field === 'agent' && !out.agent) out.agent = m.value;
+                        else if (m.field === 'survey' && !out.survey) out.survey = m.value;
+                        else if (m.field === 'product' && !out.productText) out.productText = m.value;
+                        else out._unclaimed.push(seg);
+                    }
+                } else {
+                    out._unclaimed.push(seg);
+                }
+            });
 
             var qty = extractQuantity(raw);
             if (qty) {
                 out.quantity = qty.quantity;
                 out.unit = qty.unit;
                 if (!out.productText) {
-                    var qtyEnd = raw.toLowerCase().indexOf(qty.matchText.toLowerCase()) + qty.matchText.length;
-                    var boundEnd = raw.length;
-                    for (var k = 0; k < matches.length; k++) {
-                        if (matches[k].start >= qtyEnd) { boundEnd = matches[k].start; break; }
+                    var segWithQty = segments.filter(function (s) { return s.toLowerCase().indexOf(qty.matchText.toLowerCase()) !== -1; })[0] || raw;
+                    var idx = segWithQty.toLowerCase().indexOf(qty.matchText.toLowerCase());
+                    if (idx !== -1) {
+                        var trailing = segWithQty.slice(idx + qty.matchText.length).trim();
+                        if (trailing) out.productText = trailing;
                     }
-                    var trailing = raw.slice(qtyEnd, boundEnd).trim().replace(/[,;.]+$/, '');
-                    if (trailing) out.productText = trailing;
                 }
             }
 
             var foundCount = [out.vessel, out.port, out.client, out.agent].filter(Boolean).length;
-            out._needsVocabScan = !matches.length && foundCount === 0;
+            out._needsVocabScan = !hadAnyKeyword && foundCount === 0;
             return out;
         }
 
@@ -367,6 +321,12 @@
                 if (!parsed.agent) parsed.agent = vs.agent;
                 if (!parsed.port && vs.port) parsed.port = vs.port.label;
                 if (!parsed.client && vs.client) parsed.client = vs.client.label;
+            }
+            if (!parsed.survey && parsed._unclaimed.length) {
+                for (var i = 0; i < parsed._unclaimed.length; i++) {
+                    var m = matchCandidates(parsed._unclaimed[i], surveyCandidates);
+                    if (m.status === 'single' || m.status === 'multiple') { parsed.survey = parsed._unclaimed[i]; break; }
+                }
             }
 
             var result = {

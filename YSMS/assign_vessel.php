@@ -1391,14 +1391,8 @@ include 'includes/top_app_bar.php';
                         <i class="fa-solid fa-microphone"></i>
                     </button>
                     <div class="vf-title">Tap to Speak</div>
-                    <div class="vf-sub">Say each detail with its label, like this:</div>
-                    <div class="vf-example">
-                        Vessel name MV Ocean Star<br>
-                        Client name ABC Shipping<br>
-                        Agent name XYZ Marine<br>
-                        Port name Kakinada<br>
-                        Type of survey Bunker Survey
-                    </div>
+                    <div class="vf-sub">Say the vessel, port, client and agent details</div>
+                    <div class="vf-example">e.g. "Vessel MV Ocean Star, Port Kakinada, Client ABC Shipping, Agent XYZ Marine, bunker survey, 450 metric tons VLSFO"</div>
                 </div>
 
                 <!-- Listening -->
