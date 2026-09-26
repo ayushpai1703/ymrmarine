@@ -48,6 +48,10 @@ $fab_user_role = $user_role ?? ($_SESSION['role'] ?? '');
             <i class="fa-solid fa-user-shield text-primary" style="width: 24px; text-align: center;"></i>
             <span>Add Admin</span>
         </a>
+        <a href="super_admin_clients.php" class="fab-option-item" data-testid="fab-manage-clients-link">
+            <i class="fa-solid fa-building text-success" style="width: 24px; text-align: center;"></i>
+            <span>Manage Clients</span>
+        </a>
         <!-- TEMPORARY — remove once go-live test-data cleanup is done. -->
         <a href="super_admin_controls.php" class="fab-option-item" data-testid="fab-data-cleanup-link">
             <i class="fa-solid fa-trash text-danger" style="width: 24px; text-align: center;"></i>

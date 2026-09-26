@@ -3,15 +3,21 @@ require_once __DIR__ . '/../config/config.php';
 checkAuth();
 header('Content-Type: application/json');
 
-if (($_SESSION['role'] ?? '') !== 'Admin') {
+$role = $_SESSION['role'] ?? '';
+$module = isset($_REQUEST['module']) ? trim((string)$_REQUEST['module']) : '';
+$action = isset($_REQUEST['action']) ? trim((string)$_REQUEST['action']) : 'list';
+
+// Admin manages every module here (Clients/Ports/Survey Types/Agents/
+// Surveyors) via admin_controls.php. Super Admin gets the same Add/Edit/
+// Delete behavior but only for Clients (super_admin_clients.php) — every
+// other module stays Admin-only, so this must reject anything else even
+// if requested directly.
+if ($role !== 'Admin' && !($role === 'Super Admin' && $module === 'clients')) {
     echo json_encode(['success' => false, 'message' => 'Not authorized.']);
     exit;
 }
 
 $modules = require __DIR__ . '/../config/admin_modules.php';
-
-$module = isset($_REQUEST['module']) ? trim((string)$_REQUEST['module']) : '';
-$action = isset($_REQUEST['action']) ? trim((string)$_REQUEST['action']) : 'list';
 
 if ($module === '' || !isset($modules[$module])) {
     echo json_encode(['success' => false, 'message' => 'Unknown module.']);
