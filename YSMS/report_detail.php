@@ -285,7 +285,7 @@ include 'includes/header.php';
                         <i class="fa-regular <?= $icon ?> fs-5"></i>
                         <span class="text-dark fw-semibold text-truncate" title="<?= sanitize($clean_name) ?>"><?= sanitize($clean_name) ?></span>
                     </div>
-                    <a href="<?= sanitize($file['file_path']) ?>" download="<?= sanitize($clean_name) ?>" class="btn btn-sm btn-light py-1 border text-primary"><i class="fa-solid fa-download"></i></a>
+                    <a href="download.php?upload_id=<?= (int)$file['id'] ?>" class="btn btn-sm btn-light py-1 border text-primary"><i class="fa-solid fa-download"></i></a>
                 </div>
             <?php endforeach; ?>
         <?php else: ?>

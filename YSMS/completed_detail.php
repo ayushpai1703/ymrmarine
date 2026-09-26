@@ -297,10 +297,7 @@ include 'includes/header.php';
                             </div>
                         </div>
                     </div>
-                    <?php
-                        $clean_name = preg_replace('/^[0-9]+_/', '', $file['file_name']);
-                    ?>
-                    <a href="<?= $file['file_path'] ?>" download="<?= sanitize($clean_name) ?>" class="btn btn-sm btn-light border py-1.5 text-primary">
+                    <a href="download.php?upload_id=<?= (int)$file['id'] ?>" class="btn btn-sm btn-light border py-1.5 text-primary">
                         <i class="fa-solid fa-download"></i>
                     </a>
                 </div>

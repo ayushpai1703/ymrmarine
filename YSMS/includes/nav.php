@@ -124,6 +124,15 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         <span>Manage Templates</span>
     </a>
 
+        <?php elseif ($user_role === 'Client'): ?>
+        <!-- Desktop sidebar + mobile drawer: Client-only Documents link — all
+             of this client's uploaded report files in one place (see
+             documents.php, scoped to their own clients.id). -->
+        <div class="desktop-sidebar-section-label desktop-only-nav drawer-reveal">Client</div>
+        <a href="documents.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'documents.php') ? 'active' : '' ?>" data-testid="sidebar-documents-link">
+            <i class="fa-solid fa-folder-open"></i>
+            <span>Documents</span>
+        </a>
         <?php elseif ($user_role === 'Super Admin'): ?>
         <!-- Desktop sidebar + mobile drawer: Super Admin Quick Actions — Add Client +
              Add Admin only (Assign Vessel / Admin Controls / Manage Templates /

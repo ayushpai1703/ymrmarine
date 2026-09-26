@@ -342,6 +342,21 @@ $current_username = !empty($user['username']) ? $user['username'] : (isset($_SES
 $current_role = !empty($user['role']) ? $user['role'] : (isset($_SESSION['role']) ? $_SESSION['role'] : 'Surveyor');
 $joining_date = !empty($user['created_at']) ? date('d M Y', strtotime($user['created_at'])) : date('d M Y');
 
+// Client-only: company name / contact person come from the clients row
+// linked to this login (clients.user_id), not the users table — this is
+// the "Client Profile" info the client-portal spec asks for.
+$client_company_name = '';
+$client_contact_person = '';
+if ($current_role === 'Client') {
+    $clientRowStmt = $db->prepare('SELECT company_name, contact_person FROM clients WHERE user_id = ? LIMIT 1');
+    $clientRowStmt->execute([$user_id]);
+    $clientRow = $clientRowStmt->fetch(PDO::FETCH_ASSOC);
+    if ($clientRow) {
+        $client_company_name = $clientRow['company_name'] ?? '';
+        $client_contact_person = $clientRow['contact_person'] ?? '';
+    }
+}
+
 $avatar_url = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80";
 if (!empty($user['avatar']) && file_exists($user['avatar'])) {
     $avatar_url = $user['avatar'];
@@ -498,6 +513,18 @@ include 'includes/header.php';
     <!-- 🔒 SECTION C: LOCKED PARAMETERS (మార్చడానికి వీలులేనివి) -->
     <div class="profile-card shadow-sm mt-2">
         <div class="fw-bold text-muted mb-2" style="font-size: 12.5px;"><i class="fa-solid fa-lock text-secondary me-1"></i> Locked System Parameters</div>
+        <?php if ($current_role === 'Client' && $client_company_name !== ''): ?>
+        <div>
+            <label class="text-secondary mb-1 d-block" style="font-size: 11.5px;">Company Name</label>
+            <input type="text" class="profile-locked-control" value="<?= sanitize($client_company_name) ?>" readonly data-testid="profile-client-company-name">
+        </div>
+        <?php if ($client_contact_person !== ''): ?>
+        <div>
+            <label class="text-secondary mb-1 d-block" style="font-size: 11.5px;">Contact Person</label>
+            <input type="text" class="profile-locked-control" value="<?= sanitize($client_contact_person) ?>" readonly data-testid="profile-client-contact-person">
+        </div>
+        <?php endif; ?>
+        <?php endif; ?>
         <div>
             <label class="text-secondary mb-1 d-block" style="font-size: 11.5px;">System Username</label>
             <input type="text" class="profile-locked-control" value="<?= sanitize($current_username) ?>" readonly>
