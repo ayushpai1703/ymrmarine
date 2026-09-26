@@ -23,6 +23,89 @@ $delete_targets = [
 
 $messages = [];
 $errors = [];
+$mergeMessages = [];
+$mergeErrors = [];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_action'])) {
+    $normName = trim((string)($_POST['group_norm_name'] ?? ''));
+    $keepId = (int)($_POST['keep_id'] ?? 0);
+    if ($normName === '' || $keepId <= 0) {
+        $mergeErrors[$normName] = 'Invalid request.';
+    } elseif (trim($_POST['confirm_text'] ?? '') !== 'MERGE') {
+        $mergeErrors[$normName] = 'Please type MERGE exactly to confirm.';
+    } else {
+        try {
+            // Re-fetch the group fresh from the DB rather than trusting the
+            // posted row list, in case it changed since the page was loaded.
+            $stmt = $db->prepare("SELECT id, user_id FROM clients WHERE LOWER(TRIM(company_name)) = ?");
+            $stmt->execute([$normName]);
+            $groupRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $groupIds = array_map(fn($r) => (int)$r['id'], $groupRows);
+
+            if (count($groupRows) < 2 || !in_array($keepId, $groupIds, true)) {
+                $mergeErrors[$normName] = 'This duplicate group has changed — please refresh and try again.';
+            } else {
+                $withLogin = array_filter($groupRows, fn($r) => !empty($r['user_id']));
+                if (count($withLogin) > 1) {
+                    $mergeErrors[$normName] = 'More than one row in this group already has a login attached — merging could disconnect a client, so this was skipped. Please resolve manually.';
+                } else {
+                    $db->beginTransaction();
+
+                    $keepRow = null; $otherIds = [];
+                    foreach ($groupRows as $r) {
+                        if ((int)$r['id'] === $keepId) { $keepRow = $r; } else { $otherIds[] = (int)$r['id']; }
+                    }
+                    // If the kept row has no login but a duplicate does, adopt it.
+                    if (empty($keepRow['user_id'])) {
+                        foreach ($groupRows as $r) {
+                            if ((int)$r['id'] !== $keepId && !empty($r['user_id'])) {
+                                $upd = $db->prepare('UPDATE clients SET user_id = ? WHERE id = ?');
+                                $upd->execute([$r['user_id'], $keepId]);
+                                break;
+                            }
+                        }
+                    }
+                    $in = implode(',', array_fill(0, count($otherIds), '?'));
+                    $reassign = $db->prepare("UPDATE surveys SET client_id = ? WHERE client_id IN ($in)");
+                    $reassign->execute(array_merge([$keepId], $otherIds));
+                    $del = $db->prepare("DELETE FROM clients WHERE id IN ($in)");
+                    $del->execute($otherIds);
+
+                    $db->commit();
+                    $mergeMessages[$normName] = 'Merged into client #' . $keepId . '. Its vessels/surveys and login (if any) are now on this one row.';
+                }
+            }
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            error_log('super_admin_controls merge clients: ' . $e->getMessage());
+            $mergeErrors[$normName] = 'Could not merge these records. Please try again.';
+        }
+    }
+}
+
+$dupClientGroups = [];
+try {
+    $dupStmt = $db->query("
+        SELECT LOWER(TRIM(company_name)) AS norm_name, COUNT(*) AS cnt
+        FROM clients
+        GROUP BY LOWER(TRIM(company_name))
+        HAVING COUNT(*) > 1
+    ");
+    foreach ($dupStmt->fetchAll(PDO::FETCH_ASSOC) as $g) {
+        $rowsStmt = $db->prepare("
+            SELECT c.id, c.company_name, c.contact_person, c.user_id, u.username,
+                   (SELECT COUNT(*) FROM surveys s WHERE s.client_id = c.id) AS survey_count
+            FROM clients c
+            LEFT JOIN users u ON u.id = c.user_id
+            WHERE LOWER(TRIM(c.company_name)) = ?
+            ORDER BY c.id
+        ");
+        $rowsStmt->execute([$g['norm_name']]);
+        $dupClientGroups[$g['norm_name']] = $rowsStmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+} catch (Throwable $e) {
+    error_log('super_admin_controls dup client scan: ' . $e->getMessage());
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_target'])) {
     $target = (string)$_POST['delete_target'];
@@ -81,7 +164,26 @@ include 'includes/header.php';
         padding: 10px 16px; font-weight: 650; font-size: 13px; white-space: nowrap;
     }
     @media (min-width: 992px) {
-        .sac-banner, .admin-danger-zone { max-width: 900px; margin-left: auto; margin-right: auto; }
+        .sac-banner, .admin-danger-zone, .admin-merge-zone { max-width: 900px; margin-left: auto; margin-right: auto; }
+    }
+    .admin-merge-zone {
+        margin: 16px 16px 24px;
+        padding: 16px;
+        border: 1px solid rgba(59,50,179,.25);
+        background: rgba(59,50,179,.04);
+        border-radius: 14px;
+    }
+    .admin-merge-zone-title { color: #3b32b3; font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+    .admin-merge-zone-copy { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; max-width: 640px; }
+    .amz-group { border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #fff; }
+    .amz-company { font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+    .amz-row { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; margin-bottom: 8px; cursor: pointer; }
+    .amz-row input { margin-top: 3px; }
+    .amz-confirm { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .amz-confirm input { max-width: 160px; }
+    .amz-btn {
+        flex: 0 0 auto; background: #3b32b3; color: #fff; border: none; border-radius: 10px;
+        padding: 10px 16px; font-weight: 650; font-size: 13px; white-space: nowrap;
     }
 </style>
 
@@ -92,6 +194,44 @@ include 'includes/header.php';
         <i class="fa-solid fa-triangle-exclamation"></i>
         <span>Temporary tool — for clearing test data before go-live only. Each action below permanently deletes every record in that category, with no way to undo it. Remove this page once testing is complete.</span>
     </div>
+
+    <?php if ($dupClientGroups): ?>
+    <div class="admin-merge-zone" data-testid="sac-merge-clients-section">
+        <div class="admin-merge-zone-title"><i class="fa-solid fa-code-merge"></i> Duplicate Client Companies Found</div>
+        <div class="admin-merge-zone-copy">
+            The same company name appears more than once in Clients. This happens when "Add Client" created a new login for a company that already existed — the login then points at an empty duplicate while the real vessels stay on the original row, so that client sees nothing after logging in. Pick which row to <b>keep</b> (usually the one with vessels/surveys attached) and merge — the other row's login (if any) moves onto the kept row, its vessels are reassigned, and the empty duplicate is removed.
+        </div>
+        <?php foreach ($dupClientGroups as $norm => $rows):
+            $defaultKeepId = $rows[0]['id'];
+            $bestCount = -1;
+            foreach ($rows as $r) { if ((int)$r['survey_count'] > $bestCount) { $bestCount = (int)$r['survey_count']; $defaultKeepId = $r['id']; } }
+        ?>
+        <div class="amz-group" data-testid="sac-merge-group-<?= sanitize(md5($norm)) ?>">
+            <?php if (!empty($mergeMessages[$norm])): ?><div class="alert alert-success py-2 mb-2"><?= sanitize($mergeMessages[$norm]) ?></div><?php endif; ?>
+            <?php if (!empty($mergeErrors[$norm])): ?><div class="alert alert-danger py-2 mb-2"><?= sanitize($mergeErrors[$norm]) ?></div><?php endif; ?>
+            <div class="amz-company"><?= sanitize($rows[0]['company_name']) ?> (<?= count($rows) ?> rows)</div>
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="merge_action" value="1">
+                <input type="hidden" name="group_norm_name" value="<?= sanitize($norm) ?>">
+                <?php foreach ($rows as $r): ?>
+                    <label class="amz-row">
+                        <input type="radio" name="keep_id" value="<?= (int)$r['id'] ?>" <?= ((int)$r['id'] === (int)$defaultKeepId) ? 'checked' : '' ?>>
+                        <span>
+                            Client #<?= (int)$r['id'] ?><?= $r['contact_person'] ? ' — ' . sanitize($r['contact_person']) : '' ?><br>
+                            <span class="text-muted"><?= (int)$r['survey_count'] ?> vessel(s)/survey(s) attached<?= $r['username'] ? ' · has login: ' . sanitize($r['username']) : ' · no login' ?></span>
+                        </span>
+                    </label>
+                <?php endforeach; ?>
+                <div class="amz-confirm">
+                    <input type="text" name="confirm_text" class="form-control" placeholder="Type MERGE" required autocomplete="off">
+                    <button type="submit" class="amz-btn"><i class="fa-solid fa-code-merge"></i> Merge Selected</button>
+                </div>
+            </form>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
 
     <?php foreach ($delete_targets as $key => $cfg): ?>
     <div class="admin-danger-zone" data-testid="sac-danger-zone-<?= sanitize($key) ?>">

@@ -52,6 +52,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($roleId <= 0) {
                 $error = 'Client role is not configured. Please contact the developer.';
             } else {
+                // Reuse the clients row for this company if one already
+                // exists (e.g. created earlier from Admin Controls with
+                // vessels/surveys already attached), instead of inserting a
+                // second row for the same company — otherwise the new
+                // login gets linked to an empty duplicate while the real
+                // vessel data stays attached to the original row, and the
+                // client sees nothing after logging in.
+                $findClient = $db->prepare('SELECT id, user_id FROM clients WHERE LOWER(TRIM(company_name)) = LOWER(TRIM(?)) LIMIT 1');
+                $findClient->execute([$company_name]);
+                $existingClient = $findClient->fetch(PDO::FETCH_ASSOC);
+
+                if ($existingClient && !empty($existingClient['user_id'])) {
+                    $error = 'A login already exists for "' . $company_name . '". Please use their existing username, or contact the developer to reset the password.';
+                    $existingClient = null; // fall through without touching the DB
+                }
+            }
+            if ($error === '' && $roleId > 0) {
                 try {
                     $db->beginTransaction();
 
@@ -63,8 +80,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $insertUser->execute([$roleId, $username, $hashed, $contact_person, $mobile, $email]);
                     $newUserId = (int)$db->lastInsertId();
 
-                    $insertClient = $db->prepare('INSERT INTO clients (user_id, company_name, contact_person) VALUES (?, ?, ?)');
-                    $insertClient->execute([$newUserId, $company_name, $contact_person]);
+                    if (!empty($existingClient)) {
+                        $linkClient = $db->prepare('UPDATE clients SET user_id = ?, contact_person = ? WHERE id = ?');
+                        $linkClient->execute([$newUserId, $contact_person, $existingClient['id']]);
+                    } else {
+                        $insertClient = $db->prepare('INSERT INTO clients (user_id, company_name, contact_person) VALUES (?, ?, ?)');
+                        $insertClient->execute([$newUserId, $company_name, $contact_person]);
+                    }
 
                     $db->commit();
                     $success = true;
