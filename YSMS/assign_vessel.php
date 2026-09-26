@@ -931,6 +931,66 @@ include 'includes/header.php';
         touch-action: manipulation;
     }
 
+    /* 📋 Paste Email Auto-Fill — trigger card + parse/result modal. Matches
+       the existing form-box-custom card look and the app's --accent-purple
+       brand accent, so it doesn't introduce a separate design system. */
+    .pe-card {
+        background: white;
+        margin: 15px 20px 0;
+        border-radius: 16px;
+        padding: 14px 16px;
+        border: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .pe-card-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .pe-badge {
+        width: 40px; height: 40px; flex: none; border-radius: 12px;
+        background: linear-gradient(155deg, var(--accent-purple2, #6C4CF1), var(--accent-purple));
+        color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px;
+        box-shadow: 0 6px 14px rgba(91,45,238,.28);
+    }
+    .pe-card-title { font-size: 13.5px; font-weight: 700; color: var(--text-dark); }
+    .pe-card-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
+    .pe-btn {
+        border: none; border-radius: 10px; padding: 10px 16px; font-size: 12.5px; font-weight: 700;
+        color: #fff; background: var(--accent-purple); white-space: nowrap; cursor: pointer;
+        display: inline-flex; align-items: center; gap: 8px; min-height: 40px;
+        transition: filter .15s ease, transform .15s ease;
+    }
+    .pe-btn:hover { filter: brightness(1.08); }
+    .pe-btn:active { transform: scale(.97); }
+
+    #pasteEmailModal .modal-body { padding: 22px 20px; }
+    .pe-state { display: none; }
+    .pe-state.active { display: block; }
+    .pe-title { font-size: 15px; font-weight: 700; color: var(--text-dark); margin-bottom: 4px; }
+    .pe-sub { font-size: 12.5px; color: var(--text-muted); margin-bottom: 10px; }
+    .pe-textarea {
+        width: 100%; min-height: 160px; resize: vertical;
+        border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px;
+        font-size: 13px; color: var(--text-dark); background: #f8fafc; font-family: inherit;
+    }
+    .pe-textarea:focus { outline: none; border-color: var(--accent-purple); background: #fff; }
+    .pe-example { font-size: 10.5px; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 10px; margin-top: 10px; line-height: 1.6; }
+    .pe-heard { font-size: 11px; color: var(--text-muted); min-height: 20px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 10px; margin: 10px 0; max-height: 120px; overflow-y: auto; white-space: pre-wrap; }
+    .pe-result-list { margin: 10px 0; }
+    .pe-result-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+    .pe-result-row:last-child { border-bottom: none; }
+    .pe-result-label { color: var(--text-muted); font-weight: 600; flex: 0 0 auto; }
+    .pe-result-value { text-align: right; font-weight: 650; color: var(--text-dark); flex: 1; margin-left: 10px; }
+    .pe-result-value.ok { color: #16a34a; }
+    .pe-result-value.warn { color: #d97706; }
+    .pe-result-value.bad { color: #94a3b8; font-weight: 500; }
+    .pe-result-value select, .pe-result-value input { width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 8px; font-size: 12.5px; }
+    .pe-error-icon { font-size: 30px; color: #dc2626; margin-bottom: 10px; text-align: center; }
+    .pe-btn-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+    .pe-btn-row.center { justify-content: center; }
+    .pe-btn-row .btn { font-size: 12.5px; font-weight: 650; border-radius: 10px; padding: 9px 14px; }
+
     /* Desktop 2-col */
     @media (min-width: 992px) {
         .form-box-custom {
@@ -1049,6 +1109,23 @@ include 'includes/top_app_bar.php';
     }
     $edit_type_ids = $edit_mode ? array_values(array_unique(array_filter(array_map('intval', explode(',', (string)($edit_survey['survey_type_ids'] ?? '')))))) : [];
     ?>
+    <!-- 📋 Paste Email Auto-Fill — optional shortcut only. Paste the
+         client/agent's booking email text and it matches against the same
+         Client/Port/Survey Type data already rendered into this page; the
+         form below works exactly as before if this is never used. -->
+    <div class="pe-card" id="pasteEmailTriggerCard">
+        <div class="pe-card-left">
+            <div class="pe-badge"><i class="fa-solid fa-envelope-open-text"></i></div>
+            <div>
+                <div class="pe-card-title">Paste Email — Auto-Fill</div>
+                <div class="pe-card-sub">Paste the booking email text — we'll match &amp; fill the form</div>
+            </div>
+        </div>
+        <button type="button" class="pe-btn" id="pasteEmailTriggerBtn" data-testid="paste-email-trigger-button">
+            <i class="fa-solid fa-envelope-open-text"></i> Paste Email
+        </button>
+    </div>
+
     <!-- Assignment Form -->
     <form action="assign_vessel.php<?= $edit_mode ? '?edit_id=' . (int)$edit_id : '' ?>" method="POST" id="assignVesselForm" enctype="multipart/form-data"><?= csrf_field() ?>
         <?php if ($edit_mode): ?><input type="hidden" name="edit_id" value="<?= (int)$edit_id ?>"><?php endif; ?>
@@ -1119,7 +1196,7 @@ include 'includes/top_app_bar.php';
 
 <div class="form-group-custom">
                 <label>Agent Name *</label>
-                <input type="text" name="agent_name" value="<?= $edit_mode ? sanitize($edit_survey['agent_name']) : '' ?>" placeholder="e.g. Oceanus Agencies" required>
+                <input type="text" name="agent_name" id="agent_name" value="<?= $edit_mode ? sanitize($edit_survey['agent_name']) : '' ?>" placeholder="e.g. Oceanus Agencies" required>
             </div>
 
             <!-- 🌟 Port Name: searchable dropdown with search box inside -->
@@ -1220,7 +1297,7 @@ include 'includes/top_app_bar.php';
 
             <div class="form-group-custom">
                 <label>Remarks (Optional)</label>
-                <textarea name="remarks" rows="3" placeholder="Enter any specific instructions or notes..."><?= $edit_mode ? sanitize($edit_survey['remarks'] ?? '') : '' ?></textarea>
+                <textarea name="remarks" id="remarks" rows="3" placeholder="Enter any specific instructions or notes..."><?= $edit_mode ? sanitize($edit_survey['remarks'] ?? '') : '' ?></textarea>
             </div>
 
             <?php if ($edit_mode && !empty($edit_attachments)): ?>
@@ -1271,6 +1348,64 @@ include 'includes/top_app_bar.php';
             <div class="modal-footer">
                 <button type="button" class="btn btn-light border" data-bs-dismiss="modal" data-testid="duplicate-vessel-cancel">Cancel</button>
                 <button type="button" class="btn btn-primary" id="duplicateVesselConfirmBtn" style="background:#3b32b3;border-color:#3b32b3;" data-testid="duplicate-vessel-confirm">Yes, Add Anyway</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php /* 📋 Paste Email Auto-Fill modal — Idle (paste box) / Result
+         (confirmation, same field-by-field review pattern as the rest of
+         this page's UX) / Error. Nothing here touches the real form
+         fields until the user presses Confirm/Apply. */ ?>
+<div class="modal fade" id="pasteEmailModal" tabindex="-1" aria-hidden="true" data-testid="paste-email-modal">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold"><i class="fa-solid fa-envelope-open-text text-primary me-1"></i> Paste Email — Auto-Fill</h6>
+                <button type="button" class="btn-close" id="peCloseBtn" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- Idle: paste box -->
+                <div class="pe-state" id="peIdleState" data-testid="pe-idle-state">
+                    <div class="pe-title">Paste the booking email</div>
+                    <div class="pe-sub">Copy the client/agent's email text and paste it below</div>
+                    <textarea class="pe-textarea" id="peEmailInput" placeholder="Paste the email text here..." data-testid="pe-email-textarea"></textarea>
+                    <div class="pe-example">e.g.<br>
+                        Vessel: MV Ocean Star<br>
+                        Client: ABC Shipping<br>
+                        Agent: XYZ Marine<br>
+                        Port: Kakinada<br>
+                        Survey Type: Bunker Survey
+                    </div>
+                    <div class="pe-btn-row">
+                        <button type="button" class="btn btn-light border" id="peClearBtn" data-testid="pe-clear-button">Clear</button>
+                        <button type="button" class="btn btn-primary" id="peParseBtn" style="background:#3b32b3;border-color:#3b32b3;" data-testid="pe-parse-button"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Parse &amp; Fill</button>
+                    </div>
+                </div>
+
+                <!-- Result / confirmation -->
+                <div class="pe-state" id="peResultState" data-testid="pe-result-state">
+                    <div class="pe-title">Auto-Fill Result</div>
+                    <div class="pe-heard" id="peHeardText" data-testid="pe-heard-text"></div>
+                    <div class="pe-result-list" id="peResultList" data-testid="pe-result-list"></div>
+                    <div class="pe-btn-row">
+                        <button type="button" class="btn btn-light border" id="peBackBtn" data-testid="pe-back-button"><i class="fa-solid fa-arrow-left me-1"></i>Back</button>
+                        <button type="button" class="btn btn-light border" id="peEditBtn" data-testid="pe-edit-button"><i class="fa-solid fa-pen me-1"></i>Edit</button>
+                        <button type="button" class="btn btn-primary" id="peConfirmBtn" style="background:#3b32b3;border-color:#3b32b3;" data-testid="pe-confirm-button"><i class="fa-solid fa-check me-1"></i>Confirm</button>
+                    </div>
+                </div>
+
+                <!-- Error -->
+                <div class="pe-state" id="peErrorState" data-testid="pe-error-state">
+                    <div class="pe-error-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                    <div class="pe-title" style="text-align:center;" id="peErrorTitle">Nothing recognized</div>
+                    <div class="pe-sub" style="text-align:center;" id="peErrorMsg">&nbsp;</div>
+                    <div class="pe-btn-row center">
+                        <button type="button" class="btn btn-primary" id="peErrorRetryBtn" style="background:#3b32b3;border-color:#3b32b3;" data-testid="pe-error-retry-button">Try Again</button>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -1693,8 +1828,9 @@ include 'includes/top_app_bar.php';
         });
     });
 </script>
+<script src="assets/js/paste-email-autofill.js?v=<?= @filemtime(__DIR__ . '/assets/js/paste-email-autofill.js') ?: time() ?>"></script>
 
-<?php 
+<?php
 include 'includes/nav.php';
 include 'includes/footer.php';
 ?>
