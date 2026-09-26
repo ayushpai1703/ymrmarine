@@ -931,85 +931,6 @@ include 'includes/header.php';
         touch-action: manipulation;
     }
 
-    /* 🎙️ Voice Auto-Fill — trigger card + result/listening modal.
-       Matches the existing form-box-custom card look (white, rounded,
-       var(--border-color) border) and the app's --accent-purple brand
-       accent, so it doesn't introduce a separate design system. */
-    .voice-fill-card {
-        background: white;
-        margin: 15px 20px 0;
-        border-radius: 16px;
-        padding: 14px 16px;
-        border: 1px solid var(--border-color);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        flex-wrap: wrap;
-    }
-    .voice-fill-card-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .voice-fill-mic-badge {
-        width: 40px; height: 40px; flex: none; border-radius: 12px;
-        background: linear-gradient(155deg, var(--accent-purple2, #6C4CF1), var(--accent-purple));
-        color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px;
-        box-shadow: 0 6px 14px rgba(91,45,238,.28);
-    }
-    .voice-fill-card-title { font-size: 13.5px; font-weight: 700; color: var(--text-dark); }
-    .voice-fill-card-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
-    .voice-fill-btn {
-        border: none; border-radius: 10px; padding: 10px 16px; font-size: 12.5px; font-weight: 700;
-        color: #fff; background: var(--accent-purple); white-space: nowrap; cursor: pointer;
-        display: inline-flex; align-items: center; gap: 8px; min-height: 40px;
-        transition: filter .15s ease, transform .15s ease;
-    }
-    .voice-fill-btn:hover { filter: brightness(1.08); }
-    .voice-fill-btn:active { transform: scale(.97); }
-    .voice-fill-btn:disabled { opacity: .55; cursor: not-allowed; }
-
-    #voiceFillModal .modal-body { padding: 22px 20px; }
-    .vf-state { display: none; text-align: center; }
-    .vf-state.active { display: block; }
-    .vf-mic-circle {
-        width: 76px; height: 76px; margin: 0 auto 16px; border-radius: 50%;
-        background: rgba(91,45,238,.1); color: var(--accent-purple);
-        display: flex; align-items: center; justify-content: center; font-size: 28px;
-        border: none; cursor: pointer; transition: transform .15s ease;
-    }
-    .vf-mic-circle:active { transform: scale(.94); }
-    .vf-mic-circle.listening {
-        background: rgba(220,38,38,.1); color: #dc2626;
-        animation: vfPulse 1.4s ease-in-out infinite;
-    }
-    @keyframes vfPulse {
-        0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,.28); }
-        50% { box-shadow: 0 0 0 14px rgba(220,38,38,0); }
-    }
-    .vf-title { font-size: 15px; font-weight: 700; color: var(--text-dark); margin-bottom: 4px; }
-    .vf-sub { font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; }
-    .vf-example { font-size: 11px; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 10px; margin-top: 12px; text-align: left; }
-    .vf-transcript {
-        font-size: 13.5px; color: var(--text-dark); font-weight: 600; min-height: 20px;
-        background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px;
-        padding: 10px 12px; margin: 12px 0; text-align: left;
-    }
-    .vf-result-list { text-align: left; margin: 14px 0; }
-    .vf-result-row {
-        display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
-        padding: 9px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px;
-    }
-    .vf-result-row:last-child { border-bottom: none; }
-    .vf-result-label { color: var(--text-muted); font-weight: 600; flex: 0 0 auto; }
-    .vf-result-value { text-align: right; font-weight: 650; color: var(--text-dark); flex: 1; margin-left: 10px; }
-    .vf-result-value.ok { color: #16a34a; }
-    .vf-result-value.warn { color: #d97706; }
-    .vf-result-value.bad { color: #94a3b8; font-weight: 500; }
-    .vf-result-value select, .vf-result-value input {
-        width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 8px; font-size: 12.5px;
-    }
-    .vf-error-icon { font-size: 30px; color: #dc2626; margin-bottom: 10px; }
-    .vf-btn-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
-    .vf-btn-row .btn { font-size: 12.5px; font-weight: 650; border-radius: 10px; padding: 9px 14px; }
-
     /* Desktop 2-col */
     @media (min-width: 992px) {
         .form-box-custom {
@@ -1128,22 +1049,6 @@ include 'includes/top_app_bar.php';
     }
     $edit_type_ids = $edit_mode ? array_values(array_unique(array_filter(array_map('intval', explode(',', (string)($edit_survey['survey_type_ids'] ?? '')))))) : [];
     ?>
-    <!-- 🎙️ Voice Auto-Fill — optional shortcut only. If the browser doesn't
-         support Web Speech API, voice-autofill.js hides this card entirely
-         and the form below works exactly as it always has. -->
-    <div class="voice-fill-card" id="voiceFillTriggerCard">
-        <div class="voice-fill-card-left">
-            <div class="voice-fill-mic-badge"><i class="fa-solid fa-microphone"></i></div>
-            <div>
-                <div class="voice-fill-card-title">Voice Auto-Fill</div>
-                <div class="voice-fill-card-sub">Speak vessel, port, client &amp; agent — we'll match &amp; fill the form</div>
-            </div>
-        </div>
-        <button type="button" class="voice-fill-btn" id="voiceFillTriggerBtn" data-testid="voice-fill-trigger-button">
-            <i class="fa-solid fa-microphone"></i> Voice Fill
-        </button>
-    </div>
-
     <!-- Assignment Form -->
     <form action="assign_vessel.php<?= $edit_mode ? '?edit_id=' . (int)$edit_id : '' ?>" method="POST" id="assignVesselForm" enctype="multipart/form-data"><?= csrf_field() ?>
         <?php if ($edit_mode): ?><input type="hidden" name="edit_id" value="<?= (int)$edit_id ?>"><?php endif; ?>
@@ -1214,7 +1119,7 @@ include 'includes/top_app_bar.php';
 
 <div class="form-group-custom">
                 <label>Agent Name *</label>
-                <input type="text" name="agent_name" id="agent_name" value="<?= $edit_mode ? sanitize($edit_survey['agent_name']) : '' ?>" placeholder="e.g. Oceanus Agencies" required>
+                <input type="text" name="agent_name" value="<?= $edit_mode ? sanitize($edit_survey['agent_name']) : '' ?>" placeholder="e.g. Oceanus Agencies" required>
             </div>
 
             <!-- 🌟 Port Name: searchable dropdown with search box inside -->
@@ -1315,7 +1220,7 @@ include 'includes/top_app_bar.php';
 
             <div class="form-group-custom">
                 <label>Remarks (Optional)</label>
-                <textarea name="remarks" id="remarks" rows="3" placeholder="Enter any specific instructions or notes..."><?= $edit_mode ? sanitize($edit_survey['remarks'] ?? '') : '' ?></textarea>
+                <textarea name="remarks" rows="3" placeholder="Enter any specific instructions or notes..."><?= $edit_mode ? sanitize($edit_survey['remarks'] ?? '') : '' ?></textarea>
             </div>
 
             <?php if ($edit_mode && !empty($edit_attachments)): ?>
@@ -1366,76 +1271,6 @@ include 'includes/top_app_bar.php';
             <div class="modal-footer">
                 <button type="button" class="btn btn-light border" data-bs-dismiss="modal" data-testid="duplicate-vessel-cancel">Cancel</button>
                 <button type="button" class="btn btn-primary" id="duplicateVesselConfirmBtn" style="background:#3b32b3;border-color:#3b32b3;" data-testid="duplicate-vessel-confirm">Yes, Add Anyway</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<?php /* 🎙️ Voice Auto-Fill modal — all states (idle / listening / processing /
-         result / error) live here as sibling panels; voice-autofill.js shows
-         exactly one at a time. Nothing here touches the real form fields
-         until the user presses "Confirm" (or "Apply" from Edit mode) inside
-         the result panel. */ ?>
-<div class="modal fade" id="voiceFillModal" tabindex="-1" aria-hidden="true" data-testid="voice-fill-modal">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title fw-bold"><i class="fa-solid fa-microphone text-primary me-1"></i> Voice Auto-Fill</h6>
-                <button type="button" class="btn-close" id="vfCloseBtn" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-
-                <!-- Idle: tap to speak -->
-                <div class="vf-state" id="vfIdleState" data-testid="vf-idle-state">
-                    <button type="button" class="vf-mic-circle" id="vfMicBtn" data-testid="vf-mic-button" aria-label="Tap to speak">
-                        <i class="fa-solid fa-microphone"></i>
-                    </button>
-                    <div class="vf-title">Tap to Speak</div>
-                    <div class="vf-sub">Say the vessel, port, client and agent details</div>
-                    <div class="vf-example">e.g. "Vessel MV Ocean Star, Port Kakinada, Client ABC Shipping, Agent XYZ Marine, bunker survey, 450 metric tons VLSFO"</div>
-                </div>
-
-                <!-- Listening -->
-                <div class="vf-state" id="vfListeningState" data-testid="vf-listening-state">
-                    <div class="vf-mic-circle listening"><i class="fa-solid fa-microphone"></i></div>
-                    <div class="vf-title"><span style="color:#dc2626;">&#9679;</span> Listening&hellip;</div>
-                    <div class="vf-sub">Speak your appointment details</div>
-                    <div class="vf-transcript" id="vfLiveTranscript" data-testid="vf-live-transcript">&nbsp;</div>
-                    <div class="vf-btn-row">
-                        <button type="button" class="btn btn-light border" id="vfStopBtn" data-testid="vf-stop-button">Stop</button>
-                    </div>
-                </div>
-
-                <!-- Processing -->
-                <div class="vf-state" id="vfProcessingState" data-testid="vf-processing-state">
-                    <div class="spinner-border text-primary mb-3" role="status" style="width:2.2rem;height:2.2rem;"></div>
-                    <div class="vf-title">Processing your voice input&hellip;</div>
-                    <div class="vf-sub">Matching against your Ports, Clients &amp; Survey Types</div>
-                </div>
-
-                <!-- Result / confirmation -->
-                <div class="vf-state" id="vfResultState" data-testid="vf-result-state">
-                    <div class="vf-title" style="text-align:left;">Voice Auto-Fill Result</div>
-                    <div class="vf-transcript" id="vfHeardText" data-testid="vf-heard-text" style="font-weight:500;"></div>
-                    <div class="vf-result-list" id="vfResultList" data-testid="vf-result-list"></div>
-                    <div class="vf-btn-row">
-                        <button type="button" class="btn btn-light border" id="vfSpeakAgainBtn" data-testid="vf-speak-again-button"><i class="fa-solid fa-microphone me-1"></i>Speak Again</button>
-                        <button type="button" class="btn btn-light border" id="vfEditBtn" data-testid="vf-edit-button"><i class="fa-solid fa-pen me-1"></i>Edit</button>
-                        <button type="button" class="btn btn-primary" id="vfConfirmBtn" style="background:#3b32b3;border-color:#3b32b3;" data-testid="vf-confirm-button"><i class="fa-solid fa-check me-1"></i>Confirm</button>
-                    </div>
-                </div>
-
-                <!-- Error -->
-                <div class="vf-state" id="vfErrorState" data-testid="vf-error-state">
-                    <div class="vf-error-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-                    <div class="vf-title" id="vfErrorTitle">Voice input isn't available</div>
-                    <div class="vf-sub" id="vfErrorMsg">&nbsp;</div>
-                    <div class="vf-btn-row">
-                        <button type="button" class="btn btn-light border" id="vfErrorCloseBtn" data-bs-dismiss="modal" data-testid="vf-error-close-button">Close</button>
-                        <button type="button" class="btn btn-primary" id="vfErrorRetryBtn" style="background:#3b32b3;border-color:#3b32b3;" data-testid="vf-error-retry-button">Try Again</button>
-                    </div>
-                </div>
-
             </div>
         </div>
     </div>
@@ -1858,9 +1693,8 @@ include 'includes/top_app_bar.php';
         });
     });
 </script>
-<script src="assets/js/voice-autofill.js?v=<?= @filemtime(__DIR__ . '/assets/js/voice-autofill.js') ?: time() ?>"></script>
 
-<?php
+<?php 
 include 'includes/nav.php';
 include 'includes/footer.php';
 ?>
