@@ -146,6 +146,10 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-user-shield"></i>
             <span>Add Admin</span>
         </a>
+        <a href="super_admin_clients.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'super_admin_clients.php') ? 'active' : '' ?>" data-testid="sidebar-manage-clients-link">
+            <i class="fa-solid fa-building"></i>
+            <span>Manage Clients</span>
+        </a>
         <!-- 🌟 TEMPORARY — remove this link (and super_admin_controls.php) once
              go-live test-data cleanup is done. -->
         <a href="super_admin_controls.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'super_admin_controls.php') ? 'active' : '' ?>" data-testid="sidebar-data-cleanup-link">
