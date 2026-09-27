@@ -252,7 +252,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             <div class="ov-card pending-vessel" onclick="location.href='vessels.php'">
                 <div class="ov-icon"><i class="fa-solid fa-ship"></i></div>
                 <div class="ov-count"><?= $pending_vessels ?></div>
-                <div class="ov-label">Pending<br>Vessel's</div>
+                <div class="ov-label">Pending<br>Vessels</div>
             </div>
             <div class="ov-card pending-report" onclick="location.href='reports.php'">
                 <div class="ov-icon"><i class="fa-solid fa-file-lines"></i></div>

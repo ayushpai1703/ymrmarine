@@ -233,7 +233,7 @@ require_once __DIR__ . '/../config/config.php';
            own per-page filter search bars (same .search-control class,
            different wrapper) are untouched. */
         .global-search-wrap .search-input-wrapper i {
-            left: 18px; color: #9CA3AF; font-size: 15px;
+            left: 18px; color: #9CA3AF; font-size: 15px; padding-top: 8px;
         }
         .global-search-wrap .search-control {
             background: #fff;
@@ -1117,10 +1117,14 @@ require_once __DIR__ . '/../config/config.php';
     .ov-count { font-size: 30px; grid-area: count; margin-bottom: 0; }
     .ov-label {
         grid-area: label;
-        font-size: 16px;
+        font-size: 25px;
         font-weight: 650;
         line-height: 1.25;
+        padding-left: 50px;
     }
+    .ov-card.pending-vessel .ov-label { color: #1e40af; }
+    .ov-card.pending-report .ov-label { color: #c2410c; }
+    .ov-card.completed .ov-label { color: #166534; }
     .stat-grid {
         grid-template-columns: repeat(4, 1fr);
         gap: 14px;
