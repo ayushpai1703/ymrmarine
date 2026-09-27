@@ -444,42 +444,42 @@ include 'includes/header.php';
         .vd-wrap { padding: 8px 20px 40px; max-width: 1400px; margin: 0 auto; }
 
         .vd-hero {
-            position: relative; overflow: hidden; border-radius: 24px;
+            position: relative; overflow: hidden; border-radius: 20px;
             background: linear-gradient(120deg, #0f172a 0%, #1E1B6B 48%, #4B2FD6 100%);
-            padding: 26px 32px; margin-bottom: 16px;
-            display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
-            box-shadow: 0 16px 40px rgba(30,27,107,.25);
+            padding: 15px 26px; margin-bottom: 10px;
+            display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;
+            box-shadow: 0 10px 28px rgba(30,27,107,.22);
         }
         .vd-hero-icon-bg {
-            position: absolute; right: -30px; top: -60px; font-size: 240px; color: rgba(255,255,255,.07);
+            position: absolute; right: -22px; top: -38px; font-size: 150px; color: rgba(255,255,255,.07);
             pointer-events: none; line-height: 1;
         }
-        .vd-hero-title { font-size: 25px; font-weight: 800; color: #fff; letter-spacing: -.01em; position: relative; }
-        .vd-hero-sub { font-size: 13px; color: rgba(255,255,255,.62); margin-top: 4px; font-weight: 500; position: relative; }
-        .vd-hero-stats { display: flex; align-items: center; gap: 12px; position: relative; flex-wrap: wrap; }
+        .vd-hero-title { font-size: 19px; font-weight: 800; color: #fff; letter-spacing: -.01em; position: relative; }
+        .vd-hero-sub { font-size: 11.5px; color: rgba(255,255,255,.62); margin-top: 2px; font-weight: 500; position: relative; }
+        .vd-hero-stats { display: flex; align-items: center; gap: 10px; position: relative; flex-wrap: wrap; }
         .vd-hero-stat {
             background: rgba(255,255,255,.1); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-            border: 1px solid rgba(255,255,255,.16); border-radius: 16px; padding: 12px 20px; text-align: center; min-width: 84px;
+            border: 1px solid rgba(255,255,255,.16); border-radius: 14px; padding: 7px 16px; text-align: center; min-width: 68px;
         }
-        .vd-hero-stat .n { font-size: 21px; font-weight: 800; color: #fff; line-height: 1.1; }
-        .vd-hero-stat .l { font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: rgba(255,255,255,.55); margin-top: 3px; }
+        .vd-hero-stat .n { font-size: 17px; font-weight: 800; color: #fff; line-height: 1.1; }
+        .vd-hero-stat .l { font-size: 9px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: rgba(255,255,255,.55); margin-top: 2px; }
         .vd-hero-stat.warn { background: rgba(245,158,11,.2); border-color: rgba(251,191,36,.32); }
         .vd-hero-stat.warn .n { color: #FDE68A; }
         .vd-hero-stat.warn .l { color: rgba(253,230,138,.75); }
 
         .vd-toolbar {
             display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-            margin-bottom: 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 18px;
-            padding: 12px 16px; box-shadow: 0 2px 10px rgba(15,23,42,.05);
+            margin-bottom: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
+            padding: 9px 14px; box-shadow: 0 2px 10px rgba(15,23,42,.05);
         }
         .vd-toolbar-inner {
             display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
             flex: 1 1 auto; min-width: 0;
         }
         .vd-search {
-            display: flex; align-items: center; gap: 9px;
+            display: flex; align-items: center; gap: 8px;
             background: #F8FAFC; border: 1.5px solid #e2e8f0; border-radius: 999px;
-            padding: 0 16px; height: 42px; flex: 1 1 220px; min-width: 200px; box-sizing: border-box;
+            padding: 0 14px; height: 38px; flex: 0 0 220px; min-width: 160px; box-sizing: border-box;
             transition: border-color .15s ease, box-shadow .15s ease;
         }
         .vd-search:focus-within { border-color: #A78BFA; box-shadow: 0 0 0 4px rgba(91,45,238,.12); }
@@ -489,7 +489,7 @@ include 'includes/header.php';
         .vd-filter {
             display: flex; align-items: center; gap: 7px;
             background: #F8FAFC; border: 1px solid #e2e8f0; border-radius: 999px;
-            padding: 0 14px; height: 40px; box-sizing: border-box; flex: 0 0 auto;
+            padding: 0 14px; height: 38px; box-sizing: border-box; flex: 0 0 auto;
         }
         .vd-filter i { font-size: 12px; color: #94A3B8; flex: none; }
         .vd-filter select {
@@ -507,9 +507,9 @@ include 'includes/header.php';
         .vd-clear-btn:hover { color: #5B2DEE; }
 
         .btn-export {
-            display: inline-flex; align-items: center; gap: 9px; margin-left: auto; flex: 0 0 auto;
+            display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex: 0 0 auto;
             background: linear-gradient(120deg, #14B8A6, #0D9488); color: #fff;
-            padding: 11px 22px; border-radius: 999px; font-weight: 700; font-size: 13.5px;
+            padding: 9px 18px; border-radius: 999px; font-weight: 700; font-size: 13px; height: 38px; box-sizing: border-box;
             text-decoration: none; box-shadow: 0 6px 16px rgba(13,148,136,.3); white-space: nowrap;
             transition: box-shadow .18s ease, transform .18s ease;
         }
@@ -519,7 +519,7 @@ include 'includes/header.php';
             display: inline-flex; align-items: center; justify-content: center; font-size: 9px;
         }
 
-        .vd-meta { font-size: 12.5px; color: #64748b; margin-bottom: 10px; font-weight: 500; }
+        .vd-meta { font-size: 12.5px; color: #64748b; margin-bottom: 6px; font-weight: 500; }
         .vd-table-card {
             background: #fff; border: 1px solid #e2e8f0; border-radius: 20px;
             overflow: hidden; box-shadow: 0 4px 20px rgba(15,23,42,.05);
@@ -737,15 +737,6 @@ include 'includes/header.php';
                             <option value="oldest">Oldest first</option>
                             <option value="name-asc">Vessel A–Z</option>
                             <option value="name-desc">Vessel Z–A</option>
-                        </select>
-                    </div>
-                    <div class="vd-filter">
-                        <i class="fa-solid fa-tag"></i>
-                        <select data-desk-type>
-                            <option value="">All types</option>
-                            <?php foreach ($survey_types_filter as $v): ?>
-                                <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="vd-filter">
