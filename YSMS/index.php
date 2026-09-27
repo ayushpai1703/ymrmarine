@@ -449,7 +449,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         <div class="section-title-row"><span class="section-title">Recovery Analytics</span></div>
         <div class="recovery-row-grid" data-testid="recovery-row-grid">
             <div class="recovery-row-card" data-testid="recovery-by-surveyor-card">
-                <div class="recovery-row-card-title">Recovery by Surveyor — Top 10</div>
+                <div class="recovery-row-card-title"><span class="stat-title stat-title--purple"><i class="fa-solid fa-user-tie stat-title-icon"></i>Recovery by Surveyor — Top 10</span></div>
                 <div class="recovery-row-card-body">
                     <?php if (!empty($recovery_by_surveyor)): ?>
                         <?php foreach ($recovery_by_surveyor as $row): ?>
@@ -465,7 +465,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             </div>
 
             <div class="recovery-row-card" data-testid="recovery-by-port-card">
-                <div class="recovery-row-card-title">Recovery by Port — Top 5</div>
+                <div class="recovery-row-card-title"><span class="stat-title"><i class="fa-solid fa-anchor stat-title-icon"></i>Recovery by Port — Top 5</span></div>
                 <div class="recovery-row-card-body">
                     <?php if (!empty($recovery_by_port)): ?>
                         <?php foreach ($recovery_by_port as $row): ?>
@@ -481,7 +481,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             </div>
 
             <div class="recovery-row-card" data-testid="recovery-by-country-card">
-                <div class="recovery-row-card-title">Recovery by Country — Top 5</div>
+                <div class="recovery-row-card-title"><span class="stat-title stat-title--blue"><i class="fa-solid fa-earth-asia stat-title-icon"></i>Recovery by Country — Top 5</span></div>
                 <div class="recovery-row-card-body">
                     <?php if (!empty($recovery_by_country)): ?>
                         <?php foreach ($recovery_by_country as $row): ?>
@@ -497,7 +497,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             </div>
 
             <div class="recovery-row-card" data-testid="recovery-by-client-card">
-                <div class="recovery-row-card-title">Recovery by Client — Top 5</div>
+                <div class="recovery-row-card-title"><span class="stat-title stat-title--orange"><i class="fa-solid fa-building stat-title-icon"></i>Recovery by Client — Top 5</span></div>
                 <div class="recovery-row-card-body">
                     <?php if (!empty($recovery_by_client)): ?>
                         <?php foreach ($recovery_by_client as $row): ?>
@@ -515,34 +515,39 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
     </div>
 
     <div class="overview-section mt-4">
-        <div class="section-title-row"><span class="section-title">Ships Completed by Country — Top 5</span></div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="ships-by-country-top5-card">
-            <?php if (!empty($ships_by_country_top5)): ?>
-                <?php foreach ($ships_by_country_top5 as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['country']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= (int)$row['cnt'] ?> ships</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No completed vessels yet.</div>
-            <?php endif; ?>
-        </div>
-    </div>
+        <div class="section-title-row"><span class="section-title">Ships Completed Analytics</span></div>
+        <div class="ships-row-grid" data-testid="ships-completed-row-grid">
+            <div class="recovery-row-card" data-testid="ships-by-country-top5-card">
+                <div class="recovery-row-card-title"><span class="stat-title"><i class="fa-solid fa-earth-americas stat-title-icon"></i>Ships Completed by Country — Top 5</span></div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($ships_by_country_top5)): ?>
+                        <?php foreach ($ships_by_country_top5 as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['country']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= (int)$row['cnt'] ?> ships</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No completed vessels yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
 
-    <div class="overview-section mt-4">
-        <div class="section-title-row"><span class="section-title">Ships Completed by Port — Top 5</span></div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="ships-by-port-top5-card">
-            <?php if (!empty($ships_by_port_top5)): ?>
-                <?php foreach ($ships_by_port_top5 as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['port_name']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= (int)$row['cnt'] ?> ships</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No completed vessels yet.</div>
-            <?php endif; ?>
+            <div class="recovery-row-card" data-testid="ships-by-port-top5-card">
+                <div class="recovery-row-card-title"><span class="stat-title stat-title--blue"><i class="fa-solid fa-ship stat-title-icon"></i>Ships Completed by Port — Top 5</span></div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($ships_by_port_top5)): ?>
+                        <?php foreach ($ships_by_port_top5 as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['port_name']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= (int)$row['cnt'] ?> ships</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No completed vessels yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </div>
     <?php endif; ?>

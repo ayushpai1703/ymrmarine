@@ -334,9 +334,10 @@ require_once __DIR__ . '/../config/config.php';
         }
 
         /* Recovery Analytics row — Recovery by Surveyor/Port/Country/Client.
-           Stacked single column on mobile; forced into one 4-column row on
-           desktop (see the min-width:992px override below). */
-        .recovery-row-grid {
+           Ships Completed row — by Country/Port. Both stacked single column
+           on mobile; forced into one fixed row on desktop (see the
+           min-width:992px override below). */
+        .recovery-row-grid, .ships-row-grid {
             display: grid;
             grid-template-columns: 1fr;
             gap: 14px;
@@ -350,10 +351,10 @@ require_once __DIR__ . '/../config/config.php';
             border: 1px solid var(--border-color);
         }
         .recovery-row-card-title {
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--text-dark);
-            margin-bottom: 6px;
+            margin-bottom: 10px;
+        }
+        .recovery-row-card-title .stat-title {
+            font-size: 12px;
         }
         .stat-title.stat-title--blue { color: #1e40af; background: #EEF2FF; }
         .stat-title.stat-title--blue .stat-title-icon { background: rgba(37,99,235,.14); color: #2563EB; }
@@ -1103,6 +1104,12 @@ require_once __DIR__ . '/../config/config.php';
     .stat-card { padding: 16px; border-radius: 14px; }
     .recovery-row-grid {
         grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+        padding: 12px 8px 0;
+        max-width: 1200px;
+    }
+    .ships-row-grid {
+        grid-template-columns: repeat(2, 1fr);
         gap: 14px;
         padding: 12px 8px 0;
         max-width: 1200px;
