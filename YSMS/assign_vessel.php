@@ -931,6 +931,10 @@ include 'includes/header.php';
         touch-action: manipulation;
     }
 
+    .vdd-hero { display: none; }
+    .vdd-form-card-head { display: none; }
+    .vdd-field-icon { display: none; }
+
     /* Desktop 2-col */
     @media (min-width: 992px) {
         .form-box-custom {
@@ -950,6 +954,114 @@ include 'includes/header.php';
         }
         .form-box-custom > #reportNumberGroup {
             grid-column: 1 / -1;
+        }
+
+        /* ═══ Desktop modern redesign — same hero + icon-chip visual
+           language as the rest of the app's redesigned pages. Mobile
+           (everything outside this block) is completely untouched. Every
+           .searchable-select / .ss-* class name below is exactly what the
+           JS at the bottom of this file already builds/queries against —
+           only colors, radius and spacing change; no JS was touched. */
+        .top-app-bar { display: none !important; }
+        .scroll-content { max-width: 1400px; margin: 0 auto; padding: 8px 20px 40px; }
+
+        .vdd-hero {
+            position: relative; overflow: hidden; border-radius: 22px;
+            background: linear-gradient(120deg, #0f172a 0%, #1E1B6B 48%, #4B2FD6 100%);
+            padding: 26px 30px; margin-bottom: 4px;
+            display: flex; align-items: center; gap: 16px;
+            box-shadow: 0 14px 34px rgba(30,27,107,.22);
+        }
+        .vdd-hero-icon-bg {
+            position: absolute; right: -26px; top: -40px; font-size: 170px; color: rgba(255,255,255,.07);
+            pointer-events: none; line-height: 1;
+        }
+        .vdd-hero-ship {
+            width: 52px; height: 52px; border-radius: 15px; flex: none; position: relative;
+            background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px;
+        }
+        .vdd-hero-title { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -.01em; position: relative; }
+        .vdd-hero-sub { font-size: 12.5px; color: rgba(255,255,255,.66); margin-top: 4px; font-weight: 500; position: relative; }
+
+        .form-box-custom {
+            border: 1px solid #e2e8f0 !important; border-radius: 20px !important;
+            box-shadow: 0 4px 20px rgba(15,23,42,.05) !important; padding: 26px 28px !important;
+        }
+        .vdd-form-card-head {
+            grid-column: 1 / -1; display: flex; align-items: center; gap: 10px;
+            margin: -26px -28px 18px; padding: 18px 28px; border-bottom: 1px solid #f1f5f9;
+        }
+        .vdd-form-card-head-icon {
+            width: 30px; height: 30px; border-radius: 9px; flex: none;
+            background: linear-gradient(135deg, #8B7CF6, #4B2FD6); color: #fff;
+            display: flex; align-items: center; justify-content: center; font-size: 13px;
+        }
+        .vdd-form-card-head-title { font-size: 15.5px; font-weight: 800; color: #0f172a; }
+        .vdd-form-card-head-sub { font-size: 11.5px; color: #94a3b8; margin-top: 1px; font-weight: 500; }
+
+        .form-group-custom label {
+            display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: #64748b;
+        }
+        .form-group-custom label i.vdd-field-icon { display: inline-block; color: #A78BFA; font-size: 11px; width: 14px; text-align: center; }
+        .form-group-custom input,
+        .form-group-custom select,
+        .form-group-custom textarea,
+        .searchable-select .ss-trigger {
+            border: 1.5px solid #e2e8f0 !important; border-radius: 12px !important;
+            padding: 11px 14px !important; font-size: 13.5px !important; background: #F8FAFC !important;
+        }
+        .form-group-custom input:focus,
+        .form-group-custom select:focus,
+        .form-group-custom textarea:focus,
+        .searchable-select .ss-trigger:focus {
+            outline: none !important; border-color: #A78BFA !important;
+            box-shadow: 0 0 0 4px rgba(91,45,238,.12) !important; background: #fff !important;
+        }
+        .searchable-select.open .ss-trigger {
+            border-color: #A78BFA !important; box-shadow: 0 0 0 4px rgba(91,45,238,.12) !important; background: #fff !important;
+        }
+        .searchable-select .ss-panel {
+            border: 1.5px solid #e2e8f0; border-radius: 14px; box-shadow: 0 16px 36px rgba(15,23,42,.14);
+        }
+        .searchable-select .ss-option:hover, .searchable-select .ss-option.ss-selected {
+            background: #F3EEFE !important; color: #5B2DEE !important;
+        }
+        .ss-multi .ss-option.ss-selected { background: #F3EEFE !important; color: #5B2DEE !important; }
+        .ss-multi .ss-option-checkbox { accent-color: #5B2DEE !important; }
+        .searchable-select .ss-search-input, .ss-country-wrap select.ss-country-filter {
+            border: 1.5px solid #e2e8f0 !important; border-radius: 10px !important; background: #F8FAFC !important;
+        }
+        .searchable-select .ss-search-input:focus {
+            outline: none !important; border-color: #A78BFA !important; background: #fff !important;
+        }
+
+        .blue-action-btn {
+            border: none !important; border-radius: 14px !important; height: 48px;
+            background: linear-gradient(120deg, #1E1B6B, #4B2FD6) !important; font-weight: 800 !important;
+            box-shadow: 0 10px 22px rgba(75,47,214,.3) !important; display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+
+        #vesselNameField ~ .form-group-custom > div[style*="f8fafc"] {
+            border: 1px solid #e2e8f0 !important; border-radius: 12px !important; background: #F8FAFC !important;
+        }
+        input[type="file"][name="assignment_attachment[]"] {
+            border: 1.5px dashed #C7D2E0 !important; border-radius: 14px !important;
+            padding: 14px !important; background: #F8FAFC !important; cursor: pointer;
+        }
+
+        #duplicateVesselModal .modal-content {
+            border: none; border-radius: 20px; box-shadow: 0 20px 44px rgba(15,23,42,.22); overflow: hidden;
+        }
+        #duplicateVesselModal .modal-header {
+            background: linear-gradient(120deg, #FFF7ED, #FFEDD5); border-bottom: 1px solid #FED7AA; padding: 18px 22px;
+        }
+        #duplicateVesselModal .modal-body { padding: 22px; }
+        #duplicateVesselModal .modal-footer { padding: 14px 22px; border-top: 1px solid #f1f5f9; }
+        #duplicateVesselConfirmBtn {
+            border-radius: 999px !important; padding: 0 20px !important; height: 40px;
+            background: linear-gradient(120deg, #1E1B6B, #4B2FD6) !important; border: none !important;
+            box-shadow: 0 8px 18px rgba(75,47,214,.28);
         }
     }
 
@@ -1004,6 +1116,15 @@ include 'includes/top_app_bar.php';
 ?>
 
 <div class="scroll-content">
+    <div class="vdd-hero">
+        <i class="fa-solid fa-ship vdd-hero-icon-bg" aria-hidden="true"></i>
+        <div class="vdd-hero-ship"><i class="fa-solid fa-ship"></i></div>
+        <div>
+            <div class="vdd-hero-title"><?= $edit_mode ? 'Edit Vessel Assignment' : 'Assign New Vessel' ?></div>
+            <div class="vdd-hero-sub"><?= $edit_mode ? 'Update this vessel\'s survey assignment' : 'Assign a vessel to a client, port, survey type and surveyor' ?></div>
+        </div>
+    </div>
+
     <!-- Feedback Alerts -->
     <?php if($success): ?>
         <div class="alert alert-success mx-3 mt-3 py-2" style="font-size:12px;"><?= sanitize($success) ?></div>
@@ -1053,9 +1174,16 @@ include 'includes/top_app_bar.php';
     <form action="assign_vessel.php<?= $edit_mode ? '?edit_id=' . (int)$edit_id : '' ?>" method="POST" id="assignVesselForm" enctype="multipart/form-data"><?= csrf_field() ?>
         <?php if ($edit_mode): ?><input type="hidden" name="edit_id" value="<?= (int)$edit_id ?>"><?php endif; ?>
         <div class="form-box-custom shadow-sm" style="padding-top:20px;">
+            <div class="vdd-form-card-head">
+                <div class="vdd-form-card-head-icon"><i class="fa-solid <?= $edit_mode ? 'fa-pen' : 'fa-ship' ?>"></i></div>
+                <div>
+                    <div class="vdd-form-card-head-title"><?= $edit_mode ? 'Edit Vessel Assignment' : 'Assign New Vessel' ?></div>
+                    <div class="vdd-form-card-head-sub">Fields marked * are required</div>
+                </div>
+            </div>
 
             <div class="form-group-custom" id="vesselNameField">
-                <label for="vessel_name">Vessel Name *</label>
+                <label for="vessel_name"><i class="fa-solid fa-ship vdd-field-icon"></i> Vessel Name *</label>
                 <input type="text" name="vessel_name" id="vessel_name" value="<?= $edit_mode ? sanitize($edit_survey['vessel_name']) : '' ?>" placeholder="e.g. MV Pacific Dawn" required autocomplete="off" inputmode="text" style="font-size:16px;min-height:48px;">
             </div>
 
@@ -1064,7 +1192,7 @@ include 'includes/top_app_bar.php';
                  into other clients' names. Server-side (POST handler above) also locks
                  client_id to this value regardless of what's submitted. -->
             <div class="form-group-custom">
-                <label>Client Name *</label>
+                <label><i class="fa-solid fa-building vdd-field-icon"></i> Client Name *</label>
                 <input type="text" value="<?= sanitize($own_client_name ?: 'Your Company') ?>" disabled
                        style="background:#f1f5f9;color:#0b1e46;font-weight:700;" data-testid="client-name-locked">
                 <input type="hidden" name="client_id" id="clientSelect" value="<?= (int)$own_client_id ?>">
@@ -1074,7 +1202,7 @@ include 'includes/top_app_bar.php';
                  New clients/ports/survey types are added only from Admin Controls,
                  not inline here. -->
             <div class="form-group-custom">
-                <label>Client Name *</label>
+                <label><i class="fa-solid fa-building vdd-field-icon"></i> Client Name *</label>
                 <div class="searchable-select" data-ss-root="client">
                     <button type="button" class="ss-trigger" data-testid="client-select-trigger">
                         <span class="ss-trigger-text<?= ($edit_mode && $edit_client_id) ? '' : ' placeholder' ?>" data-placeholder="Select Client" style="color:#64748b !important;font-weight:500;font-size:14px;"><?= ($edit_mode && $edit_client_id) ? sanitize($edit_client_name) : 'Select Client' ?></span>
@@ -1105,7 +1233,7 @@ include 'includes/top_app_bar.php';
                  In edit mode this shows the assignment's existing (fixed) number instead of a
                  live preview — editing never generates a new one. -->
             <div class="form-group-custom" id="reportNumberGroup" style="<?= ($edit_mode && !empty($edit_survey['report_number'])) ? '' : 'display:none;' ?>">
-                <label>Report Number <?php if (!$edit_mode): ?><span class="text-muted fw-normal">(auto)</span><?php endif; ?></label>
+                <label><i class="fa-solid fa-hashtag vdd-field-icon"></i> Report Number <?php if (!$edit_mode): ?><span class="text-muted fw-normal">(auto)</span><?php endif; ?></label>
                 <input type="text" id="reportNumberPreview" value="<?= $edit_mode ? sanitize($edit_survey['report_number'] ?? '') : '' ?>" readonly
                        style="background:#f1f5f9; color:#0b1e46; font-weight:700; letter-spacing:0.5px; cursor:default;"
                        data-testid="report-number-preview" placeholder="Select client to generate">
@@ -1118,13 +1246,13 @@ include 'includes/top_app_bar.php';
 
 
 <div class="form-group-custom">
-                <label>Agent Name *</label>
+                <label><i class="fa-solid fa-people-group vdd-field-icon"></i> Agent Name *</label>
                 <input type="text" name="agent_name" value="<?= $edit_mode ? sanitize($edit_survey['agent_name']) : '' ?>" placeholder="e.g. Oceanus Agencies" required>
             </div>
 
             <!-- 🌟 Port Name: searchable dropdown with search box inside -->
             <div class="form-group-custom">
-                <label>Port Name *</label>
+                <label><i class="fa-solid fa-location-dot vdd-field-icon"></i> Port Name *</label>
                 <div class="searchable-select" data-ss-root="port">
                     <button type="button" class="ss-trigger" data-testid="port-select-trigger">
                         <span class="ss-trigger-text<?= ($edit_mode && $edit_port_id) ? '' : ' placeholder' ?>" data-placeholder="Select Port" style="color:#64748b !important;font-weight:500;font-size:14px;"><?= ($edit_mode && $edit_port_id) ? sanitize($edit_port_name) : 'Select Port' ?></span>
@@ -1161,7 +1289,7 @@ include 'includes/top_app_bar.php';
 
             <!-- 🌟 Survey Type: searchable MULTI-select (checkboxes) with search box inside -->
             <div class="form-group-custom">
-                <label>Survey Type * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
+                <label><i class="fa-solid fa-file-circle-check vdd-field-icon"></i> Survey Type * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
                 <div class="searchable-select ss-multi" data-ss-root="surveyType">
                     <button type="button" class="ss-trigger" data-testid="survey-type-select-trigger">
                         <span class="ss-trigger-text placeholder" data-placeholder="Select Survey Type" style="color:#64748b !important;font-weight:500;font-size:14px;">Select Survey Type</span>
@@ -1187,7 +1315,7 @@ include 'includes/top_app_bar.php';
 
             <?php if (!$is_client_role): ?>
             <div class="form-group-custom">
-                <label>Assign Surveyor(s) * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
+                <label><i class="fa-solid fa-user-tie vdd-field-icon"></i> Assign Surveyor(s) * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
                 <div class="searchable-select ss-multi" data-ss-root="surveyor" data-hidden-input="surveyorIdsInput">
                     <button type="button" class="ss-trigger" data-testid="surveyor-select-trigger">
                         <span class="ss-trigger-text placeholder" data-placeholder="Select Surveyor(s)" style="color:#64748b !important;font-weight:500;font-size:14px;">Select Surveyor(s)</span>
@@ -1219,13 +1347,13 @@ include 'includes/top_app_bar.php';
             <?php endif; ?>
 
             <div class="form-group-custom">
-                <label>Remarks (Optional)</label>
+                <label><i class="fa-solid fa-comment vdd-field-icon"></i> Remarks (Optional)</label>
                 <textarea name="remarks" rows="3" placeholder="Enter any specific instructions or notes..."><?= $edit_mode ? sanitize($edit_survey['remarks'] ?? '') : '' ?></textarea>
             </div>
 
             <?php if ($edit_mode && !empty($edit_attachments)): ?>
             <div class="form-group-custom">
-                <label>Already Uploaded</label>
+                <label><i class="fa-solid fa-paperclip vdd-field-icon"></i> Already Uploaded</label>
                 <?php foreach ($edit_attachments as $att): ?>
                     <div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;border:1px solid var(--border-color);border-radius:10px;padding:8px 12px;margin-bottom:6px;font-size:12px;">
                         <span><i class="fa-solid fa-paperclip text-primary me-1"></i><?= sanitize($att['file_name']) ?></span>
@@ -1236,7 +1364,7 @@ include 'includes/top_app_bar.php';
             <?php endif; ?>
 
             <div class="form-group-custom">
-                <label>Assignment Attachment(s) <span class="text-muted" style="font-weight:500;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                <label><i class="fa-solid fa-cloud-arrow-up vdd-field-icon"></i> Assignment Attachment(s) <span class="text-muted" style="font-weight:500;text-transform:none;letter-spacing:0;">(optional)</span></label>
                 <input type="file" name="assignment_attachment[]" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip" multiple>
                 <div class="text-muted" style="font-size:11px;margin-top:4px;"><?= $edit_mode ? 'Any files selected here are added to the ones already uploaded above — nothing gets removed.' : 'You can select multiple files at once. Surveyor will see all of them on the vessel detail page.' ?></div>
             </div>
