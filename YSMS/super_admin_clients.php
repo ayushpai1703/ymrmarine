@@ -63,6 +63,10 @@ include 'includes/header.php';
     }
     .admin-item-actions button.edit-btn:hover { color: var(--accent-purple); border-color: var(--accent-purple); }
     .admin-item-actions button.delete-btn:hover { color: #dc2626; border-color: #dc2626; }
+    .admin-item-actions button.login-btn:hover { color: #0ea5b0; border-color: #0ea5b0; }
+    .admin-item-actions button.login-btn.no-login { color: #b45309; border-color: #fcd34d; background: #fffbeb; }
+    .sac-login-delete-row { border-top: 1px dashed var(--border-color); margin-top: 4px; padding-top: 14px; }
+    .sac-login-delete-btn { width: 100%; background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; border-radius: 10px; padding: 10px; font-weight: 650; font-size: 13px; }
     .admin-empty-state { text-align: center; padding: 30px 10px; color: var(--text-muted); font-size: 12.5px; }
     .admin-loading { text-align: center; padding: 20px; color: var(--text-muted); font-size: 12.5px; }
     .admin-field-group { margin-bottom: 14px; }
@@ -109,6 +113,52 @@ include 'includes/header.php';
     </div>
 </div>
 
+<!-- Manage Client Login Modal (username/password/contact/email/phone —
+     separate from company details above, since these live on `users`,
+     not `clients`) -->
+<div class="modal fade" id="clientLoginModal" tabindex="-1" data-testid="sac-client-login-modal">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 16px; border: none;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color);">
+                <h5 class="modal-title fw-bold" id="clientLoginModalTitle" style="font-size: 15px;">Manage Login</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" data-testid="sac-client-login-close"></button>
+            </div>
+            <form id="clientLoginForm" data-testid="sac-client-login-form">
+                <div class="modal-body">
+                    <div class="admin-field-group">
+                        <label>Username *</label>
+                        <input type="text" name="username" autocomplete="off" required data-testid="sac-login-field-username">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Contact Person *</label>
+                        <input type="text" name="full_name" required data-testid="sac-login-field-full_name">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Email</label>
+                        <input type="email" name="email" data-testid="sac-login-field-email">
+                    </div>
+                    <div class="admin-field-group">
+                        <label>Phone</label>
+                        <input type="text" name="phone" data-testid="sac-login-field-phone">
+                    </div>
+                    <div class="admin-field-group">
+                        <label id="clientLoginPasswordLabel">Password *</label>
+                        <input type="password" name="password" autocomplete="new-password" data-testid="sac-login-field-password">
+                        <div class="admin-field-hint" id="clientLoginPasswordHint">Leave blank to keep the current password.</div>
+                    </div>
+                    <div class="sac-login-delete-row" id="clientLoginDeleteRow" style="display:none;">
+                        <button type="button" class="sac-login-delete-btn" id="clientLoginDeleteBtn" data-testid="sac-client-login-delete"><i class="fa-solid fa-trash me-1"></i> Delete This Login</button>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid var(--border-color);">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn" style="background: #0ea5b0; color:#fff; font-weight:650;" id="clientLoginSubmitBtn" data-testid="sac-client-login-submit">Save Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 const CLIENTS_MOD = <?= json_encode($clientsMod, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
 const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
@@ -123,8 +173,11 @@ $(document).ready(function() {
     $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
 
     const clientFormModal = new bootstrap.Modal(document.getElementById('clientFormModal'));
+    const clientLoginModal = new bootstrap.Modal(document.getElementById('clientLoginModal'));
     let currentEditId = null;
     let currentRows = [];
+    let currentLogins = {};
+    let currentLoginClientId = null;
 
     function escapeHtml(str) {
         return $('<div>').text(str == null ? '' : String(str)).html();
@@ -143,9 +196,24 @@ $(document).ready(function() {
                 return;
             }
             currentRows = res.rows || [];
-            renderRows(currentRows);
+            loadLogins(function() { renderRows(currentRows); });
         }).fail(function() {
             $('#clientsListContainer').html('<div class="admin-empty-state">Network error while loading data.</div>');
+        });
+    }
+
+    function loadLogins(done) {
+        $.ajax({
+            url: 'ajax/super_admin_client_login.php',
+            method: 'GET',
+            data: { action: 'list_logins' },
+            dataType: 'json'
+        }).done(function(res) {
+            currentLogins = (res && res.success) ? (res.logins || {}) : {};
+            done();
+        }).fail(function() {
+            currentLogins = {};
+            done();
         });
     }
 
@@ -157,21 +225,27 @@ $(document).ready(function() {
         }
         let html = '';
         rows.forEach(function(row) {
+            const id = row[CLIENTS_MOD.id_field];
             const title = escapeHtml(row[CLIENTS_MOD.name_field] || '');
             let subParts = [];
             CLIENTS_MOD.fields.forEach(function(f) {
                 if (f.name === CLIENTS_MOD.name_field || f.type === 'password') return;
                 if (row[f.name]) subParts.push(f.label + ': ' + escapeHtml(row[f.name]));
             });
+            const login = currentLogins[id];
+            subParts.push(login && login.user_id ? 'Login: ' + escapeHtml(login.username) : 'No login yet');
             const sub = subParts.join(' &middot; ');
-            html += '<div class="admin-item-card" data-testid="sac-client-item-' + row[CLIENTS_MOD.id_field] + '">' +
+            const loginBtnClass = (login && login.user_id) ? 'login-btn' : 'login-btn no-login';
+            const loginTitle = (login && login.user_id) ? 'Manage Login' : 'Add Login';
+            html += '<div class="admin-item-card" data-testid="sac-client-item-' + id + '">' +
                 '<div class="admin-item-main">' +
                     '<p class="admin-item-title">' + title + '</p>' +
                     (sub ? '<p class="admin-item-sub">' + sub + '</p>' : '') +
                 '</div>' +
                 '<div class="admin-item-actions">' +
-                    '<button type="button" class="edit-btn" data-id="' + row[CLIENTS_MOD.id_field] + '" data-testid="sac-client-edit-' + row[CLIENTS_MOD.id_field] + '"><i class="fa-solid fa-pen"></i></button>' +
-                    '<button type="button" class="delete-btn" data-id="' + row[CLIENTS_MOD.id_field] + '" data-testid="sac-client-delete-' + row[CLIENTS_MOD.id_field] + '"><i class="fa-solid fa-trash"></i></button>' +
+                    '<button type="button" class="' + loginBtnClass + '" title="' + loginTitle + '" data-id="' + id + '" data-testid="sac-client-login-btn-' + id + '"><i class="fa-solid fa-key"></i></button>' +
+                    '<button type="button" class="edit-btn" data-id="' + id + '" data-testid="sac-client-edit-' + id + '"><i class="fa-solid fa-pen"></i></button>' +
+                    '<button type="button" class="delete-btn" data-id="' + id + '" data-testid="sac-client-delete-' + id + '"><i class="fa-solid fa-trash"></i></button>' +
                 '</div>' +
             '</div>';
         });
@@ -185,6 +259,57 @@ $(document).ready(function() {
         $container.find('.delete-btn').on('click', function() {
             const id = $(this).data('id');
             confirmDelete(id);
+        });
+        $container.find('.login-btn').on('click', function() {
+            const id = $(this).data('id');
+            const row = currentRows.find(r => String(r[CLIENTS_MOD.id_field]) === String(id));
+            openLoginForm(id, row, currentLogins[id]);
+        });
+    }
+
+    function openLoginForm(clientId, clientRow, login) {
+        currentLoginClientId = clientId;
+        const hasLogin = !!(login && login.user_id);
+        $('#clientLoginModalTitle').text('Manage Login — ' + (clientRow ? clientRow[CLIENTS_MOD.name_field] : ''));
+        $('#clientLoginForm')[0].reset();
+        $('[data-testid="sac-login-field-username"]').val(hasLogin ? (login.username || '') : '');
+        $('[data-testid="sac-login-field-full_name"]').val(hasLogin ? (login.full_name || '') : (clientRow ? clientRow.contact_person || '' : ''));
+        $('[data-testid="sac-login-field-email"]').val(hasLogin ? (login.email || '') : '');
+        $('[data-testid="sac-login-field-phone"]').val(hasLogin ? (login.phone || '') : '');
+        $('[data-testid="sac-login-field-password"]').prop('required', !hasLogin);
+        $('#clientLoginPasswordLabel').text(hasLogin ? 'New Password' : 'Password *');
+        $('#clientLoginPasswordHint').text(hasLogin ? 'Leave blank to keep the current password.' : 'Required to create this client\'s first login.');
+        $('#clientLoginDeleteRow').toggle(hasLogin);
+        clientLoginModal.show();
+    }
+
+    function confirmDeleteLogin(clientId) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Delete this login?',
+            text: 'The client\'s company record and vessels are NOT affected — only their username/password login is removed. They will no longer be able to sign in until a new login is created.',
+            showCancelButton: true,
+            confirmButtonText: 'Delete Login',
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b'
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            $.ajax({
+                url: 'ajax/super_admin_client_login.php',
+                method: 'POST',
+                data: { action: 'delete', client_id: clientId },
+                dataType: 'json'
+            }).done(function(res) {
+                if (res && res.success) {
+                    clientLoginModal.hide();
+                    Swal.fire({ icon: 'success', title: 'Login Deleted', text: res.message, confirmButtonColor: '#3b32b3', timer: 1600, showConfirmButton: false });
+                    loadClients($('#clientsSearchInput').val());
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Cannot Delete', text: (res && res.message) ? res.message : 'Please try again.', confirmButtonColor: '#3b32b3' });
+                }
+            }).fail(function() {
+                Swal.fire({ icon: 'error', title: 'Network Error', text: 'Please try again.', confirmButtonColor: '#3b32b3' });
+            });
         });
     }
 
@@ -271,6 +396,38 @@ $(document).ready(function() {
             Swal.fire({ icon: 'error', title: 'Network Error', text: 'Please try again.', confirmButtonColor: '#3b32b3' });
         }).always(function() {
             $btn.prop('disabled', false).text('Save');
+        });
+    });
+
+    $('#clientLoginDeleteBtn').on('click', function() {
+        if (currentLoginClientId != null) confirmDeleteLogin(currentLoginClientId);
+    });
+
+    $('#clientLoginForm').on('submit', function(e) {
+        e.preventDefault();
+        const postData = { action: 'save', client_id: currentLoginClientId };
+        $(this).serializeArray().forEach(function(f) { postData[f.name] = f.value; });
+
+        const $btn = $('#clientLoginSubmitBtn');
+        $btn.prop('disabled', true).text('Saving...');
+
+        $.ajax({
+            url: 'ajax/super_admin_client_login.php',
+            method: 'POST',
+            data: postData,
+            dataType: 'json'
+        }).done(function(res) {
+            if (res && res.success) {
+                clientLoginModal.hide();
+                Swal.fire({ icon: 'success', title: 'Login Saved', text: res.message, confirmButtonColor: '#3b32b3', timer: 1600, showConfirmButton: false });
+                loadClients($('#clientsSearchInput').val());
+            } else {
+                Swal.fire({ icon: 'error', title: 'Could Not Save', text: (res && res.message) ? res.message : 'Please check the form and try again.', confirmButtonColor: '#3b32b3' });
+            }
+        }).fail(function() {
+            Swal.fire({ icon: 'error', title: 'Network Error', text: 'Please try again.', confirmButtonColor: '#3b32b3' });
+        }).always(function() {
+            $btn.prop('disabled', false).text('Save Login');
         });
     });
 
