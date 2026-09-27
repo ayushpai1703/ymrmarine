@@ -209,14 +209,6 @@ function pvAvatarGradient(string $name): string {
     [$from, $to] = $palette[$idx];
     return "linear-gradient(135deg, $from, $to)";
 }
-$vdd_status_map = [
-    'Pending Vessel' => ['label' => 'Awaiting Surveyor', 'dot' => '#FBBF24'],
-    'Pending Report' => ['label' => 'Awaiting Report', 'dot' => '#3B82F6'],
-    'Completed'      => ['label' => 'Completed', 'dot' => '#22C55E'],
-    'Cancelled'      => ['label' => 'Cancelled', 'dot' => '#EF4444'],
-];
-$vdd_status = $vdd_status_map[$survey['status'] ?? ''] ?? ['label' => $survey['status'] ?? 'Status', 'dot' => '#94A3B8'];
-
 // 🌟 Fetched once, reused by both the mobile card list and the desktop
 // attachment list below (same array, iterated twice — no extra query).
 $assign_attachments = getSurveyAttachments($db, $survey['id'], $survey['attachment_path'] ?? '');
@@ -333,17 +325,11 @@ include 'includes/header.php';
         }
         .vdd-hero-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .vdd-hero-title { font-size: 24px; font-weight: 800; color: #fff; letter-spacing: -.01em; }
-        .vdd-hero-status {
-            display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.14);
-            border: 1px solid rgba(255,255,255,.22); color: #fff; font-size: 11px; font-weight: 700;
-            padding: 5px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
-        }
-        .vdd-hero-status .dot { width: 6px; height: 6px; border-radius: 50%; background: #FBBF24; flex: none; }
         .vdd-hero-sub { font-size: 13px; color: rgba(255,255,255,.66); margin-top: 6px; font-weight: 500; }
         .vdd-hero-actions { display: flex; align-items: center; gap: 10px; position: relative; flex: none; flex-wrap: wrap; }
         .vdd-hero-actions a {
             display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px;
-            border-radius: 999px; font-weight: 700; font-size: 13px; white-space: nowrap;
+            border-radius: 999px; font-weight: 700; font-size: 13px; white-space: nowrap; text-decoration: none !important;
         }
         .vdd-btn-whatsapp { background: #25D366; color: #fff !important; box-shadow: 0 8px 18px rgba(37,211,102,.35); }
         .vdd-btn-email { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28); color: #fff !important; }
@@ -411,7 +397,9 @@ include 'includes/header.php';
         .vdd-upload-icon { width: 36px; height: 36px; border-radius: 10px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 15px; }
         .vdd-upload-label { font-size: 12.5px; font-weight: 700; color: #0f172a; }
         .vdd-upload-label .req { color: #DC2626; }
-        .vdd-upload-hint { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+        .vdd-upload-hint { font-size: 11px; color: #94a3b8; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vdd-upload-hint.picked { color: #16A34A; font-weight: 600; }
+        .vdd-upload-hint.picked i { margin-right: 3px; }
         .vdd-upload-choose {
             position: relative; flex: none; overflow: hidden;
             display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #e2e8f0;
@@ -594,7 +582,6 @@ include 'includes/header.php';
                     <div>
                         <div class="vdd-hero-title-row">
                             <div class="vdd-hero-title"><?= sanitize($survey['vessel_name']) ?></div>
-                            <span class="vdd-hero-status"><span class="dot" style="background: <?= sanitize($vdd_status['dot']) ?>;"></span> <?= sanitize($vdd_status['label']) ?></span>
                         </div>
                         <div class="vdd-hero-sub">
                             <?php if (!empty($survey['report_number'])): ?>Report <?= sanitize($survey['report_number']) ?> &nbsp;·&nbsp; <?php endif; ?>
@@ -726,25 +713,25 @@ include 'includes/header.php';
                                     <div class="vdd-upload-icon" style="background:#FEE2E2;color:#B91C1C;"><i class="fa-solid fa-file-pdf"></i></div>
                                     <div style="flex:1 1 auto;min-width:0;">
                                         <div class="vdd-upload-label">1. Formal Report (PDF) <span class="req">*</span></div>
-                                        <div class="vdd-upload-hint">PDF only</div>
+                                        <div class="vdd-upload-hint" data-upload-hint data-default="PDF only">PDF only</div>
                                     </div>
-                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose file<input type="file" name="pdf_report" accept=".pdf" required></label>
+                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose file<input type="file" class="vdd-file-input" name="pdf_report" accept=".pdf" required></label>
                                 </div>
                                 <div class="vdd-upload-row">
                                     <div class="vdd-upload-icon" style="background:#D1FAE5;color:#047857;"><i class="fa-solid fa-file-excel"></i></div>
                                     <div style="flex:1 1 auto;min-width:0;">
                                         <div class="vdd-upload-label">2. Calculation Sheet (Excel) <span class="req">*</span></div>
-                                        <div class="vdd-upload-hint">.xlsx or .xls</div>
+                                        <div class="vdd-upload-hint" data-upload-hint data-default=".xlsx or .xls">.xlsx or .xls</div>
                                     </div>
-                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose file<input type="file" name="excel_report" accept=".xlsx, .xls" required></label>
+                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose file<input type="file" class="vdd-file-input" name="excel_report" accept=".xlsx, .xls" required></label>
                                 </div>
                                 <div class="vdd-upload-row">
                                     <div class="vdd-upload-icon" style="background:#EEF2FF;color:#4F46E5;"><i class="fa-solid fa-paperclip"></i></div>
                                     <div style="flex:1 1 auto;min-width:0;">
                                         <div class="vdd-upload-label">Additional Files <span style="color:#94a3b8;font-weight:500;">(optional)</span></div>
-                                        <div class="vdd-upload-hint">Excel, Word or PDF — multiple allowed</div>
+                                        <div class="vdd-upload-hint" data-upload-hint data-default="Excel, Word or PDF — multiple allowed">Excel, Word or PDF — multiple allowed</div>
                                     </div>
-                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose files<input type="file" name="additional_files[]" accept=".xlsx,.xls,.docx,.doc,.pdf" multiple></label>
+                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose files<input type="file" class="vdd-file-input" name="additional_files[]" accept=".xlsx,.xls,.docx,.doc,.pdf" multiple></label>
                                 </div>
                                 <button type="submit" class="vdd-submit-btn"><i class="fa-solid fa-paper-plane"></i> Submit &amp; Send</button>
                             </form>
@@ -779,15 +766,64 @@ include 'includes/header.php';
         </div>
     </div><!-- /.detail-desktop-view -->
 
+    <script>
+    // 🌟 File-input "chosen" confirmation for the desktop Upload Required
+    // Reports card — purely a display confirmation (small text under the
+    // label turns green and shows the picked file name(s)); the form
+    // fields/names/behavior are unchanged, nothing here touches submission.
+    document.querySelectorAll('.vdd-file-input').forEach(function (input) {
+        input.addEventListener('change', function () {
+            var row = input.closest('.vdd-upload-row');
+            var hint = row ? row.querySelector('[data-upload-hint]') : null;
+            if (!hint) return;
+            if (input.files && input.files.length) {
+                var names = Array.prototype.map.call(input.files, function (f) { return f.name; });
+                var label = names.length > 1 ? (names.length + ' files selected') : names[0];
+                hint.innerHTML = '<i class="fa-solid fa-circle-check"></i>' + label.replace(/</g, '&lt;');
+                hint.classList.add('picked');
+                hint.title = names.join(', ');
+            } else {
+                hint.textContent = hint.getAttribute('data-default') || '';
+                hint.classList.remove('picked');
+                hint.removeAttribute('title');
+            }
+        });
+    });
+    </script>
+
+    <style>
+        #remarksModal .modal-content { border: none; border-radius: 20px; box-shadow: 0 20px 44px rgba(15,23,42,.22); overflow: hidden; }
+        #remarksModal .modal-header {
+            background: linear-gradient(120deg, #FFF7ED, #FFEDD5); border-bottom: 1px solid #FED7AA;
+            padding: 18px 22px; display: flex; align-items: center; gap: 12px;
+        }
+        #remarksModal .modal-header::before {
+            content: '\f071'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 15px;
+            width: 34px; height: 34px; border-radius: 10px; flex: none;
+            background: #FDBA74; color: #7C2D12; display: flex; align-items: center; justify-content: center;
+        }
+        #remarksModal .modal-title { font-size: 15px; font-weight: 800; color: #7C2D12; }
+        #remarksModal .btn-close { margin-left: auto; opacity: .55; }
+        #remarksModal .btn-close:hover { opacity: 1; }
+        #remarksModal .modal-body { padding: 22px; font-size: 14px; line-height: 1.65; color: #334155; background: #fff; }
+        #remarksModal .modal-footer { border-top: 1px solid #f1f5f9; padding: 14px 22px; }
+        #remarksModal .modal-footer .btn-modern-close {
+            border: none; background: #5B2DEE; color: #fff; height: 38px; padding: 0 20px;
+            border-radius: 999px; font-weight: 700; font-size: 12.5px; box-shadow: 0 8px 18px rgba(91,45,238,.3);
+        }
+    </style>
         <?php if (!empty($remarks_full) && strlen($remarks_full) > 150): ?>
         <div class="modal fade" id="remarksModal" tabindex="-1" aria-hidden="true" data-testid="vessel-detail-remarks-modal">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h6 class="modal-title fw-bold">Admin Remarks</h6>
+                        <h6 class="modal-title">Admin Remarks</h6>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body" style="font-size: 13.5px; white-space: pre-wrap;"><?= sanitize($remarks_full) ?></div>
+                    <div class="modal-body" style="white-space: pre-wrap;"><?= sanitize($remarks_full) ?></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modern-close" data-bs-dismiss="modal">Close</button>
+                    </div>
                 </div>
             </div>
         </div>
