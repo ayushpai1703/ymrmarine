@@ -133,6 +133,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $avg_ships_per_month = $months_span > 0 ? round(((float)$avg_ships) / (float)$months_span, 1) : 0;
     $avg_recovery_per_ship = $db->query("SELECT AVG(recovery_amount) FROM surveys WHERE recovery_amount IS NOT NULL AND recovery_amount > 0")->fetchColumn();
     $avg_recovery_per_surveyor = $db->query("SELECT AVG(t.s) FROM (SELECT SUM(recovery_amount) AS s FROM surveys WHERE recovery_amount IS NOT NULL GROUP BY surveyor_id) t")->fetchColumn();
+    $avg_ships_per_surveyor = $db->query("SELECT AVG(t.cnt) FROM (SELECT COUNT(*) AS cnt FROM surveys WHERE status = 'Completed' GROUP BY surveyor_id) t")->fetchColumn();
 } elseif ($role === 'Client') {
     $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE recovery_amount IS NOT NULL AND client_id = ? ORDER BY COALESCE(survey_completed_date, report_uploaded_date) DESC, id DESC LIMIT 1");
     $stmt_recent->execute([$client_row_id]);
@@ -147,6 +148,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $avg_ships_per_month = $months_span > 0 ? round(((float)$avg_ships) / (float)$months_span, 1) : 0;
     $avg_recovery_per_ship = null;
     $avg_recovery_per_surveyor = null;
+    $avg_ships_per_surveyor = null;
 } else {
     $assignedSql = "(surveyor_id = ? OR id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))";
     $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE recovery_amount IS NOT NULL AND $assignedSql ORDER BY COALESCE(survey_completed_date, report_uploaded_date) DESC, id DESC LIMIT 1");
@@ -161,6 +163,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $avg_ships_per_month = $months_span > 0 ? round(((float)$avg_ships) / (float)$months_span, 1) : 0;
     $avg_recovery_per_ship = null;
     $avg_recovery_per_surveyor = null;
+    $avg_ships_per_surveyor = null;
 }
 $recent_vessel_name = $recent_row['vessel_name'] ?? '—';
 $recent_vlsfo = !empty($recent_row['vlsfo_recovery']) ? number_format((float)$recent_row['vlsfo_recovery'], 3) . ' MT' : '0.000 MT';
@@ -328,6 +331,13 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
     </div>
 
     <?php if ($role === 'Super Admin'):
+        // 🌟 Super Admin analytics — Recovery by Surveyor (Top 10), Recovery by
+        // Port/Country/Client (Top 5 each), Top 5 completed ships by
+        // country/port, and average ships per year/month/day/surveyor. All
+        // computed live from the same `surveys`/`ports`/`clients`/`users`
+        // tables used everywhere else on this dashboard — no hardcoded values.
+        ensurePortsCountryColumn($db);
+
         $recovery_by_surveyor = $db->query("
             SELECT u.full_name, SUM(s.recovery_amount) AS total
             FROM surveys s
@@ -335,33 +345,8 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             WHERE s.recovery_amount IS NOT NULL
             GROUP BY s.surveyor_id, u.full_name
             ORDER BY total DESC
+            LIMIT 10
         ")->fetchAll(PDO::FETCH_ASSOC);
-    ?>
-    <div class="overview-section mt-4">
-        <div class="section-title-row">
-            <span class="section-title">Recovery by Surveyor</span>
-        </div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="recovery-by-surveyor-card">
-            <?php if (!empty($recovery_by_surveyor)): ?>
-                <?php foreach ($recovery_by_surveyor as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['full_name']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
-            <?php endif; ?>
-        </div>
-    </div>
-    <?php endif; ?>
-
-    <?php if ($role === 'Super Admin'):
-        // 🌟 Super Admin analytics — Recovery by Port/Country/Client, Top 5
-        // completed ships by country/port, and average ships per year/month/day.
-        // All computed live from the same `surveys`/`ports`/`clients` tables used
-        // everywhere else on this dashboard — no hardcoded values.
-        ensurePortsCountryColumn($db);
 
         $recovery_by_port = $db->query("
             SELECT p.port_name, SUM(s.recovery_amount) AS total
@@ -370,6 +355,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             WHERE s.recovery_amount IS NOT NULL
             GROUP BY s.port_id, p.port_name
             ORDER BY total DESC
+            LIMIT 5
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         $recovery_by_country = $db->query("
@@ -379,6 +365,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             WHERE s.recovery_amount IS NOT NULL
             GROUP BY COALESCE(NULLIF(p.country, ''), 'India')
             ORDER BY total DESC
+            LIMIT 5
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         $recovery_by_client = $db->query("
@@ -388,6 +375,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             WHERE s.recovery_amount IS NOT NULL
             GROUP BY s.client_id, c.company_name
             ORDER BY total DESC
+            LIMIT 5
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         $ships_by_country_top5 = $db->query("
@@ -451,53 +439,78 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             <span class="stat-title stat-title--orange"><i class="fa-solid fa-calendar-day stat-title-icon"></i>Average Ships Per Day</span>
             <div class="stat-val"><?= number_format($sa_avg_per_day, 2) ?></div>
         </div>
-    </div>
-
-    <div class="overview-section mt-4">
-        <div class="section-title-row"><span class="section-title">Recovery by Port</span></div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="recovery-by-port-card">
-            <?php if (!empty($recovery_by_port)): ?>
-                <?php foreach ($recovery_by_port as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['port_name']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
-            <?php endif; ?>
+        <div class="stat-card" data-testid="avg-ships-per-surveyor-card">
+            <span class="stat-title stat-title--purple"><i class="fa-solid fa-user-tie stat-title-icon"></i>Average Ships Per Surveyor</span>
+            <div class="stat-val"><?= number_format((float)$avg_ships_per_surveyor, 1) ?></div>
         </div>
     </div>
 
     <div class="overview-section mt-4">
-        <div class="section-title-row"><span class="section-title">Recovery by Country</span></div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="recovery-by-country-card">
-            <?php if (!empty($recovery_by_country)): ?>
-                <?php foreach ($recovery_by_country as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['country']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
-            <?php endif; ?>
-        </div>
-    </div>
+        <div class="section-title-row"><span class="section-title">Recovery Analytics</span></div>
+        <div class="recovery-row-grid" data-testid="recovery-row-grid">
+            <div class="recovery-row-card" data-testid="recovery-by-surveyor-card">
+                <div class="recovery-row-card-title">Recovery by Surveyor — Top 10</div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($recovery_by_surveyor)): ?>
+                        <?php foreach ($recovery_by_surveyor as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['full_name']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
 
-    <div class="overview-section mt-4">
-        <div class="section-title-row"><span class="section-title">Recovery by Client</span></div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="recovery-by-client-card">
-            <?php if (!empty($recovery_by_client)): ?>
-                <?php foreach ($recovery_by_client as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['company_name']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
-            <?php endif; ?>
+            <div class="recovery-row-card" data-testid="recovery-by-port-card">
+                <div class="recovery-row-card-title">Recovery by Port — Top 5</div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($recovery_by_port)): ?>
+                        <?php foreach ($recovery_by_port as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['port_name']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="recovery-row-card" data-testid="recovery-by-country-card">
+                <div class="recovery-row-card-title">Recovery by Country — Top 5</div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($recovery_by_country)): ?>
+                        <?php foreach ($recovery_by_country as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['country']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="recovery-row-card" data-testid="recovery-by-client-card">
+                <div class="recovery-row-card-title">Recovery by Client — Top 5</div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($recovery_by_client)): ?>
+                        <?php foreach ($recovery_by_client as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['company_name']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </div>
 

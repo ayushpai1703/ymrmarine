@@ -332,6 +332,29 @@ require_once __DIR__ . '/../config/config.php';
             font-size: 10px;
             background: rgba(22,163,74,.16); color: #16A34A;
         }
+
+        /* Recovery Analytics row — Recovery by Surveyor/Port/Country/Client.
+           Stacked single column on mobile; forced into one 4-column row on
+           desktop (see the min-width:992px override below). */
+        .recovery-row-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            padding: 0 20px;
+        }
+        .recovery-row-card {
+            background: white;
+            border-radius: 20px;
+            padding: 16px;
+            box-shadow: 0 2px 10px rgba(15,23,42,.04);
+            border: 1px solid var(--border-color);
+        }
+        .recovery-row-card-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 6px;
+        }
         .stat-title.stat-title--blue { color: #1e40af; background: #EEF2FF; }
         .stat-title.stat-title--blue .stat-title-icon { background: rgba(37,99,235,.14); color: #2563EB; }
         .stat-title.stat-title--orange { color: #c2410c; background: #FFF1E8; }
@@ -1078,6 +1101,13 @@ require_once __DIR__ . '/../config/config.php';
         max-width: 1200px;
     }
     .stat-card { padding: 16px; border-radius: 14px; }
+    .recovery-row-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+        padding: 12px 8px 0;
+        max-width: 1200px;
+    }
+    .recovery-row-card { padding: 16px; border-radius: 14px; }
     .search-filter-row { padding: 14px 16px 10px; max-width: none; width: 100%; }
     .vessel-list-container { padding: 0 16px 12px; max-width: none; width: 100%; }
     .list-controls-panel {
