@@ -187,6 +187,40 @@ $mail_body = "Dear Sir,\n\n"
     . "YMR Marine Solutions";
 $mail_share_url = 'mailto:?subject=' . rawurlencode($mail_subject) . '&body=' . rawurlencode($mail_body);
 
+// 🌟 Desktop hero status pill + surveyor avatar helpers — display only,
+// same avatar helpers as the list pages' redesign, duplicated page-scoped.
+function pvInitials(string $name): string {
+    $parts = preg_split('/\s+/', trim($name));
+    $ini = '';
+    foreach (array_slice($parts ?: [], 0, 2) as $p) {
+        $ini .= mb_strtoupper(mb_substr($p, 0, 1));
+    }
+    return $ini !== '' ? $ini : '?';
+}
+function pvAvatarGradient(string $name): string {
+    static $palette = [
+        ['#8B7CF6', '#4B2FD6'],
+        ['#22D3C8', '#0D9488'],
+        ['#FBBF24', '#F59E0B'],
+        ['#F472B6', '#DB2777'],
+        ['#60A5FA', '#2563EB'],
+    ];
+    $idx = crc32($name) % count($palette);
+    [$from, $to] = $palette[$idx];
+    return "linear-gradient(135deg, $from, $to)";
+}
+$vdd_status_map = [
+    'Pending Vessel' => ['label' => 'Awaiting Surveyor', 'dot' => '#FBBF24'],
+    'Pending Report' => ['label' => 'Awaiting Report', 'dot' => '#3B82F6'],
+    'Completed'      => ['label' => 'Completed', 'dot' => '#22C55E'],
+    'Cancelled'      => ['label' => 'Cancelled', 'dot' => '#EF4444'],
+];
+$vdd_status = $vdd_status_map[$survey['status'] ?? ''] ?? ['label' => $survey['status'] ?? 'Status', 'dot' => '#94A3B8'];
+
+// 🌟 Fetched once, reused by both the mobile card list and the desktop
+// attachment list below (same array, iterated twice — no extra query).
+$assign_attachments = getSurveyAttachments($db, $survey['id'], $survey['attachment_path'] ?? '');
+
 include 'includes/header.php';
 ?>
 
@@ -249,6 +283,169 @@ include 'includes/header.php';
         .info-row { padding: 10px 16px; }
         .blue-action-btn { max-width: none; width: 100%; }
     }
+
+    /* ═══ Desktop modern redesign — hero banner + icon-chip info card +
+       modern upload/status cards, same visual language as the vessels.php
+       list-page redesign (gradient hero, .vd-badge-style pills). Mobile
+       (".detail-mobile-view", the markup above/below unchanged) keeps the
+       existing simple layout; only >=992px swaps to this. Page-scoped
+       <style>, so it doesn't leak into other detail pages. */
+    .detail-mobile-view { display: block; }
+    .detail-desktop-view { display: none; }
+    @media (min-width: 992px) {
+        .detail-mobile-view { display: none !important; }
+        .detail-desktop-view { display: block !important; }
+
+        /* Hero already carries the title + back link; the shared top bar
+           (hamburger/title/profile) is redundant here, same as the list
+           pages — desktop sidebar carries nav/profile. Mobile untouched. */
+        .top-app-bar { display: none !important; }
+
+        .vdd-wrap { padding: 8px 20px 40px; max-width: 1400px; margin: 0 auto; }
+
+        .vdd-back {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+            font-size: 13px; font-weight: 600; color: #64748b; text-decoration: none;
+        }
+        .vdd-back:hover { color: #5B2DEE; }
+        .vdd-back-icon {
+            width: 32px; height: 32px; border-radius: 10px; background: #fff;
+            border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center;
+            color: #475569; flex: none;
+        }
+
+        .vdd-hero {
+            position: relative; overflow: hidden; border-radius: 22px;
+            background: linear-gradient(120deg, #0f172a 0%, #1E1B6B 48%, #4B2FD6 100%);
+            padding: 26px 30px; margin-bottom: 18px;
+            display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap;
+            box-shadow: 0 14px 34px rgba(30,27,107,.22);
+        }
+        .vdd-hero-icon-bg {
+            position: absolute; right: -26px; top: -40px; font-size: 190px; color: rgba(255,255,255,.07);
+            pointer-events: none; line-height: 1;
+        }
+        .vdd-hero-left { display: flex; align-items: center; gap: 16px; min-width: 0; position: relative; }
+        .vdd-hero-ship {
+            width: 56px; height: 56px; border-radius: 16px; flex: none;
+            background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 24px;
+        }
+        .vdd-hero-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .vdd-hero-title { font-size: 24px; font-weight: 800; color: #fff; letter-spacing: -.01em; }
+        .vdd-hero-status {
+            display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.22); color: #fff; font-size: 11px; font-weight: 700;
+            padding: 5px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+        }
+        .vdd-hero-status .dot { width: 6px; height: 6px; border-radius: 50%; background: #FBBF24; flex: none; }
+        .vdd-hero-sub { font-size: 13px; color: rgba(255,255,255,.66); margin-top: 6px; font-weight: 500; }
+        .vdd-hero-actions { display: flex; align-items: center; gap: 10px; position: relative; flex: none; flex-wrap: wrap; }
+        .vdd-hero-actions a {
+            display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px;
+            border-radius: 999px; font-weight: 700; font-size: 13px; white-space: nowrap;
+        }
+        .vdd-btn-whatsapp { background: #25D366; color: #fff !important; box-shadow: 0 8px 18px rgba(37,211,102,.35); }
+        .vdd-btn-email { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28); color: #fff !important; }
+        .vdd-btn-edit { background: #fff; color: #1E1B6B !important; }
+
+        .vdd-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 18px; align-items: start; }
+        .vdd-card {
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(15,23,42,.05); overflow: hidden;
+        }
+        .vdd-card + .vdd-card { margin-top: 18px; }
+        .vdd-card-head {
+            padding: 18px 22px; border-bottom: 1px solid #f1f5f9;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .vdd-card-head-icon {
+            width: 30px; height: 30px; border-radius: 9px; flex: none;
+            display: flex; align-items: center; justify-content: center; font-size: 14px;
+        }
+        .vdd-card-head-title { font-size: 15px; font-weight: 800; color: #0f172a; }
+        .vdd-card-body { padding: 20px 22px 22px; }
+
+        .vdd-info-rows { padding: 8px 10px; }
+        .vdd-info-row {
+            display: flex; align-items: center; gap: 14px; padding: 13px 12px; border-radius: 12px;
+        }
+        .vdd-info-row.alt { background: #FAFAFE; }
+        .vdd-info-row.align-top { align-items: flex-start; }
+        .vdd-info-icon {
+            width: 34px; height: 34px; border-radius: 10px; flex: none;
+            display: flex; align-items: center; justify-content: center; font-size: 14px;
+        }
+        .vdd-info-label { flex: 0 0 150px; font-size: 12.5px; color: #64748b; font-weight: 600; }
+        .vdd-info-row.align-top .vdd-info-label { margin-top: 6px; }
+        .vdd-info-value { font-size: 13.5px; color: #0f172a; font-weight: 700; min-width: 0; }
+        .vdd-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: #EFF6FF; color: #1D4ED8; font-size: 10.5px; font-weight: 800;
+            padding: 4px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em;
+        }
+        .vdd-badge .dot { width: 5px; height: 5px; border-radius: 50%; background: #2563EB; flex: none; }
+        .vdd-agent-send { display: inline-flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 11.5px; font-weight: 700; color: #5B2DEE; }
+        .vdd-avatar {
+            width: 34px; height: 34px; border-radius: 10px; flex: none; color: #fff; font-size: 11px; font-weight: 800;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .vdd-remarks {
+            margin: 6px 18px 18px; padding: 14px 16px; border-radius: 14px;
+            background: #FFF7ED; border: 1px solid #FED7AA; display: flex; gap: 12px; align-items: flex-start;
+        }
+        .vdd-remarks-icon {
+            width: 30px; height: 30px; border-radius: 9px; background: #FDBA74; color: #7C2D12;
+            display: flex; align-items: center; justify-content: center; flex: none;
+        }
+        .vdd-remarks-label { font-size: 11px; font-weight: 800; color: #C2410C; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+        .vdd-remarks-text { font-size: 13px; color: #7C2D12; font-weight: 600; line-height: 1.5; }
+        .vdd-remarks-text a { color: #9A3412; text-decoration: underline; font-weight: 800; }
+
+        .vdd-upload-row {
+            border: 1.5px dashed #C7D2E0; border-radius: 14px; padding: 14px 16px;
+            display: flex; align-items: center; gap: 12px; background: #F8FAFC;
+        }
+        .vdd-upload-row + .vdd-upload-row { margin-top: 10px; }
+        .vdd-upload-icon { width: 36px; height: 36px; border-radius: 10px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+        .vdd-upload-label { font-size: 12.5px; font-weight: 700; color: #0f172a; }
+        .vdd-upload-label .req { color: #DC2626; }
+        .vdd-upload-hint { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+        .vdd-upload-choose {
+            position: relative; flex: none; overflow: hidden;
+            display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #e2e8f0;
+            color: #334155; font-size: 11.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px;
+        }
+        .vdd-upload-choose input[type=file] {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%;
+        }
+        .vdd-submit-btn {
+            margin-top: 14px; width: 100%; height: 46px; border: none; border-radius: 14px;
+            background: linear-gradient(120deg, #1E1B6B, #4B2FD6); color: #fff; font-weight: 800; font-size: 13.5px;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            box-shadow: 0 10px 22px rgba(75,47,214,.3); cursor: pointer;
+        }
+
+        .vdd-status-textarea {
+            width: 100%; box-sizing: border-box; border: 1.5px solid #e2e8f0; border-radius: 14px;
+            padding: 13px 14px; font-size: 13px; font-family: inherit; background: #F8FAFC;
+            resize: none; color: #334155; min-height: 68px;
+        }
+        .vdd-status-textarea:focus { outline: none; border-color: #A78BFA; box-shadow: 0 0 0 4px rgba(91,45,238,.12); }
+        .vdd-status-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; gap: 10px; }
+        .vdd-status-meta { font-size: 11px; color: #94a3b8; font-weight: 500; }
+        .vdd-status-btn {
+            border: none; background: #5B2DEE; color: #fff; height: 38px; padding: 0 20px;
+            border-radius: 999px; font-weight: 700; font-size: 12.5px; box-shadow: 0 8px 18px rgba(91,45,238,.3); flex: none;
+        }
+
+        .vdd-attachment {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
+        }
+        .vdd-attachment-icon { width: 34px; height: 34px; border-radius: 10px; background: #EEF2FF; color: #4F46E5; display: flex; align-items: center; justify-content: center; flex: none; }
+    }
 </style>
 
 <div class="scroll-content">
@@ -257,6 +454,7 @@ include 'includes/header.php';
     <?php if($success): ?><div class="alert alert-success mx-3 mt-3 py-2" style="font-size:12px;"><?= $success ?></div><?php endif; ?>
     <?php if($error): ?><div class="alert alert-danger mx-3 mt-3 py-2" style="font-size:12px;"><?= $error ?></div><?php endif; ?>
 
+    <div class="detail-mobile-view">
         <div class="detail-main-row">
         <div class="info-table-list shadow-sm">
             <div class="text-end p-2 d-flex justify-content-end gap-2 flex-wrap">
@@ -316,7 +514,7 @@ include 'includes/header.php';
     // the new survey_attachments table, falling back to the legacy single
     // surveys.attachment_path column for vessels assigned before multi-file
     // upload existed, so older assignments still show their one attachment.
-    $assign_attachments = getSurveyAttachments($db, $survey['id'], $survey['attachment_path'] ?? '');
+    // (Fetched once above; reused here and in the desktop view below.)
     foreach ($assign_attachments as $assign_att_row):
         $assign_att = $assign_att_row['file_path'];
         $att_fs = (strpos($assign_att, '/') === 0 || preg_match('#^[A-Za-z]:#', $assign_att)) ? $assign_att : (__DIR__ . '/' . ltrim($assign_att, '/'));
@@ -380,6 +578,207 @@ include 'includes/header.php';
         </form>
     </div>
         </div><!-- /.detail-main-row -->
+    </div><!-- /.detail-mobile-view -->
+
+    <div class="detail-desktop-view">
+        <div class="vdd-wrap">
+            <a href="<?= sanitize($back_url ?: 'vessels.php') ?>" class="vdd-back">
+                <span class="vdd-back-icon"><i class="fa-solid fa-chevron-left"></i></span>
+                Back
+            </a>
+
+            <div class="vdd-hero">
+                <i class="fa-solid fa-ship vdd-hero-icon-bg" aria-hidden="true"></i>
+                <div class="vdd-hero-left">
+                    <div class="vdd-hero-ship"><i class="fa-solid fa-ship"></i></div>
+                    <div>
+                        <div class="vdd-hero-title-row">
+                            <div class="vdd-hero-title"><?= sanitize($survey['vessel_name']) ?></div>
+                            <span class="vdd-hero-status"><span class="dot" style="background: <?= sanitize($vdd_status['dot']) ?>;"></span> <?= sanitize($vdd_status['label']) ?></span>
+                        </div>
+                        <div class="vdd-hero-sub">
+                            <?php if (!empty($survey['report_number'])): ?>Report <?= sanitize($survey['report_number']) ?> &nbsp;·&nbsp; <?php endif; ?>
+                            <?= sanitize($combined_survey_type) ?> &nbsp;·&nbsp; Assigned <?= sanitize($display_date) ?>
+                        </div>
+                    </div>
+                </div>
+                <div class="vdd-hero-actions">
+                    <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-whatsapp" data-testid="vessel-detail-whatsapp-link-desktop" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
+                    <a href="<?= sanitize($mail_share_url) ?>" class="vdd-btn-email" data-testid="vessel-detail-mail-link-desktop" title="Send via Email (Outlook)"><i class="fa-solid fa-envelope"></i> Email</a>
+                    <?php if ($is_admin): ?>
+                        <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vdd-btn-edit" data-testid="vessel-detail-edit-link-desktop"><i class="fa-solid fa-pen"></i> Edit</a>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="vdd-grid">
+                <div>
+                    <div class="vdd-card">
+                        <div class="vdd-card-head">
+                            <div class="vdd-card-head-icon" style="background:#EEF2FF;color:#4F46E5;"><i class="fa-solid fa-file-lines"></i></div>
+                            <div class="vdd-card-head-title">Survey Information</div>
+                        </div>
+                        <div class="vdd-info-rows">
+                            <div class="vdd-info-row">
+                                <div class="vdd-info-icon" style="background:#F1F5FF;color:#4F46E5;"><i class="fa-solid fa-building"></i></div>
+                                <div class="vdd-info-label">Client Name</div>
+                                <div class="vdd-info-value"><?= sanitize($survey['company_name']) ?></div>
+                            </div>
+                            <div class="vdd-info-row alt">
+                                <div class="vdd-info-icon" style="background:#F1F5FF;color:#4F46E5;"><i class="fa-solid fa-hashtag"></i></div>
+                                <div class="vdd-info-label">Report No</div>
+                                <div class="vdd-info-value"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></div>
+                            </div>
+                            <div class="vdd-info-row">
+                                <div class="vdd-info-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-file-circle-check"></i></div>
+                                <div class="vdd-info-label">Survey Type</div>
+                                <div><span class="vdd-badge"><span class="dot"></span><?= sanitize($combined_survey_type) ?></span></div>
+                            </div>
+                            <div class="vdd-info-row alt">
+                                <div class="vdd-info-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-calendar-days"></i></div>
+                                <div class="vdd-info-label">Assigned Date</div>
+                                <div class="vdd-info-value"><?= $display_date ?></div>
+                            </div>
+                            <div class="vdd-info-row align-top">
+                                <div class="vdd-info-icon" style="background:#FFF7ED;color:#EA580C;"><i class="fa-solid fa-people-group"></i></div>
+                                <div class="vdd-info-label">Agent Name</div>
+                                <div>
+                                    <div class="vdd-info-value"><?= sanitize($survey['agent_name']) ?></div>
+                                    <?php if ($is_admin && !empty($survey['agent_name'])):
+                                        $vdd_agent_sent_at = $survey['agent_email_sent_at'] ?? null;
+                                        $vdd_agent_sent_label = $vdd_agent_sent_at ? date('d M Y, h:i A', strtotime($vdd_agent_sent_at)) : '';
+                                    ?>
+                                        <div id="agentEmailActionsDesktop" style="margin-top:6px;font-size:11.5px;line-height:1.45;" data-survey-id="<?= (int)$survey['id'] ?>">
+                                            <span id="agentEmailStatusWrapDesktop" style="<?= $vdd_agent_sent_at ? '' : 'display:none;' ?>">
+                                                <span class="text-success" id="agentEmailSentLabelDesktop"><i class="fa-solid fa-circle-check"></i> Email sent to agent on <span id="agentEmailSentAtDesktop"><?= sanitize($vdd_agent_sent_label) ?></span></span>
+                                                <button type="button" id="btnAgentEmailAgainDesktop" class="btn btn-link p-0 ms-1 vdd-agent-send" style="<?= $vdd_agent_sent_at ? '' : 'display:none;' ?>">Send email again</button>
+                                            </span>
+                                            <button type="button" id="btnAgentEmailSendDesktop" class="btn btn-link p-0 vdd-agent-send" style="<?= $vdd_agent_sent_at ? 'display:none;' : '' ?>"><i class="fa-solid fa-paper-plane"></i> Send email to agent for latest update</button>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="vdd-info-row alt">
+                                <div class="vdd-avatar" style="background: <?= pvAvatarGradient($combined_surveyor_names) ?>;"><?= sanitize(pvInitials($combined_surveyor_names)) ?></div>
+                                <div class="vdd-info-label">Surveyor Name</div>
+                                <div class="vdd-info-value" style="color:#5B2DEE;"><?= sanitize($combined_surveyor_names) ?></div>
+                            </div>
+                            <div class="vdd-info-row">
+                                <div class="vdd-info-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-location-dot"></i></div>
+                                <div class="vdd-info-label">Port Name</div>
+                                <div class="vdd-info-value"><?= sanitize($survey['port_name']) ?></div>
+                            </div>
+                        </div>
+
+                        <div class="vdd-remarks">
+                            <div class="vdd-remarks-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                            <div>
+                                <div class="vdd-remarks-label">Admin Remarks</div>
+                                <div class="vdd-remarks-text">
+                                    <?php
+                                        if ($remarks_full === '') {
+                                            echo 'N/A';
+                                        } elseif (strlen($remarks_full) > 150) {
+                                            echo sanitize(substr($remarks_full, 0, 150)) . '... <a href="#" data-bs-toggle="modal" data-bs-target="#remarksModal" onclick="event.stopPropagation();" data-testid="vessel-detail-read-more-remarks-desktop">Read More</a>';
+                                        } else {
+                                            echo sanitize($remarks_full);
+                                        }
+                                    ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <?php if (!$is_client_viewer && !$is_super_admin): ?>
+                    <div class="vdd-card">
+                        <div class="vdd-card-head">
+                            <div class="vdd-card-head-icon" style="background:linear-gradient(135deg,#8B7CF6,#4B2FD6);color:#fff;"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                            <div class="vdd-card-head-title">Upload Required Reports</div>
+                        </div>
+                        <div class="vdd-card-body">
+                            <?php foreach ($assign_attachments as $vdd_att_row):
+                                $vdd_att = $vdd_att_row['file_path'];
+                                $vdd_att_fs = (strpos($vdd_att, '/') === 0 || preg_match('#^[A-Za-z]:#', $vdd_att)) ? $vdd_att : (__DIR__ . '/' . ltrim($vdd_att, '/'));
+                                $vdd_att_url = $vdd_att;
+                                $vdd_att_label = $vdd_att_row['file_name'] ?: basename($vdd_att);
+                                $vdd_att_label_clean = preg_replace('/^[0-9]+(_[0-9]+)?_/', '', $vdd_att_label);
+                                if (is_file($vdd_att_fs)):
+                            ?>
+                            <div class="vdd-attachment">
+                                <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                                    <div class="vdd-attachment-icon"><i class="fa-solid fa-paperclip"></i></div>
+                                    <div style="min-width:0;">
+                                        <div style="font-size:12.5px;font-weight:700;color:#0f172a;">Assignment Attachment</div>
+                                        <div style="font-size:11px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= sanitize($vdd_att_label_clean) ?></div>
+                                    </div>
+                                </div>
+                                <a href="<?= sanitize($vdd_att_url) ?>" download="<?= sanitize($vdd_att_label_clean) ?>" style="flex:none;width:32px;height:32px;border-radius:9px;background:#F8FAFC;border:1px solid #e2e8f0;color:#5B2DEE;display:flex;align-items:center;justify-content:center;"><i class="fa-solid fa-download"></i></a>
+                            </div>
+                            <?php endif; endforeach; ?>
+
+                            <form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="survey_id" value="<?= $survey['id'] ?>">
+                                <input type="hidden" name="current_status" value="<?= $survey['status'] ?>">
+                                <div class="vdd-upload-row">
+                                    <div class="vdd-upload-icon" style="background:#FEE2E2;color:#B91C1C;"><i class="fa-solid fa-file-pdf"></i></div>
+                                    <div style="flex:1 1 auto;min-width:0;">
+                                        <div class="vdd-upload-label">1. Formal Report (PDF) <span class="req">*</span></div>
+                                        <div class="vdd-upload-hint">PDF only</div>
+                                    </div>
+                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose file<input type="file" name="pdf_report" accept=".pdf" required></label>
+                                </div>
+                                <div class="vdd-upload-row">
+                                    <div class="vdd-upload-icon" style="background:#D1FAE5;color:#047857;"><i class="fa-solid fa-file-excel"></i></div>
+                                    <div style="flex:1 1 auto;min-width:0;">
+                                        <div class="vdd-upload-label">2. Calculation Sheet (Excel) <span class="req">*</span></div>
+                                        <div class="vdd-upload-hint">.xlsx or .xls</div>
+                                    </div>
+                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose file<input type="file" name="excel_report" accept=".xlsx, .xls" required></label>
+                                </div>
+                                <div class="vdd-upload-row">
+                                    <div class="vdd-upload-icon" style="background:#EEF2FF;color:#4F46E5;"><i class="fa-solid fa-paperclip"></i></div>
+                                    <div style="flex:1 1 auto;min-width:0;">
+                                        <div class="vdd-upload-label">Additional Files <span style="color:#94a3b8;font-weight:500;">(optional)</span></div>
+                                        <div class="vdd-upload-hint">Excel, Word or PDF — multiple allowed</div>
+                                    </div>
+                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose files<input type="file" name="additional_files[]" accept=".xlsx,.xls,.docx,.doc,.pdf" multiple></label>
+                                </div>
+                                <button type="submit" class="vdd-submit-btn"><i class="fa-solid fa-paper-plane"></i> Submit &amp; Send</button>
+                            </form>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="vdd-card">
+                        <div class="vdd-card-head">
+                            <div class="vdd-card-head-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-pen-fancy"></i></div>
+                            <div class="vdd-card-head-title">Latest Update / Live Status</div>
+                        </div>
+                        <div class="vdd-card-body">
+                            <form action="vessel_detail.php?id=<?= $survey['id'] ?>" method="POST">
+                                <?= csrf_field() ?>
+                                <textarea name="latest_status" class="vdd-status-textarea" rows="2" placeholder="Update the current operational event…" required><?= !empty($survey['custom_live_status']) ? sanitize($survey['custom_live_status']) : '' ?></textarea>
+                                <div class="vdd-status-foot">
+                                    <div class="vdd-status-meta">
+                                        <?php if (!empty($survey['status_updated_at'])): ?>
+                                            <span style="color:#334155;font-weight:700;"><?= formatLatestUpdateWhen($survey['status_updated_at']) ?></span> By <span style="color:#5B2DEE;font-weight:700;"><?= sanitize($survey['modifier_name'] ?? 'User') ?></span>
+                                        <?php else: ?>
+                                            <span style="color:#334155;font-weight:700;">No updates yet</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <button type="submit" name="update_latest_status" class="vdd-status-btn">Update</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div><!-- /.detail-desktop-view -->
+
         <?php if (!empty($remarks_full) && strlen($remarks_full) > 150): ?>
         <div class="modal fade" id="remarksModal" tabindex="-1" aria-hidden="true" data-testid="vessel-detail-remarks-modal">
             <div class="modal-dialog modal-dialog-centered">
@@ -459,13 +858,23 @@ include 'includes/header.php';
     var $modal = document.getElementById('agentEmailModal');
     if (!$modal) return;
 
+    // 🌟 The desktop redesign duplicates this agent-email mini-widget
+    // (id="…Desktop") next to the mobile one so it works in both the
+    // mobile card view and the desktop hero/card view — keep both pairs
+    // of elements in sync everywhere below.
     function showSent(label) {
-        var wrap = document.getElementById('agentEmailStatusWrap');
-        var sendBtn = document.getElementById('btnAgentEmailSend');
-        var at = document.getElementById('agentEmailSentAt');
-        if (at) at.textContent = label || '';
-        if (wrap) wrap.style.display = '';
-        if (sendBtn) sendBtn.style.display = 'none';
+        ['agentEmailStatusWrap', 'agentEmailStatusWrapDesktop'].forEach(function(id) {
+            var wrap = document.getElementById(id);
+            if (wrap) wrap.style.display = '';
+        });
+        ['agentEmailSentAt', 'agentEmailSentAtDesktop'].forEach(function(id) {
+            var at = document.getElementById(id);
+            if (at) at.textContent = label || '';
+        });
+        ['btnAgentEmailSend', 'btnAgentEmailSendDesktop'].forEach(function(id) {
+            var sendBtn = document.getElementById(id);
+            if (sendBtn) sendBtn.style.display = 'none';
+        });
     }
 
     function openModal() {
@@ -491,10 +900,15 @@ include 'includes/header.php';
         }).then(function(r) { return r.json(); });
     }
 
+    function allAgentEmailButtons() {
+        return ['btnAgentEmailSend', 'btnAgentEmailAgain', 'btnAgentEmailSendDesktop', 'btnAgentEmailAgainDesktop']
+            .map(function(id) { return document.getElementById(id); })
+            .filter(Boolean);
+    }
+
     function startSendFlow() {
-        var sendBtn = document.getElementById('btnAgentEmailSend');
-        var againBtn = document.getElementById('btnAgentEmailAgain');
-        [sendBtn, againBtn].forEach(function(b) { if (b) b.disabled = true; });
+        var buttons = allAgentEmailButtons();
+        buttons.forEach(function(b) { b.disabled = true; });
 
         fetch('ajax/send_agent_update.php?action=lookup&survey_id=' + surveyId, { credentials: 'same-origin' })
             .then(function(r) { return r.json(); })
@@ -521,14 +935,13 @@ include 'includes/header.php';
             })
             .catch(function() { alert('Network error'); })
             .finally(function() {
-                [sendBtn, againBtn].forEach(function(b) { if (b) b.disabled = false; });
+                buttons.forEach(function(b) { b.disabled = false; });
             });
     }
 
-    var btn = document.getElementById('btnAgentEmailSend');
-    var again = document.getElementById('btnAgentEmailAgain');
-    if (btn) btn.addEventListener('click', function(e) { e.preventDefault(); startSendFlow(); });
-    if (again) again.addEventListener('click', function(e) { e.preventDefault(); startSendFlow(); });
+    allAgentEmailButtons().forEach(function(b) {
+        b.addEventListener('click', function(e) { e.preventDefault(); startSendFlow(); });
+    });
 
     document.getElementById('agentEmailModalClose').addEventListener('click', closeModal);
     document.getElementById('agentEmailModalCancel').addEventListener('click', closeModal);
