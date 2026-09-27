@@ -65,6 +65,17 @@ include 'includes/header.php';
     .admin-item-actions button.delete-btn:hover { color: #dc2626; border-color: #dc2626; }
     .admin-item-actions button.login-btn:hover { color: #0ea5b0; border-color: #0ea5b0; }
     .admin-item-actions button.login-btn.no-login { color: #b45309; border-color: #fcd34d; background: #fffbeb; }
+    .sac-view-tabs { display: flex; gap: 8px; padding: 14px 16px 0; }
+    .sac-view-tab {
+        flex: 0 0 auto; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--border-color);
+        background: #fff; color: var(--text-muted); font-size: 12.5px; font-weight: 650; white-space: nowrap;
+    }
+    .sac-view-tab.active { background: var(--accent-purple); border-color: var(--accent-purple); color: #fff; }
+    .sac-dup-badge {
+        display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+        background: #fef2f2; color: #dc2626; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+        border: 1px solid #fecaca; vertical-align: middle;
+    }
     .sac-login-delete-row { border-top: 1px dashed var(--border-color); margin-top: 4px; padding-top: 14px; }
     .sac-login-delete-btn { width: 100%; background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; border-radius: 10px; padding: 10px; font-weight: 650; font-size: 13px; }
     .admin-empty-state { text-align: center; padding: 30px 10px; color: var(--text-muted); font-size: 12.5px; }
@@ -85,12 +96,28 @@ include 'includes/header.php';
 <div class="scroll-content">
     <?php $page_title = 'Manage Clients'; $back_url = 'index.php'; $page_testid = 'super-admin-clients'; include 'includes/top_app_bar.php'; ?>
 
-    <div class="admin-search-row">
-        <input type="text" id="clientsSearchInput" placeholder="Search clients..." data-testid="sac-clients-search">
-        <button type="button" class="admin-add-btn" id="clientsAddBtn" data-testid="sac-clients-add"><i class="fa-solid fa-plus"></i> Add</button>
+    <div class="sac-view-tabs" data-testid="sac-view-tabs">
+        <button type="button" class="sac-view-tab active" data-view="companies" data-testid="sac-view-tab-companies">Companies</button>
+        <button type="button" class="sac-view-tab" data-view="logins" data-testid="sac-view-tab-logins">Client Logins</button>
     </div>
-    <div class="admin-list-container" id="clientsListContainer" data-testid="sac-clients-list">
-        <div class="admin-loading">Loading...</div>
+
+    <div id="companiesView">
+        <div class="admin-search-row">
+            <input type="text" id="clientsSearchInput" placeholder="Search clients..." data-testid="sac-clients-search">
+            <button type="button" class="admin-add-btn" id="clientsAddBtn" data-testid="sac-clients-add"><i class="fa-solid fa-plus"></i> Add</button>
+        </div>
+        <div class="admin-list-container" id="clientsListContainer" data-testid="sac-clients-list">
+            <div class="admin-loading">Loading...</div>
+        </div>
+    </div>
+
+    <div id="loginsView" style="display:none;">
+        <div class="admin-search-row">
+            <input type="text" id="loginsSearchInput" placeholder="Search logins by company, username, email or phone..." data-testid="sac-logins-search">
+        </div>
+        <div class="admin-list-container" id="loginsListContainer" data-testid="sac-logins-list">
+            <div class="admin-loading">Loading...</div>
+        </div>
     </div>
 </div>
 
@@ -196,7 +223,13 @@ $(document).ready(function() {
                 return;
             }
             currentRows = res.rows || [];
-            loadLogins(function() { renderRows(currentRows); });
+            loadLogins(function() {
+                if ($('.sac-view-tab[data-view="logins"]').hasClass('active')) {
+                    renderLoginsView($('#loginsSearchInput').val());
+                } else {
+                    renderRows(currentRows);
+                }
+            });
         }).fail(function() {
             $('#clientsListContainer').html('<div class="admin-empty-state">Network error while loading data.</div>');
         });
@@ -266,6 +299,118 @@ $(document).ready(function() {
             openLoginForm(id, row, currentLogins[id]);
         });
     }
+
+    // ── Client Logins view: every client that HAS a login, in one flat
+    // list, so a mistake like "gave the same client two separate logins"
+    // (usually two clients rows for the same company, each with its own
+    // login — see the Companies view's duplicate-name merge tool) is easy
+    // to spot by eye instead of clicking into each company one at a time.
+    function loginRowsWithData() {
+        return currentRows
+            .map(function(row) {
+                const id = row[CLIENTS_MOD.id_field];
+                const login = currentLogins[id];
+                return (login && login.user_id) ? { id: id, row: row, login: login } : null;
+            })
+            .filter(Boolean);
+    }
+
+    function renderLoginsView(searchTerm) {
+        const $container = $('#loginsListContainer');
+        let entries = loginRowsWithData();
+
+        // Flag possible duplicates: same normalized company name, OR same
+        // login's phone/email, shared by 2+ different logins.
+        const byCompany = {};
+        const byContact = {};
+        entries.forEach(function(e) {
+            const nameKey = String(e.row[CLIENTS_MOD.name_field] || '').trim().toLowerCase();
+            if (nameKey) { (byCompany[nameKey] = byCompany[nameKey] || []).push(e.id); }
+            ['email', 'phone'].forEach(function(f) {
+                const v = String(e.login[f] || '').trim().toLowerCase();
+                if (v) { (byContact[f + ':' + v] = byContact[f + ':' + v] || []).push(e.id); }
+            });
+        });
+        function isDup(e) {
+            const nameKey = String(e.row[CLIENTS_MOD.name_field] || '').trim().toLowerCase();
+            if (nameKey && byCompany[nameKey] && byCompany[nameKey].length > 1) return true;
+            return ['email', 'phone'].some(function(f) {
+                const v = String(e.login[f] || '').trim().toLowerCase();
+                return v && byContact[f + ':' + v] && byContact[f + ':' + v].length > 1;
+            });
+        }
+
+        const term = (searchTerm || '').toLowerCase().trim();
+        if (term) {
+            entries = entries.filter(function(e) {
+                const hay = [e.row[CLIENTS_MOD.name_field], e.login.username, e.login.full_name, e.login.email, e.login.phone]
+                    .map(function(v) { return String(v || '').toLowerCase(); }).join(' ');
+                return hay.indexOf(term) !== -1;
+            });
+        }
+
+        entries.sort(function(a, b) {
+            return String(a.row[CLIENTS_MOD.name_field] || '').localeCompare(String(b.row[CLIENTS_MOD.name_field] || ''));
+        });
+
+        if (!entries.length) {
+            $container.html('<div class="admin-empty-state">' + (term ? 'No matching logins found.' : 'No client logins exist yet.') + '</div>');
+            return;
+        }
+
+        let html = '';
+        entries.forEach(function(e) {
+            const dupBadge = isDup(e) ? '<span class="sac-dup-badge">Possible duplicate</span>' : '';
+            const subParts = [
+                'Username: ' + escapeHtml(e.login.username || ''),
+                'Contact: ' + escapeHtml(e.login.full_name || '')
+            ];
+            if (e.login.email) subParts.push('Email: ' + escapeHtml(e.login.email));
+            if (e.login.phone) subParts.push('Phone: ' + escapeHtml(e.login.phone));
+            html += '<div class="admin-item-card" data-testid="sac-login-row-' + e.id + '">' +
+                '<div class="admin-item-main">' +
+                    '<p class="admin-item-title">' + escapeHtml(e.row[CLIENTS_MOD.name_field] || '') + dupBadge + '</p>' +
+                    '<p class="admin-item-sub">' + subParts.join(' &middot; ') + '</p>' +
+                '</div>' +
+                '<div class="admin-item-actions">' +
+                    '<button type="button" class="login-btn" title="Edit Login" data-id="' + e.id + '" data-testid="sac-login-row-edit-' + e.id + '"><i class="fa-solid fa-pen"></i></button>' +
+                    '<button type="button" class="delete-btn" title="Delete Login" data-id="' + e.id + '" data-testid="sac-login-row-delete-' + e.id + '"><i class="fa-solid fa-trash"></i></button>' +
+                '</div>' +
+            '</div>';
+        });
+        $container.html(html);
+
+        $container.find('.login-btn').on('click', function() {
+            const id = $(this).data('id');
+            const row = currentRows.find(r => String(r[CLIENTS_MOD.id_field]) === String(id));
+            openLoginForm(id, row, currentLogins[id]);
+        });
+        $container.find('.delete-btn').on('click', function() {
+            const id = $(this).data('id');
+            confirmDeleteLogin(id);
+        });
+    }
+
+    $('.sac-view-tab').on('click', function() {
+        const view = $(this).data('view');
+        $('.sac-view-tab').removeClass('active');
+        $(this).addClass('active');
+        if (view === 'logins') {
+            $('#companiesView').hide();
+            $('#loginsView').show();
+            renderLoginsView($('#loginsSearchInput').val());
+        } else {
+            $('#loginsView').hide();
+            $('#companiesView').show();
+        }
+    });
+
+    let loginsSearchTimer = null;
+    $('#loginsSearchInput').on('input', function() {
+        const term = $(this).val();
+        clearTimeout(loginsSearchTimer);
+        loginsSearchTimer = setTimeout(function() { renderLoginsView(term); }, 300);
+    });
 
     function openLoginForm(clientId, clientRow, login) {
         currentLoginClientId = clientId;
