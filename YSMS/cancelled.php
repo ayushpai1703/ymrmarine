@@ -64,7 +64,7 @@ foreach ($surveys as $row) {
 }
 
 /* Desktop: pagination */
-$perPage = 10;
+$perPage = 25;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $q = trim((string)($_GET['q'] ?? ''));
 $filter_type = trim((string)($_GET['type'] ?? ''));
@@ -409,7 +409,7 @@ include 'includes/header.php';
                     </table>
                 </div>
                 <div class="vd-pagination">
-                    <div class="vd-page-info">10 per page</div>
+                    <div class="vd-page-info">25 per page</div>
                     <div class="vd-page-links" data-desk-pager></div>
                 </div>
             </div>
@@ -419,7 +419,7 @@ include 'includes/header.php';
 
 <script>
 (function () {
-  var PER = 10;
+  var PER = 25;
   var root = document.querySelector('.list-desktop-view, .vessels-desktop-view');
   if (!root) return;
 
@@ -495,7 +495,7 @@ include 'includes/header.php';
     if (meta) {
       var from = total ? start + 1 : 0;
       var to = Math.min(start + slice.length, total);
-      meta.innerHTML = 'Showing <strong>' + from + '</strong>–<strong>' + to + '</strong> of <strong>' + total + '</strong> · Page <strong>' + page + '</strong> / <strong>' + pages + '</strong> · 10 per page';
+      meta.innerHTML = 'Showing <strong>' + from + '</strong>–<strong>' + to + '</strong> of <strong>' + total + '</strong> · Page <strong>' + page + '</strong> / <strong>' + pages + '</strong> · 25 per page';
     }
 
     if (pager) {
