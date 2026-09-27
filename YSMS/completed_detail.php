@@ -185,10 +185,162 @@ include 'includes/header.php';
     }
     .info-row { padding: 10px 16px; }
 }
+
+    /* ═══ Desktop modern redesign — same hero + icon-chip card visual
+       language as vessel_detail.php / report_detail.php. Mobile
+       (".detail-mobile-view", the markup above/below unchanged) keeps the
+       existing layout; only >=992px swaps to this. Page-scoped <style>. */
+    .detail-mobile-view { display: block; }
+    .detail-desktop-view { display: none; }
+    @media (min-width: 992px) {
+        .detail-mobile-view { display: none !important; }
+        .detail-desktop-view { display: block !important; }
+        .top-app-bar { display: none !important; }
+
+        .vdd-wrap { padding: 8px 20px 40px; max-width: 1400px; margin: 0 auto; }
+
+        .vdd-back {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+            font-size: 13px; font-weight: 600; color: #64748b; text-decoration: none;
+        }
+        .vdd-back:hover { color: #5B2DEE; }
+        .vdd-back-icon {
+            width: 32px; height: 32px; border-radius: 10px; background: #fff;
+            border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center;
+            color: #475569; flex: none;
+        }
+
+        .vdd-hero {
+            position: relative; overflow: hidden; border-radius: 22px;
+            background: linear-gradient(120deg, #0f172a 0%, #14532D 55%, #16A34A 100%);
+            padding: 26px 30px; margin-bottom: 18px;
+            display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap;
+            box-shadow: 0 14px 34px rgba(20,83,45,.22);
+        }
+        .vdd-hero-icon-bg {
+            position: absolute; right: -26px; top: -40px; font-size: 190px; color: rgba(255,255,255,.07);
+            pointer-events: none; line-height: 1;
+        }
+        .vdd-hero-left { display: flex; align-items: center; gap: 16px; min-width: 0; position: relative; }
+        .vdd-hero-ship {
+            width: 56px; height: 56px; border-radius: 16px; flex: none;
+            background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 24px;
+        }
+        .vdd-hero-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .vdd-hero-title { font-size: 24px; font-weight: 800; color: #fff; letter-spacing: -.01em; }
+        .vdd-hero-status {
+            display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.16);
+            border: 1px solid rgba(255,255,255,.24); color: #fff; font-size: 10.5px; font-weight: 800;
+            padding: 5px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+        }
+        .vdd-hero-sub { font-size: 13px; color: rgba(255,255,255,.7); margin-top: 6px; font-weight: 500; }
+        .vdd-hero-sub b { color: #fff; font-weight: 700; }
+
+        .vdd-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 18px; align-items: start; }
+        .vdd-card {
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(15,23,42,.05); overflow: hidden;
+        }
+        .vdd-card + .vdd-card { margin-top: 18px; }
+        .vdd-card-head {
+            padding: 18px 22px; border-bottom: 1px solid #f1f5f9;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .vdd-card-head-icon {
+            width: 30px; height: 30px; border-radius: 9px; flex: none;
+            display: flex; align-items: center; justify-content: center; font-size: 14px;
+        }
+        .vdd-card-head-title { font-size: 15px; font-weight: 800; color: #0f172a; }
+        .vdd-card-body { padding: 20px 22px 22px; }
+
+        .vdd-info-rows { padding: 8px 10px; }
+        .vdd-info-row {
+            display: flex; align-items: center; gap: 14px; padding: 13px 12px; border-radius: 12px;
+        }
+        .vdd-info-row.alt { background: #FAFAFE; }
+        .vdd-info-icon {
+            width: 34px; height: 34px; border-radius: 10px; flex: none;
+            display: flex; align-items: center; justify-content: center; font-size: 14px;
+        }
+        .vdd-info-label { flex: 0 0 150px; font-size: 12.5px; color: #64748b; font-weight: 600; }
+        .vdd-info-value { font-size: 13.5px; color: #0f172a; font-weight: 700; min-width: 0; }
+        .vdd-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: #EFF6FF; color: #1D4ED8; font-size: 10.5px; font-weight: 800;
+            padding: 4px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em;
+        }
+        .vdd-badge .dot { width: 5px; height: 5px; border-radius: 50%; background: #2563EB; flex: none; }
+        .vdd-badge-soft {
+            display: inline-flex; align-items: center; background: #F8FAFC; color: #334155;
+            font-size: 11.5px; font-weight: 700; padding: 4px 11px; border-radius: 999px; border: 1px solid #e2e8f0;
+        }
+
+        /* Recovery figures — 2x2 stat-tile grid */
+        .vdd-recovery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 18px 22px 22px; }
+        .vdd-recovery-tile {
+            background: #F8FAFC; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 16px;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .vdd-recovery-icon {
+            width: 36px; height: 36px; border-radius: 10px; flex: none;
+            display: flex; align-items: center; justify-content: center; font-size: 15px;
+        }
+        .vdd-recovery-value { font-size: 16px; font-weight: 800; color: #0f172a; line-height: 1.15; }
+        .vdd-recovery-label { font-size: 10.5px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; margin-top: 1px; }
+
+        /* Modern form fields (Edit Recovery) */
+        .vdd-field { margin-bottom: 12px; }
+        .vdd-field label { display: block; font-size: 11.5px; font-weight: 700; color: #64748b; margin-bottom: 5px; }
+        .vdd-field input {
+            width: 100%; box-sizing: border-box; border: 1.5px solid #e2e8f0; border-radius: 12px;
+            padding: 10px 14px; font-size: 13.5px; color: #0f172a; font-family: inherit; background: #F8FAFC;
+        }
+        .vdd-field input:focus { outline: none; border-color: #A78BFA; box-shadow: 0 0 0 4px rgba(91,45,238,.12); background: #fff; }
+        .vdd-save-btn {
+            width: 100%; border: none; background: linear-gradient(120deg, #1E1B6B, #4B2FD6); color: #fff;
+            height: 44px; border-radius: 12px; font-weight: 800; font-size: 13px; cursor: pointer;
+            box-shadow: 0 8px 18px rgba(75,47,214,.28);
+        }
+        .vdd-alert { border-radius: 12px; padding: 10px 14px; font-size: 12.5px; font-weight: 600; margin-bottom: 12px; }
+        .vdd-alert-success { background: #D1FAE5; color: #065f46; }
+        .vdd-alert-danger { background: #FEE2E2; color: #991b1b; }
+
+        /* File list (Dossier Archive downloads) */
+        .vdd-file-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 14px;
+        }
+        .vdd-file-row + .vdd-file-row { margin-top: 10px; }
+        .vdd-file-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex: none; font-size: 15px; }
+        .vdd-file-name { font-size: 12.5px; font-weight: 700; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vdd-file-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+        .vdd-file-dl {
+            flex: none; width: 34px; height: 34px; border-radius: 10px; background: #F8FAFC; border: 1px solid #e2e8f0;
+            color: #5B2DEE; display: flex; align-items: center; justify-content: center; text-decoration: none !important;
+        }
+        .vdd-file-dl:hover { background: #5B2DEE; color: #fff; border-color: #5B2DEE; }
+        .vdd-file-empty { text-align: center; padding: 30px 20px; color: #94a3b8; font-size: 12.5px; }
+
+        .vdd-invoice-btn {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; border: none; border-radius: 14px; height: 48px;
+            background: linear-gradient(120deg, #1E1B6B, #4B2FD6); color: #fff !important; font-weight: 800; font-size: 13.5px;
+            text-decoration: none !important; box-shadow: 0 10px 22px rgba(75,47,214,.3);
+        }
+        .vdd-expenses-btn {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; border: none; border-radius: 14px; height: 48px;
+            background: #0f766e; color: #fff !important; font-weight: 800; font-size: 13.5px;
+            text-decoration: none !important; box-shadow: 0 10px 22px rgba(15,118,110,.3);
+        }
+    }
 </style>
 
 <div class="scroll-content">
     <?php $page_title = 'Vessel Complete History'; $back_url = 'completed.php'; $page_testid = 'completed-detail'; include 'includes/top_app_bar.php'; ?>
+
+    <div class="detail-mobile-view">
 
     <!-- Top Summary Card -->
     <div class="detail-header-card">
@@ -325,9 +477,216 @@ include 'includes/header.php';
         </a>
         <?php endif; ?>
     </div>
+    </div><!-- /.detail-mobile-view -->
+
+    <div class="detail-desktop-view">
+        <div class="vdd-wrap">
+            <a href="<?= sanitize($back_url ?: 'completed.php') ?>" class="vdd-back">
+                <span class="vdd-back-icon"><i class="fa-solid fa-chevron-left"></i></span>
+                Back
+            </a>
+
+            <div class="vdd-hero">
+                <i class="fa-solid fa-circle-check vdd-hero-icon-bg" aria-hidden="true"></i>
+                <div class="vdd-hero-left">
+                    <div class="vdd-hero-ship"><i class="fa-solid fa-ship"></i></div>
+                    <div>
+                        <div class="vdd-hero-title-row">
+                            <div class="vdd-hero-title"><?= sanitize($survey['vessel_name']) ?></div>
+                            <span class="vdd-hero-status"><i class="fa-solid fa-circle-check"></i>&nbsp; Fully Completed</span>
+                        </div>
+                        <div class="vdd-hero-sub">
+                            Client: <b><?= sanitize($survey['company_name']) ?></b>
+                            <?php if (!empty($survey['report_number'])): ?>&nbsp;·&nbsp; Report No: <b><?= sanitize($survey['report_number']) ?></b><?php endif; ?>
+                            &nbsp;·&nbsp; Uploaded by <b><?= sanitize($survey['uploader_name'] ?: $survey['surveyor_name'] ?: 'Admin') ?></b>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="vdd-grid">
+                <div>
+                    <div class="vdd-card">
+                        <div class="vdd-card-head">
+                            <div class="vdd-card-head-icon" style="background:#EEF2FF;color:#4F46E5;"><i class="fa-solid fa-timeline"></i></div>
+                            <div class="vdd-card-head-title">Timeline</div>
+                        </div>
+                        <div class="vdd-info-rows">
+                            <div class="vdd-info-row">
+                                <div class="vdd-info-icon" style="background:#F1F5FF;color:#4F46E5;"><i class="fa-regular fa-calendar-plus"></i></div>
+                                <div class="vdd-info-label">Survey Assigned</div>
+                                <div><span class="vdd-badge-soft"><?= fmtDateTime($survey['assign_date'] ?? '') ?></span></div>
+                            </div>
+                            <div class="vdd-info-row alt">
+                                <div class="vdd-info-icon" style="background:#FFFBEB;color:#B45309;"><i class="fa-regular fa-calendar-check"></i></div>
+                                <div class="vdd-info-label">Survey Completed</div>
+                                <div><span class="vdd-badge-soft"><?= fmtDateTime($survey['survey_completed_date'] ?? '') ?></span></div>
+                            </div>
+                            <div class="vdd-info-row">
+                                <div class="vdd-info-icon" style="background:#D1FAE5;color:#047857;"><i class="fa-solid fa-calendar-check"></i></div>
+                                <div class="vdd-info-label">Report Completed</div>
+                                <div><span class="vdd-badge-soft"><?= fmtDateTime($survey['report_uploaded_date'] ?? '') ?></span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="vdd-card">
+                        <div class="vdd-card-head">
+                            <div class="vdd-card-head-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-file-lines"></i></div>
+                            <div class="vdd-card-head-title">Survey Records</div>
+                        </div>
+                        <div class="vdd-info-rows">
+                            <div class="vdd-info-row">
+                                <div class="vdd-info-icon" style="background:#F1F5FF;color:#4F46E5;"><i class="fa-solid fa-hashtag"></i></div>
+                                <div class="vdd-info-label">Report No</div>
+                                <div class="vdd-info-value"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></div>
+                            </div>
+                            <div class="vdd-info-row alt">
+                                <div class="vdd-info-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-file-circle-check"></i></div>
+                                <div class="vdd-info-label">Survey Type</div>
+                                <div><span class="vdd-badge"><span class="dot"></span><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
+                            </div>
+                            <div class="vdd-info-row">
+                                <div class="vdd-info-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-location-dot"></i></div>
+                                <div class="vdd-info-label">Port</div>
+                                <div class="vdd-info-value"><?= sanitize($survey['port_name']) ?></div>
+                            </div>
+                            <div class="vdd-info-row alt">
+                                <div class="vdd-info-icon" style="background:#FFF7ED;color:#EA580C;"><i class="fa-solid fa-people-group"></i></div>
+                                <div class="vdd-info-label">Agent</div>
+                                <div class="vdd-info-value"><?= sanitize($survey['agent_name']) ?></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="vdd-card">
+                        <div class="vdd-card-head">
+                            <div class="vdd-card-head-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-droplet"></i></div>
+                            <div class="vdd-card-head-title">Recovery Summary</div>
+                        </div>
+                        <div class="vdd-recovery-grid">
+                            <div class="vdd-recovery-tile">
+                                <div class="vdd-recovery-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-droplet"></i></div>
+                                <div>
+                                    <div class="vdd-recovery-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></div>
+                                    <div class="vdd-recovery-label">Total</div>
+                                </div>
+                            </div>
+                            <div class="vdd-recovery-tile">
+                                <div class="vdd-recovery-icon" style="background:#EFF6FF;color:#1D4ED8;"><i class="fa-solid fa-droplet"></i></div>
+                                <div>
+                                    <div class="vdd-recovery-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></div>
+                                    <div class="vdd-recovery-label">VLSFO</div>
+                                </div>
+                            </div>
+                            <div class="vdd-recovery-tile">
+                                <div class="vdd-recovery-icon" style="background:#D1FAE5;color:#047857;"><i class="fa-solid fa-droplet"></i></div>
+                                <div>
+                                    <div class="vdd-recovery-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></div>
+                                    <div class="vdd-recovery-label">LSMGO</div>
+                                </div>
+                            </div>
+                            <div class="vdd-recovery-tile">
+                                <div class="vdd-recovery-icon" style="background:#FFF7ED;color:#EA580C;"><i class="fa-solid fa-droplet"></i></div>
+                                <div>
+                                    <div class="vdd-recovery-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></div>
+                                    <div class="vdd-recovery-label">HSFO</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="vdd-card">
+                        <div class="vdd-card-head">
+                            <div class="vdd-card-head-icon" style="background:#EEF2FF;color:#4F46E5;"><i class="fa-solid fa-cloud-arrow-down"></i></div>
+                            <div class="vdd-card-head-title">Dossier Archive (All Uploaded Files)</div>
+                        </div>
+                        <div class="vdd-card-body">
+                            <?php if (count($all_files) > 0): foreach ($all_files as $file):
+                                $vdd_icon = 'fa-file-lines'; $vdd_icon_bg = '#F1F5F9'; $vdd_icon_fg = '#475569';
+                                if (str_contains($file['file_type'], 'PDF')) { $vdd_icon = 'fa-file-pdf'; $vdd_icon_bg = '#FEE2E2'; $vdd_icon_fg = '#B91C1C'; }
+                                elseif (str_contains($file['file_type'], 'Excel')) { $vdd_icon = 'fa-file-excel'; $vdd_icon_bg = '#D1FAE5'; $vdd_icon_fg = '#047857'; }
+                                elseif (str_contains($file['file_type'], 'Word')) { $vdd_icon = 'fa-file-word'; $vdd_icon_bg = '#EEF2FF'; $vdd_icon_fg = '#4F46E5'; }
+                            ?>
+                            <div class="vdd-file-row">
+                                <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                                    <div class="vdd-file-icon" style="background:<?= $vdd_icon_bg ?>;color:<?= $vdd_icon_fg ?>;"><i class="fa-solid <?= $vdd_icon ?>"></i></div>
+                                    <div style="min-width:0;">
+                                        <div class="vdd-file-name" title="<?= sanitize(preg_replace('/^[0-9]+_/', '', $file['file_name'])) ?>"><?= sanitize(preg_replace('/^[0-9]+_/', '', $file['file_name'])) ?></div>
+                                        <div class="vdd-file-meta">
+                                            <span class="vdd-badge-soft" style="font-size:10px;padding:2px 8px;"><?= sanitize($file['file_type']) ?></span>
+                                            <span style="font-size:11px;color:#94a3b8;"><?= sanitize($file['file_size']) ?></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <a href="download.php?upload_id=<?= (int)$file['id'] ?>" class="vdd-file-dl"><i class="fa-solid fa-download"></i></a>
+                            </div>
+                            <?php endforeach; else: ?>
+                            <div class="vdd-file-empty"><i class="fa-solid fa-folder-open d-block mb-2" style="font-size:22px;opacity:.5;"></i>No files archived for this vessel.</div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <?php if ($is_admin): ?>
+                    <div class="vdd-card">
+                        <div class="vdd-card-head">
+                            <div class="vdd-card-head-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-droplet"></i></div>
+                            <div class="vdd-card-head-title">Edit Recovery</div>
+                        </div>
+                        <div class="vdd-card-body" data-testid="recovery-edit-box-desktop">
+                            <?php if ($recovery_message): ?><div class="vdd-alert vdd-alert-success" data-testid="recovery-success-desktop"><?= sanitize($recovery_message) ?></div><?php endif; ?>
+                            <?php if ($recovery_error): ?><div class="vdd-alert vdd-alert-danger" data-testid="recovery-error-desktop"><?= sanitize($recovery_error) ?></div><?php endif; ?>
+                            <form method="POST">
+                                <?= csrf_field() ?>
+                                <div class="vdd-field">
+                                    <label>Total Recovery (MT)</label>
+                                    <input type="number" step="0.001" min="0" name="recovery_amount" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)$survey['recovery_amount']) : '' ?>" data-testid="recovery-field-total-desktop">
+                                </div>
+                                <div class="vdd-field">
+                                    <label>VLSFO Recovery (MT)</label>
+                                    <input type="number" step="0.001" min="0" name="vlsfo_recovery" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)$survey['vlsfo_recovery']) : '' ?>" data-testid="recovery-field-vlsfo-desktop">
+                                </div>
+                                <div class="vdd-field">
+                                    <label>LSMGO Recovery (MT)</label>
+                                    <input type="number" step="0.001" min="0" name="lsmgo_recovery" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)$survey['lsmgo_recovery']) : '' ?>" data-testid="recovery-field-lsmgo-desktop">
+                                </div>
+                                <div class="vdd-field">
+                                    <label>HSFO Recovery (MT)</label>
+                                    <input type="number" step="0.001" min="0" name="hsfo_recovery" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)$survey['hsfo_recovery']) : '' ?>" data-testid="recovery-field-hsfo-desktop">
+                                </div>
+                                <button type="submit" name="update_recovery" class="vdd-save-btn" data-testid="save-recovery-button-desktop">Save Recovery</button>
+                            </form>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
+                    <div class="vdd-card">
+                        <div class="vdd-card-body">
+                            <a href="invoice_generator.php?id=<?= (int)$survey['id'] ?>" class="vdd-invoice-btn" data-testid="generate-invoice-button-desktop">
+                                <i class="fa-solid fa-file-invoice-dollar"></i> Generate Invoice
+                            </a>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (($_SESSION['role'] ?? '') === 'Surveyor'): ?>
+                    <div class="vdd-card">
+                        <div class="vdd-card-body">
+                            <a href="coming_soon.php?feature=Generate+Expenses" class="vdd-expenses-btn" data-testid="generate-expenses-button-desktop">
+                                <i class="fa-solid fa-receipt"></i> Generate Expenses
+                            </a>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div><!-- /.detail-desktop-view -->
 </div>
 
-<?php 
+<?php
 include 'includes/nav.php';
 include 'includes/footer.php';
 ?>
