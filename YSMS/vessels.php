@@ -477,39 +477,66 @@ include 'includes/header.php';
             flex: 1 1 auto; min-width: 0;
         }
         .vd-search {
-            display: flex; align-items: center; gap: 8px;
+            display: flex; align-items: center; gap: 7px;
             background: #F8FAFC; border: 1.5px solid #e2e8f0; border-radius: 999px;
-            padding: 0 14px; height: 38px; flex: 0 0 220px; min-width: 160px; box-sizing: border-box;
+            padding: 0 12px; height: 34px; flex: 0 0 150px; min-width: 120px; box-sizing: border-box;
             transition: border-color .15s ease, box-shadow .15s ease;
         }
         .vd-search:focus-within { border-color: #A78BFA; box-shadow: 0 0 0 4px rgba(91,45,238,.12); }
-        .vd-search i { color: #94A3B8; font-size: 14px; flex: none; }
-        .vd-search input[type=search] { border: none; background: transparent; font-size: 13px; color: #0f172a; flex: 1 1 auto; height: 100%; }
+        .vd-search i { color: #94A3B8; font-size: 12.5px; flex: none; }
+        .vd-search input[type=search] { border: none; background: transparent; font-size: 12.5px; color: #0f172a; flex: 1 1 auto; height: 100%; min-width: 0; }
         .vd-search input[type=search]:focus { outline: none; }
-        .vd-filter {
-            display: flex; align-items: center; gap: 7px;
+
+        /* Custom-styled dropdown: a pill trigger + floating menu, built by JS
+           over the real <select data-desk-*> (kept in the DOM, just hidden)
+           so the existing filter/sort logic below — which reads these
+           selects' .value and listens for their 'change' event — is
+           completely unchanged. */
+        .vd-dd { position: relative; flex: 0 0 auto; }
+        .vd-dd select { display: none; }
+        .vd-dd-trigger {
+            display: flex; align-items: center; gap: 5px;
             background: #F8FAFC; border: 1px solid #e2e8f0; border-radius: 999px;
-            padding: 0 14px; height: 38px; box-sizing: border-box; flex: 0 0 auto;
+            padding: 0 10px; height: 34px; box-sizing: border-box; max-width: 128px;
+            font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; white-space: nowrap;
+            transition: border-color .15s ease, background .15s ease;
         }
-        .vd-filter i { font-size: 12px; color: #94A3B8; flex: none; }
-        .vd-filter select {
-            border: none; background: transparent; appearance: none; -webkit-appearance: none; -moz-appearance: none;
-            font-size: 12.5px; font-weight: 600; color: #334155; padding-right: 16px; height: 38px; max-width: 150px;
-            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%2394A3B8'/></svg>");
-            background-repeat: no-repeat; background-position: right 0 center;
+        .vd-dd-trigger:hover { border-color: #c7d2e0; background: #fff; }
+        .vd-dd-trigger.open { border-color: #A78BFA; background: #fff; box-shadow: 0 0 0 3px rgba(91,45,238,.12); }
+        .vd-dd-trigger .vd-dd-icon { font-size: 11px; color: #94A3B8; flex: none; }
+        .vd-dd-trigger .vd-dd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+        .vd-dd-trigger .vd-dd-chevron { font-size: 8px; color: #94A3B8; flex: none; transition: transform .15s ease; }
+        .vd-dd-trigger.open .vd-dd-chevron { transform: rotate(180deg); }
+        .vd-dd-menu {
+            position: absolute; top: calc(100% + 6px); left: 0; min-width: 170px; max-width: 240px;
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+            box-shadow: 0 16px 36px rgba(15,23,42,.14); padding: 6px; z-index: 40; max-height: 260px; overflow-y: auto;
+            opacity: 0; visibility: hidden; transform: translateY(-6px) scale(.98); transform-origin: top left;
+            transition: opacity .15s ease, transform .15s ease, visibility .15s ease;
         }
-        .vd-filter select:focus { outline: none; }
+        .vd-dd-menu.open { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+        .vd-dd-item {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            padding: 8px 10px 8px 12px; border-radius: 10px; font-size: 13px; font-weight: 500; color: #334155;
+            cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .vd-dd-item:hover { background: #F3EEFE; color: #5B2DEE; }
+        .vd-dd-item.selected { background: #F3EEFE; color: #5B2DEE; font-weight: 700; }
+        .vd-dd-item.selected::after {
+            content: '\f00c'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 10px; color: #5B2DEE; flex: none;
+        }
+
         .vd-clear-btn {
-            display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 999px;
-            font-size: 12.5px; font-weight: 600; color: #94A3B8; text-decoration: none; border: none;
+            display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; height: 34px; border-radius: 999px;
+            font-size: 12px; font-weight: 600; color: #94A3B8; text-decoration: none; border: none;
             background: transparent; cursor: pointer; white-space: nowrap;
         }
         .vd-clear-btn:hover { color: #5B2DEE; }
 
         .btn-export {
-            display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex: 0 0 auto;
+            display: inline-flex; align-items: center; gap: 7px; margin-left: auto; flex: 0 0 auto;
             background: linear-gradient(120deg, #14B8A6, #0D9488); color: #fff;
-            padding: 9px 18px; border-radius: 999px; font-weight: 700; font-size: 13px; height: 38px; box-sizing: border-box;
+            padding: 0 16px; border-radius: 999px; font-weight: 700; font-size: 12.5px; height: 34px; box-sizing: border-box;
             text-decoration: none; box-shadow: 0 6px 16px rgba(13,148,136,.3); white-space: nowrap;
             transition: box-shadow .18s ease, transform .18s ease;
         }
@@ -728,10 +755,10 @@ include 'includes/header.php';
                 <div class="vd-toolbar-inner">
                     <div class="vd-search">
                         <i class="fa-solid fa-magnifying-glass"></i>
-                        <input type="search" data-desk-search placeholder="Search vessel, client, agent, type…" autocomplete="off">
+                        <input type="search" data-desk-search placeholder="Search vessel" autocomplete="off">
                     </div>
-                    <div class="vd-filter">
-                        <i class="fa-solid fa-arrow-down-wide-short"></i>
+                    <div class="vd-dd">
+                        <i class="fa-solid fa-arrow-down-wide-short vd-dd-icon-src"></i>
                         <select data-desk-sort>
                             <option value="newest">Newest first</option>
                             <option value="oldest">Oldest first</option>
@@ -739,8 +766,8 @@ include 'includes/header.php';
                             <option value="name-desc">Vessel Z–A</option>
                         </select>
                     </div>
-                    <div class="vd-filter">
-                        <i class="fa-solid fa-location-dot"></i>
+                    <div class="vd-dd">
+                        <i class="fa-solid fa-location-dot vd-dd-icon-src"></i>
                         <select data-desk-place>
                             <option value="">All ports</option>
                             <?php foreach ($survey_places_filter as $v): ?>
@@ -748,8 +775,8 @@ include 'includes/header.php';
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="vd-filter">
-                        <i class="fa-solid fa-building"></i>
+                    <div class="vd-dd">
+                        <i class="fa-solid fa-building vd-dd-icon-src"></i>
                         <select data-desk-client>
                             <option value="">All clients</option>
                             <?php foreach ($survey_clients_filter as $v): ?>
@@ -758,8 +785,8 @@ include 'includes/header.php';
                         </select>
                     </div>
                     <?php if ($is_full_access): ?>
-                    <div class="vd-filter">
-                        <i class="fa-solid fa-user-tie"></i>
+                    <div class="vd-dd">
+                        <i class="fa-solid fa-user-tie vd-dd-icon-src"></i>
                         <select data-desk-surveyor>
                             <option value="">All surveyors</option>
                             <?php foreach ($survey_surveyors_filter as $v): ?>
@@ -895,7 +922,6 @@ include 'includes/header.php';
 
   var search = root.querySelector('[data-desk-search]');
   var sortSel = root.querySelector('[data-desk-sort]');
-  var typeSel = root.querySelector('[data-desk-type]');
   var placeSel = root.querySelector('[data-desk-place]');
   var clientSel = root.querySelector('[data-desk-client]');
   var surveyorSel = root.querySelector('[data-desk-surveyor]');
@@ -909,12 +935,77 @@ include 'includes/header.php';
   var allRows = Array.prototype.slice.call(tbody.querySelectorAll('tr.vd-row'));
   var page = 1;
 
+  // 🌟 Modern custom-styled dropdown — a pill trigger + floating menu built
+  // by JS over the real <select data-desk-*> (kept in the DOM, just
+  // display:none'd), so filtered()/onChange() below still read these
+  // selects' .value exactly as before; a custom item click just sets the
+  // select's value and dispatches a real 'change' event on it.
+  var enhancedDropdowns = [];
+  function enhanceDropdown(selectEl) {
+    if (!selectEl) return;
+    var wrap = selectEl.closest('.vd-dd');
+    if (!wrap) return;
+    var iconSrc = wrap.querySelector('.vd-dd-icon-src');
+    var iconClass = iconSrc ? iconSrc.className.replace('vd-dd-icon-src', '').trim() : '';
+    if (iconSrc) iconSrc.remove();
+
+    var trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'vd-dd-trigger';
+    trigger.innerHTML = '<i class="' + iconClass + ' vd-dd-icon"></i><span class="vd-dd-label"></span><i class="fa-solid fa-chevron-down vd-dd-chevron"></i>';
+
+    var menu = document.createElement('div');
+    menu.className = 'vd-dd-menu';
+    Array.prototype.forEach.call(selectEl.options, function (opt) {
+      var item = document.createElement('div');
+      item.className = 'vd-dd-item';
+      item.textContent = opt.textContent;
+      item.dataset.value = opt.value;
+      item.addEventListener('click', function () {
+        selectEl.value = opt.value;
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        syncDropdownLabel(entry);
+        closeAllDropdowns();
+      });
+      menu.appendChild(item);
+    });
+
+    wrap.appendChild(trigger);
+    wrap.appendChild(menu);
+
+    trigger.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      var wasOpen = menu.classList.contains('open');
+      closeAllDropdowns();
+      if (!wasOpen) { trigger.classList.add('open'); menu.classList.add('open'); }
+    });
+
+    var entry = { select: selectEl, trigger: trigger, menu: menu };
+    enhancedDropdowns.push(entry);
+    syncDropdownLabel(entry);
+  }
+  function syncDropdownLabel(entry) {
+    var opt = entry.select.options[entry.select.selectedIndex];
+    entry.trigger.querySelector('.vd-dd-label').textContent = opt ? opt.textContent : '';
+    Array.prototype.forEach.call(entry.menu.children, function (item) {
+      item.classList.toggle('selected', item.dataset.value === entry.select.value);
+    });
+  }
+  function closeAllDropdowns() {
+    enhancedDropdowns.forEach(function (e) {
+      e.trigger.classList.remove('open');
+      e.menu.classList.remove('open');
+    });
+  }
+  document.addEventListener('click', closeAllDropdowns);
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closeAllDropdowns(); });
+  [sortSel, placeSel, clientSel, surveyorSel].forEach(enhanceDropdown);
+
   function val(sel) { return sel ? (sel.value || '').toLowerCase() : ''; }
 
   function filtered() {
     var q = (search ? search.value : '').toLowerCase().trim();
     var parts = q ? q.split(/\s+/).filter(Boolean) : [];
-    var type = val(typeSel);
     var place = val(placeSel);
     var client = val(clientSel);
     var surveyor = val(surveyorSel);
@@ -923,7 +1014,6 @@ include 'includes/header.php';
     var rows = allRows.filter(function (row) {
       var hay = (row.getAttribute('data-search') || '').toLowerCase();
       if (parts.length && !parts.every(function (p) { return hay.indexOf(p) !== -1; })) return false;
-      if (type && (row.getAttribute('data-type') || '').toLowerCase() !== type) return false;
       if (place && (row.getAttribute('data-place') || '').toLowerCase() !== place) return false;
       if (client && (row.getAttribute('data-client') || '').toLowerCase() !== client) return false;
       if (surveyor && (row.getAttribute('data-surveyor') || '').toLowerCase() !== surveyor) return false;
@@ -995,17 +1085,18 @@ include 'includes/header.php';
   function onChange() { page = 1; render(); }
 
   if (search) search.addEventListener('input', onChange);
-  [sortSel, typeSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
+  [sortSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
     if (el) el.addEventListener('change', onChange);
   });
   if (clearBtn) clearBtn.addEventListener('click', function (ev) {
     ev.preventDefault();
     if (search) search.value = '';
-    [sortSel, typeSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
+    [sortSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
       if (!el) return;
       if (el === sortSel) el.value = 'newest';
       else el.value = '';
     });
+    enhancedDropdowns.forEach(syncDropdownLabel);
     page = 1;
     render();
   });
