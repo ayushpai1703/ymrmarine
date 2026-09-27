@@ -83,85 +83,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_action'])) {
     }
 }
 
-// ── Client Data Diagnostic (read-only) — traces username → user_id →
-// client_id → company → per-status survey counts, using the exact same
-// getClientIdForUser() helper the real dashboard/reports pages call. If the
-// counts shown here are 0, the real dashboard's counts will be 0 for the
-// same reason — this exists so a Super Admin can run it directly against
-// whichever environment (staging or production) they're actually logged
-// into, rather than guessing from the code alone. No writes; nothing is
-// hardcoded — the username is typed in each time.
-$diag = null;
-$diagUsername = trim((string)($_GET['diag_username'] ?? ''));
-if ($diagUsername !== '') {
-    $diag = ['username' => $diagUsername];
-    try {
-        $uStmt = $db->prepare("SELECT u.id, u.full_name, r.name AS role_name FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE u.username = ? LIMIT 1");
-        $uStmt->execute([$diagUsername]);
-        $uRow = $uStmt->fetch(PDO::FETCH_ASSOC);
-        if (!$uRow) {
-            $diag['error'] = 'No user found with that exact username in this database.';
-        } else {
-            $diag['user_id'] = (int)$uRow['id'];
-            $diag['full_name'] = $uRow['full_name'];
-            $diag['role'] = $uRow['role_name'];
-            if ($diag['role'] === 'Client') {
-                $clientId = getClientIdForUser($db, $diag['user_id']);
-                $diag['client_id'] = $clientId;
-                if ($clientId <= 0) {
-                    $diag['error'] = 'This login has role Client but no clients row has user_id = ' . $diag['user_id'] . '. The account exists but is not linked to any company, so every dashboard query returns zero — this is the duplicate/unlinked-client issue; check the Duplicate Client Companies section below, or re-run Add Client with the exact same company name to link it.';
-                } else {
-                    $cStmt = $db->prepare('SELECT company_name, contact_person FROM clients WHERE id = ?');
-                    $cStmt->execute([$clientId]);
-                    $cRow = $cStmt->fetch(PDO::FETCH_ASSOC);
-                    $diag['company_name'] = $cRow['company_name'] ?? '';
-                    $diag['contact_person'] = $cRow['contact_person'] ?? '';
-
-                    $countsStmt = $db->prepare('SELECT status, COUNT(*) AS cnt FROM surveys WHERE client_id = ? GROUP BY status');
-                    $countsStmt->execute([$clientId]);
-                    $diag['status_counts'] = $countsStmt->fetchAll(PDO::FETCH_KEY_PAIR);
-
-                    $totalStmt = $db->prepare('SELECT COUNT(*) FROM surveys WHERE client_id = ?');
-                    $totalStmt->execute([$clientId]);
-                    $diag['total_surveys'] = (int)$totalStmt->fetchColumn();
-
-                    // Zero surveys on the linked row could also mean the real
-                    // data sits under a differently-spelled clients row for
-                    // the same company (e.g. "Norden" vs "Norden A/S") — the
-                    // exact-match duplicate scan below wouldn't catch that.
-                    // Surface any similarly-named row so it can be confirmed
-                    // and fixed by hand rather than guessed at automatically.
-                    if ($diag['total_surveys'] === 0) {
-                        $firstWord = trim((string)strtok((string)$diag['company_name'], " \t"));
-                        if (mb_strlen($firstWord) >= 3) {
-                            $simStmt = $db->prepare("
-                                SELECT c.id, c.company_name, c.user_id, u.username,
-                                       (SELECT COUNT(*) FROM surveys s WHERE s.client_id = c.id) AS survey_count
-                                FROM clients c
-                                LEFT JOIN users u ON u.id = c.user_id
-                                WHERE c.company_name LIKE ? AND c.id != ?
-                                ORDER BY c.id
-                            ");
-                            $simStmt->execute(['%' . $firstWord . '%', $clientId]);
-                            $diag['similar_clients'] = $simStmt->fetchAll(PDO::FETCH_ASSOC);
-                        }
-                    }
-                }
-            } else {
-                $diag['note'] = 'This login\'s role is "' . $diag['role'] . '", not Client — the client-dashboard filter doesn\'t apply to it.';
-            }
-        }
-    } catch (Throwable $e) {
-        error_log('super_admin_controls client diagnostic: ' . $e->getMessage());
-        $diag['error'] = 'Diagnostic query failed — see server error log for details.';
-    }
-}
-
-$dbIdentityRow = null;
-try {
-    $dbIdentityRow = $db->query('SELECT DATABASE() AS db_name')->fetch(PDO::FETCH_ASSOC);
-} catch (Throwable $e) { /* non-fatal, just skips the "connected DB" label */ }
-
 $dupClientGroups = [];
 try {
     $dupStmt = $db->query("
@@ -264,25 +185,6 @@ include 'includes/header.php';
         flex: 0 0 auto; background: #3b32b3; color: #fff; border: none; border-radius: 10px;
         padding: 10px 16px; font-weight: 650; font-size: 13px; white-space: nowrap;
     }
-    .admin-diag-zone {
-        margin: 16px 16px 24px;
-        padding: 16px;
-        border: 1px solid rgba(29,111,224,.3);
-        background: rgba(29,111,224,.04);
-        border-radius: 14px;
-    }
-    .admin-diag-zone-title { color: #1d6fe0; font-weight: 700; font-size: 13px; margin-bottom: 8px; }
-    .admin-diag-zone-copy { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; max-width: 640px; }
-    .diag-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
-    .diag-form input[type=text] { max-width: 260px; }
-    .diag-btn {
-        flex: 0 0 auto; background: #1d6fe0; color: #fff; border: none; border-radius: 10px;
-        padding: 10px 16px; font-weight: 650; font-size: 13px; white-space: nowrap;
-    }
-    .diag-result { border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; background: #fff; font-size: 12.5px; line-height: 1.9; }
-    @media (min-width: 992px) {
-        .admin-diag-zone { max-width: 900px; margin-left: auto; margin-right: auto; }
-    }
 </style>
 
 <div class="scroll-content">
@@ -291,64 +193,6 @@ include 'includes/header.php';
     <div class="sac-banner" data-testid="sac-temporary-banner">
         <i class="fa-solid fa-triangle-exclamation"></i>
         <span>Temporary tool — for clearing test data before go-live only. Each action below permanently deletes every record in that category, with no way to undo it. Remove this page once testing is complete.</span>
-    </div>
-
-    <div class="admin-diag-zone" data-testid="sac-client-diagnostic-section">
-        <div class="admin-diag-zone-title"><i class="fa-solid fa-magnifying-glass-chart"></i> Client Data Diagnostic (read-only)</div>
-        <div class="admin-diag-zone-copy">
-            Type a client's login username to trace exactly what <b>this running server</b> sees for that account — which database it's connected to, the resolved client record, and live vessel/report counts by status. Nothing here changes any data. Run this directly on whichever site (staging or production) is showing the problem — the answer only means anything for the environment you're actually logged into right now.
-        </div>
-        <form method="GET" class="diag-form">
-            <input type="text" name="diag_username" class="form-control" placeholder="e.g. bainbridge_login" value="<?= sanitize($diagUsername) ?>" autocomplete="off">
-            <button type="submit" class="diag-btn"><i class="fa-solid fa-magnifying-glass"></i> Diagnose</button>
-            <?php if ($dbIdentityRow): ?>
-                <span class="text-muted d-flex align-items-center" style="font-size:12px;">Connected database: <b style="margin-left:4px;"><?= sanitize($dbIdentityRow['db_name']) ?></b></span>
-            <?php endif; ?>
-        </form>
-        <?php if ($diag): ?>
-        <div class="diag-result" data-testid="sac-client-diagnostic-result">
-            <?php if (!empty($diag['error'])): ?>
-                <div class="alert alert-danger py-2 mb-2"><?= sanitize($diag['error']) ?></div>
-            <?php endif; ?>
-            <?php if (!empty($diag['user_id'])): ?>
-                <div><b>Username:</b> <?= sanitize($diag['username']) ?></div>
-                <div><b>user_id:</b> <?= (int)$diag['user_id'] ?></div>
-                <div><b>Full name:</b> <?= sanitize($diag['full_name'] ?? '') ?></div>
-                <div><b>Role:</b> <?= sanitize($diag['role'] ?? '') ?></div>
-                <?php if (!empty($diag['note'])): ?><div class="text-muted"><?= sanitize($diag['note']) ?></div><?php endif; ?>
-                <?php if (isset($diag['client_id'])): ?>
-                    <div><b>Resolved client_id:</b> <?= $diag['client_id'] > 0 ? (int)$diag['client_id'] : '— none (unlinked) —' ?></div>
-                <?php endif; ?>
-                <?php if (!empty($diag['company_name'])): ?>
-                    <div><b>Company:</b> <?= sanitize($diag['company_name']) ?><?php if (!empty($diag['contact_person'])): ?> (<?= sanitize($diag['contact_person']) ?>)<?php endif; ?></div>
-                <?php endif; ?>
-                <?php if (isset($diag['total_surveys'])): ?>
-                    <div><b>Total surveys with this client_id:</b> <?= (int)$diag['total_surveys'] ?></div>
-                    <?php if (!empty($diag['status_counts'])): ?>
-                        <div style="margin-top:4px;"><b>By status:</b>
-                            <?php foreach ($diag['status_counts'] as $st => $cnt): ?>
-                                <span class="badge bg-light text-dark border me-1"><?= sanitize($st) ?>: <?= (int)$cnt ?></span>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php elseif ((int)$diag['total_surveys'] === 0): ?>
-                        <div class="text-muted mt-1">No surveys exist anywhere in <b><?= sanitize($dbIdentityRow['db_name'] ?? 'this database') ?></b> with client_id = <?= (int)$diag['client_id'] ?>. Nothing has actually been assigned to "<?= sanitize($diag['company_name'] ?? '') ?>" in THIS environment yet — check Assign Vessel / Pending Vessels here, not in a different environment (staging and production are separate databases).</div>
-                        <?php if (!empty($diag['similar_clients'])): ?>
-                        <div class="mt-2" style="border-top:1px dashed var(--border-color); padding-top:8px;">
-                            <b>Similarly-named client rows found</b> — the real data may be sitting under one of these instead (different spelling of the same company name, so the automatic duplicate check above didn't group them together):
-                            <?php foreach ($diag['similar_clients'] as $sc): ?>
-                                <div class="mt-1">
-                                    Client #<?= (int)$sc['id'] ?> — "<?= sanitize($sc['company_name']) ?>":
-                                    <b><?= (int)$sc['survey_count'] ?></b> survey(s)<?= $sc['username'] ? ', login: ' . sanitize($sc['username']) : ', no login' ?>
-                                </div>
-                            <?php endforeach; ?>
-                            <div class="text-muted mt-1">If one of these clearly has the real vessels, rename it (Admin Controls → Clients) to exactly match "<?= sanitize($diag['company_name'] ?? '') ?>" — the Duplicate Client Companies tool below will then pick it up for a safe Merge, without touching data by hand.</div>
-                        </div>
-                        <?php endif; ?>
-                    <?php endif; ?>
-                <?php endif; ?>
-            <?php endif; ?>
-        </div>
-        <?php endif; ?>
     </div>
 
     <?php if ($dupClientGroups): ?>
