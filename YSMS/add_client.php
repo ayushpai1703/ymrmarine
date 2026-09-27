@@ -113,69 +113,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 include 'includes/header.php';
 ?>
 <style>
-    .surveyor-form-card { max-width: 640px; margin: 24px auto; background: #fff; border: 1px solid var(--border-color); border-radius: 18px; padding: 24px; box-shadow: 0 8px 24px rgba(15,23,42,.06); }
-    .surveyor-form-title { font-size: 18px; font-weight: 700; color: var(--text-dark); margin-bottom: 4px; }
-    .surveyor-form-copy { color: var(--text-muted); font-size: 12px; margin-bottom: 22px; }
-    .surveyor-field { margin-bottom: 16px; }
-    .surveyor-field label { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 12px; font-weight: 650; }
-    .surveyor-field input { width: 100%; padding: 11px 13px; border: 1px solid var(--border-color); border-radius: 10px; background: #f8fafc; color: var(--text-dark); font-size: 13px; outline: none; }
-    .surveyor-field input:focus { border-color: var(--accent-purple); background: #fff; }
-    .surveyor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    @media (max-width: 680px) {
-        .surveyor-form-card { margin: 18px 16px; padding: 20px; }
-        .surveyor-grid { grid-template-columns: 1fr; }
+    /* ═══ Ultra-modern redesign — same hero + icon-chip visual language as
+       vessel_detail.php / report_detail.php / completed_detail.php. This is
+       a single standalone form (no list/detail split), so one responsive
+       card works at every width; only the hero banner is desktop-only
+       (replacing the plain top bar, same as the other redesigned pages). */
+    .vdd-wrap { padding: 8px 20px 40px; max-width: 640px; margin: 0 auto; }
+
+    .vdd-hero { display: none; }
+    @media (min-width: 992px) {
+        .top-app-bar { display: none !important; }
+        .vdd-hero {
+            position: relative; overflow: hidden; border-radius: 22px;
+            background: linear-gradient(120deg, #0f172a 0%, #1E1B6B 48%, #4B2FD6 100%);
+            padding: 26px 30px; margin-bottom: 18px;
+            display: flex; align-items: center; gap: 16px;
+            box-shadow: 0 14px 34px rgba(30,27,107,.22);
+        }
+        .vdd-hero-icon-bg {
+            position: absolute; right: -26px; top: -40px; font-size: 170px; color: rgba(255,255,255,.07);
+            pointer-events: none; line-height: 1;
+        }
+        .vdd-hero-ship {
+            width: 52px; height: 52px; border-radius: 15px; flex: none; position: relative;
+            background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px;
+        }
+        .vdd-hero-title { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -.01em; position: relative; }
+        .vdd-hero-sub { font-size: 12.5px; color: rgba(255,255,255,.66); margin-top: 4px; font-weight: 500; position: relative; }
     }
-    .btn-save-surveyor {
-        width: 100%; background: #3b32b3; color: #fff; border: none; padding: 12px; border-radius: 12px;
-        font-weight: 700; font-size: 14px; margin-top: 8px;
+
+    .vdd-form-card {
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 20px;
+        box-shadow: 0 4px 20px rgba(15,23,42,.05); overflow: hidden;
+        max-width: 640px; margin: 18px auto 24px;
+    }
+    .vdd-form-head {
+        padding: 18px 22px; border-bottom: 1px solid #f1f5f9;
+        display: flex; align-items: center; gap: 10px;
+    }
+    .vdd-form-head-icon {
+        width: 32px; height: 32px; border-radius: 10px; flex: none;
+        background: linear-gradient(135deg, #8B7CF6, #4B2FD6); color: #fff;
+        display: flex; align-items: center; justify-content: center; font-size: 14px;
+    }
+    .vdd-form-head-title { font-size: 15px; font-weight: 800; color: #0f172a; }
+    .vdd-form-head-sub { font-size: 11.5px; color: #94a3b8; margin-top: 1px; font-weight: 500; }
+    .vdd-form-body { padding: 22px; }
+
+    .vdd-alert { border-radius: 12px; padding: 11px 14px; font-size: 12.5px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .vdd-alert-success { background: #D1FAE5; color: #065f46; }
+    .vdd-alert-danger { background: #FEE2E2; color: #991b1b; }
+
+    .vdd-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .vdd-field { margin-bottom: 14px; }
+    .vdd-field.span-2 { grid-column: 1 / -1; }
+    .vdd-field label { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: #64748b; margin-bottom: 6px; }
+    .vdd-field label i { color: #A78BFA; font-size: 11px; width: 14px; text-align: center; }
+    .vdd-field input {
+        width: 100%; box-sizing: border-box; border: 1.5px solid #e2e8f0; border-radius: 12px;
+        padding: 11px 14px; font-size: 13.5px; color: #0f172a; font-family: inherit; background: #F8FAFC;
+    }
+    .vdd-field input:focus { outline: none; border-color: #A78BFA; box-shadow: 0 0 0 4px rgba(91,45,238,.12); background: #fff; }
+    .vdd-field input::placeholder { color: #cbd5e1; }
+
+    @media (max-width: 680px) {
+        .vdd-field-grid { grid-template-columns: 1fr; }
+        .vdd-form-card { margin: 16px 14px 20px; }
+    }
+
+    .vdd-submit-btn {
+        width: 100%; border: none; border-radius: 14px; height: 48px; margin-top: 6px;
+        background: linear-gradient(120deg, #1E1B6B, #4B2FD6); color: #fff; font-weight: 800; font-size: 13.5px;
+        display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+        box-shadow: 0 10px 22px rgba(75,47,214,.3);
     }
 </style>
 <div class="scroll-content">
     <?php $page_title = 'Add Client'; $back_url = 'index.php'; $page_testid = 'add-client'; include 'includes/top_app_bar.php'; ?>
-    <div class="surveyor-form-card">
-        <div class="surveyor-form-title">Add Client</div>
-        <div class="surveyor-form-copy">Create a client login. The client can sign in with this username and password to view their own vessels and reports.</div>
 
-        <?php if ($success): ?>
-            <div class="alert alert-success py-2">Client added successfully.</div>
-        <?php endif; ?>
-        <?php if ($error): ?>
-            <div class="alert alert-danger py-2"><?= sanitize($error) ?></div>
-        <?php endif; ?>
+    <div class="vdd-wrap">
+        <div class="vdd-hero">
+            <i class="fa-solid fa-building-user vdd-hero-icon-bg" aria-hidden="true"></i>
+            <div class="vdd-hero-ship"><i class="fa-solid fa-building-user"></i></div>
+            <div>
+                <div class="vdd-hero-title">Add Client</div>
+                <div class="vdd-hero-sub">Create a client login to view their own vessels and reports</div>
+            </div>
+        </div>
 
-        <form method="POST" autocomplete="off"><?= csrf_field() ?>
-            <div class="surveyor-grid">
-                <div class="surveyor-field" style="grid-column:1 / -1;">
-                    <label>Company Name *</label>
-                    <input type="text" name="company_name" value="<?= sanitize($company_name) ?>" required>
-                </div>
-                <div class="surveyor-field" style="grid-column:1 / -1;">
-                    <label>Contact Person *</label>
-                    <input type="text" name="contact_person" value="<?= sanitize($contact_person) ?>" required>
-                </div>
-                <div class="surveyor-field">
-                    <label>Username *</label>
-                    <input type="text" name="username" value="<?= sanitize($username) ?>" required autocomplete="off">
-                </div>
-                <div class="surveyor-field">
-                    <label>Mobile *</label>
-                    <input type="text" name="mobile" value="<?= sanitize($mobile) ?>" placeholder="10-digit mobile" required>
-                </div>
-                <div class="surveyor-field" style="grid-column:1 / -1;">
-                    <label>Email *</label>
-                    <input type="email" name="email" value="<?= sanitize($email) ?>" placeholder="client@company.com" required>
-                </div>
-                <div class="surveyor-field">
-                    <label>Password *</label>
-                    <input type="password" name="password" required autocomplete="new-password">
-                </div>
-                <div class="surveyor-field">
-                    <label>Re-enter Password *</label>
-                    <input type="password" name="confirm_password" required autocomplete="new-password">
+        <div class="vdd-form-card">
+            <div class="vdd-form-head">
+                <div class="vdd-form-head-icon"><i class="fa-solid fa-user-plus"></i></div>
+                <div>
+                    <div class="vdd-form-head-title">Client Details</div>
+                    <div class="vdd-form-head-sub">The client signs in with this username and password</div>
                 </div>
             </div>
-            <button type="submit" class="btn-save-surveyor"><i class="fa-solid fa-user-plus me-1"></i> Create Client</button>
-        </form>
+            <div class="vdd-form-body">
+                <?php if ($success): ?>
+                    <div class="vdd-alert vdd-alert-success"><i class="fa-solid fa-circle-check"></i> Client added successfully.</div>
+                <?php endif; ?>
+                <?php if ($error): ?>
+                    <div class="vdd-alert vdd-alert-danger"><i class="fa-solid fa-circle-exclamation"></i> <?= sanitize($error) ?></div>
+                <?php endif; ?>
+
+                <form method="POST" autocomplete="off"><?= csrf_field() ?>
+                    <div class="vdd-field-grid">
+                        <div class="vdd-field span-2">
+                            <label><i class="fa-solid fa-building"></i> Company Name *</label>
+                            <input type="text" name="company_name" value="<?= sanitize($company_name) ?>" required>
+                        </div>
+                        <div class="vdd-field span-2">
+                            <label><i class="fa-solid fa-user"></i> Contact Person *</label>
+                            <input type="text" name="contact_person" value="<?= sanitize($contact_person) ?>" required>
+                        </div>
+                        <div class="vdd-field">
+                            <label><i class="fa-solid fa-at"></i> Username *</label>
+                            <input type="text" name="username" value="<?= sanitize($username) ?>" required autocomplete="off">
+                        </div>
+                        <div class="vdd-field">
+                            <label><i class="fa-solid fa-phone"></i> Mobile *</label>
+                            <input type="text" name="mobile" value="<?= sanitize($mobile) ?>" placeholder="10-digit mobile" required>
+                        </div>
+                        <div class="vdd-field span-2">
+                            <label><i class="fa-solid fa-envelope"></i> Email *</label>
+                            <input type="email" name="email" value="<?= sanitize($email) ?>" placeholder="client@company.com" required>
+                        </div>
+                        <div class="vdd-field">
+                            <label><i class="fa-solid fa-lock"></i> Password *</label>
+                            <input type="password" name="password" required autocomplete="new-password">
+                        </div>
+                        <div class="vdd-field">
+                            <label><i class="fa-solid fa-lock"></i> Re-enter Password *</label>
+                            <input type="password" name="confirm_password" required autocomplete="new-password">
+                        </div>
+                    </div>
+                    <button type="submit" class="vdd-submit-btn"><i class="fa-solid fa-user-plus"></i> Create Client</button>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>
