@@ -430,6 +430,13 @@ include 'includes/header.php';
         .vessels-mobile-view { display: none !important; }
         .vessels-desktop-view { display: block !important; }
 
+        /* The shared top app bar (title + profile) is redundant here — the
+           hero banner below already shows the "Pending Vessels" title, and
+           the desktop sidebar already carries navigation/profile. Mobile
+           (where this is the only header, with the hamburger menu) is
+           untouched — this rule only fires at >=992px. */
+        .top-app-bar { display: none !important; }
+
         /* Desktop table UI — richer "premium" pass: hero banner with live
            counts, pill-style toolbar, icon-chip/avatar table cells. Sidebar
            and nav are untouched (page-scoped <style>, nothing here touches
@@ -499,12 +506,11 @@ include 'includes/header.php';
         }
         .vd-clear-btn:hover { color: #5B2DEE; }
 
-        .vd-export-row { margin: 0 0 14px 0; display: flex; justify-content: flex-end; }
         .btn-export {
-            display: inline-flex; align-items: center; gap: 9px;
+            display: inline-flex; align-items: center; gap: 9px; margin-left: auto; flex: 0 0 auto;
             background: linear-gradient(120deg, #14B8A6, #0D9488); color: #fff;
             padding: 11px 22px; border-radius: 999px; font-weight: 700; font-size: 13.5px;
-            text-decoration: none; box-shadow: 0 6px 16px rgba(13,148,136,.3);
+            text-decoration: none; box-shadow: 0 6px 16px rgba(13,148,136,.3); white-space: nowrap;
             transition: box-shadow .18s ease, transform .18s ease;
         }
         .btn-export:hover { box-shadow: 0 10px 22px rgba(13,148,136,.4); transform: translateY(-1px); color: #fff; }
@@ -773,9 +779,7 @@ include 'includes/header.php';
                     <?php endif; ?>
                     <button type="button" class="vd-clear-btn" data-desk-clear><i class="fa-solid fa-rotate-left"></i> Clear</button>
                 </div>
-            </div>
-            <div class="vd-export-row">
-                <a href="export_vessels.php" class="btn-export"><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Export Excel</a>
+                <a href="export_vessels.php" class="btn-export"><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Download</a>
             </div>
             <div class="vd-meta" data-desk-meta></div>
             <div class="vd-table-card">
