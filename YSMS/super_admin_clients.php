@@ -76,6 +76,13 @@ include 'includes/header.php';
         background: #fef2f2; color: #dc2626; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
         border: 1px solid #fecaca; vertical-align: middle;
     }
+    .sac-orphan-badge {
+        display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+        background: #fffbeb; color: #b45309; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+        border: 1px solid #fcd34d; vertical-align: middle;
+    }
+    .sac-orphan-card { border-color: #fcd34d; background: #fffdf5; }
+    .admin-item-actions button.link-btn:hover { color: #0ea5b0; border-color: #0ea5b0; }
     .sac-login-delete-row { border-top: 1px dashed var(--border-color); margin-top: 4px; padding-top: 14px; }
     .sac-login-delete-btn { width: 100%; background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; border-radius: 10px; padding: 10px; font-weight: 650; font-size: 13px; }
     .admin-empty-state { text-align: center; padding: 30px 10px; color: var(--text-muted); font-size: 12.5px; }
@@ -186,6 +193,35 @@ include 'includes/header.php';
     </div>
 </div>
 
+<!-- Link an orphan login (no clients row points at it yet, but it can
+     already log in) onto a company that doesn't have one yet. -->
+<div class="modal fade" id="linkLoginModal" tabindex="-1" data-testid="sac-link-login-modal">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 16px; border: none;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color);">
+                <h5 class="modal-title fw-bold" style="font-size: 15px;">Link Login to a Company</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" data-testid="sac-link-login-close"></button>
+            </div>
+            <form id="linkLoginForm" data-testid="sac-link-login-form">
+                <div class="modal-body">
+                    <p class="text-muted" style="font-size:12.5px;">Username: <strong id="linkLoginUsername"></strong></p>
+                    <div class="admin-field-group">
+                        <label>Company *</label>
+                        <select name="client_id" required data-testid="sac-link-login-select">
+                            <option value="">Select a company...</option>
+                        </select>
+                        <div class="admin-field-hint">Only companies with no login of their own are listed.</div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid var(--border-color);">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn" style="background: #0ea5b0; color:#fff; font-weight:650;" id="linkLoginSubmitBtn" data-testid="sac-link-login-submit">Link Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 const CLIENTS_MOD = <?= json_encode($clientsMod, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
 const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
@@ -201,10 +237,13 @@ $(document).ready(function() {
 
     const clientFormModal = new bootstrap.Modal(document.getElementById('clientFormModal'));
     const clientLoginModal = new bootstrap.Modal(document.getElementById('clientLoginModal'));
+    const linkLoginModal = new bootstrap.Modal(document.getElementById('linkLoginModal'));
     let currentEditId = null;
     let currentRows = [];
-    let currentLogins = {};
-    let currentLoginClientId = null;
+    let currentLogins = {};       // client_id -> login, for the Companies view's key icon
+    let currentLoginsAll = [];    // every Client-role login, including ones not linked to any clients row
+    let currentLoginContext = { clientId: null, userId: null };
+    let currentLinkUserId = null;
 
     function escapeHtml(str) {
         return $('<div>').text(str == null ? '' : String(str)).html();
@@ -242,9 +281,16 @@ $(document).ready(function() {
             data: { action: 'list_logins' },
             dataType: 'json'
         }).done(function(res) {
-            currentLogins = (res && res.success) ? (res.logins || {}) : {};
+            if (res && res.success) {
+                currentLoginsAll = res.all || [];
+                currentLogins = res.by_client || {};
+            } else {
+                currentLoginsAll = [];
+                currentLogins = {};
+            }
             done();
         }).fail(function() {
+            currentLoginsAll = [];
             currentLogins = {};
             done();
         });
@@ -296,46 +342,46 @@ $(document).ready(function() {
         $container.find('.login-btn').on('click', function() {
             const id = $(this).data('id');
             const row = currentRows.find(r => String(r[CLIENTS_MOD.id_field]) === String(id));
-            openLoginForm(id, row, currentLogins[id]);
+            const login = currentLogins[id];
+            openLoginForm({
+                clientId: id,
+                companyName: row ? row[CLIENTS_MOD.name_field] : '',
+                login: login || null,
+                defaultFullName: row ? (row.contact_person || '') : ''
+            });
         });
     }
 
-    // ── Client Logins view: every client that HAS a login, in one flat
-    // list, so a mistake like "gave the same client two separate logins"
-    // (usually two clients rows for the same company, each with its own
-    // login — see the Companies view's duplicate-name merge tool) is easy
-    // to spot by eye instead of clicking into each company one at a time.
-    function loginRowsWithData() {
-        return currentRows
-            .map(function(row) {
-                const id = row[CLIENTS_MOD.id_field];
-                const login = currentLogins[id];
-                return (login && login.user_id) ? { id: id, row: row, login: login } : null;
-            })
-            .filter(Boolean);
-    }
-
+    // ── Client Logins view: EVERY Client-role login in one flat list —
+    // including one not linked to any clients row at all. That "orphan"
+    // case matters: username+password authentication only ever checks
+    // `users`, so such a login can sign in successfully right now (and
+    // land on a blank dashboard, since nothing resolves it to a client_id)
+    // even though it never shows up next to any company on the Companies
+    // view. A mistake like "gave the same client two separate logins" is
+    // also easy to spot here since duplicates land next to each other.
     function renderLoginsView(searchTerm) {
         const $container = $('#loginsListContainer');
-        let entries = loginRowsWithData();
+        let entries = currentLoginsAll.slice();
 
-        // Flag possible duplicates: same normalized company name, OR same
-        // login's phone/email, shared by 2+ different logins.
+        // Flag possible duplicates: same normalized company name (only
+        // meaningful for linked entries), OR the same email/phone, shared
+        // by 2+ different logins.
         const byCompany = {};
         const byContact = {};
         entries.forEach(function(e) {
-            const nameKey = String(e.row[CLIENTS_MOD.name_field] || '').trim().toLowerCase();
-            if (nameKey) { (byCompany[nameKey] = byCompany[nameKey] || []).push(e.id); }
+            const nameKey = String(e.company_name || '').trim().toLowerCase();
+            if (nameKey) { (byCompany[nameKey] = byCompany[nameKey] || []).push(e.user_id); }
             ['email', 'phone'].forEach(function(f) {
-                const v = String(e.login[f] || '').trim().toLowerCase();
-                if (v) { (byContact[f + ':' + v] = byContact[f + ':' + v] || []).push(e.id); }
+                const v = String(e[f] || '').trim().toLowerCase();
+                if (v) { (byContact[f + ':' + v] = byContact[f + ':' + v] || []).push(e.user_id); }
             });
         });
         function isDup(e) {
-            const nameKey = String(e.row[CLIENTS_MOD.name_field] || '').trim().toLowerCase();
+            const nameKey = String(e.company_name || '').trim().toLowerCase();
             if (nameKey && byCompany[nameKey] && byCompany[nameKey].length > 1) return true;
             return ['email', 'phone'].some(function(f) {
-                const v = String(e.login[f] || '').trim().toLowerCase();
+                const v = String(e[f] || '').trim().toLowerCase();
                 return v && byContact[f + ':' + v] && byContact[f + ':' + v].length > 1;
             });
         }
@@ -343,14 +389,17 @@ $(document).ready(function() {
         const term = (searchTerm || '').toLowerCase().trim();
         if (term) {
             entries = entries.filter(function(e) {
-                const hay = [e.row[CLIENTS_MOD.name_field], e.login.username, e.login.full_name, e.login.email, e.login.phone]
+                const hay = [e.company_name, e.username, e.full_name, e.email, e.phone]
                     .map(function(v) { return String(v || '').toLowerCase(); }).join(' ');
                 return hay.indexOf(term) !== -1;
             });
         }
 
         entries.sort(function(a, b) {
-            return String(a.row[CLIENTS_MOD.name_field] || '').localeCompare(String(b.row[CLIENTS_MOD.name_field] || ''));
+            // Orphans first — they're the ones most likely to be missed.
+            if (!a.client_id && b.client_id) return -1;
+            if (a.client_id && !b.client_id) return 1;
+            return String(a.company_name || '').localeCompare(String(b.company_name || ''));
         });
 
         if (!entries.length) {
@@ -360,34 +409,71 @@ $(document).ready(function() {
 
         let html = '';
         entries.forEach(function(e) {
+            const isOrphan = !e.client_id;
             const dupBadge = isDup(e) ? '<span class="sac-dup-badge">Possible duplicate</span>' : '';
+            const orphanBadge = isOrphan ? '<span class="sac-orphan-badge">Not linked to any company</span>' : '';
+            const titleText = e.company_name ? escapeHtml(e.company_name) : escapeHtml(e.username || 'Unknown');
             const subParts = [
-                'Username: ' + escapeHtml(e.login.username || ''),
-                'Contact: ' + escapeHtml(e.login.full_name || '')
+                'Username: ' + escapeHtml(e.username || ''),
+                'Contact: ' + escapeHtml(e.full_name || '')
             ];
-            if (e.login.email) subParts.push('Email: ' + escapeHtml(e.login.email));
-            if (e.login.phone) subParts.push('Phone: ' + escapeHtml(e.login.phone));
-            html += '<div class="admin-item-card" data-testid="sac-login-row-' + e.id + '">' +
+            if (e.email) subParts.push('Email: ' + escapeHtml(e.email));
+            if (e.phone) subParts.push('Phone: ' + escapeHtml(e.phone));
+            html += '<div class="admin-item-card' + (isOrphan ? ' sac-orphan-card' : '') + '" data-testid="sac-login-row-' + e.user_id + '">' +
                 '<div class="admin-item-main">' +
-                    '<p class="admin-item-title">' + escapeHtml(e.row[CLIENTS_MOD.name_field] || '') + dupBadge + '</p>' +
+                    '<p class="admin-item-title">' + titleText + dupBadge + orphanBadge + '</p>' +
                     '<p class="admin-item-sub">' + subParts.join(' &middot; ') + '</p>' +
                 '</div>' +
                 '<div class="admin-item-actions">' +
-                    '<button type="button" class="login-btn" title="Edit Login" data-id="' + e.id + '" data-testid="sac-login-row-edit-' + e.id + '"><i class="fa-solid fa-pen"></i></button>' +
-                    '<button type="button" class="delete-btn" title="Delete Login" data-id="' + e.id + '" data-testid="sac-login-row-delete-' + e.id + '"><i class="fa-solid fa-trash"></i></button>' +
+                    (isOrphan ? '<button type="button" class="link-btn" title="Link to Company" data-user-id="' + e.user_id + '" data-testid="sac-login-row-link-' + e.user_id + '"><i class="fa-solid fa-link"></i></button>' : '') +
+                    '<button type="button" class="login-btn" title="Edit Login" data-user-id="' + e.user_id + '" data-testid="sac-login-row-edit-' + e.user_id + '"><i class="fa-solid fa-pen"></i></button>' +
+                    '<button type="button" class="delete-btn" title="Delete Login" data-client-id="' + (e.client_id || '') + '" data-user-id="' + e.user_id + '" data-testid="sac-login-row-delete-' + e.user_id + '"><i class="fa-solid fa-trash"></i></button>' +
                 '</div>' +
             '</div>';
         });
         $container.html(html);
 
         $container.find('.login-btn').on('click', function() {
-            const id = $(this).data('id');
-            const row = currentRows.find(r => String(r[CLIENTS_MOD.id_field]) === String(id));
-            openLoginForm(id, row, currentLogins[id]);
+            const userId = $(this).data('user-id');
+            const entry = currentLoginsAll.find(x => String(x.user_id) === String(userId));
+            if (entry) openLoginForm({ clientId: entry.client_id, companyName: entry.company_name, login: entry });
         });
         $container.find('.delete-btn').on('click', function() {
-            const id = $(this).data('id');
-            confirmDeleteLogin(id);
+            const clientId = $(this).data('client-id');
+            const userId = $(this).data('user-id');
+            confirmDeleteLogin({ clientId: clientId || null, userId: userId || null });
+        });
+        $container.find('.link-btn').on('click', function() {
+            openLinkForm($(this).data('user-id'));
+        });
+    }
+
+    function openLinkForm(userId) {
+        currentLinkUserId = userId;
+        const entry = currentLoginsAll.find(x => String(x.user_id) === String(userId));
+        $('#linkLoginUsername').text(entry ? entry.username : '');
+        $('#linkLoginForm')[0].reset();
+        const $select = $('[data-testid="sac-link-login-select"]');
+        $select.html('<option value="">Loading...</option>');
+        linkLoginModal.show();
+        $.ajax({
+            url: 'ajax/super_admin_client_login.php',
+            method: 'GET',
+            data: { action: 'unlinked_clients' },
+            dataType: 'json'
+        }).done(function(res) {
+            const clients = (res && res.success) ? (res.clients || []) : [];
+            if (!clients.length) {
+                $select.html('<option value="">No unlinked companies available</option>');
+                return;
+            }
+            let html = '<option value="">Select a company...</option>';
+            clients.forEach(function(c) {
+                html += '<option value="' + c.id + '">' + escapeHtml(c.company_name) + '</option>';
+            });
+            $select.html(html);
+        }).fail(function() {
+            $select.html('<option value="">Network error — please retry</option>');
         });
     }
 
@@ -402,6 +488,10 @@ $(document).ready(function() {
         } else {
             $('#loginsView').hide();
             $('#companiesView').show();
+            // Re-render from the already-fetched data rather than leaving
+            // whatever was last drawn here (possibly stale, if the other
+            // view changed a login since this one was last shown).
+            renderRows(currentRows);
         }
     });
 
@@ -412,15 +502,21 @@ $(document).ready(function() {
         loginsSearchTimer = setTimeout(function() { renderLoginsView(term); }, 300);
     });
 
-    function openLoginForm(clientId, clientRow, login) {
-        currentLoginClientId = clientId;
-        const hasLogin = !!(login && login.user_id);
-        $('#clientLoginModalTitle').text('Manage Login — ' + (clientRow ? clientRow[CLIENTS_MOD.name_field] : ''));
+    function openLoginForm(ctx) {
+        // ctx: { clientId: number|null, companyName: string|null,
+        //        login: object|null, defaultFullName?: string }
+        const hasLogin = !!(ctx.login && ctx.login.user_id);
+        currentLoginContext = {
+            clientId: ctx.clientId || null,
+            userId: hasLogin ? ctx.login.user_id : null
+        };
+        const titleSuffix = ctx.companyName || (hasLogin ? ctx.login.username : '');
+        $('#clientLoginModalTitle').text('Manage Login' + (titleSuffix ? ' — ' + titleSuffix : ''));
         $('#clientLoginForm')[0].reset();
-        $('[data-testid="sac-login-field-username"]').val(hasLogin ? (login.username || '') : '');
-        $('[data-testid="sac-login-field-full_name"]').val(hasLogin ? (login.full_name || '') : (clientRow ? clientRow.contact_person || '' : ''));
-        $('[data-testid="sac-login-field-email"]').val(hasLogin ? (login.email || '') : '');
-        $('[data-testid="sac-login-field-phone"]').val(hasLogin ? (login.phone || '') : '');
+        $('[data-testid="sac-login-field-username"]').val(hasLogin ? (ctx.login.username || '') : '');
+        $('[data-testid="sac-login-field-full_name"]').val(hasLogin ? (ctx.login.full_name || '') : (ctx.defaultFullName || ''));
+        $('[data-testid="sac-login-field-email"]').val(hasLogin ? (ctx.login.email || '') : '');
+        $('[data-testid="sac-login-field-phone"]').val(hasLogin ? (ctx.login.phone || '') : '');
         $('[data-testid="sac-login-field-password"]').prop('required', !hasLogin);
         $('#clientLoginPasswordLabel').text(hasLogin ? 'New Password' : 'Password *');
         $('#clientLoginPasswordHint').text(hasLogin ? 'Leave blank to keep the current password.' : 'Required to create this client\'s first login.');
@@ -428,21 +524,25 @@ $(document).ready(function() {
         clientLoginModal.show();
     }
 
-    function confirmDeleteLogin(clientId) {
+    function confirmDeleteLogin(ctx) {
+        // ctx: { clientId: number|null, userId: number|null }
         Swal.fire({
             icon: 'warning',
             title: 'Delete this login?',
-            text: 'The client\'s company record and vessels are NOT affected — only their username/password login is removed. They will no longer be able to sign in until a new login is created.',
+            text: 'Any linked company record and vessels are NOT affected — only the username/password login is removed. They will no longer be able to sign in until a new login is created or linked.',
             showCancelButton: true,
             confirmButtonText: 'Delete Login',
             confirmButtonColor: '#dc2626',
             cancelButtonColor: '#64748b'
         }).then(function(result) {
             if (!result.isConfirmed) return;
+            const postData = { action: 'delete' };
+            if (ctx.clientId) postData.client_id = ctx.clientId;
+            else if (ctx.userId) postData.user_id = ctx.userId;
             $.ajax({
                 url: 'ajax/super_admin_client_login.php',
                 method: 'POST',
-                data: { action: 'delete', client_id: clientId },
+                data: postData,
                 dataType: 'json'
             }).done(function(res) {
                 if (res && res.success) {
@@ -545,12 +645,16 @@ $(document).ready(function() {
     });
 
     $('#clientLoginDeleteBtn').on('click', function() {
-        if (currentLoginClientId != null) confirmDeleteLogin(currentLoginClientId);
+        if (currentLoginContext.clientId || currentLoginContext.userId) {
+            confirmDeleteLogin(currentLoginContext);
+        }
     });
 
     $('#clientLoginForm').on('submit', function(e) {
         e.preventDefault();
-        const postData = { action: 'save', client_id: currentLoginClientId };
+        const postData = { action: 'save' };
+        if (currentLoginContext.clientId) postData.client_id = currentLoginContext.clientId;
+        else if (currentLoginContext.userId) postData.user_id = currentLoginContext.userId;
         $(this).serializeArray().forEach(function(f) { postData[f.name] = f.value; });
 
         const $btn = $('#clientLoginSubmitBtn');
@@ -573,6 +677,34 @@ $(document).ready(function() {
             Swal.fire({ icon: 'error', title: 'Network Error', text: 'Please try again.', confirmButtonColor: '#3b32b3' });
         }).always(function() {
             $btn.prop('disabled', false).text('Save Login');
+        });
+    });
+
+    $('#linkLoginForm').on('submit', function(e) {
+        e.preventDefault();
+        const clientId = $('[data-testid="sac-link-login-select"]').val();
+        if (!clientId) return;
+
+        const $btn = $('#linkLoginSubmitBtn');
+        $btn.prop('disabled', true).text('Linking...');
+
+        $.ajax({
+            url: 'ajax/super_admin_client_login.php',
+            method: 'POST',
+            data: { action: 'link', user_id: currentLinkUserId, client_id: clientId },
+            dataType: 'json'
+        }).done(function(res) {
+            if (res && res.success) {
+                linkLoginModal.hide();
+                Swal.fire({ icon: 'success', title: 'Login Linked', text: res.message, confirmButtonColor: '#3b32b3', timer: 1600, showConfirmButton: false });
+                loadClients($('#clientsSearchInput').val());
+            } else {
+                Swal.fire({ icon: 'error', title: 'Cannot Link', text: (res && res.message) ? res.message : 'Please try again.', confirmButtonColor: '#3b32b3' });
+            }
+        }).fail(function() {
+            Swal.fire({ icon: 'error', title: 'Network Error', text: 'Please try again.', confirmButtonColor: '#3b32b3' });
+        }).always(function() {
+            $btn.prop('disabled', false).text('Link Login');
         });
     });
 
