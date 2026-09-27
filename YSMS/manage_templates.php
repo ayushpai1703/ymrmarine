@@ -198,36 +198,121 @@ include 'includes/header.php';
     /* Desktop table / mobile cards */
     .templates-desktop-table-wrap { display: none; }
     .templates-mobile-cards { display: block; }
+    .vdd-hero { display: none; }
+    .tpl-panel-icon { color: #0d6efd; margin-right: 4px; }
+
+    /* ═══ Desktop modern redesign — same hero + icon-chip visual language
+       as the rest of the app's redesigned pages. Mobile (cards + upload
+       panels, everything outside this block) is completely untouched;
+       only >=992px gets the hero, modern cards and modern table. */
     @media (min-width: 992px) {
-        .templates-page { padding: 24px 28px 40px; max-width: 1200px; margin: 0 auto; }
+        .top-app-bar { display: none !important; }
+        .templates-page { padding: 8px 20px 40px; max-width: 1200px; margin: 0 auto; }
+
+        .vdd-hero {
+            position: relative; overflow: hidden; border-radius: 22px;
+            background: linear-gradient(120deg, #0f172a 0%, #1E1B6B 48%, #4B2FD6 100%);
+            padding: 26px 30px; margin-bottom: 18px;
+            display: flex; align-items: center; gap: 16px;
+            box-shadow: 0 14px 34px rgba(30,27,107,.22);
+        }
+        .vdd-hero-icon-bg {
+            position: absolute; right: -26px; top: -40px; font-size: 170px; color: rgba(255,255,255,.07);
+            pointer-events: none; line-height: 1;
+        }
+        .vdd-hero-ship {
+            width: 52px; height: 52px; border-radius: 15px; flex: none; position: relative;
+            background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px;
+        }
+        .vdd-hero-title { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -.01em; position: relative; }
+        .vdd-hero-sub { font-size: 12.5px; color: rgba(255,255,255,.66); margin-top: 4px; font-weight: 500; position: relative; }
+
+        .templates-heading, .templates-subtitle { display: none; }
+
+        /* Upload panels → modern cards */
+        .template-upload-panel {
+            background: #fff; border: 1px solid #e2e8f0 !important; border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(15,23,42,.05); padding: 20px 22px;
+        }
+        .tpl-panel-icon {
+            width: 30px; height: 30px; border-radius: 9px; flex: none; margin-right: 10px;
+            background: linear-gradient(135deg, #8B7CF6, #4B2FD6); color: #fff !important;
+            display: inline-flex; align-items: center; justify-content: center; font-size: 13px;
+        }
+        .template-upload-form input[type=text],
+        .template-upload-form input[type=file],
+        .template-upload-form .form-control {
+            border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 11px 14px;
+            font-size: 13.5px; background: #F8FAFC; color: #0f172a;
+        }
+        .template-upload-form input:focus, .template-upload-form .form-control:focus {
+            outline: none; border-color: #A78BFA; box-shadow: 0 0 0 4px rgba(91,45,238,.12); background: #fff;
+        }
+        .template-upload-form button {
+            border: none; border-radius: 12px; height: 46px; padding: 0 18px;
+            background: linear-gradient(120deg, #1E1B6B, #4B2FD6); color: #fff; font-weight: 800; font-size: 13px;
+            box-shadow: 0 8px 18px rgba(75,47,214,.28); align-self: flex-start;
+        }
+
+        .template-empty {
+            border: 1.5px dashed #C7D2E0; border-radius: 16px; background: #F8FAFC; color: #94a3b8;
+        }
+
         .templates-mobile-cards { display: none !important; }
         .templates-desktop-table-wrap { display: block !important; }
         .templates-modern-table {
             width: 100%; border-collapse: separate; border-spacing: 0;
-            background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
-            overflow: hidden; box-shadow: 0 4px 16px rgba(15,23,42,.04);
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 20px;
+            overflow: hidden; box-shadow: 0 4px 20px rgba(15,23,42,.05);
         }
         .templates-modern-table thead th {
-            background: #f8fafc; color: #475569; font-size: 11.5px; font-weight: 700;
-            text-transform: uppercase; letter-spacing: .04em; padding: 14px 16px;
+            background: #f8fafc; color: #64748b; font-size: 10.5px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .06em; padding: 14px 18px;
             border-bottom: 1px solid #e2e8f0; text-align: left; white-space: nowrap;
         }
         .templates-modern-table tbody td {
-            padding: 14px 16px; border-bottom: 1px solid #f1f5f9;
-            font-size: 13.5px; color: #0f172a; vertical-align: middle;
+            padding: 14px 18px; border-bottom: 1px solid #f1f5f9;
+            font-size: 13.5px; color: #334155; vertical-align: middle;
         }
         .templates-modern-table tbody tr:last-child td { border-bottom: 0; }
-        .templates-modern-table tbody tr:hover { background: #f8fafc; }
+        .templates-modern-table tbody tr:hover { background: #FAF8FF; }
         .templates-modern-table .tpl-name {
-            font-weight: 650; display: flex; align-items: center; gap: 10px;
+            font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 12px;
         }
         .templates-modern-table .tpl-name i {
-            width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; color: #1d4ed8;
+            width: 36px; height: 36px; border-radius: 11px;
+            background: linear-gradient(135deg, #EEF2FF, #DCE3FF); color: #4F46E5;
             display: inline-flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;
         }
-        .templates-modern-table .tpl-type { color: #64748b; font-size: 12.5px; }
+        .templates-modern-table .tpl-type {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: #EFF6FF; color: #1D4ED8; font-size: 10.5px; font-weight: 800;
+            padding: 4px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em;
+        }
+        .templates-modern-table .tpl-type.none { background: transparent; color: #cbd5e1; padding: 0; }
         .templates-modern-table .tpl-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-        .templates-modern-table .template-rename-form { margin-top: 8px; max-width: 480px; }
+        .templates-modern-table .template-rename-form { margin-top: 10px; max-width: 480px; }
+
+        .template-rename-btn, .template-delete-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 14px; border-radius: 999px; font-size: 12px; font-weight: 700;
+            text-decoration: none; border: 1.5px solid #e2e8f0; background: #fff; transition: all .15s ease;
+        }
+        .template-rename-btn { color: #C2410C; border-color: #FED7AA; }
+        .template-rename-btn:hover { background: #EA580C; color: #fff; border-color: #EA580C; }
+        .template-delete-btn { color: #DC2626; border-color: #FECACA; }
+        .template-delete-btn:hover { background: #DC2626; color: #fff; border-color: #DC2626; }
+
+        .templates-modern-table .template-rename-form input,
+        .templates-modern-table .template-rename-form .form-control {
+            border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 9px 12px; font-size: 12.5px; background: #F8FAFC;
+        }
+        .templates-modern-table .template-rename-form button {
+            border: none; border-radius: 999px; height: 36px; padding: 0 16px;
+            background: #5B2DEE; color: #fff; font-weight: 700; font-size: 12px; align-self: flex-start;
+            box-shadow: 0 6px 14px rgba(91,45,238,.28);
+        }
     }
     .template-icon { width: 48px; height: 48px; border-radius: 13px; background: #eff6ff; color: #1d4ed8; display: flex; align-items: center; justify-content: center; font-size: 22px; flex: 0 0 auto; }
     .template-top { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
@@ -248,13 +333,21 @@ include 'includes/header.php';
 <div class="scroll-content">
     <?php $page_title = 'Manage Word Templates'; $back_url = 'report_generator.php'; $page_testid = 'manage-templates'; include 'includes/top_app_bar.php'; ?>
     <main class="templates-page" data-testid="manage-templates-page">
+        <div class="vdd-hero">
+            <i class="fa-regular fa-file-word vdd-hero-icon-bg" aria-hidden="true"></i>
+            <div class="vdd-hero-ship"><i class="fa-regular fa-file-word"></i></div>
+            <div>
+                <div class="vdd-hero-title">Word Report Templates</div>
+                <div class="vdd-hero-sub">Upload the predefined Word templates surveyors can pick from in the Report Generator</div>
+            </div>
+        </div>
         <h2 class="templates-heading" data-testid="manage-templates-heading">Word Report Templates</h2>
         <p class="templates-subtitle" data-testid="manage-templates-subtitle">Upload the predefined Word templates surveyors can pick from in the Report Generator.</p>
 
         <!-- Photo Report Generator — single system template -->
         <section class="template-upload-panel mb-3" style="border:2px solid #0b1e46;" data-testid="photo-report-template-panel">
             <div class="fw-bold text-dark mb-1" style="font-size:13.5px;">
-                <i class="fa-solid fa-images text-primary me-1"></i> Photo Report Generator Template
+                <span class="tpl-panel-icon"><i class="fa-solid fa-images"></i></span> Photo Report Generator Template
             </div>
             <p class="text-muted mb-2" style="font-size:12px;">This is the <strong>only</strong> template used by Photo Report Generator. Surveyors cannot upload their own — they load this automatically.</p>
             <?php if ($photo_tpl_upload_error): ?><div class="alert alert-danger py-2" style="font-size:12px;"><?= sanitize($photo_tpl_upload_error) ?></div><?php endif; ?>
@@ -288,7 +381,7 @@ include 'includes/header.php';
         <p class="templates-subtitle">Used by the formal Report Generator (not Photo Report).</p>
 
         <section class="template-upload-panel" data-testid="template-upload-panel">
-            <div class="fw-bold text-dark mb-2" style="font-size:13px;"><i class="fa-solid fa-cloud-arrow-up text-primary me-1"></i> Upload New Template</div>
+            <div class="fw-bold text-dark mb-2" style="font-size:13px;"><span class="tpl-panel-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span> Upload New Template</div>
             <?php if ($template_upload_error): ?><div class="alert alert-danger py-2" style="font-size:12px;" data-testid="template-upload-error-message"><?= sanitize($template_upload_error) ?></div><?php endif; ?>
             <form method="POST" enctype="multipart/form-data" class="template-upload-form" data-testid="template-upload-form"><?= csrf_field() ?>
                 <input type="text" name="template_name" class="form-control" placeholder="Template Name (e.g. Off Hire Bunker Survey)" required data-testid="template-name-input">
@@ -353,7 +446,13 @@ include 'includes/header.php';
                                 <span title="<?= sanitize($t['template_name']) ?>"><?= sanitize($t['template_name']) ?></span>
                             </div>
                         </td>
-                        <td class="tpl-type"><?= !empty($t['survey_type']) ? sanitize($t['survey_type']) : '—' ?></td>
+                        <td>
+                            <?php if (!empty($t['survey_type'])): ?>
+                                <span class="tpl-type"><?= sanitize($t['survey_type']) ?></span>
+                            <?php else: ?>
+                                <span class="tpl-type none">—</span>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <div class="tpl-actions">
                                 <button type="button" class="template-rename-btn" onclick="document.getElementById('rename-form-desk-<?= $t_index ?>').classList.toggle('d-none')"><i class="fa-solid fa-pen"></i> Edit</button>
