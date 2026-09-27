@@ -147,10 +147,129 @@ include 'includes/header.php';
         flex: 0 0 auto; background: #dc2626; color: #fff; border: none; border-radius: 10px;
         padding: 10px 16px; font-weight: 650; font-size: 13px; white-space: nowrap;
     }
+    .vdd-hero { display: none; }
+
+    /* ═══ Desktop modern redesign — same hero + icon-chip visual language
+       as the rest of the app's redesigned pages. Mobile (everything
+       outside this block) is completely untouched. All the JS-rendered
+       rows/fields below (renderRows/renderSurveyRows/openForm in the
+       <script> at the bottom) reuse these SAME class names, so restyling
+       them here reskins the dynamic content too — no JS changes needed. */
+    @media (min-width: 992px) {
+        .top-app-bar { display: none !important; }
+        .scroll-content { max-width: 1400px; margin: 0 auto; padding: 8px 20px 40px; }
+
+        .vdd-hero {
+            position: relative; overflow: hidden; border-radius: 22px;
+            background: linear-gradient(120deg, #0f172a 0%, #1E1B6B 48%, #4B2FD6 100%);
+            padding: 26px 30px; margin-bottom: 18px;
+            display: flex; align-items: center; gap: 16px;
+            box-shadow: 0 14px 34px rgba(30,27,107,.22);
+        }
+        .vdd-hero-icon-bg {
+            position: absolute; right: -26px; top: -40px; font-size: 170px; color: rgba(255,255,255,.07);
+            pointer-events: none; line-height: 1;
+        }
+        .vdd-hero-ship {
+            width: 52px; height: 52px; border-radius: 15px; flex: none; position: relative;
+            background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px;
+        }
+        .vdd-hero-title { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -.01em; position: relative; }
+        .vdd-hero-sub { font-size: 12.5px; color: rgba(255,255,255,.66); margin-top: 4px; font-weight: 500; position: relative; }
+
+        .admin-tabs-bar {
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
+            padding: 10px 12px; margin-bottom: 18px; box-shadow: 0 2px 10px rgba(15,23,42,.05);
+        }
+        .admin-tab-btn {
+            border-radius: 999px; font-size: 12.5px; padding: 9px 16px;
+            transition: all .15s ease; border-color: #e2e8f0;
+        }
+        .admin-tab-btn:hover { border-color: #A78BFA; color: #5B2DEE; background: #FAF8FF; }
+        .admin-tab-btn.active {
+            background: linear-gradient(120deg, #1E1B6B, #4B2FD6); border-color: transparent;
+            box-shadow: 0 6px 14px rgba(75,47,214,.3);
+        }
+
+        .admin-module-panel.active { padding: 0; }
+        .admin-search-row { gap: 12px; margin-bottom: 16px; }
+        .admin-search-input {
+            border: 1.5px solid #e2e8f0; border-radius: 999px; padding: 11px 18px; font-size: 13px; background: #F8FAFC;
+        }
+        .admin-search-input:focus { outline: none; border-color: #A78BFA; box-shadow: 0 0 0 4px rgba(91,45,238,.12); background: #fff; }
+        .admin-add-btn {
+            border-radius: 999px; padding: 0 20px; height: 42px;
+            background: linear-gradient(120deg, #1E1B6B, #4B2FD6); font-weight: 800;
+            box-shadow: 0 8px 18px rgba(75,47,214,.28); display: inline-flex; align-items: center; gap: 7px;
+        }
+
+        .admin-list-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+        .admin-item-card {
+            border-radius: 16px; border-color: #e2e8f0; box-shadow: 0 2px 10px rgba(15,23,42,.04);
+            padding: 14px 16px; margin-bottom: 0; transition: box-shadow .15s ease, border-color .15s ease;
+        }
+        .admin-item-card:hover { border-color: #A78BFA; box-shadow: 0 8px 20px rgba(91,45,238,.1); }
+        .admin-item-title { font-size: 14px; font-weight: 700; color: #0f172a; }
+        .admin-item-sub { font-size: 11.5px; }
+        .admin-item-actions button, .admin-item-actions a {
+            width: 32px; height: 32px; border-radius: 10px; border: 1.5px solid #e2e8f0;
+            background: #F8FAFC; color: #64748b; transition: all .15s ease;
+        }
+        .admin-item-actions button.edit-btn:hover, .admin-item-actions a.edit-btn:hover {
+            background: #5B2DEE; color: #fff; border-color: #5B2DEE;
+        }
+        .admin-item-actions button.delete-btn:hover { background: #DC2626; color: #fff; border-color: #DC2626; }
+        .admin-item-actions button.cancel-btn { color: #B45309; }
+        .admin-item-actions button.cancel-btn:hover { background: #B45309; color: #fff; border-color: #B45309; }
+        .admin-empty-state, .admin-loading {
+            grid-column: 1 / -1; background: #F8FAFC; border: 1.5px dashed #C7D2E0; border-radius: 16px;
+        }
+
+        .admin-field-group input, .admin-field-group select {
+            border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 11px 14px; font-size: 13.5px; background: #F8FAFC;
+        }
+        .admin-field-group input:focus, .admin-field-group select:focus {
+            outline: none; border-color: #A78BFA; box-shadow: 0 0 0 4px rgba(91,45,238,.12); background: #fff;
+        }
+
+        .admin-danger-zone {
+            margin: 0 0 24px; border-radius: 20px; border: 1.5px solid #FCA5A5; background: #FEF2F2;
+            padding: 20px 22px;
+        }
+        .admin-danger-zone-title { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+        .admin-danger-zone-btn {
+            border-radius: 999px; padding: 11px 20px; box-shadow: 0 8px 18px rgba(220,38,38,.25);
+        }
+
+        #adminFormModal .modal-content, #deleteCompletedModal .modal-content {
+            border-radius: 20px !important; box-shadow: 0 20px 44px rgba(15,23,42,.22);
+        }
+        #adminFormModal .modal-header, #deleteCompletedModal .modal-header { padding: 18px 22px; }
+        #adminFormModal .modal-body, #deleteCompletedModal .modal-body { padding: 22px; }
+        #adminFormModal .modal-footer, #deleteCompletedModal .modal-footer { padding: 14px 22px; }
+        #adminFormModal #adminFormSubmitBtn {
+            border-radius: 999px !important; padding: 0 22px !important; height: 40px;
+            background: linear-gradient(120deg, #1E1B6B, #4B2FD6) !important;
+            box-shadow: 0 8px 18px rgba(75,47,214,.28);
+        }
+        #deleteCompletedModal .btn-danger {
+            border-radius: 999px; box-shadow: 0 8px 18px rgba(220,38,38,.25);
+        }
+    }
 </style>
 
 <div class="scroll-content">
     <?php $page_title = 'Admin Controls'; $back_url = 'index.php'; $page_testid = 'admin-controls'; include 'includes/top_app_bar.php'; ?>
+
+    <div class="vdd-hero">
+        <i class="fa-solid fa-sliders vdd-hero-icon-bg" aria-hidden="true"></i>
+        <div class="vdd-hero-ship"><i class="fa-solid fa-sliders"></i></div>
+        <div>
+            <div class="vdd-hero-title">Admin Controls</div>
+            <div class="vdd-hero-sub">Manage ports, survey types, agents, surveyors, clients and system settings</div>
+        </div>
+    </div>
 
     <div class="admin-tabs-bar" data-testid="admin-controls-tabs">
         <?php foreach ($modules as $key => $mod): ?>
