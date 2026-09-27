@@ -158,11 +158,21 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         </a>
         <?php endif; ?>
 
+        <?php if ($user_role === 'Admin'): ?>
+        <!-- Admin: sidebar "My Profile" is replaced with a shortcut to Formats
+             (upload/manage the format files Surveyors see on formats_download.php). -->
+        <div class="desktop-sidebar-section-label desktop-only-nav drawer-reveal">Formats</div>
+        <a href="formats_download.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'formats_download.php') ? 'active' : '' ?>" data-testid="sidebar-formats-link">
+            <i class="fa-solid fa-file-excel"></i>
+            <span>Formats</span>
+        </a>
+        <?php else: ?>
         <div class="desktop-sidebar-section-label desktop-only-nav">Account</div>
         <a href="profile.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'profile.php') ? 'active' : '' ?>" data-testid="sidebar-profile-link">
             <i class="fa-solid fa-user"></i>
             <span>My Profile</span>
         </a>
+        <?php endif; ?>
     </div>
 
     <!-- Desktop only: profile photo + name (click → profile) + logout at bottom of sidebar -->
