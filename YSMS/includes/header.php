@@ -1093,8 +1093,34 @@ require_once __DIR__ . '/../config/config.php';
         grid-template-columns: repeat(3, 1fr);
         gap: 14px;
     }
-    .ov-card { padding: 18px 14px; border-radius: 14px; }
-    .ov-count { font-size: 30px; }
+    /* Desktop only: icon top-left, count below it, label to the right in a
+       larger font — plus a stylish accent border + lifted shadow on hover. */
+    .ov-card {
+        padding: 18px 16px;
+        border-radius: 14px;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        grid-template-areas: "icon label" "count label";
+        align-items: center;
+        column-gap: 16px;
+        border: 1px solid transparent;
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .ov-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 28px rgba(15,23,42,.10);
+    }
+    .ov-card.pending-vessel:hover { border-color: rgba(37,99,235,.3); }
+    .ov-card.pending-report:hover { border-color: rgba(234,88,12,.3); }
+    .ov-card.completed:hover { border-color: rgba(22,163,74,.3); }
+    .ov-icon { grid-area: icon; margin-bottom: 0; }
+    .ov-count { font-size: 30px; grid-area: count; margin-bottom: 0; }
+    .ov-label {
+        grid-area: label;
+        font-size: 16px;
+        font-weight: 650;
+        line-height: 1.25;
+    }
     .stat-grid {
         grid-template-columns: repeat(4, 1fr);
         gap: 14px;
