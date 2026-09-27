@@ -198,6 +198,37 @@ function vd_qs(array $extra = []): string {
     return http_build_query($merged);
 }
 
+// 🌟 Desktop hero banner stats + surveyor avatar helpers — display only,
+// derived from the same $surveys/$is_full_access already computed above.
+function pvInitials(string $name): string {
+    $parts = preg_split('/\s+/', trim($name));
+    $ini = '';
+    foreach (array_slice($parts ?: [], 0, 2) as $p) {
+        $ini .= mb_strtoupper(mb_substr($p, 0, 1));
+    }
+    return $ini !== '' ? $ini : '?';
+}
+function pvAvatarGradient(string $name): string {
+    static $palette = [
+        ['#8B7CF6', '#4B2FD6'],
+        ['#22D3C8', '#0D9488'],
+        ['#FBBF24', '#F59E0B'],
+        ['#F472B6', '#DB2777'],
+        ['#60A5FA', '#2563EB'],
+    ];
+    $idx = crc32($name) % count($palette);
+    [$from, $to] = $palette[$idx];
+    return "linear-gradient(135deg, $from, $to)";
+}
+
+$pv_total = count($surveys);
+$pv_no_update = 0;
+$pv_needs_surveyor = 0;
+foreach ($surveys as $pv_row) {
+    if (empty($pv_row['custom_live_status'])) $pv_no_update++;
+    if ($is_full_access && (int)($pv_row['client_submitted'] ?? 0) === 1 && (int)($pv_row['surveyor_id'] ?? 0) === 1) $pv_needs_surveyor++;
+}
+
 include 'includes/header.php';
 ?>
 
@@ -399,91 +430,167 @@ include 'includes/header.php';
         .vessels-mobile-view { display: none !important; }
         .vessels-desktop-view { display: block !important; }
 
-        /* Desktop table UI */
+        /* Desktop table UI — richer "premium" pass: hero banner with live
+           counts, pill-style toolbar, icon-chip/avatar table cells. Sidebar
+           and nav are untouched (page-scoped <style>, nothing here touches
+           .bottom-nav-bar/.desktop-sidebar-*). */
         .vd-wrap { padding: 8px 20px 40px; max-width: 1400px; margin: 0 auto; }
-        
+
+        .vd-hero {
+            position: relative; overflow: hidden; border-radius: 24px;
+            background: linear-gradient(120deg, #0f172a 0%, #1E1B6B 48%, #4B2FD6 100%);
+            padding: 26px 32px; margin-bottom: 16px;
+            display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+            box-shadow: 0 16px 40px rgba(30,27,107,.25);
+        }
+        .vd-hero-icon-bg {
+            position: absolute; right: -30px; top: -60px; font-size: 240px; color: rgba(255,255,255,.07);
+            pointer-events: none; line-height: 1;
+        }
+        .vd-hero-title { font-size: 25px; font-weight: 800; color: #fff; letter-spacing: -.01em; position: relative; }
+        .vd-hero-sub { font-size: 13px; color: rgba(255,255,255,.62); margin-top: 4px; font-weight: 500; position: relative; }
+        .vd-hero-stats { display: flex; align-items: center; gap: 12px; position: relative; flex-wrap: wrap; }
+        .vd-hero-stat {
+            background: rgba(255,255,255,.1); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+            border: 1px solid rgba(255,255,255,.16); border-radius: 16px; padding: 12px 20px; text-align: center; min-width: 84px;
+        }
+        .vd-hero-stat .n { font-size: 21px; font-weight: 800; color: #fff; line-height: 1.1; }
+        .vd-hero-stat .l { font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: rgba(255,255,255,.55); margin-top: 3px; }
+        .vd-hero-stat.warn { background: rgba(245,158,11,.2); border-color: rgba(251,191,36,.32); }
+        .vd-hero-stat.warn .n { color: #FDE68A; }
+        .vd-hero-stat.warn .l { color: rgba(253,230,138,.75); }
+
         .vd-toolbar {
-            display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;
-            margin-bottom: 10px; overflow-x: auto; padding-bottom: 4px;
+            display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+            margin-bottom: 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 18px;
+            padding: 12px 16px; box-shadow: 0 2px 10px rgba(15,23,42,.05);
         }
         .vd-toolbar-inner {
-            display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;
+            display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
             flex: 1 1 auto; min-width: 0;
         }
-        .vd-toolbar input[type=search],
-        .vd-toolbar select {
-            border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px 12px;
-            font-size: 13px; background: #fff; color: #0f172a; height: 40px; box-sizing: border-box;
+        .vd-search {
+            display: flex; align-items: center; gap: 9px;
+            background: #F8FAFC; border: 1.5px solid #e2e8f0; border-radius: 999px;
+            padding: 0 16px; height: 42px; flex: 1 1 220px; min-width: 200px; box-sizing: border-box;
+            transition: border-color .15s ease, box-shadow .15s ease;
         }
-        .vd-toolbar input[type=search] { min-width: 180px; width: 220px; flex: 0 0 auto; }
-        .vd-toolbar select { max-width: 140px; flex: 0 0 auto; }
-        .vd-toolbar .btn-clear {
-            height: 40px; box-sizing: border-box; border-radius: 10px; padding: 0 14px;
-            font-weight: 650; font-size: 13px; display: inline-flex; align-items: center;
-            justify-content: center; gap: 6px; white-space: nowrap; flex: 0 0 auto;
-            text-decoration: none; border: 1px solid #e2e8f0; cursor: pointer; line-height: 1;
-            background: #f1f5f9; color: #475569;
+        .vd-search:focus-within { border-color: #A78BFA; box-shadow: 0 0 0 4px rgba(91,45,238,.12); }
+        .vd-search i { color: #94A3B8; font-size: 14px; flex: none; }
+        .vd-search input[type=search] { border: none; background: transparent; font-size: 13px; color: #0f172a; flex: 1 1 auto; height: 100%; }
+        .vd-search input[type=search]:focus { outline: none; }
+        .vd-filter {
+            display: flex; align-items: center; gap: 7px;
+            background: #F8FAFC; border: 1px solid #e2e8f0; border-radius: 999px;
+            padding: 0 14px; height: 40px; box-sizing: border-box; flex: 0 0 auto;
         }
-        .vd-export-row {
-            margin: 0 0 12px 0;
+        .vd-filter i { font-size: 12px; color: #94A3B8; flex: none; }
+        .vd-filter select {
+            border: none; background: transparent; appearance: none; -webkit-appearance: none; -moz-appearance: none;
+            font-size: 12.5px; font-weight: 600; color: #334155; padding-right: 16px; height: 38px; max-width: 150px;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%2394A3B8'/></svg>");
+            background-repeat: no-repeat; background-position: right 0 center;
         }
-        .vd-export-row .btn-export {
-            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-            height: 40px; padding: 0 16px; border-radius: 10px; font-weight: 650; font-size: 13px;
-            background: #16a34a; color: #fff; text-decoration: none; border: none;
+        .vd-filter select:focus { outline: none; }
+        .vd-clear-btn {
+            display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 999px;
+            font-size: 12.5px; font-weight: 600; color: #94A3B8; text-decoration: none; border: none;
+            background: transparent; cursor: pointer; white-space: nowrap;
         }
-        .vd-meta { font-size: 12px; color: #64748b; margin-bottom: 10px; }
+        .vd-clear-btn:hover { color: #5B2DEE; }
+
+        .vd-export-row { margin: 0 0 14px 0; display: flex; justify-content: flex-end; }
+        .btn-export {
+            display: inline-flex; align-items: center; gap: 9px;
+            background: linear-gradient(120deg, #14B8A6, #0D9488); color: #fff;
+            padding: 11px 22px; border-radius: 999px; font-weight: 700; font-size: 13.5px;
+            text-decoration: none; box-shadow: 0 6px 16px rgba(13,148,136,.3);
+            transition: box-shadow .18s ease, transform .18s ease;
+        }
+        .btn-export:hover { box-shadow: 0 10px 22px rgba(13,148,136,.4); transform: translateY(-1px); color: #fff; }
+        .vd-export-icon {
+            width: 18px; height: 18px; border-radius: 50%; background: rgba(255,255,255,.22);
+            display: inline-flex; align-items: center; justify-content: center; font-size: 9px;
+        }
+
+        .vd-meta { font-size: 12.5px; color: #64748b; margin-bottom: 10px; font-weight: 500; }
         .vd-table-card {
-            background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
-            overflow: hidden; box-shadow: 0 4px 20px rgba(15,23,42,.04);
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 20px;
+            overflow: hidden; box-shadow: 0 4px 20px rgba(15,23,42,.05);
         }
         .vd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .vd-table thead th {
-            background: #0b1e46; color: #fff; font-weight: 650; font-size: 11px;
-            letter-spacing: .04em; text-transform: uppercase;
-            padding: 12px 14px; text-align: left; white-space: nowrap;
+            background: #F8FAFC; color: #64748b; font-weight: 700; font-size: 10.5px;
+            letter-spacing: .06em; text-transform: uppercase;
+            padding: 13px 16px; text-align: left; white-space: nowrap; border-bottom: 1px solid #e2e8f0;
         }
         .vd-table tbody td {
-            padding: 12px 14px; border-bottom: 1px solid #f1f5f9;
+            padding: 13px 16px; border-bottom: 1px solid #f1f5f9;
             vertical-align: middle; color: #334155;
         }
-        .vd-table tbody tr:hover { background: #f8fafc; }
+        .vd-table tbody tr:hover { background: #FAF8FF; }
         .vd-table tbody tr:last-child td { border-bottom: none; }
-        .vd-vessel { font-weight: 700; color: #0f172a; text-decoration: none; }
-        .vd-vessel:hover { color: #3b32b3; }
-        .vd-sub { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+        .vd-vessel-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .vd-vessel-icon {
+            width: 36px; height: 36px; border-radius: 11px; flex: none;
+            background: linear-gradient(135deg, #EEF2FF, #DCE3FF); color: #4F46E5;
+            display: flex; align-items: center; justify-content: center; font-size: 15px;
+        }
+        .vd-vessel { font-weight: 700; color: #0f172a; text-decoration: none; font-size: 13.5px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+        .vd-vessel:hover { color: #5B2DEE; }
+        .vd-sub { font-size: 11px; color: #94a3b8; margin-top: 1px; font-weight: 500; }
+
         .vd-badge {
-            display: inline-block; background: #e0f2fe; color: #0369a1;
-            font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 8px;
-            text-transform: uppercase; max-width: 100%; text-align: left; line-height: 1.4;
+            display: inline-flex; align-items: center; gap: 5px;
+            background: #EFF6FF; color: #1D4ED8; font-size: 10.5px; font-weight: 800;
+            padding: 4px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em;
+            max-width: 100%; box-shadow: 0 0 0 1px rgba(37,99,235,.08);
         }
-        .vd-status-ok { color: #047857; font-size: 12px; }
-        .vd-status-none { color: #94a3b8; font-size: 12px; font-style: italic; }
-        .vd-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .vd-badge .dot { width: 5px; height: 5px; border-radius: 50%; background: #2563EB; flex: none; }
+        .vd-status-ok { font-size: 11.5px; }
+        .vd-status-none {
+            display: inline-flex; align-items: center; gap: 5px;
+            color: #B45309; font-size: 10.5px; font-weight: 600;
+        }
+        .vd-status-none i { font-size: 10px; }
+
+        .vd-port-cell { display: flex; align-items: center; gap: 8px; }
+        .vd-port-icon { width: 26px; height: 26px; border-radius: 8px; background: #ECFEFF; color: #0891B2; display: flex; align-items: center; justify-content: center; font-size: 11px; flex: none; }
+
+        .vd-avatar-cell { display: flex; align-items: center; gap: 8px; }
+        .vd-avatar {
+            width: 24px; height: 24px; border-radius: 50%; color: #fff; font-size: 9.5px; font-weight: 800;
+            display: flex; align-items: center; justify-content: center; flex: none;
+        }
+
+        .vd-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
         .vd-actions a {
-            display: inline-flex; align-items: center; gap: 4px;
-            padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 650;
-            text-decoration: none; border: 1px solid #e2e8f0; color: #3b32b3; background: #fff;
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 8px 14px; border-radius: 999px; font-size: 12px; font-weight: 700;
+            text-decoration: none; border: 1.5px solid #e2e8f0; color: #475569; background: #fff;
+            transition: all .15s ease;
         }
-        .vd-actions a:hover { background: #3b32b3; color: #fff; border-color: #3b32b3; }
-        .vd-actions a.edit { color: #0369a1; border-color: #bae6fd; }
-        .vd-actions a.edit:hover { background: #0284c7; color: #fff; border-color: #0284c7; }
+        .vd-actions a:hover { background: #5B2DEE; color: #fff; border-color: #5B2DEE; box-shadow: 0 6px 16px rgba(91,45,238,.3); }
+        .vd-actions a.edit { color: #C2410C; border-color: #FED7AA; }
+        .vd-actions a.edit:hover { background: #EA580C; color: #fff; border-color: #EA580C; box-shadow: 0 6px 16px rgba(234,88,12,.3); }
+
         .vd-pagination {
             display: flex; justify-content: space-between; align-items: center;
-            flex-wrap: wrap; gap: 10px; padding: 14px 16px; background: #f8fafc;
+            flex-wrap: wrap; gap: 10px; padding: 16px 20px; background: #F8FAFC;
             border-top: 1px solid #e2e8f0;
         }
-        .vd-page-info { font-size: 12px; color: #64748b; }
-        .vd-page-links { display: flex; gap: 4px; flex-wrap: wrap; }
+        .vd-page-info { font-size: 12.5px; color: #64748b; font-weight: 500; }
+        .vd-page-links { display: flex; gap: 6px; flex-wrap: wrap; }
         .vd-page-links a, .vd-page-links span {
-            min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center;
-            border-radius: 8px; font-size: 12px; font-weight: 650; text-decoration: none;
-            border: 1px solid #e2e8f0; background: #fff; color: #334155; padding: 0 8px;
+            min-width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 10px; font-size: 12.5px; font-weight: 700; text-decoration: none;
+            border: 1px solid #e2e8f0; background: #fff; color: #475569; padding: 0 8px;
         }
-        .vd-page-links a:hover { border-color: #3b32b3; color: #3b32b3; }
-        .vd-page-links .active { background: #3b32b3; color: #fff; border-color: #3b32b3; }
-        .vd-page-links .disabled { opacity: .45; pointer-events: none; }
-        .vd-empty { text-align: center; padding: 48px 20px; color: #94a3b8; }
+        .vd-page-links a:hover { border-color: #A78BFA; color: #5B2DEE; background: #FAF8FF; }
+        .vd-page-links .active { background: linear-gradient(135deg, #8B7CF6, #4B2FD6); color: #fff; border-color: transparent; box-shadow: 0 4px 12px rgba(91,45,238,.35); }
+        .vd-page-links .disabled { opacity: .4; pointer-events: none; }
+        .vd-empty { text-align: center; padding: 56px 20px; color: #94a3b8; }
     }
 </style>
 
@@ -586,46 +693,89 @@ include 'includes/header.php';
 
     <div class="list-desktop-view vessels-desktop-view">
         <div class="vd-wrap">
+
+            <div class="vd-hero" data-testid="pending-vessels-hero">
+                <i class="fa-solid fa-ship vd-hero-icon-bg" aria-hidden="true"></i>
+                <div>
+                    <div class="vd-hero-title">Pending Vessels</div>
+                    <div class="vd-hero-sub"><?= (int)$pv_total ?> vessel<?= $pv_total === 1 ? '' : 's' ?> currently awaiting a completed survey report</div>
+                </div>
+                <div class="vd-hero-stats">
+                    <div class="vd-hero-stat">
+                        <div class="n"><?= (int)$pv_total ?></div>
+                        <div class="l">Total</div>
+                    </div>
+                    <div class="vd-hero-stat warn">
+                        <div class="n"><?= (int)$pv_no_update ?></div>
+                        <div class="l">No Update</div>
+                    </div>
+                    <?php if ($is_full_access): ?>
+                    <div class="vd-hero-stat warn">
+                        <div class="n"><?= (int)$pv_needs_surveyor ?></div>
+                        <div class="l">Needs Surveyor</div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <div class="vd-toolbar">
                 <div class="vd-toolbar-inner">
-                    <input type="search" data-desk-search placeholder="Search vessel, client, agent, type…" autocomplete="off">
-                    <select data-desk-sort>
-                        <option value="newest">Newest first</option>
-                        <option value="oldest">Oldest first</option>
-                        <option value="name-asc">Vessel A–Z</option>
-                        <option value="name-desc">Vessel Z–A</option>
-                    </select>
-                    <select data-desk-type>
-                        <option value="">All types</option>
-                        <?php foreach ($survey_types_filter as $v): ?>
-                            <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <select data-desk-place>
-                        <option value="">All ports</option>
-                        <?php foreach ($survey_places_filter as $v): ?>
-                            <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <select data-desk-client>
-                        <option value="">All clients</option>
-                        <?php foreach ($survey_clients_filter as $v): ?>
-                            <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <div class="vd-search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="search" data-desk-search placeholder="Search vessel, client, agent, type…" autocomplete="off">
+                    </div>
+                    <div class="vd-filter">
+                        <i class="fa-solid fa-arrow-down-wide-short"></i>
+                        <select data-desk-sort>
+                            <option value="newest">Newest first</option>
+                            <option value="oldest">Oldest first</option>
+                            <option value="name-asc">Vessel A–Z</option>
+                            <option value="name-desc">Vessel Z–A</option>
+                        </select>
+                    </div>
+                    <div class="vd-filter">
+                        <i class="fa-solid fa-tag"></i>
+                        <select data-desk-type>
+                            <option value="">All types</option>
+                            <?php foreach ($survey_types_filter as $v): ?>
+                                <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="vd-filter">
+                        <i class="fa-solid fa-location-dot"></i>
+                        <select data-desk-place>
+                            <option value="">All ports</option>
+                            <?php foreach ($survey_places_filter as $v): ?>
+                                <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="vd-filter">
+                        <i class="fa-solid fa-building"></i>
+                        <select data-desk-client>
+                            <option value="">All clients</option>
+                            <?php foreach ($survey_clients_filter as $v): ?>
+                                <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <?php if ($is_full_access): ?>
-                    <select data-desk-surveyor>
-                        <option value="">All surveyors</option>
-                        <?php foreach ($survey_surveyors_filter as $v): ?>
-                            <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <div class="vd-filter">
+                        <i class="fa-solid fa-user-tie"></i>
+                        <select data-desk-surveyor>
+                            <option value="">All surveyors</option>
+                            <?php foreach ($survey_surveyors_filter as $v): ?>
+                                <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <?php endif; ?>
-                    <button type="button" class="btn-clear" data-desk-clear><i class="fa-solid fa-rotate-left"></i> Clear</button>
+                    <button type="button" class="vd-clear-btn" data-desk-clear><i class="fa-solid fa-rotate-left"></i> Clear</button>
                 </div>
             </div>
             <div class="vd-export-row">
-                <a href="export_vessels.php" class="btn-export"><i class="fa-solid fa-file-excel"></i> Export Excel</a>
+                <a href="export_vessels.php" class="btn-export"><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Export Excel</a>
             </div>
             <div class="vd-meta" data-desk-meta></div>
             <div class="vd-table-card">
@@ -668,27 +818,32 @@ include 'includes/header.php';
                                 data-date="<?= (int)$ts ?>">
                                 <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
                                 <td>
-                                    <a class="vd-vessel" href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><?= sanitize($vessel_name) ?></a>
-                                    <?php if (!empty($survey['report_number'])): ?>
-                                        <div class="vd-sub">Report: <?= sanitize($survey['report_number']) ?></div>
-                                    <?php endif; ?>
+                                    <div class="vd-vessel-cell">
+                                        <div class="vd-vessel-icon"><i class="fa-solid fa-ship"></i></div>
+                                        <div style="min-width:0;">
+                                            <a class="vd-vessel" href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><?= sanitize($vessel_name) ?></a>
+                                            <?php if (!empty($survey['report_number'])): ?>
+                                                <div class="vd-sub">Report: <?= sanitize($survey['report_number']) ?></div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td>
-                                    <div><?= sanitize($survey['company_name'] ?? '') ?></div>
+                                    <div style="font-weight:600;color:#334155;"><?= sanitize($survey['company_name'] ?? '') ?></div>
                                     <div class="vd-sub">Agent: <?= sanitize($survey['agent_name'] ?? '—') ?></div>
                                     <?php if ($needsSurveyor): ?>
                                         <span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> Assign a surveyor</span>
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <span class="vd-badge"><?= sanitize($typeLabel) ?></span>
+                                    <span class="vd-badge"><span class="dot"></span><?= sanitize($typeLabel) ?></span>
                                     <?php /* 🌟 Desktop mirrors the mobile card's Latest Update block exactly —
                                              same wording/hierarchy/fallback, same data source
                                              (custom_live_status / status_updated_at / modifier_name), just
                                              laid out for a table cell instead of a card. */ ?>
-                                    <div class="vd-sub vd-latest-update" style="max-width:240px;white-space:normal;margin-top:4px;">
+                                    <div class="vd-latest-update" style="max-width:240px;white-space:normal;margin-top:6px;">
                                         <?php if (!empty($survey['custom_live_status'])): ?>
-                                            <div class="text-dark fw-semibold" style="font-size:11.5px;">
+                                            <div class="vd-status-ok text-dark fw-semibold">
                                                 <i class="fa-solid fa-comment-dots text-primary me-1"></i>Latest Update : <?= sanitize($survey['custom_live_status']) ?>
                                             </div>
                                             <div class="text-muted" style="font-size:10px;">
@@ -696,15 +851,25 @@ include 'includes/header.php';
                                                 By <span class="text-primary fw-bold"><?= !empty($survey['modifier_name']) ? sanitize($survey['modifier_name']) : 'User' ?></span>
                                             </div>
                                         <?php else: ?>
-                                            <div class="text-muted fst-italic" style="font-size:10.5px;"><i class="fa-solid fa-info-circle text-warning"></i> No updates recorded yet.</div>
+                                            <div class="vd-status-none"><i class="fa-solid fa-clock"></i> No updates yet</div>
                                         <?php endif; ?>
                                     </div>
                                 </td>
-                                <td><i class="fa-solid fa-location-dot" style="opacity:.5;"></i> <?= sanitize($survey['port_name'] ?? 'N/A') ?></td>
+                                <td>
+                                    <div class="vd-port-cell">
+                                        <div class="vd-port-icon"><i class="fa-solid fa-location-dot"></i></div>
+                                        <span><?= sanitize($survey['port_name'] ?? 'N/A') ?></span>
+                                    </div>
+                                </td>
                                 <?php if ($is_full_access): ?>
-                                <td><?= sanitize($surveyorNames) ?></td>
+                                <td>
+                                    <div class="vd-avatar-cell">
+                                        <div class="vd-avatar" style="background: <?= pvAvatarGradient($surveyorNames) ?>;"><?= sanitize(pvInitials($surveyorNames)) ?></div>
+                                        <span><?= sanitize($surveyorNames) ?></span>
+                                    </div>
+                                </td>
                                 <?php endif; ?>
-                                <td style="white-space:nowrap;"><?= sanitize($date_disp) ?></td>
+                                <td style="white-space:nowrap;color:#64748b;font-size:12.5px;"><?= sanitize($date_disp) ?></td>
                                 <td>
                                     <div class="vd-actions">
                                         <a href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-eye"></i> View</a>
