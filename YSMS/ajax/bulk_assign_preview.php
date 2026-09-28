@@ -6,6 +6,31 @@
  * POST (multipart, first call):  excel_file, [sheet]
  * POST (form, sheet re-select):  batch_token, sheet
  */
+ob_start();
+ini_set('display_errors', '0');
+error_reporting(0);
+@set_time_limit(120);
+@ini_set('memory_limit', '256M');
+
+// 🌟 Same safety net export_vessels.php already uses: a PHP warning/notice
+// (PhpSpreadsheet is known to trigger deprecation notices on newer PHP) or
+// an uncaught fatal error would otherwise print raw text before our
+// json_encode() output, corrupting the JSON — jQuery's dataType:'json' then
+// fails the whole request with a generic "Upload failed" and no real reason
+// shown anywhere. This guarantees the response is always valid JSON.
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+        }
+        error_log('bulk_assign_preview fatal: ' . $error['message']);
+        echo json_encode(['success' => false, 'message' => 'Server error while reading this file. Please try again or contact support.']);
+    }
+});
+
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../../includes/upload_validation.php';
 require_once __DIR__ . '/../includes/bulk_assign_helpers.php';

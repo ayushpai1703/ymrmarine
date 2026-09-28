@@ -6,6 +6,12 @@
  *
  * GET: batch_id
  */
+ob_start();
+ini_set('display_errors', '0');
+error_reporting(0);
+@set_time_limit(120);
+@ini_set('memory_limit', '256M');
+
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/bulk_assign_helpers.php';
 checkAuth();

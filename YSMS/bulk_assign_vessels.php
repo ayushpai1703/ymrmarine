@@ -269,6 +269,39 @@ function showUploadError(msg) {
     $('#baUploadError').text(msg).show();
 }
 
+// Turns a failed $.ajax() call into a real, specific reason instead of a
+// generic "check your connection" message — shows the server's own JSON
+// message when there is one, otherwise the HTTP status, so a genuine server
+// error (500, session expired -> redirected to login, CSRF mismatch, etc.)
+// is actually visible instead of always looking like a network problem.
+function describeAjaxFailure(jqXHR) {
+    if (jqXHR && jqXHR.responseJSON && jqXHR.responseJSON.message) {
+        return jqXHR.responseJSON.message;
+    }
+    if (jqXHR && typeof jqXHR.responseText === 'string' && /^\s*</.test(jqXHR.responseText)) {
+        // Got an HTML page back instead of JSON — most often means the
+        // session expired and this request was redirected to the login
+        // page, or a server error page was returned.
+        return 'Your session may have expired. Please refresh the page, log in again, and retry.';
+    }
+    if (jqXHR && jqXHR.status === 0) {
+        return 'Could not reach the server. Please check your internet connection and try again.';
+    }
+    if (jqXHR && jqXHR.status === 403) {
+        return 'Your session may have expired, or this action is not permitted. Please refresh the page and log in again, then retry.';
+    }
+    if (jqXHR && jqXHR.status === 413) {
+        return 'This file is too large for the server to accept. Please try a smaller file.';
+    }
+    if (jqXHR && jqXHR.status >= 500) {
+        return 'The server hit an error while processing this (HTTP ' + jqXHR.status + '). Please try again, or contact support if it keeps happening.';
+    }
+    if (jqXHR && jqXHR.status) {
+        return 'Request failed (HTTP ' + jqXHR.status + '). Please try again.';
+    }
+    return 'Upload failed. Please check your connection and try again.';
+}
+
 $('#baUploadBtn').on('click', function () {
     if (!baFile) return;
     const fd = new FormData();
@@ -294,9 +327,9 @@ function runPreview(fd, loadingText) {
         baBatchToken = res.batch_token;
         renderPreview(res);
         $step1.hide(); $step2.show();
-    }).fail(function () {
+    }).fail(function (jqXHR) {
         Swal.close();
-        showUploadError('Upload failed. Please check your connection and try again.');
+        showUploadError(describeAjaxFailure(jqXHR));
     });
 }
 
@@ -418,8 +451,8 @@ function processChunk(offset) {
         } else {
             processChunk(res.processed);
         }
-    }).fail(function () {
-        Swal.fire('Error', 'Lost connection while processing. Please check Assignment History for what was completed, then retry any remaining rows.', 'error');
+    }).fail(function (jqXHR) {
+        Swal.fire('Error', describeAjaxFailure(jqXHR) + ' Check Assignment History for what was completed, then retry any remaining rows.', 'error');
     });
 }
 
@@ -444,4 +477,4 @@ function finishProcessing() {
 }
 </script>
 
-<?php include 'includes/footer.php'; ?>
+<?php include 'includes/nav.php'; include 'includes/footer.php'; ?>

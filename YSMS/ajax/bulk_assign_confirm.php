@@ -9,6 +9,25 @@
  *
  * POST: batch_token, offset, limit
  */
+ob_start();
+ini_set('display_errors', '0');
+error_reporting(0);
+@set_time_limit(120);
+@ini_set('memory_limit', '256M');
+
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+        }
+        error_log('bulk_assign_confirm fatal: ' . $error['message']);
+        echo json_encode(['success' => false, 'message' => 'Server error while processing this batch. Please try again.']);
+    }
+});
+
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/bulk_assign_helpers.php';
 require_once __DIR__ . '/../includes/mailer.php';

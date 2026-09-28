@@ -149,4 +149,4 @@ $(document).on('click', '.ba-batch-row', function (e) {
 });
 </script>
 
-<?php include 'includes/footer.php'; ?>
+<?php include 'includes/nav.php'; include 'includes/footer.php'; ?>
