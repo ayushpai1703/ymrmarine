@@ -231,6 +231,14 @@ include 'includes/top_app_bar.php';
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
+// 🌟 includes/footer.php loads its own copy of jQuery again further down
+// this page — that second <script src> creates a brand new jQuery instance
+// and silently discards any $.ajaxSetup() defaults set here (proven: same
+// URL loaded twice via <script src> does NOT return the same $ object, and
+// the new instance's ajaxSettings.headers comes back empty). So this
+// ajaxSetup call alone is NOT reliable for a request made after the page
+// has fully loaded — every $.ajax() call below also passes this header
+// explicitly, which is what actually keeps CSRF working.
 $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
 
 let baBatchToken = null;
@@ -318,6 +326,7 @@ function runPreview(fd, loadingText) {
         contentType: false,
         processData: false,
         dataType: 'json',
+        headers: { 'X-CSRF-Token': CSRF_TOKEN },
     }).done(function (res) {
         Swal.close();
         if (!res.success) {
@@ -438,6 +447,7 @@ function processChunk(offset) {
         method: 'POST',
         data: { batch_token: baBatchToken, offset: offset, limit: 15 },
         dataType: 'json',
+        headers: { 'X-CSRF-Token': CSRF_TOKEN },
     }).done(function (res) {
         if (!res.success) {
             Swal.fire('Error', res.message || 'Something went wrong while processing.', 'error');
