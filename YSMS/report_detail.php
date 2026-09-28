@@ -106,6 +106,30 @@ $uploads_stmt = $db->prepare("SELECT * FROM uploads WHERE survey_id = ?");
 $uploads_stmt->execute([$id]);
 $uploaded_files = $uploads_stmt->fetchAll();
 
+// 🌟 "Send Email to Master for Redelivery" — always opens Gmail's own
+// compose window (mail.google.com), not mailto:, since mailto: opens
+// whatever the OS/browser has set as its default mail handler (Outlook,
+// in practice, for this deployment) rather than Gmail specifically. To/Cc
+// are left out of the URL so they stay blank for the user to fill in
+// themselves — no auto-sending, no recipient automation.
+$redelivery_type = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
+$redelivery_surveyor = getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A');
+$redelivery_date = !empty($survey['survey_completed_date']) ? date('d M Y', strtotime($survey['survey_completed_date'])) : '';
+$redelivery_subject = 'Redelivery Details Needed for ' . $survey['vessel_name'];
+$redelivery_body = "Dear Captain,\n\nGood day.\n\nWith reference to the {$redelivery_type} carried out on board  {$survey['vessel_name']}  at {$survey['port_name']} on {$redelivery_date}, kindly send us the redelivery details to make a final report.\n\nWe would appreciate it if you could please forward the same at your earliest convenience.\n\n\n\nThank you for your cooperation.\n\nBest regards,\n{$redelivery_surveyor}\nYMR Marine Solutions LLP";
+$redelivery_gmail_url = 'https://mail.google.com/mail/?view=cm&fs=1&su=' . rawurlencode($redelivery_subject) . '&body=' . rawurlencode($redelivery_body);
+
+// Pre-fill the "from account" field with the logged-in user's own email
+// (same column/safety-net pattern as profile.php), so it defaults to
+// whoever is actually clicking the button instead of starting blank.
+$has_email_col = $db->query("SHOW COLUMNS FROM users LIKE 'email'")->fetch();
+$my_email = '';
+if ($has_email_col) {
+    $myEmailStmt = $db->prepare("SELECT email FROM users WHERE id = ?");
+    $myEmailStmt->execute([$current_user_id]);
+    $my_email = (string)($myEmailStmt->fetchColumn() ?: '');
+}
+
 include 'includes/header.php';
 ?>
 
@@ -334,6 +358,15 @@ include 'includes/header.php';
     </div>
     <?php endif; ?>
 
+    <?php if ($role !== 'Client'): ?>
+    <div class="action-btn-container redelivery-block mb-4 px-3" style="display:flex;flex-direction:column;gap:8px;" data-testid="redelivery-block-mobile">
+        <input type="email" class="form-control form-control-sm" placeholder="Your Gmail address (optional — picks which account composes)" value="<?= sanitize($my_email) ?>" data-redelivery-from data-testid="redelivery-from-input">
+        <a href="#" data-redelivery-open data-base-url="<?= sanitize($redelivery_gmail_url) ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" style="background:#0f766e;" data-testid="redelivery-email-button">
+            <i class="fa-solid fa-envelope me-1"></i> Send Email to Master for Redelivery
+        </a>
+    </div>
+    <?php endif; ?>
+
     <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
     <div class="action-btn-container mb-4 px-3" style="display:flex;flex-direction:column;gap:10px;">
         <a href="invoice_generator.php?id=<?= (int)$survey['id'] ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" data-testid="generate-invoice-button">
@@ -399,7 +432,24 @@ include 'includes/header.php';
     });
 </script>
 
-<?php 
+<script>
+// "Send Email to Master for Redelivery" — an optional "Your Gmail address"
+// field lets the user pick which signed-in Google account the compose
+// window opens under (Gmail's own &authuser= param), purely by what they
+// type here. Nothing is sent automatically and To/Cc stay blank either way.
+document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('[data-redelivery-open]');
+    if (!btn) return;
+    ev.preventDefault();
+    var block = btn.closest('.redelivery-block');
+    var input = block ? block.querySelector('[data-redelivery-from]') : null;
+    var email = input ? input.value.trim() : '';
+    var url = btn.getAttribute('data-base-url') + (email ? '&authuser=' + encodeURIComponent(email) : '');
+    window.open(url, '_blank', 'noopener');
+});
+</script>
+
+<?php
 include 'includes/nav.php';
 include 'includes/footer.php';
 ?>
