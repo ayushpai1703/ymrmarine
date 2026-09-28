@@ -119,6 +119,17 @@ $redelivery_subject = 'Redelivery Details Needed for ' . $survey['vessel_name'];
 $redelivery_body = "Dear Captain,\n\nGood day.\n\nWith reference to the {$redelivery_type} carried out on board  {$survey['vessel_name']}  at {$survey['port_name']} on {$redelivery_date}, kindly send us the redelivery details to make a final report.\n\nWe would appreciate it if you could please forward the same at your earliest convenience.\n\n\n\nThank you for your cooperation.\n\nBest regards,\n{$redelivery_surveyor}\nYMR Marine Solutions LLP";
 $redelivery_gmail_url = 'https://mail.google.com/mail/?view=cm&fs=1&su=' . rawurlencode($redelivery_subject) . '&body=' . rawurlencode($redelivery_body);
 
+// Pre-fill the "from account" field with the logged-in user's own email
+// (same column/safety-net pattern as profile.php), so it defaults to
+// whoever is actually clicking the button instead of starting blank.
+$has_email_col = $db->query("SHOW COLUMNS FROM users LIKE 'email'")->fetch();
+$my_email = '';
+if ($has_email_col) {
+    $myEmailStmt = $db->prepare("SELECT email FROM users WHERE id = ?");
+    $myEmailStmt->execute([$current_user_id]);
+    $my_email = (string)($myEmailStmt->fetchColumn() ?: '');
+}
+
 include 'includes/header.php';
 ?>
 
@@ -540,7 +551,7 @@ include 'includes/header.php';
 
     <?php if ($role !== 'Client'): ?>
     <div class="action-btn-container redelivery-block mb-4 px-3" style="display:flex;flex-direction:column;gap:8px;" data-testid="redelivery-block-mobile">
-        <input type="email" class="form-control form-control-sm" placeholder="Your Gmail address (optional — picks which account composes)" data-redelivery-from data-testid="redelivery-from-input">
+        <input type="email" class="form-control form-control-sm" placeholder="Your Gmail address (optional — picks which account composes)" value="<?= sanitize($my_email) ?>" data-redelivery-from data-testid="redelivery-from-input">
         <a href="#" data-redelivery-open data-base-url="<?= sanitize($redelivery_gmail_url) ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" style="background:#0f766e;" data-testid="redelivery-email-button">
             <i class="fa-solid fa-envelope me-1"></i> Send Email to Master for Redelivery
         </a>
@@ -774,7 +785,7 @@ include 'includes/header.php';
                         <div class="vdd-card-body">
                             <div class="vdd-field" style="margin-bottom:10px;">
                                 <label>Your Gmail address (optional — picks which account composes)</label>
-                                <input type="email" placeholder="you@gmail.com" data-redelivery-from data-testid="redelivery-from-input-desktop">
+                                <input type="email" placeholder="you@gmail.com" value="<?= sanitize($my_email) ?>" data-redelivery-from data-testid="redelivery-from-input-desktop">
                             </div>
                             <a href="#" data-redelivery-open data-base-url="<?= sanitize($redelivery_gmail_url) ?>" class="vdd-invoice-btn" style="background:linear-gradient(120deg,#0f766e,#0d9488);" data-testid="redelivery-email-button-desktop">
                                 <i class="fa-solid fa-envelope"></i> Send Email to Master for Redelivery

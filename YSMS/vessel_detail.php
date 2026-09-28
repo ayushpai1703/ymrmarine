@@ -190,6 +190,17 @@ $mail_body = "Dear Sir,\n\n"
     . "YMR Marine Solutions";
 $mail_share_url = 'https://mail.google.com/mail/?view=cm&fs=1&su=' . rawurlencode($mail_subject) . '&body=' . rawurlencode($mail_body);
 
+// Pre-fill the "from account" prompt with the logged-in user's own email
+// (same column/safety-net pattern as profile.php), so it defaults to
+// whoever is actually clicking the button instead of starting blank.
+$has_email_col = $db->query("SHOW COLUMNS FROM users LIKE 'email'")->fetch();
+$my_email = '';
+if ($has_email_col) {
+    $myEmailStmt = $db->prepare("SELECT email FROM users WHERE id = ?");
+    $myEmailStmt->execute([$current_user_id]);
+    $my_email = (string)($myEmailStmt->fetchColumn() ?: '');
+}
+
 // 🌟 Desktop hero status pill + surveyor avatar helpers — display only,
 // same avatar helpers as the list pages' redesign, duplicated page-scoped.
 function pvInitials(string $name): string {
@@ -450,7 +461,7 @@ include 'includes/header.php';
         <div class="info-table-list shadow-sm">
             <div class="text-end p-2 d-flex justify-content-end gap-2 flex-wrap">
                 <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="btn-whatsapp" data-testid="vessel-detail-whatsapp-link" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
-                <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-testid="vessel-detail-mail-link" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
+                <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
                 <?php if ($is_admin): ?>
                     <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vessel-edit-btn" data-testid="vessel-detail-edit-link"><i class="fa-solid fa-pen"></i> Edit</a>
                 <?php endif; ?>
@@ -594,7 +605,7 @@ include 'includes/header.php';
                 </div>
                 <div class="vdd-hero-actions">
                     <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-whatsapp" data-testid="vessel-detail-whatsapp-link-desktop" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
-                    <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-testid="vessel-detail-mail-link-desktop" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
+                    <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link-desktop" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
                     <?php if ($is_admin): ?>
                         <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vdd-btn-edit" data-testid="vessel-detail-edit-link-desktop"><i class="fa-solid fa-pen"></i> Edit</a>
                     <?php endif; ?>
@@ -1027,7 +1038,7 @@ document.addEventListener('click', function (ev) {
     var btn = ev.target.closest('[data-mail-from-picker]');
     if (!btn) return;
     ev.preventDefault();
-    var email = (window.prompt('Your Gmail address (optional — picks which account composes; leave blank to use the default account):', '') || '').trim();
+    var email = (window.prompt('Your Gmail address (optional — picks which account composes; leave blank to use the default account):', btn.getAttribute('data-my-email') || '') || '').trim();
     var url = btn.getAttribute('data-base-url') + (email ? '&authuser=' + encodeURIComponent(email) : '');
     window.open(url, '_blank', 'noopener');
 });
