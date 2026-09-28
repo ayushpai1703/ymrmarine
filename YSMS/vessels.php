@@ -279,6 +279,12 @@ include 'includes/header.php';
         text-align: left;
     }
     .vessel-name-title { margin: 0; text-align: left; word-break: break-word; }
+    .pv-row-num {
+        flex: none; width: 22px; height: 22px; border-radius: 50%;
+        background: #F1F5F9; color: #64748b; font-size: 11px; font-weight: 800;
+        display: flex; align-items: center; justify-content: center;
+        margin-top: 1px;
+    }
     .vessel-client-sub { margin: 2px 0 0 0; text-align: left; }
     .vessel-badge-date { flex: 0 0 auto; text-align: right; max-width: 42%; }
     .vessel-live-status-bar {
@@ -433,6 +439,7 @@ include 'includes/header.php';
                     <div class="vessel-card vessel-card--stacked" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize($survey['type_name'] ?? '') ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= strtotime($survey['assign_date'] ?? '1970-01-01') ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
                         <div class="vessel-card-top-content">
                             <div class="vessel-avatar-info">
+                                <span class="pv-row-num" data-row-num data-testid="pv-row-num"></span>
                                 <div>
                                     <h4 class="vessel-name-title"><?= sanitize($vessel_name) ?></h4>
                                     <p class="vessel-client-sub">Client: <?= sanitize($survey['company_name']) ?></p>

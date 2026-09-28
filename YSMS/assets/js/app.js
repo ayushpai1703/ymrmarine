@@ -90,7 +90,13 @@ $(document).ready(function() {
                 && (!status || cardAttr($card, 'status') === status)
                 && (!surveyor || cardAttr($card, 'surveyor') === surveyor);
             $card.toggle(show);
-            if (show) visible++;
+            if (show) {
+                visible++;
+                // Sequential "#1, #2, ..." badge — recomputed on every
+                // search/filter/sort so it always matches what's actually
+                // on screen right now, same as the desktop table's numbering.
+                $card.find('[data-row-num]').text(visible);
+            }
         });
         $scope.find('[data-list-empty]').toggle(visible === 0);
         $scope.find('[data-list-count]').text(visible);
@@ -110,5 +116,12 @@ $(document).ready(function() {
         scope.find('[data-filter-type], [data-filter-place], [data-filter-client], [data-filter-status], [data-filter-surveyor]').val('');
         scope.find('[data-list-sort]').val('newest');
         updateSurveyList(scope);
+    });
+
+    // Initial numbering/sort pass on every mobile list page (Pending
+    // Vessels, Reports, Completed, Cancelled) — without this, the "#1, #2..."
+    // badges stay blank until the user first touches a filter/sort control.
+    $('[data-list-scope]').each(function() {
+        updateSurveyList(this);
     });
 });

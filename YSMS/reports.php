@@ -174,6 +174,12 @@ include 'includes/header.php';
         text-align: left;
     }
     .vessel-thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; margin-right: 12px; }
+    .pv-row-num {
+        flex: none; width: 22px; height: 22px; border-radius: 50%;
+        background: #F1F5F9; color: #64748b; font-size: 11px; font-weight: 800;
+        display: flex; align-items: center; justify-content: center;
+        margin-right: 10px; margin-top: 2px;
+    }
     .vessel-name-title {
         font-size: 16px;
         font-weight: 600;
@@ -444,7 +450,7 @@ include 'includes/header.php';
              data-date="<?= strtotime($survey['survey_completed_date'] ?? $survey['assign_date'] ?? '1970-01-01') ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '']))) ?>">
             <div class="vessel-card-top-content">
-                <div class="vessel-avatar-info"><div>
+                <div class="vessel-avatar-info"><span class="pv-row-num" data-row-num data-testid="pv-row-num"></span><div>
                     <h4 class="vessel-name-title"><?= sanitize($vessel_name) ?></h4>
                     <p class="vessel-client-sub">Client: <?= sanitize($survey['company_name'] ?? '') ?></p>
                     <p class="vessel-client-sub">Agent: <?= sanitize($survey['agent_name'] ?? '') ?></p>

@@ -140,6 +140,11 @@ include 'includes/header.php';
 
 <style>
 
+    .pv-row-num {
+        flex: none; width: 22px; height: 22px; border-radius: 50%;
+        background: #F1F5F9; color: #64748b; font-size: 11px; font-weight: 800;
+        display: flex; align-items: center; justify-content: center;
+    }
     .list-desktop-view { display: none; }
     .list-mobile-view { display: block; }
     @media (min-width: 992px) {
@@ -272,6 +277,7 @@ include 'includes/header.php';
              data-date="<?= strtotime($survey['assign_date'] ?? '1970-01-01') ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$survey['vessel_name'] ?? '', $survey['company_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>">
             <div style="display:flex;align-items:center;gap:12px;">
+                <span class="pv-row-num" data-row-num data-testid="pv-row-num"></span>
                 <div style="width:42px;height:42px;border-radius:50%;background:#fee2e2;color:#b91c1c;display:flex;justify-content:center;align-items:center;font-weight:700;">
                     <?= strtoupper(substr($survey['vessel_name'] ?? 'X', 0, 1)) ?>
                 </div>
