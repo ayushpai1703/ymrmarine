@@ -539,8 +539,9 @@ include 'includes/header.php';
     <?php endif; ?>
 
     <?php if ($role !== 'Client'): ?>
-    <div class="action-btn-container mb-4 px-3" style="display:flex;flex-direction:column;gap:10px;">
-        <a href="<?= sanitize($redelivery_gmail_url) ?>" target="_blank" rel="noopener" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" style="background:#0f766e;" data-testid="redelivery-email-button">
+    <div class="action-btn-container redelivery-block mb-4 px-3" style="display:flex;flex-direction:column;gap:8px;" data-testid="redelivery-block-mobile">
+        <input type="email" class="form-control form-control-sm" placeholder="Your Gmail address (optional — picks which account composes)" data-redelivery-from data-testid="redelivery-from-input">
+        <a href="#" data-redelivery-open data-base-url="<?= sanitize($redelivery_gmail_url) ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" style="background:#0f766e;" data-testid="redelivery-email-button">
             <i class="fa-solid fa-envelope me-1"></i> Send Email to Master for Redelivery
         </a>
     </div>
@@ -769,9 +770,13 @@ include 'includes/header.php';
                     <?php endif; ?>
 
                     <?php if ($role !== 'Client'): ?>
-                    <div class="vdd-card">
+                    <div class="vdd-card redelivery-block" data-testid="redelivery-block-desktop">
                         <div class="vdd-card-body">
-                            <a href="<?= sanitize($redelivery_gmail_url) ?>" target="_blank" rel="noopener" class="vdd-invoice-btn" style="background:linear-gradient(120deg,#0f766e,#0d9488);" data-testid="redelivery-email-button-desktop">
+                            <div class="vdd-field" style="margin-bottom:10px;">
+                                <label>Your Gmail address (optional — picks which account composes)</label>
+                                <input type="email" placeholder="you@gmail.com" data-redelivery-from data-testid="redelivery-from-input-desktop">
+                            </div>
+                            <a href="#" data-redelivery-open data-base-url="<?= sanitize($redelivery_gmail_url) ?>" class="vdd-invoice-btn" style="background:linear-gradient(120deg,#0f766e,#0d9488);" data-testid="redelivery-email-button-desktop">
                                 <i class="fa-solid fa-envelope"></i> Send Email to Master for Redelivery
                             </a>
                         </div>
@@ -903,6 +908,23 @@ include 'includes/header.php';
             activeForm.trigger('submit');
         });
     });
+</script>
+
+<script>
+// "Send Email to Master for Redelivery" — an optional "Your Gmail address"
+// field lets the user pick which signed-in Google account the compose
+// window opens under (Gmail's own &authuser= param), purely by what they
+// type here. Nothing is sent automatically and To/Cc stay blank either way.
+document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('[data-redelivery-open]');
+    if (!btn) return;
+    ev.preventDefault();
+    var block = btn.closest('.redelivery-block');
+    var input = block ? block.querySelector('[data-redelivery-from]') : null;
+    var email = input ? input.value.trim() : '';
+    var url = btn.getAttribute('data-base-url') + (email ? '&authuser=' + encodeURIComponent(email) : '');
+    window.open(url, '_blank', 'noopener');
+});
 </script>
 
 <?php
