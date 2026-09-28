@@ -1134,13 +1134,8 @@ include 'includes/top_app_bar.php';
     </div>
 
     <?php if (!$is_client_role && !$edit_mode): ?>
-    <!-- 🌟 Bulk Upload Excel: lets Admin assign many vessels at once from an
-         existing Excel/CSV file, instead of filling this form one vessel at
-         a time. See bulk_assign_vessels.php — completely separate flow, does
-         not touch anything below (single-assign form/logic unchanged). -->
     <div class="av-toolbar" data-testid="assign-vessel-toolbar">
         <a href="assign_vessel.php" class="av-pill active" data-testid="av-nav-assign"><i class="fa-solid fa-plus"></i> Assign Vessel</a>
-        <a href="bulk_assign_vessels.php" class="av-pill" data-testid="av-nav-bulk"><i class="fa-solid fa-file-excel"></i> Bulk Upload Excel</a>
         <a href="bulk_assignment_history.php" class="av-pill" data-testid="av-nav-history"><i class="fa-solid fa-clock-rotate-left"></i> Assignment History</a>
     </div>
     <?php endif; ?>
