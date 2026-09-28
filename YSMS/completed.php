@@ -880,6 +880,13 @@ include 'includes/header.php';
     allRows.forEach(function (r) { r.style.display = 'none'; });
     slice.forEach(function (r, i) {
       r.style.display = '';
+      // Move the row into the table in sorted order too — this "#" badge
+      // was already being computed against the sorted array, but without
+      // actually reordering the <tr> elements the row STAYED at its
+      // original (PHP query) position, so the number and the row it sat
+      // next to disagreed whenever the client-side sort (e.g. "newest")
+      // differed from the initial render order.
+      tbody.appendChild(r);
       var num = r.querySelector('[data-row-num]');
       if (num) num.textContent = String(start + i + 1);
     });
