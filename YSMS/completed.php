@@ -250,18 +250,28 @@ include 'includes/header.php';
 
 /* Recovery: visible to every role. The surveyor-name tooltip is only
    present in the markup for Admin/Super Admin (see $is_full_access below),
-   so .no-tooltip / plain cursor is purely cosmetic for everyone else. */
+   so .no-tooltip / plain cursor is purely cosmetic for everyone else.
+   Shows on mouse hover/keyboard focus (desktop) and on tap via the
+   .tooltip-open class toggled by JS (mobile/touch, no real :hover there). */
 .recovery-cell { position: relative; display: inline-block; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .recovery-cell.no-tooltip { cursor: default; }
 .recovery-total { display: block; font-size: 12.5px; font-weight: 700; color: #0f172a; }
 .recovery-total b { font-weight: 800; }
 .recovery-parts { display: block; font-size: 10.5px; color: #64748b; font-weight: 500; margin-top: 2px; }
-.recovery-tooltip {
-    display: none; position: absolute; left: 0; top: 100%; margin-top: 6px; z-index: 20;
-    background: #0f172a; color: #fff; font-size: 11px; font-weight: 600; white-space: nowrap;
-    padding: 6px 10px; border-radius: 8px; box-shadow: 0 8px 20px rgba(15,23,42,.2);
+.recovery-cell .recovery-tooltip {
+    position: absolute; left: 0; top: calc(100% + 6px); z-index: 60;
+    background: #0f172a; color: #fff; font-size: 11px; font-weight: 600;
+    padding: 6px 10px; border-radius: 8px; white-space: nowrap;
+    opacity: 0; visibility: hidden; transform: translateY(-4px);
+    transition: opacity .15s ease, transform .15s ease, visibility .15s ease;
+    pointer-events: none;
+    box-shadow: 0 8px 20px rgba(15,23,42,.25);
 }
-.recovery-cell.tooltip-open .recovery-tooltip { display: block; }
+.recovery-cell:hover .recovery-tooltip,
+.recovery-cell:focus .recovery-tooltip,
+.recovery-cell.tooltip-open .recovery-tooltip {
+    opacity: 1; visibility: visible; transform: translateY(0);
+}
 </style>
 <div class="scroll-content" data-list-scope data-testid="completed-surveys-page">
     <?php $page_title = 'Completed Surveys'; $back_url = 'index.php'; $page_testid = 'completed-surveys'; include 'includes/top_app_bar.php'; ?>
@@ -399,7 +409,6 @@ include 'includes/header.php';
                                 <th>Survey type</th>
                                 <th>Port</th>
                                 <th>Recovery</th>
-                                <?php if ($is_full_access): ?><th>Surveyor</th><?php endif; ?>
                                 <th>Date</th>
                                 <th>Actions</th>
                             </tr>
@@ -437,14 +446,14 @@ include 'includes/header.php';
                                 <td><i class="fa-solid fa-location-dot" style="opacity:.5;"></i> <?= sanitize($survey['port_name'] ?? 'N/A') ?></td>
                                 <?php $rp = recoveryDisplayParts($survey); ?>
                                 <td>
-                                    <span class="recovery-cell no-tooltip" data-testid="recovery-cell-desktop">
+                                    <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-desktop">
                                         <span class="recovery-total">Total: <b><?= sanitize($rp['total']) ?></b></span>
                                         <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
+                                        <?php if ($is_full_access): ?>
+                                        <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
+                                        <?php endif; ?>
                                     </span>
                                 </td>
-                                <?php if ($is_full_access): ?>
-                                <td><?= sanitize($surveyorNames) ?></td>
-                                <?php endif; ?>
                                 <td style="white-space:nowrap;"><?= sanitize($date_disp) ?></td>
                                 <td>
                                     <div class="vd-actions">

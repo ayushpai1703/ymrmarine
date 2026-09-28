@@ -18,20 +18,35 @@ checkAuth();
 
 $db = getDB();
 $uploadId = isset($_GET['upload_id']) ? (int)$_GET['upload_id'] : 0;
+$remarkAttachmentId = isset($_GET['remark_attachment_id']) ? (int)$_GET['remark_attachment_id'] : 0;
 
-if ($uploadId <= 0) {
+if ($uploadId <= 0 && $remarkAttachmentId <= 0) {
     http_response_code(404);
     die('File not found.');
 }
 
-$stmt = $db->prepare("
-    SELECT up.id, up.file_name, up.file_path, s.id AS survey_id, s.client_id
-    FROM uploads up
-    JOIN surveys s ON s.id = up.survey_id
-    WHERE up.id = ?
-");
-$stmt->execute([$uploadId]);
-$upload = $stmt->fetch(PDO::FETCH_ASSOC);
+if ($remarkAttachmentId > 0) {
+    // Same authenticated-download pattern as the `uploads` table below, for
+    // completed_detail.php's Remarks attachments (completed_remark_attachments).
+    $stmt = $db->prepare("
+        SELECT a.id, a.file_name, a.file_path, s.id AS survey_id, s.client_id
+        FROM completed_remark_attachments a
+        JOIN completed_remarks r ON r.id = a.remark_id
+        JOIN surveys s ON s.id = r.survey_id
+        WHERE a.id = ?
+    ");
+    $stmt->execute([$remarkAttachmentId]);
+    $upload = $stmt->fetch(PDO::FETCH_ASSOC);
+} else {
+    $stmt = $db->prepare("
+        SELECT up.id, up.file_name, up.file_path, s.id AS survey_id, s.client_id
+        FROM uploads up
+        JOIN surveys s ON s.id = up.survey_id
+        WHERE up.id = ?
+    ");
+    $stmt->execute([$uploadId]);
+    $upload = $stmt->fetch(PDO::FETCH_ASSOC);
+}
 
 if (!$upload) {
     http_response_code(404);
