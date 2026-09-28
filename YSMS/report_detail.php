@@ -119,6 +119,16 @@ $redelivery_subject = 'Redelivery Details Needed for ' . $survey['vessel_name'];
 $redelivery_body = "Dear Captain,\n\nGood day.\n\nWith reference to the {$redelivery_type} carried out on board  {$survey['vessel_name']}  at {$survey['port_name']} on {$redelivery_date}, kindly send us the redelivery details to make a final report.\n\nWe would appreciate it if you could please forward the same at your earliest convenience.\n\n\n\nThank you for your cooperation.\n\nBest regards,\n{$redelivery_surveyor}\nYMR Marine Solutions LLP";
 $redelivery_gmail_url = 'https://mail.google.com/mail/?view=cm&fs=1&su=' . rawurlencode($redelivery_subject) . '&body=' . rawurlencode($redelivery_body);
 
+// Mobile: open the Gmail app itself (not a browser tab) so the user lands in
+// an already-signed-in app instead of being asked to log in again, with To/Cc
+// still editable by hand inside the app. iOS uses Gmail's own "co" (compose)
+// URL scheme. Android Gmail has no such custom scheme — it only registers
+// itself as a handler for the standard mailto: intent — so we route a
+// mailto: intent and force it to Gmail specifically via package=, falling
+// back to the web compose URL only if Gmail isn't installed.
+$redelivery_gmail_ios_url = 'googlegmail://co?subject=' . rawurlencode($redelivery_subject) . '&body=' . rawurlencode($redelivery_body);
+$redelivery_gmail_android_url = 'intent://send?subject=' . rawurlencode($redelivery_subject) . '&body=' . rawurlencode($redelivery_body) . '#Intent;scheme=mailto;package=com.google.android.gm;S.browser_fallback_url=' . rawurlencode($redelivery_gmail_url) . ';end';
+
 // Pre-fill the "from account" field with the logged-in user's own email
 // (same column/safety-net pattern as profile.php), so it defaults to
 // whoever is actually clicking the button instead of starting blank.
@@ -361,7 +371,7 @@ include 'includes/header.php';
     <?php if ($role !== 'Client'): ?>
     <div class="action-btn-container redelivery-block mb-4 px-3" style="display:flex;flex-direction:column;gap:8px;" data-testid="redelivery-block-mobile">
         <input type="email" class="form-control form-control-sm" placeholder="Your Gmail address (optional — picks which account composes)" value="<?= sanitize($my_email) ?>" data-redelivery-from data-testid="redelivery-from-input">
-        <a href="#" data-redelivery-open data-base-url="<?= sanitize($redelivery_gmail_url) ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" style="background:#0f766e;" data-testid="redelivery-email-button">
+        <a href="#" data-redelivery-open data-base-url="<?= sanitize($redelivery_gmail_url) ?>" data-ios-url="<?= sanitize($redelivery_gmail_ios_url) ?>" data-android-url="<?= sanitize($redelivery_gmail_android_url) ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" style="background:#0f766e;" data-testid="redelivery-email-button">
             <i class="fa-solid fa-envelope me-1"></i> Send Email to Master for Redelivery
         </a>
     </div>
@@ -437,6 +447,9 @@ include 'includes/header.php';
 // field lets the user pick which signed-in Google account the compose
 // window opens under (Gmail's own &authuser= param), purely by what they
 // type here. Nothing is sent automatically and To/Cc stay blank either way.
+// On phones this opens the Gmail app directly (already signed in) instead
+// of a browser tab that would ask the user to log in again; desktop keeps
+// opening the Gmail web compose tab as before.
 document.addEventListener('click', function (ev) {
     var btn = ev.target.closest('[data-redelivery-open]');
     if (!btn) return;
@@ -444,8 +457,25 @@ document.addEventListener('click', function (ev) {
     var block = btn.closest('.redelivery-block');
     var input = block ? block.querySelector('[data-redelivery-from]') : null;
     var email = input ? input.value.trim() : '';
-    var url = btn.getAttribute('data-base-url') + (email ? '&authuser=' + encodeURIComponent(email) : '');
-    window.open(url, '_blank', 'noopener');
+    var webUrl = btn.getAttribute('data-base-url') + (email ? '&authuser=' + encodeURIComponent(email) : '');
+    var ua = navigator.userAgent || '';
+
+    if (/Android/i.test(ua)) {
+        window.location.href = btn.getAttribute('data-android-url');
+        return;
+    }
+    if (/iPhone|iPad|iPod/i.test(ua)) {
+        var appOpened = false;
+        var onBlur = function () { appOpened = true; window.removeEventListener('blur', onBlur); };
+        window.addEventListener('blur', onBlur);
+        window.location.href = btn.getAttribute('data-ios-url');
+        setTimeout(function () {
+            window.removeEventListener('blur', onBlur);
+            if (!appOpened) window.location.href = webUrl;
+        }, 1500);
+        return;
+    }
+    window.open(webUrl, '_blank', 'noopener');
 });
 </script>
 
