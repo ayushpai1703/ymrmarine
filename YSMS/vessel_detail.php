@@ -190,6 +190,13 @@ $mail_body = "Dear Sir,\n\n"
     . "YMR Marine Solutions";
 $mail_share_url = 'https://mail.google.com/mail/?view=cm&fs=1&su=' . rawurlencode($mail_subject) . '&body=' . rawurlencode($mail_body);
 
+// Mobile: open the Gmail app itself (not a browser tab) so the user lands in
+// an already-signed-in app instead of being asked to log in again. iOS uses
+// Gmail's own URL scheme; Android uses an intent that targets the Gmail app
+// specifically, falling back to the web compose URL if the app isn't installed.
+$mail_ios_url = 'googlegmail://co?subject=' . rawurlencode($mail_subject) . '&body=' . rawurlencode($mail_body);
+$mail_android_url = 'intent://co?subject=' . rawurlencode($mail_subject) . '&body=' . rawurlencode($mail_body) . '#Intent;scheme=googlegmail;package=com.google.android.gm;S.browser_fallback_url=' . rawurlencode($mail_share_url) . ';end';
+
 // Pre-fill the "from account" prompt with the logged-in user's own email
 // (same column/safety-net pattern as profile.php), so it defaults to
 // whoever is actually clicking the button instead of starting blank.
@@ -461,7 +468,7 @@ include 'includes/header.php';
         <div class="info-table-list shadow-sm">
             <div class="text-end p-2 d-flex justify-content-end gap-2 flex-wrap">
                 <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="btn-whatsapp" data-testid="vessel-detail-whatsapp-link" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
-                <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
+                <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-ios-url="<?= sanitize($mail_ios_url) ?>" data-android-url="<?= sanitize($mail_android_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
                 <?php if ($is_admin): ?>
                     <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vessel-edit-btn" data-testid="vessel-detail-edit-link"><i class="fa-solid fa-pen"></i> Edit</a>
                 <?php endif; ?>
@@ -605,7 +612,7 @@ include 'includes/header.php';
                 </div>
                 <div class="vdd-hero-actions">
                     <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-whatsapp" data-testid="vessel-detail-whatsapp-link-desktop" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
-                    <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link-desktop" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
+                    <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-ios-url="<?= sanitize($mail_ios_url) ?>" data-android-url="<?= sanitize($mail_android_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link-desktop" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
                     <?php if ($is_admin): ?>
                         <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vdd-btn-edit" data-testid="vessel-detail-edit-link-desktop"><i class="fa-solid fa-pen"></i> Edit</a>
                     <?php endif; ?>
@@ -1034,13 +1041,33 @@ include 'includes/header.php';
 // signed-in Google account the compose window opens under (Gmail's own
 // &authuser= param). Cancel/leave it blank and the link opens exactly as
 // before — this is purely what the user types, nothing automatic.
+// On phones this opens the Gmail app directly (already signed in) instead
+// of a browser tab that would ask the user to log in again; desktop keeps
+// opening the Gmail web compose tab as before.
 document.addEventListener('click', function (ev) {
     var btn = ev.target.closest('[data-mail-from-picker]');
     if (!btn) return;
     ev.preventDefault();
     var email = (window.prompt('Your Gmail address (optional — picks which account composes; leave blank to use the default account):', btn.getAttribute('data-my-email') || '') || '').trim();
-    var url = btn.getAttribute('data-base-url') + (email ? '&authuser=' + encodeURIComponent(email) : '');
-    window.open(url, '_blank', 'noopener');
+    var webUrl = btn.getAttribute('data-base-url') + (email ? '&authuser=' + encodeURIComponent(email) : '');
+    var ua = navigator.userAgent || '';
+
+    if (/Android/i.test(ua)) {
+        window.location.href = btn.getAttribute('data-android-url');
+        return;
+    }
+    if (/iPhone|iPad|iPod/i.test(ua)) {
+        var appOpened = false;
+        var onBlur = function () { appOpened = true; window.removeEventListener('blur', onBlur); };
+        window.addEventListener('blur', onBlur);
+        window.location.href = btn.getAttribute('data-ios-url');
+        setTimeout(function () {
+            window.removeEventListener('blur', onBlur);
+            if (!appOpened) window.location.href = webUrl;
+        }, 1500);
+        return;
+    }
+    window.open(webUrl, '_blank', 'noopener');
 });
 </script>
 
