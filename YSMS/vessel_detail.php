@@ -176,8 +176,10 @@ $whatsapp_share_url = $whatsapp_number !== ''
     ? 'https://wa.me/' . $whatsapp_number . '?text=' . rawurlencode($whatsapp_text)
     : 'https://api.whatsapp.com/send?text=' . rawurlencode($whatsapp_text);
 
-// Email — default Outlook/mailto template with greeting + full assignment data
-// (mailto: opens user's own mail app; "To" left blank for manual entry)
+// Email — opens Gmail's own compose window (not mailto:, which opens
+// whatever the OS's default mail app is, e.g. Outlook) with greeting +
+// full assignment data pre-filled. "To" is left out of the URL so it
+// stays blank for manual entry, same as mailto: did.
 $mail_subject = "New Survey Appointment - " . ($survey['vessel_name'] ?? 'Vessel') . " (" . $client_name . ")";
 $mail_body = "Dear Sir,\n\n"
     . "Good day to you.\n\n"
@@ -185,7 +187,7 @@ $mail_body = "Dear Sir,\n\n"
     . $appointment_block . "\n\n"
     . "Thank you.\n"
     . "YMR Marine Solutions";
-$mail_share_url = 'mailto:?subject=' . rawurlencode($mail_subject) . '&body=' . rawurlencode($mail_body);
+$mail_share_url = 'https://mail.google.com/mail/?view=cm&fs=1&su=' . rawurlencode($mail_subject) . '&body=' . rawurlencode($mail_body);
 
 // 🌟 Desktop hero status pill + surveyor avatar helpers — display only,
 // same avatar helpers as the list pages' redesign, duplicated page-scoped.
@@ -230,14 +232,14 @@ include 'includes/header.php';
         text-decoration: none !important; box-shadow: 0 1px 3px rgba(18,140,126,.25);
     }
     .btn-whatsapp:hover { background: #128C7E; color: #fff !important; }
-    /* Microsoft / Outlook blue */
+    /* Gmail red */
     .btn-email {
         display: inline-flex; align-items: center; gap: 6px;
-        background: #0078D4; color: #fff !important; border: 1px solid #106EBE;
+        background: #EA4335; color: #fff !important; border: 1px solid #D93025;
         border-radius: 8px; padding: 6px 12px; font-size: 11px; font-weight: 700;
-        text-decoration: none !important; box-shadow: 0 1px 3px rgba(0,120,212,.25);
+        text-decoration: none !important; box-shadow: 0 1px 3px rgba(234,67,53,.25);
     }
-    .btn-email:hover { background: #106EBE; color: #fff !important; }
+    .btn-email:hover { background: #D93025; color: #fff !important; }
 
     /* 🖥️ Desktop: main details | upload side-by-side; live status content-height only */
     @media (min-width: 992px) {
@@ -447,7 +449,7 @@ include 'includes/header.php';
         <div class="info-table-list shadow-sm">
             <div class="text-end p-2 d-flex justify-content-end gap-2 flex-wrap">
                 <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="btn-whatsapp" data-testid="vessel-detail-whatsapp-link" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
-                <a href="<?= sanitize($mail_share_url) ?>" class="btn-email" data-testid="vessel-detail-mail-link" title="Send via Email (Outlook)"><i class="fa-solid fa-envelope"></i> Email</a>
+                <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="btn-email" data-testid="vessel-detail-mail-link" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
                 <?php if ($is_admin): ?>
                     <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vessel-edit-btn" data-testid="vessel-detail-edit-link"><i class="fa-solid fa-pen"></i> Edit</a>
                 <?php endif; ?>
@@ -591,7 +593,7 @@ include 'includes/header.php';
                 </div>
                 <div class="vdd-hero-actions">
                     <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-whatsapp" data-testid="vessel-detail-whatsapp-link-desktop" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
-                    <a href="<?= sanitize($mail_share_url) ?>" class="vdd-btn-email" data-testid="vessel-detail-mail-link-desktop" title="Send via Email (Outlook)"><i class="fa-solid fa-envelope"></i> Email</a>
+                    <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-email" data-testid="vessel-detail-mail-link-desktop" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
                     <?php if ($is_admin): ?>
                         <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vdd-btn-edit" data-testid="vessel-detail-edit-link-desktop"><i class="fa-solid fa-pen"></i> Edit</a>
                     <?php endif; ?>
