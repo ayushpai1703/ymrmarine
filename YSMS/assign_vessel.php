@@ -935,6 +935,14 @@ include 'includes/header.php';
     .vdd-form-card-head { display: none; }
     .vdd-field-icon { display: none; }
 
+    /* Assign Vessel / Bulk Upload Excel / Assignment History pill toolbar
+       (Admin only — see the PHP conditional below) */
+    .av-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 20px 4px; }
+    .av-pill { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 999px; font-size: 12.5px; font-weight: 700; text-decoration: none; border: 1.5px solid #e2e8f0; color: #334155; background: #fff; transition: all .15s ease; }
+    .av-pill:hover { border-color: #A78BFA; color: #4B2FD6; }
+    .av-pill.active { background: linear-gradient(120deg, #1E1B6B, #4B2FD6); color: #fff; border-color: transparent; box-shadow: 0 6px 16px rgba(75,47,214,.28); }
+    @media (min-width: 992px) { .av-toolbar { margin: 0 0 12px; } }
+
     /* Desktop 2-col */
     @media (min-width: 992px) {
         .form-box-custom {
@@ -1124,6 +1132,18 @@ include 'includes/top_app_bar.php';
             <div class="vdd-hero-sub"><?= $edit_mode ? 'Update this vessel\'s survey assignment' : 'Assign a vessel to a client, port, survey type and surveyor' ?></div>
         </div>
     </div>
+
+    <?php if (!$is_client_role && !$edit_mode): ?>
+    <!-- 🌟 Bulk Upload Excel: lets Admin assign many vessels at once from an
+         existing Excel/CSV file, instead of filling this form one vessel at
+         a time. See bulk_assign_vessels.php — completely separate flow, does
+         not touch anything below (single-assign form/logic unchanged). -->
+    <div class="av-toolbar" data-testid="assign-vessel-toolbar">
+        <a href="assign_vessel.php" class="av-pill active" data-testid="av-nav-assign"><i class="fa-solid fa-plus"></i> Assign Vessel</a>
+        <a href="bulk_assign_vessels.php" class="av-pill" data-testid="av-nav-bulk"><i class="fa-solid fa-file-excel"></i> Bulk Upload Excel</a>
+        <a href="bulk_assignment_history.php" class="av-pill" data-testid="av-nav-history"><i class="fa-solid fa-clock-rotate-left"></i> Assignment History</a>
+    </div>
+    <?php endif; ?>
 
     <!-- Feedback Alerts -->
     <?php if($success): ?>
