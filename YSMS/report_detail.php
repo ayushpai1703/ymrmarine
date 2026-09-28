@@ -106,11 +106,10 @@ $uploads_stmt = $db->prepare("SELECT * FROM uploads WHERE survey_id = ?");
 $uploads_stmt->execute([$id]);
 $uploaded_files = $uploads_stmt->fetchAll();
 
-// 🌟 "Send Email to Master for Redelivery" — plain mailto: so it opens
-// whichever mail app the user's own device/browser has set as default
-// (Gmail app on a phone where that's the default handler, Gmail in Chrome
-// if configured as its mailto: handler, Outlook if that's the default,
-// etc.), instead of forcing everyone through one hardcoded provider. To/Cc
+// 🌟 "Send Email to Master for Redelivery" — always opens Gmail's own
+// compose window (mail.google.com), not mailto:, since mailto: opens
+// whatever the OS/browser has set as its default mail handler (Outlook,
+// in practice, for this deployment) rather than Gmail specifically. To/Cc
 // are left out of the URL so they stay blank for the user to fill in
 // themselves — no auto-sending, no recipient automation.
 $redelivery_type = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
@@ -118,7 +117,7 @@ $redelivery_surveyor = getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey
 $redelivery_date = !empty($survey['survey_completed_date']) ? date('d M Y', strtotime($survey['survey_completed_date'])) : '';
 $redelivery_subject = 'Redelivery Details Needed for ' . $survey['vessel_name'];
 $redelivery_body = "Dear Captain,\n\nGood day.\n\nWith reference to the {$redelivery_type} carried out on board  {$survey['vessel_name']}  at {$survey['port_name']} on {$redelivery_date}, kindly send us the redelivery details to make a final report.\n\nWe would appreciate it if you could please forward the same at your earliest convenience.\n\n\n\nThank you for your cooperation.\n\nBest regards,\n{$redelivery_surveyor}\nYMR Marine Solutions LLP";
-$redelivery_mailto_url = 'mailto:?subject=' . rawurlencode($redelivery_subject) . '&body=' . rawurlencode($redelivery_body);
+$redelivery_gmail_url = 'https://mail.google.com/mail/?view=cm&fs=1&su=' . rawurlencode($redelivery_subject) . '&body=' . rawurlencode($redelivery_body);
 
 include 'includes/header.php';
 ?>
@@ -541,7 +540,7 @@ include 'includes/header.php';
 
     <?php if ($role !== 'Client'): ?>
     <div class="action-btn-container mb-4 px-3" style="display:flex;flex-direction:column;gap:10px;">
-        <a href="<?= sanitize($redelivery_mailto_url) ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" style="background:#0f766e;" data-testid="redelivery-email-button">
+        <a href="<?= sanitize($redelivery_gmail_url) ?>" target="_blank" rel="noopener" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" style="background:#0f766e;" data-testid="redelivery-email-button">
             <i class="fa-solid fa-envelope me-1"></i> Send Email to Master for Redelivery
         </a>
     </div>
@@ -772,7 +771,7 @@ include 'includes/header.php';
                     <?php if ($role !== 'Client'): ?>
                     <div class="vdd-card">
                         <div class="vdd-card-body">
-                            <a href="<?= sanitize($redelivery_mailto_url) ?>" class="vdd-invoice-btn" style="background:linear-gradient(120deg,#0f766e,#0d9488);" data-testid="redelivery-email-button-desktop">
+                            <a href="<?= sanitize($redelivery_gmail_url) ?>" target="_blank" rel="noopener" class="vdd-invoice-btn" style="background:linear-gradient(120deg,#0f766e,#0d9488);" data-testid="redelivery-email-button-desktop">
                                 <i class="fa-solid fa-envelope"></i> Send Email to Master for Redelivery
                             </a>
                         </div>
