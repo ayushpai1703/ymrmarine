@@ -120,6 +120,7 @@ include 'includes/top_app_bar.php';
     </div>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script>
 $(document).on('click', '.ba-batch-row', function (e) {
     if ($(e.target).closest('.ba-dl-link').length) return;
