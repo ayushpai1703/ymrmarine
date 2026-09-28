@@ -139,6 +139,19 @@ function vd_qs(array $extra = []): string {
     return http_build_query($merged);
 }
 
+// 🌟 Recovery: Total/VLSFO/HSFO/LSMGO, formatted "12.500 MT" or "—" when unset.
+function recoveryDisplayParts(array $survey): array {
+    $fmt = function ($v) {
+        return $v !== null ? number_format((float)$v, 3) . ' MT' : '—';
+    };
+    return [
+        'total' => $fmt($survey['recovery_amount'] ?? null),
+        'vlsfo' => $fmt($survey['vlsfo_recovery'] ?? null),
+        'hsfo' => $fmt($survey['hsfo_recovery'] ?? null),
+        'lsmgo' => $fmt($survey['lsmgo_recovery'] ?? null),
+    ];
+}
+
 include 'includes/header.php';
 ?>
 
@@ -234,6 +247,21 @@ include 'includes/header.php';
     }
 
 .vd-badge { background: #d1fae5 !important; color: #065f46 !important; }
+
+/* Recovery: visible to every role. The surveyor-name tooltip is only
+   present in the markup for Admin/Super Admin (see $is_full_access below),
+   so .no-tooltip / plain cursor is purely cosmetic for everyone else. */
+.recovery-cell { position: relative; display: inline-block; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.recovery-cell.no-tooltip { cursor: default; }
+.recovery-total { display: block; font-size: 12.5px; font-weight: 700; color: #0f172a; }
+.recovery-total b { font-weight: 800; }
+.recovery-parts { display: block; font-size: 10.5px; color: #64748b; font-weight: 500; margin-top: 2px; }
+.recovery-tooltip {
+    display: none; position: absolute; left: 0; top: 100%; margin-top: 6px; z-index: 20;
+    background: #0f172a; color: #fff; font-size: 11px; font-weight: 600; white-space: nowrap;
+    padding: 6px 10px; border-radius: 8px; box-shadow: 0 8px 20px rgba(15,23,42,.2);
+}
+.recovery-cell.tooltip-open .recovery-tooltip { display: block; }
 </style>
 <div class="scroll-content" data-list-scope data-testid="completed-surveys-page">
     <?php $page_title = 'Completed Surveys'; $back_url = 'index.php'; $page_testid = 'completed-surveys'; include 'includes/top_app_bar.php'; ?>
@@ -284,6 +312,16 @@ include 'includes/header.php';
                     <h4 style="margin:0;font-size:14px;font-weight:700;"><?= sanitize($survey['vessel_name']) ?></h4>
                     <p style="margin:2px 0 0;font-size:12px;color:#64748b;">Client: <?= sanitize($survey['company_name'] ?? '') ?></p>
                     <p style="margin:2px 0 0;font-size:11px;">Type: <span style="color:#047857;font-weight:600;"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></p>
+                    <?php $rp = recoveryDisplayParts($survey); ?>
+                    <p style="margin:4px 0 0;font-size:11px;">
+                        <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-mobile">
+                            <span class="recovery-total">Recovery: <b><?= sanitize($rp['total']) ?></b></span>
+                            <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
+                            <?php if ($is_full_access): ?>
+                            <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
+                            <?php endif; ?>
+                        </span>
+                    </p>
                 </div>
             </div>
             <div style="text-align:right;">
@@ -360,6 +398,7 @@ include 'includes/header.php';
                                 <th>Client / Agent</th>
                                 <th>Survey type</th>
                                 <th>Port</th>
+                                <th>Recovery</th>
                                 <?php if ($is_full_access): ?><th>Surveyor</th><?php endif; ?>
                                 <th>Date</th>
                                 <th>Actions</th>
@@ -396,6 +435,13 @@ include 'includes/header.php';
                                 </td>
                                 <td><span class="vd-badge"><?= sanitize($typeLabel) ?></span></td>
                                 <td><i class="fa-solid fa-location-dot" style="opacity:.5;"></i> <?= sanitize($survey['port_name'] ?? 'N/A') ?></td>
+                                <?php $rp = recoveryDisplayParts($survey); ?>
+                                <td>
+                                    <span class="recovery-cell no-tooltip" data-testid="recovery-cell-desktop">
+                                        <span class="recovery-total">Total: <b><?= sanitize($rp['total']) ?></b></span>
+                                        <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
+                                    </span>
+                                </td>
                                 <?php if ($is_full_access): ?>
                                 <td><?= sanitize($surveyorNames) ?></td>
                                 <?php endif; ?>
@@ -547,6 +593,25 @@ include 'includes/header.php';
 
   render();
 })();
+</script>
+
+<script>
+// Recovery tooltip toggle (mobile card only — the desktop cell has no
+// .recovery-tooltip child so this stays inert there). Capture phase is
+// required: the mobile card itself has its own onclick="location.href=...'"
+// navigation, and a bubble-phase listener here would run AFTER that
+// ancestor onclick has already fired, making stopPropagation() too late.
+document.addEventListener('click', function (ev) {
+    var cell = ev.target.closest('.recovery-cell');
+    var hasTooltip = cell && cell.querySelector('.recovery-tooltip');
+    document.querySelectorAll('.recovery-cell.tooltip-open').forEach(function (openCell) {
+        if (openCell !== cell) openCell.classList.remove('tooltip-open');
+    });
+    if (hasTooltip) {
+        ev.stopPropagation();
+        cell.classList.toggle('tooltip-open');
+    }
+}, true);
 </script>
 
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>
