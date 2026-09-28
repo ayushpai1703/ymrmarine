@@ -139,6 +139,11 @@ include 'includes/top_app_bar.php';
                 <div class="ba-card-head-sub">.xlsx, .xls or .csv — use the file you already have, no template needed</div>
             </div>
         </div>
+        <div class="mb-3">
+            <a href="ajax/bulk_assign_template.php" class="ba-pill" style="font-weight:600;" data-testid="ba-download-template-link">
+                <i class="fa-solid fa-file-arrow-down"></i> Need a starting point? Download a sample template
+            </a>
+        </div>
         <label class="ba-drop" id="baDropZone" data-testid="ba-drop-zone">
             <i class="fa-solid fa-file-arrow-up"></i>
             <div class="ba-drop-title">Click to choose a file, or drag it here</div>
