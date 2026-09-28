@@ -406,6 +406,11 @@ include 'includes/header.php';
             background: #eaf3ff; color: #1d6fe0; font-size: 17px;
             display: flex; align-items: center; justify-content: center;
         }
+        .pv-row-num {
+            flex: none; width: 22px; height: 22px; border-radius: 50%;
+            background: #F1F5F9; color: #64748b; font-size: 11px; font-weight: 800;
+            display: flex; align-items: center; justify-content: center;
+        }
         .pv-vessel-name { font-size: 16.5px; font-weight: 800; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
         .pv-type-pill { align-self: flex-end; max-width: 100%; text-align: right; }
         .pv-info-rows { display: flex; flex-direction: column; gap: 7px; padding: 0 16px 14px; }
@@ -677,6 +682,7 @@ include 'includes/header.php';
                     <div class="vessel-card vessel-card--stacked" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize($survey['type_name'] ?? '') ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= strtotime($survey['assign_date'] ?? '1970-01-01') ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
                         <div class="pv-card-top">
                             <div class="pv-card-headline">
+                                <span class="pv-row-num" data-row-num data-testid="pv-row-num"></span>
                                 <div class="pv-ship-icon"><i class="fa-solid fa-ship"></i></div>
                                 <div class="pv-vessel-name"><?= sanitize($vessel_name) ?></div>
                             </div>

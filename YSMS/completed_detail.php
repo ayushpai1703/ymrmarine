@@ -1,5 +1,7 @@
 <?php
 require_once 'config/config.php';
+require_once __DIR__ . '/../includes/upload_validation.php';
+require_once 'includes/completed_remarks_helpers.php';
 checkAuth();
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -104,6 +106,45 @@ if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_r
             $recovery_error = 'Could not save recovery values. Please try again.';
         }
     }
+}
+
+// 🌟 Add Remarks (+ optional attachments) — Admin or the assigned surveyor(s)
+// only (Client stays read-only, same boundary the rest of this page already
+// draws). Post/Redirect/Get so a page refresh never re-submits the remark.
+$can_add_remark = canAddCompletedRemark($db, $survey, $role, $current_user_id);
+$remark_error = '';
+if ($can_add_remark && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_remark'])) {
+    $result = saveCompletedRemark($db, $id, $current_user_id, (string)($_POST['remarks'] ?? ''), $_FILES['remark_attachments'] ?? []);
+    if ($result['ok']) {
+        $_SESSION['flash_msg'] = $result['error'] !== '' ? $result['error'] : 'Remark saved.';
+        header('Location: completed_detail.php?id=' . $id . '#remarks-section');
+        exit;
+    }
+    $remark_error = $result['error'];
+}
+$completed_remarks = getCompletedRemarks($db, $id);
+$can_delete_remark = canDeleteCompletedRemark($role);
+
+if ($can_delete_remark && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_remark_id'])) {
+    $delRemarkId = (int)$_POST['delete_remark_id'];
+    try {
+        // Only ever deletes a remark that actually belongs to this survey — a
+        // forged id for another survey's remark can't be used to delete it.
+        $own = $db->prepare("SELECT a.file_path FROM completed_remark_attachments a JOIN completed_remarks r ON r.id = a.remark_id WHERE a.remark_id = ? AND r.survey_id = ?");
+        $own->execute([$delRemarkId, $id]);
+        foreach ($own->fetchAll(PDO::FETCH_COLUMN) as $relPath) {
+            $abs = __DIR__ . '/' . ltrim((string)$relPath, '/');
+            if (is_file($abs)) { @unlink($abs); }
+        }
+        $delAtt = $db->prepare("DELETE a FROM completed_remark_attachments a JOIN completed_remarks r ON r.id = a.remark_id WHERE a.remark_id = ? AND r.survey_id = ?");
+        $delAtt->execute([$delRemarkId, $id]);
+        $delRow = $db->prepare("DELETE FROM completed_remarks WHERE id = ? AND survey_id = ?");
+        $delRow->execute([$delRemarkId, $id]);
+    } catch (Throwable $e) {
+        error_log('completed_detail delete remark: ' . $e->getMessage());
+    }
+    header('Location: completed_detail.php?id=' . $id . '#remarks-section');
+    exit;
 }
 
 // 2. ఈ వెసెల్ కి సంబంధించి అప్‌లోడ్ చేసిన అన్ని రకాల ఫైల్స్ (PDF, Excel, Word, Extra) ఒకేసారి లోడ్ చేయడం
@@ -684,7 +725,159 @@ include 'includes/header.php';
             </div>
         </div>
     </div><!-- /.detail-desktop-view -->
+
+    <!-- Add Remarks — shared section, not part of the mobile/desktop toggle
+         above, so it always renders once with its own simple responsive CSS. -->
+    <section class="remarks-section" id="remarks-section" data-testid="remarks-section">
+        <div class="remarks-card">
+            <div class="remarks-card-head">
+                <div class="remarks-card-head-icon"><i class="fa-solid fa-comment-dots"></i></div>
+                <div>
+                    <div class="remarks-card-head-title">Add Remarks</div>
+                    <div class="remarks-card-head-sub">Notes about this completed vessel/report</div>
+                </div>
+            </div>
+
+            <?php if ($can_add_remark): ?>
+            <?php if ($remark_error): ?><div class="remarks-alert" data-testid="remark-error"><?= sanitize($remark_error) ?></div><?php endif; ?>
+            <form method="POST" enctype="multipart/form-data" id="remarkForm" data-testid="remark-form"><?= csrf_field() ?>
+                <input type="hidden" name="add_remark" value="1">
+                <textarea name="remarks" class="remarks-textarea" placeholder="Write your remarks here..." required data-testid="remark-textarea"></textarea>
+
+                <div class="remarks-attach-row">
+                    <label class="remarks-attach-btn">
+                        <i class="fa-solid fa-paperclip"></i> Attachments (Optional)
+                        <input type="file" name="remark_attachments[]" id="remarkFiles" multiple
+                               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" style="display:none;" data-testid="remark-file-input">
+                    </label>
+                    <span class="remarks-attach-hint">PDF, JPG, PNG, DOC/DOCX, XLS/XLSX — up to 15MB each</span>
+                </div>
+                <div class="remarks-file-list" id="remarkFileList"></div>
+
+                <button type="submit" class="remarks-save-btn" data-testid="save-remark-button">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Remarks
+                </button>
+            </form>
+            <?php else: ?>
+            <div class="remarks-readonly-note"><i class="fa-solid fa-eye"></i> You can view remarks here, but only Admin or the assigned surveyor can add new ones.</div>
+            <?php endif; ?>
+
+            <div class="remarks-list">
+                <?php if (empty($completed_remarks)): ?>
+                    <div class="remarks-empty">No remarks yet.</div>
+                <?php else: foreach ($completed_remarks as $rem): ?>
+                    <div class="remarks-item" data-testid="remark-item-<?= (int)$rem['id'] ?>">
+                        <div class="remarks-item-head">
+                            <span class="remarks-item-author"><?= sanitize($rem['author_name'] ?: 'User') ?></span>
+                            <span class="remarks-item-date"><?= sanitize(fmtDateTime($rem['created_at'])) ?></span>
+                            <?php if ($can_delete_remark): ?>
+                            <form method="POST" class="remarks-delete-form" onsubmit="return confirm('Delete this remark?');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="delete_remark_id" value="<?= (int)$rem['id'] ?>">
+                                <button type="submit" class="remarks-delete-btn" title="Delete remark" data-testid="delete-remark-<?= (int)$rem['id'] ?>"><i class="fa-solid fa-trash"></i></button>
+                            </form>
+                            <?php endif; ?>
+                        </div>
+                        <div class="remarks-item-text"><?= nl2br(sanitize($rem['remarks'])) ?></div>
+                        <?php if (!empty($rem['attachments'])): ?>
+                        <div class="remarks-item-attachments">
+                            <?php foreach ($rem['attachments'] as $att): ?>
+                                <a href="download.php?remark_attachment_id=<?= (int)$att['id'] ?>" class="remarks-attachment-chip">
+                                    <i class="fa-solid fa-paperclip"></i> <?= sanitize($att['file_name']) ?>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; endif; ?>
+            </div>
+        </div>
+    </section>
 </div>
+
+<style>
+    .remarks-section { padding: 0 12px 24px; }
+    .remarks-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 20px; box-shadow: 0 4px 20px rgba(15,23,42,.05); max-width: 100%; }
+    .remarks-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .remarks-card-head-icon { width: 34px; height: 34px; border-radius: 10px; flex: none; background: linear-gradient(135deg, #8B7CF6, #4B2FD6); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .remarks-card-head-title { font-size: 15px; font-weight: 800; color: #0f172a; }
+    .remarks-card-head-sub { font-size: 11.5px; color: #94a3b8; font-weight: 500; margin-top: 1px; }
+
+    .remarks-alert { background: #FEF2F2; border: 1.5px solid #FECACA; color: #991B1B; border-radius: 10px; padding: 10px 14px; font-size: 12.5px; font-weight: 600; margin-bottom: 12px; }
+    .remarks-textarea { width: 100%; min-height: 110px; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; font-size: 13.5px; font-family: inherit; color: #1e293b; background: #F8FAFC; resize: vertical; }
+    .remarks-textarea:focus { outline: none; border-color: #A78BFA; background: #fff; box-shadow: 0 0 0 4px rgba(91,45,238,.12); }
+
+    .remarks-attach-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+    .remarks-attach-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 10px; background: #F1F5F9; color: #334155; font-size: 12.5px; font-weight: 700; cursor: pointer; border: 1.5px dashed #cbd5e1; }
+    .remarks-attach-btn:hover { background: #E2E8F0; }
+    .remarks-attach-hint { font-size: 11px; color: #94a3b8; }
+    .remarks-file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .remarks-file-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #F8FAFC; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 10px; font-size: 12px; color: #334155; }
+    .remarks-file-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .remarks-file-row .remove-btn { border: none; background: none; color: #DC2626; cursor: pointer; font-size: 12px; flex: none; padding: 2px 6px; }
+
+    .remarks-save-btn { display: inline-flex; align-items: center; gap: 8px; border: none; border-radius: 12px; padding: 11px 20px; margin-top: 14px; font-size: 13px; font-weight: 700; cursor: pointer; background: linear-gradient(120deg, #1E1B6B, #4B2FD6); color: #fff; box-shadow: 0 6px 16px rgba(75,47,214,.28); }
+    .remarks-save-btn:hover { box-shadow: 0 10px 22px rgba(75,47,214,.38); }
+    .remarks-readonly-note { font-size: 12.5px; color: #64748b; background: #F8FAFC; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; }
+
+    .remarks-list { margin-top: 18px; display: flex; flex-direction: column; gap: 12px; }
+    .remarks-empty { text-align: center; color: #94a3b8; font-size: 12.5px; padding: 20px 0; }
+    .remarks-item { border: 1px solid #f1f5f9; border-radius: 12px; padding: 12px 14px; background: #FAFBFF; }
+    .remarks-item-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+    .remarks-item-author { font-size: 12.5px; font-weight: 700; color: #0f172a; }
+    .remarks-item-date { font-size: 11px; color: #94a3b8; }
+    .remarks-delete-form { margin-left: auto; }
+    .remarks-delete-btn { border: none; background: none; color: #cbd5e1; cursor: pointer; padding: 2px 4px; }
+    .remarks-delete-btn:hover { color: #DC2626; }
+    .remarks-item-text { font-size: 13px; color: #334155; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+    .remarks-item-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .remarks-attachment-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: #EEF2FF; color: #4338CA; font-size: 11.5px; font-weight: 600; text-decoration: none; }
+    .remarks-attachment-chip:hover { background: #E0E7FF; }
+
+    @media (min-width: 992px) {
+        .remarks-section { max-width: 1400px; margin: 0 auto; padding: 0 20px 40px; }
+        .remarks-card { max-width: 900px; }
+    }
+</style>
+<script>
+(function () {
+    var input = document.getElementById('remarkFiles');
+    var list = document.getElementById('remarkFileList');
+    if (!input || !list) return;
+    var dt = new DataTransfer();
+
+    input.addEventListener('change', function () {
+        Array.prototype.forEach.call(input.files, function (f) { dt.items.add(f); });
+        input.files = dt.files;
+        render();
+    });
+
+    function render() {
+        list.innerHTML = '';
+        Array.prototype.forEach.call(dt.files, function (f, idx) {
+            var row = document.createElement('div');
+            row.className = 'remarks-file-row';
+            var name = document.createElement('span');
+            name.className = 'name';
+            name.textContent = f.name;
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'remove-btn';
+            btn.innerHTML = '<i class="fa-solid fa-xmark"></i> Remove';
+            btn.addEventListener('click', function () {
+                var newDt = new DataTransfer();
+                Array.prototype.forEach.call(dt.files, function (ff, i2) { if (i2 !== idx) newDt.items.add(ff); });
+                dt = newDt;
+                input.files = dt.files;
+                render();
+            });
+            row.appendChild(name);
+            row.appendChild(btn);
+            list.appendChild(row);
+        });
+    }
+})();
+</script>
 
 <?php
 include 'includes/nav.php';

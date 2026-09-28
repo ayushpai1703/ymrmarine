@@ -3,6 +3,28 @@ require_once 'config/config.php';
 checkAuth();
 
 $db = getDB();
+
+// 🌟 SAFETY NET: hsfo_recovery column, same as completed_detail.php /
+// ajax/upload_handler.php — covers a live DB where this column hasn't been
+// added yet, so the Recovery display below never silently breaks.
+try {
+    $cols = $db->query("SHOW COLUMNS FROM surveys LIKE 'hsfo_recovery'")->fetchAll();
+    if (empty($cols)) {
+        $db->exec("ALTER TABLE surveys ADD COLUMN hsfo_recovery DECIMAL(12,3) DEFAULT NULL");
+    }
+} catch (Exception $e) { error_log('completed.php hsfo_recovery column: ' . $e->getMessage()); }
+
+/** Total/VLSFO/HSFO/LSMGO recovery, formatted "12.500 MT" (or "—" when not recorded yet). */
+function recoveryDisplayParts(array $survey): array {
+    $fmt = function ($v) { return $v !== null ? number_format((float)$v, 3) . ' MT' : '—'; };
+    return [
+        'total' => $fmt($survey['recovery_amount'] ?? null),
+        'vlsfo' => $fmt($survey['vlsfo_recovery'] ?? null),
+        'hsfo'  => $fmt($survey['hsfo_recovery'] ?? null),
+        'lsmgo' => $fmt($survey['lsmgo_recovery'] ?? null),
+    ];
+}
+
 $role = $_SESSION['role'];
 $user_id = $_SESSION['user_id'];
 $client_id = ($role === 'Client') ? getClientIdForUser($db, $user_id) : 0;
@@ -168,6 +190,34 @@ include 'includes/header.php';
 
 <style>
 
+    /* Recovery display (replaces the Surveyor column/row for Admin/Super
+       Admin) — deliberately OUTSIDE both the mobile and desktop media
+       queries below so the same rules apply at every width; the surveyor
+       name only ever appears in the hover/tap tooltip, never permanently. */
+    .recovery-row .pv-info-val { white-space: normal; overflow: visible; text-overflow: clip; }
+    .recovery-cell { position: relative; display: inline-block; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .recovery-total { display: block; font-size: 12.5px; font-weight: 700; color: #0f172a; }
+    .recovery-total b { font-weight: 800; }
+    .recovery-parts { display: block; font-size: 10.5px; color: #64748b; font-weight: 500; margin-top: 2px; }
+    .recovery-cell .recovery-tooltip {
+        position: absolute; left: 0; top: calc(100% + 6px); z-index: 60;
+        background: #0f172a; color: #fff; font-size: 11px; font-weight: 600;
+        padding: 6px 10px; border-radius: 8px; white-space: nowrap;
+        opacity: 0; visibility: hidden; transform: translateY(-4px);
+        transition: opacity .15s ease, transform .15s ease, visibility .15s ease;
+        pointer-events: none;
+        box-shadow: 0 8px 20px rgba(15,23,42,.25);
+    }
+    .recovery-cell .recovery-tooltip::before {
+        content: ''; position: absolute; bottom: 100%; left: 14px;
+        border: 5px solid transparent; border-bottom-color: #0f172a;
+    }
+    .recovery-cell:hover .recovery-tooltip,
+    .recovery-cell:focus .recovery-tooltip,
+    .recovery-cell.tooltip-open .recovery-tooltip {
+        opacity: 1; visibility: visible; transform: translateY(0);
+    }
+
     /* ═══ Mobile modern header + card redesign (same pattern as
        vessels.php) — page-scoped, only applies while this page's own
        <style> block is loaded, so it doesn't leak into other pages even
@@ -232,6 +282,11 @@ include 'includes/header.php';
         .pv-ship-icon {
             width: 40px; height: 40px; border-radius: 12px; flex: none;
             background: #d1fae5; color: #047857; font-size: 17px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .pv-row-num {
+            flex: none; width: 22px; height: 22px; border-radius: 50%;
+            background: #F1F5F9; color: #64748b; font-size: 11px; font-weight: 800;
             display: flex; align-items: center; justify-content: center;
         }
         .pv-vessel-name { font-size: 16.5px; font-weight: 800; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
@@ -498,6 +553,7 @@ include 'includes/header.php';
              data-search="<?= sanitize(strtolower(implode(' ', [$survey['vessel_name'] ?? '', $survey['company_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>">
             <div class="pv-card-top">
                 <div class="pv-card-headline">
+                    <span class="pv-row-num" data-row-num data-testid="pv-row-num"></span>
                     <div class="pv-ship-icon"><i class="fa-solid fa-ship"></i></div>
                     <div class="pv-vessel-name"><?= sanitize($survey['vessel_name']) ?></div>
                 </div>
@@ -506,8 +562,17 @@ include 'includes/header.php';
             <div class="pv-info-rows">
                 <div class="pv-info-row"><i class="fa-solid fa-user"></i><span class="pv-info-label">Client</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['company_name'] ?? '') ?></span></div>
                 <div class="pv-info-row"><i class="fa-solid fa-people-group"></i><span class="pv-info-label">Agent</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['agent_name'] ?? '') ?></span></div>
-                <?php if ($is_full_access): ?>
-                    <div class="pv-info-row"><i class="fa-solid fa-user-tie"></i><span class="pv-info-label">Surveyor</span><span>:</span><span class="pv-info-val"><?= sanitize($surveyorNames) ?></span></div>
+                <?php if ($is_full_access): $rp = recoveryDisplayParts($survey); ?>
+                    <div class="pv-info-row recovery-row">
+                        <i class="fa-solid fa-droplet"></i><span class="pv-info-label">Recovery</span><span>:</span>
+                        <span class="pv-info-val">
+                            <span class="recovery-cell" tabindex="0" data-testid="recovery-cell-mobile" data-surveyor="<?= sanitize($surveyorNames) ?>">
+                                <span class="recovery-total">Total: <b><?= sanitize($rp['total']) ?></b></span>
+                                <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
+                                <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
+                            </span>
+                        </span>
+                    </div>
                 <?php endif; ?>
                 <div class="pv-info-row"><i class="fa-solid fa-location-dot"></i><span class="pv-info-label">Port</span><span>:</span><span class="badge-place"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
                 <div class="pv-info-row"><i class="fa-solid fa-circle-check"></i><span class="pv-info-label">Status</span><span>:</span><span class="pv-status-pill"><i class="fa-solid fa-check"></i> Completed</span></div>
@@ -604,7 +669,7 @@ include 'includes/header.php';
                                 <th>Client / Agent</th>
                                 <th>Survey type</th>
                                 <th>Port</th>
-                                <?php if ($is_full_access): ?><th>Surveyor</th><?php endif; ?>
+                                <?php if ($is_full_access): ?><th>Recovery</th><?php endif; ?>
                                 <th>Date</th>
                                 <th>Actions</th>
                             </tr>
@@ -650,12 +715,13 @@ include 'includes/header.php';
                                         <span><?= sanitize($survey['port_name'] ?? 'N/A') ?></span>
                                     </div>
                                 </td>
-                                <?php if ($is_full_access): ?>
+                                <?php if ($is_full_access): $rp = recoveryDisplayParts($survey); ?>
                                 <td>
-                                    <div class="vd-avatar-cell">
-                                        <div class="vd-avatar" style="background: <?= pvAvatarGradient($surveyorNames) ?>;"><?= sanitize(pvInitials($surveyorNames)) ?></div>
-                                        <span><?= sanitize($surveyorNames) ?></span>
-                                    </div>
+                                    <span class="recovery-cell" tabindex="0" data-testid="recovery-cell-desktop" data-surveyor="<?= sanitize($surveyorNames) ?>">
+                                        <span class="recovery-total">Total: <b><?= sanitize($rp['total']) ?></b></span>
+                                        <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
+                                        <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
+                                    </span>
                                 </td>
                                 <?php endif; ?>
                                 <td style="white-space:nowrap;color:#64748b;font-size:12.5px;"><?= sanitize($date_disp) ?></td>
@@ -869,6 +935,30 @@ include 'includes/header.php';
   });
 
   render();
+})();
+</script>
+
+<script>
+// Recovery-cell surveyor tooltip: tap/click toggles it open (desktop still
+// gets a plain CSS :hover too), and stopPropagation so tapping it on a
+// mobile card doesn't also trigger the card's own onclick navigation.
+(function () {
+    // Capture phase (the `true` below) — a delegated *bubble*-phase listener
+    // on document runs AFTER the card's own onclick has already fired (bubble
+    // order visits the card long before it reaches document), so
+    // stopPropagation() there is too late to stop the navigation. Capture
+    // phase runs top-down, before the card's handler, so stopping it here
+    // actually prevents the click from ever reaching the card's onclick.
+    document.addEventListener('click', function (ev) {
+        var cell = ev.target.closest('.recovery-cell');
+        document.querySelectorAll('.recovery-cell.tooltip-open').forEach(function (openCell) {
+            if (openCell !== cell) openCell.classList.remove('tooltip-open');
+        });
+        if (cell) {
+            ev.stopPropagation();
+            cell.classList.toggle('tooltip-open');
+        }
+    }, true);
 })();
 </script>
 

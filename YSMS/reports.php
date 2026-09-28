@@ -391,6 +391,11 @@ include 'includes/header.php';
             background: #eaf3ff; color: #1d6fe0; font-size: 17px;
             display: flex; align-items: center; justify-content: center;
         }
+        .pv-row-num {
+            flex: none; width: 22px; height: 22px; border-radius: 50%;
+            background: #F1F5F9; color: #64748b; font-size: 11px; font-weight: 800;
+            display: flex; align-items: center; justify-content: center;
+        }
         .pv-vessel-name { font-size: 16.5px; font-weight: 800; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
         .pv-type-pill { align-self: flex-end; max-width: 100%; text-align: right; }
         .pv-info-rows { display: flex; flex-direction: column; gap: 7px; padding: 0 16px 16px; }
@@ -666,6 +671,7 @@ include 'includes/header.php';
              data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '']))) ?>">
             <div class="pv-card-top">
                 <div class="pv-card-headline">
+                    <span class="pv-row-num" data-row-num data-testid="pv-row-num"></span>
                     <div class="pv-ship-icon"><i class="fa-solid fa-ship"></i></div>
                     <div class="pv-vessel-name"><?= sanitize($vessel_name) ?></div>
                 </div>
