@@ -196,6 +196,7 @@ include 'includes/header.php';
        name only ever appears in the hover/tap tooltip, never permanently. */
     .recovery-row .pv-info-val { white-space: normal; overflow: visible; text-overflow: clip; }
     .recovery-cell { position: relative; display: inline-block; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .recovery-cell.no-tooltip { cursor: default; }
     .recovery-total { display: block; font-size: 12.5px; font-weight: 700; color: #0f172a; }
     .recovery-total b { font-weight: 800; }
     .recovery-parts { display: block; font-size: 10.5px; color: #64748b; font-weight: 500; margin-top: 2px; }
@@ -562,18 +563,19 @@ include 'includes/header.php';
             <div class="pv-info-rows">
                 <div class="pv-info-row"><i class="fa-solid fa-user"></i><span class="pv-info-label">Client</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['company_name'] ?? '') ?></span></div>
                 <div class="pv-info-row"><i class="fa-solid fa-people-group"></i><span class="pv-info-label">Agent</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['agent_name'] ?? '') ?></span></div>
-                <?php if ($is_full_access): $rp = recoveryDisplayParts($survey); ?>
+                <?php $rp = recoveryDisplayParts($survey); ?>
                     <div class="pv-info-row recovery-row">
                         <i class="fa-solid fa-droplet"></i><span class="pv-info-label">Recovery</span><span>:</span>
                         <span class="pv-info-val">
-                            <span class="recovery-cell" tabindex="0" data-testid="recovery-cell-mobile" data-surveyor="<?= sanitize($surveyorNames) ?>">
+                            <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-mobile">
                                 <span class="recovery-total">Total: <b><?= sanitize($rp['total']) ?></b></span>
                                 <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
+                                <?php if ($is_full_access): ?>
                                 <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
+                                <?php endif; ?>
                             </span>
                         </span>
                     </div>
-                <?php endif; ?>
                 <div class="pv-info-row"><i class="fa-solid fa-location-dot"></i><span class="pv-info-label">Port</span><span>:</span><span class="badge-place"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
                 <div class="pv-info-row"><i class="fa-solid fa-circle-check"></i><span class="pv-info-label">Status</span><span>:</span><span class="pv-status-pill"><i class="fa-solid fa-check"></i> Completed</span></div>
             </div>
@@ -669,7 +671,7 @@ include 'includes/header.php';
                                 <th>Client / Agent</th>
                                 <th>Survey type</th>
                                 <th>Port</th>
-                                <?php if ($is_full_access): ?><th>Recovery</th><?php endif; ?>
+                                <th>Recovery</th>
                                 <th>Date</th>
                                 <th>Actions</th>
                             </tr>
@@ -715,15 +717,16 @@ include 'includes/header.php';
                                         <span><?= sanitize($survey['port_name'] ?? 'N/A') ?></span>
                                     </div>
                                 </td>
-                                <?php if ($is_full_access): $rp = recoveryDisplayParts($survey); ?>
+                                <?php $rp = recoveryDisplayParts($survey); ?>
                                 <td>
-                                    <span class="recovery-cell" tabindex="0" data-testid="recovery-cell-desktop" data-surveyor="<?= sanitize($surveyorNames) ?>">
+                                    <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-desktop">
                                         <span class="recovery-total">Total: <b><?= sanitize($rp['total']) ?></b></span>
                                         <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
+                                        <?php if ($is_full_access): ?>
                                         <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
+                                        <?php endif; ?>
                                     </span>
                                 </td>
-                                <?php endif; ?>
                                 <td style="white-space:nowrap;color:#64748b;font-size:12.5px;"><?= sanitize($date_disp) ?></td>
                                 <td>
                                     <div class="vd-actions">
@@ -951,10 +954,15 @@ include 'includes/header.php';
     // actually prevents the click from ever reaching the card's onclick.
     document.addEventListener('click', function (ev) {
         var cell = ev.target.closest('.recovery-cell');
+        var hasTooltip = cell && cell.querySelector('.recovery-tooltip');
         document.querySelectorAll('.recovery-cell.tooltip-open').forEach(function (openCell) {
             if (openCell !== cell) openCell.classList.remove('tooltip-open');
         });
-        if (cell) {
+        // Only Admin/Super Admin cells actually have a .recovery-tooltip
+        // (surveyor name) — for everyone else the cell has none, so this
+        // stays inert and a mobile tap falls through to the card's own
+        // navigation instead of being swallowed for nothing.
+        if (hasTooltip) {
             ev.stopPropagation();
             cell.classList.toggle('tooltip-open');
         }

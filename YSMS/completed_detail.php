@@ -107,6 +107,10 @@ if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_r
         }
     }
 }
+// Re-open the inline edit form automatically only when the save just failed
+// (so the user sees their input + the error right where they were editing);
+// a successful save goes back to the plain display view.
+$recovery_edit_open = ($recovery_error !== '');
 
 // 🌟 Add Remarks (+ optional attachments) — Admin or the assigned surveyor(s)
 // only (Client stays read-only, same boundary the rest of this page already
@@ -226,6 +230,26 @@ include 'includes/header.php';
     }
     .info-row { padding: 10px 16px; }
 }
+
+    /* Recovery: one card, display by default, an Admin-only edit-pencil
+       swaps in the same Save form in place. Deliberately unguarded by any
+       media query — the .recovery-block class is shared by both the mobile
+       (.info-table-list) and desktop (.vdd-card) markup below, so these
+       rules must apply at every width, not just inside one layout's own
+       media query. */
+    .recovery-block-head {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 10px 16px; font-weight: 700; font-size: 13px; color: #0f172a;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .recovery-edit-toggle {
+        border: none; background: #F3EEFE; color: #5B2DEE; width: 30px; height: 30px;
+        border-radius: 9px; font-size: 12px; cursor: pointer; flex: none; margin-left: auto;
+    }
+    .recovery-edit-toggle:hover { background: #E9E2FE; }
+    .recovery-block .recovery-edit-form { display: none; }
+    .recovery-block.editing .recovery-display { display: none; }
+    .recovery-block.editing .recovery-edit-form { display: block; }
 
     /* ═══ Desktop modern redesign — same hero + icon-chip card visual
        language as vessel_detail.php / report_detail.php. Mobile
@@ -422,40 +446,53 @@ include 'includes/header.php';
         <div class="info-row"><span class="info-label">Agent Handle</span><span class="info-value"><?= sanitize($survey['agent_name']) ?></span></div>
     </div>
 
-    <!-- Recovery -->
-    <div class="info-table-list shadow-sm">
-        <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
-    </div>
+    <!-- Recovery — single card; Admin gets an inline edit-pencil that swaps
+         the display rows for the same Save form in place, instead of a
+         separate "Edit Recovery" box further down the page. -->
+    <div class="info-table-list shadow-sm recovery-block<?= $recovery_edit_open ? ' editing' : '' ?>" id="recoveryBlockMobile" data-testid="recovery-block-mobile">
+        <div class="recovery-block-head">
+            <span><i class="fa-solid fa-droplet text-primary me-1"></i> Recovery</span>
+            <?php if ($is_admin): ?>
+            <button type="button" class="recovery-edit-toggle" data-recovery-edit-toggle="recoveryBlockMobile" title="Edit Recovery" data-testid="recovery-edit-toggle-mobile"><i class="fa-solid fa-pen"></i></button>
+            <?php endif; ?>
+        </div>
+        <?php if ($recovery_message): ?><div class="alert alert-success py-2 mx-2 mt-2 mb-0" style="font-size:12px;" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
+        <?php if ($recovery_error): ?><div class="alert alert-danger py-2 mx-2 mt-2 mb-0" style="font-size:12px;" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
 
-    <?php if ($is_admin): ?>
-    <div class="form-box mx-3 my-3 p-3 bg-white rounded-3 border shadow-sm" data-testid="recovery-edit-box">
-        <div class="fw-bold text-dark mb-2" style="font-size: 13px;"><i class="fa-solid fa-droplet text-primary me-1"></i> Edit Recovery</div>
-        <?php if ($recovery_message): ?><div class="alert alert-success py-2 mb-2" style="font-size:12px;" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
-        <?php if ($recovery_error): ?><div class="alert alert-danger py-2 mb-2" style="font-size:12px;" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
-        <form method="POST"><?= csrf_field() ?>
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">Total Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="recovery_amount" class="form-control form-control-sm" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)$survey['recovery_amount']) : '' ?>" data-testid="recovery-field-total">
-            </div>
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">VLSFO Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="vlsfo_recovery" class="form-control form-control-sm" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)$survey['vlsfo_recovery']) : '' ?>" data-testid="recovery-field-vlsfo">
-            </div>
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">LSMGO Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)$survey['lsmgo_recovery']) : '' ?>" data-testid="recovery-field-lsmgo">
-            </div>
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">HSFO Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="hsfo_recovery" class="form-control form-control-sm" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)$survey['hsfo_recovery']) : '' ?>" data-testid="recovery-field-hsfo">
-            </div>
-            <button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
-        </form>
+        <div class="recovery-display">
+            <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
+            <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
+            <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
+            <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
+        </div>
+
+        <?php if ($is_admin): ?>
+        <div class="recovery-edit-form">
+            <form method="POST" class="p-3"><?= csrf_field() ?>
+                <div class="mb-2">
+                    <label class="form-label fw-bold text-secondary" style="font-size:11px;">Total Recovery (MT)</label>
+                    <input type="number" step="0.001" min="0" name="recovery_amount" class="form-control form-control-sm" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)$survey['recovery_amount']) : '' ?>" data-testid="recovery-field-total">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold text-secondary" style="font-size:11px;">VLSFO Recovery (MT)</label>
+                    <input type="number" step="0.001" min="0" name="vlsfo_recovery" class="form-control form-control-sm" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)$survey['vlsfo_recovery']) : '' ?>" data-testid="recovery-field-vlsfo">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold text-secondary" style="font-size:11px;">LSMGO Recovery (MT)</label>
+                    <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)$survey['lsmgo_recovery']) : '' ?>" data-testid="recovery-field-lsmgo">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold text-secondary" style="font-size:11px;">HSFO Recovery (MT)</label>
+                    <input type="number" step="0.001" min="0" name="hsfo_recovery" class="form-control form-control-sm" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)$survey['hsfo_recovery']) : '' ?>" data-testid="recovery-field-hsfo">
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
+                    <button type="button" class="btn btn-light btn-sm w-100" data-recovery-edit-toggle="recoveryBlockMobile">Cancel</button>
+                </div>
+            </form>
+        </div>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
     </div><!-- /.detail-top-grid -->
 
     <!-- Files -->
@@ -600,11 +637,18 @@ include 'includes/header.php';
                         </div>
                     </div>
 
-                    <div class="vdd-card">
+                    <div class="vdd-card recovery-block<?= $recovery_edit_open ? ' editing' : '' ?>" id="recoveryBlockDesktop" data-testid="recovery-block-desktop">
                         <div class="vdd-card-head">
                             <div class="vdd-card-head-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-droplet"></i></div>
                             <div class="vdd-card-head-title">Recovery Summary</div>
+                            <?php if ($is_admin): ?>
+                            <button type="button" class="recovery-edit-toggle" data-recovery-edit-toggle="recoveryBlockDesktop" title="Edit Recovery" data-testid="recovery-edit-toggle-desktop"><i class="fa-solid fa-pen"></i></button>
+                            <?php endif; ?>
                         </div>
+                        <?php if ($recovery_message): ?><div class="vdd-alert vdd-alert-success mx-3 mt-3" data-testid="recovery-success-desktop"><?= sanitize($recovery_message) ?></div><?php endif; ?>
+                        <?php if ($recovery_error): ?><div class="vdd-alert vdd-alert-danger mx-3 mt-3" data-testid="recovery-error-desktop"><?= sanitize($recovery_error) ?></div><?php endif; ?>
+
+                        <div class="recovery-display">
                         <div class="vdd-recovery-grid">
                             <div class="vdd-recovery-tile">
                                 <div class="vdd-recovery-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-droplet"></i></div>
@@ -635,6 +679,37 @@ include 'includes/header.php';
                                 </div>
                             </div>
                         </div>
+                        </div>
+
+                        <?php if ($is_admin): ?>
+                        <div class="recovery-edit-form">
+                            <div class="vdd-card-body">
+                                <form method="POST">
+                                    <?= csrf_field() ?>
+                                    <div class="vdd-field">
+                                        <label>Total Recovery (MT)</label>
+                                        <input type="number" step="0.001" min="0" name="recovery_amount" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)$survey['recovery_amount']) : '' ?>" data-testid="recovery-field-total-desktop">
+                                    </div>
+                                    <div class="vdd-field">
+                                        <label>VLSFO Recovery (MT)</label>
+                                        <input type="number" step="0.001" min="0" name="vlsfo_recovery" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)$survey['vlsfo_recovery']) : '' ?>" data-testid="recovery-field-vlsfo-desktop">
+                                    </div>
+                                    <div class="vdd-field">
+                                        <label>LSMGO Recovery (MT)</label>
+                                        <input type="number" step="0.001" min="0" name="lsmgo_recovery" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)$survey['lsmgo_recovery']) : '' ?>" data-testid="recovery-field-lsmgo-desktop">
+                                    </div>
+                                    <div class="vdd-field">
+                                        <label>HSFO Recovery (MT)</label>
+                                        <input type="number" step="0.001" min="0" name="hsfo_recovery" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)$survey['hsfo_recovery']) : '' ?>" data-testid="recovery-field-hsfo-desktop">
+                                    </div>
+                                    <div style="display:flex;gap:8px;">
+                                        <button type="submit" name="update_recovery" class="vdd-save-btn" style="flex:1;" data-testid="save-recovery-button-desktop">Save Recovery</button>
+                                        <button type="button" class="vdd-save-btn" style="flex:1;background:#F1F5F9;color:#334155;" data-recovery-edit-toggle="recoveryBlockDesktop">Cancel</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </div>
 
                     <div class="vdd-card">
@@ -670,38 +745,6 @@ include 'includes/header.php';
                 </div>
 
                 <div>
-                    <?php if ($is_admin): ?>
-                    <div class="vdd-card">
-                        <div class="vdd-card-head">
-                            <div class="vdd-card-head-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-droplet"></i></div>
-                            <div class="vdd-card-head-title">Edit Recovery</div>
-                        </div>
-                        <div class="vdd-card-body" data-testid="recovery-edit-box-desktop">
-                            <?php if ($recovery_message): ?><div class="vdd-alert vdd-alert-success" data-testid="recovery-success-desktop"><?= sanitize($recovery_message) ?></div><?php endif; ?>
-                            <?php if ($recovery_error): ?><div class="vdd-alert vdd-alert-danger" data-testid="recovery-error-desktop"><?= sanitize($recovery_error) ?></div><?php endif; ?>
-                            <form method="POST">
-                                <?= csrf_field() ?>
-                                <div class="vdd-field">
-                                    <label>Total Recovery (MT)</label>
-                                    <input type="number" step="0.001" min="0" name="recovery_amount" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)$survey['recovery_amount']) : '' ?>" data-testid="recovery-field-total-desktop">
-                                </div>
-                                <div class="vdd-field">
-                                    <label>VLSFO Recovery (MT)</label>
-                                    <input type="number" step="0.001" min="0" name="vlsfo_recovery" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)$survey['vlsfo_recovery']) : '' ?>" data-testid="recovery-field-vlsfo-desktop">
-                                </div>
-                                <div class="vdd-field">
-                                    <label>LSMGO Recovery (MT)</label>
-                                    <input type="number" step="0.001" min="0" name="lsmgo_recovery" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)$survey['lsmgo_recovery']) : '' ?>" data-testid="recovery-field-lsmgo-desktop">
-                                </div>
-                                <div class="vdd-field">
-                                    <label>HSFO Recovery (MT)</label>
-                                    <input type="number" step="0.001" min="0" name="hsfo_recovery" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)$survey['hsfo_recovery']) : '' ?>" data-testid="recovery-field-hsfo-desktop">
-                                </div>
-                                <button type="submit" name="update_recovery" class="vdd-save-btn" data-testid="save-recovery-button-desktop">Save Recovery</button>
-                            </form>
-                        </div>
-                    </div>
-                    <?php endif; ?>
 
                     <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
                     <div class="vdd-card">
@@ -876,6 +919,19 @@ include 'includes/header.php';
             list.appendChild(row);
         });
     }
+})();
+</script>
+
+<script>
+// Recovery inline edit toggle (mobile card + desktop card, same button
+// pattern) — no page reload needed to switch between display and edit.
+(function () {
+    document.addEventListener('click', function (ev) {
+        var btn = ev.target.closest('[data-recovery-edit-toggle]');
+        if (!btn) return;
+        var block = document.getElementById(btn.getAttribute('data-recovery-edit-toggle'));
+        if (block) block.classList.toggle('editing');
+    });
 })();
 </script>
 
