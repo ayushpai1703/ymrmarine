@@ -191,11 +191,14 @@ $mail_body = "Dear Sir,\n\n"
 $mail_share_url = 'https://mail.google.com/mail/?view=cm&fs=1&su=' . rawurlencode($mail_subject) . '&body=' . rawurlencode($mail_body);
 
 // Mobile: open the Gmail app itself (not a browser tab) so the user lands in
-// an already-signed-in app instead of being asked to log in again. iOS uses
-// Gmail's own URL scheme; Android uses an intent that targets the Gmail app
-// specifically, falling back to the web compose URL if the app isn't installed.
+// an already-signed-in app instead of being asked to log in again, with To/Cc
+// still editable by hand inside the app. iOS uses Gmail's own "co" (compose)
+// URL scheme. Android Gmail has no such custom scheme — it only registers
+// itself as a handler for the standard mailto: intent — so we route a
+// mailto: intent and force it to Gmail specifically via package=, falling
+// back to the web compose URL only if Gmail isn't installed.
 $mail_ios_url = 'googlegmail://co?subject=' . rawurlencode($mail_subject) . '&body=' . rawurlencode($mail_body);
-$mail_android_url = 'intent://co?subject=' . rawurlencode($mail_subject) . '&body=' . rawurlencode($mail_body) . '#Intent;scheme=googlegmail;package=com.google.android.gm;S.browser_fallback_url=' . rawurlencode($mail_share_url) . ';end';
+$mail_android_url = 'intent://send?subject=' . rawurlencode($mail_subject) . '&body=' . rawurlencode($mail_body) . '#Intent;scheme=mailto;package=com.google.android.gm;S.browser_fallback_url=' . rawurlencode($mail_share_url) . ';end';
 
 // Pre-fill the "from account" prompt with the logged-in user's own email
 // (same column/safety-net pattern as profile.php), so it defaults to

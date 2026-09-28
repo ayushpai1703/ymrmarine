@@ -120,11 +120,14 @@ $redelivery_body = "Dear Captain,\n\nGood day.\n\nWith reference to the {$redeli
 $redelivery_gmail_url = 'https://mail.google.com/mail/?view=cm&fs=1&su=' . rawurlencode($redelivery_subject) . '&body=' . rawurlencode($redelivery_body);
 
 // Mobile: open the Gmail app itself (not a browser tab) so the user lands in
-// an already-signed-in app instead of being asked to log in again. iOS uses
-// Gmail's own URL scheme; Android uses an intent that targets the Gmail app
-// specifically, falling back to the web compose URL if the app isn't installed.
+// an already-signed-in app instead of being asked to log in again, with To/Cc
+// still editable by hand inside the app. iOS uses Gmail's own "co" (compose)
+// URL scheme. Android Gmail has no such custom scheme — it only registers
+// itself as a handler for the standard mailto: intent — so we route a
+// mailto: intent and force it to Gmail specifically via package=, falling
+// back to the web compose URL only if Gmail isn't installed.
 $redelivery_gmail_ios_url = 'googlegmail://co?subject=' . rawurlencode($redelivery_subject) . '&body=' . rawurlencode($redelivery_body);
-$redelivery_gmail_android_url = 'intent://co?subject=' . rawurlencode($redelivery_subject) . '&body=' . rawurlencode($redelivery_body) . '#Intent;scheme=googlegmail;package=com.google.android.gm;S.browser_fallback_url=' . rawurlencode($redelivery_gmail_url) . ';end';
+$redelivery_gmail_android_url = 'intent://send?subject=' . rawurlencode($redelivery_subject) . '&body=' . rawurlencode($redelivery_body) . '#Intent;scheme=mailto;package=com.google.android.gm;S.browser_fallback_url=' . rawurlencode($redelivery_gmail_url) . ';end';
 
 // Pre-fill the "from account" field with the logged-in user's own email
 // (same column/safety-net pattern as profile.php), so it defaults to
