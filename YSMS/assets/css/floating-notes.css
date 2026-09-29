@@ -1,0 +1,218 @@
+/* 🌟 Floating Sticky Notes — global widget (see includes/floating-notes.php).
+   Scoped entirely under .fnotes so it can never collide with existing page
+   styles. Reuses the app's own CSS variables (--accent-purple, --btn-blue,
+   --border-color, etc.) defined in includes/header.php's :root, so it stays
+   on-theme without redefining colors of its own. */
+.fnotes, .fnotes * { box-sizing: border-box; }
+.fnotes {
+    font-family: var(--font-primary, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
+}
+
+/* ── Floating trigger button (CLOSED state) — same purple gradient as the
+   existing bottom-nav "+" FAB, so it reads as part of the same design
+   language rather than a bolted-on widget. ── */
+.fnotes-fab {
+    position: fixed;
+    right: 22px;
+    bottom: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(155deg, #4d43d6, var(--accent-purple, #5B2DEE));
+    color: #fff;
+    font-size: 21px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 10px 24px rgba(59, 50, 179, .38), 0 0 0 1px rgba(255,255,255,.06);
+    z-index: 99999;
+    transition: transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s ease;
+}
+.fnotes-fab:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(59,50,179,.45); }
+.fnotes-fab:active { transform: scale(.94); }
+.fnotes-fab:focus-visible { outline: 3px solid rgba(91,45,238,.35); outline-offset: 2px; }
+
+@media (max-width: 991px) {
+    /* Clears the fixed 76px mobile bottom-nav-bar so the two never overlap */
+    .fnotes-fab { bottom: 100px; right: 16px; width: 52px; height: 52px; font-size: 19px; }
+}
+
+/* ── Minimized bar ── */
+.fnotes-min-bar {
+    position: fixed;
+    right: 20px;
+    bottom: 24px;
+    z-index: 99999;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 16px;
+    padding: 11px 16px;
+    box-shadow: 0 12px 28px rgba(15,23,42,.16);
+    cursor: pointer;
+    color: var(--text-dark, #1e293b);
+    font-size: 13px;
+    font-weight: 650;
+    max-width: calc(100vw - 32px);
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+.fnotes-min-bar:hover { transform: translateY(-2px); box-shadow: 0 16px 32px rgba(15,23,42,.2); }
+.fnotes-min-bar:focus-visible { outline: 3px solid rgba(91,45,238,.35); outline-offset: 2px; }
+.fnotes-min-bar i { color: var(--accent-purple, #5B2DEE); font-size: 15px; }
+.fnotes-min-chevron { font-size: 11px !important; color: var(--text-muted, #64748b) !important; margin-left: 2px; }
+.fnotes-min-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+
+@media (max-width: 991px) {
+    .fnotes-min-bar { bottom: 100px; right: 16px; }
+}
+
+/* ── Notepad window ── */
+.fnotes-window {
+    position: fixed;
+    right: 24px;
+    bottom: 100px;
+    width: 420px;
+    height: 520px;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 140px);
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(15,23,42,.28), 0 0 0 1px rgba(15,23,42,.04);
+    z-index: 99999;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    transform-origin: bottom right;
+}
+.fnotes-window.fnotes-animate-open {
+    animation: fnotesOpen .22s cubic-bezier(.34,1.35,.64,1);
+}
+.fnotes-window.fnotes-transition {
+    transition: width .25s ease, height .25s ease, top .25s ease, left .25s ease,
+        right .25s ease, bottom .25s ease, border-radius .25s ease;
+}
+@keyframes fnotesOpen {
+    from { opacity: 0; transform: scale(.85) translateY(16px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.fnotes-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #24438f, var(--btn-blue, #1e3a8a));
+    color: #fff;
+    cursor: grab;
+    -webkit-user-select: none;
+    user-select: none;
+}
+.fnotes-header.fnotes-dragging { cursor: grabbing; }
+.fnotes-header-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13.5px; font-weight: 700;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.fnotes-header-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.fnotes-header-btn {
+    width: 28px; height: 28px;
+    border: none; border-radius: 8px;
+    background: rgba(255,255,255,.14);
+    color: #fff;
+    font-size: 11.5px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background-color .15s ease, transform .15s ease;
+}
+.fnotes-header-btn:hover { background: rgba(255,255,255,.28); }
+.fnotes-header-btn:active { transform: scale(.92); }
+.fnotes-header-btn:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.fnotes-close-btn:hover { background: #dc2626; }
+
+.fnotes-textarea {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text-dark, #1e293b);
+    font-family: inherit;
+    background: #fffdf6;
+}
+.fnotes-textarea::placeholder { color: var(--text-muted, #64748b); }
+
+.fnotes-status-bar {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 14px;
+    border-top: 1px solid var(--border-color, #e2e8f0);
+    background: #fff;
+}
+.fnotes-status {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-muted, #64748b);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 14px;
+}
+.fnotes-status.is-saved { color: #16A34A; }
+.fnotes-status.is-saving { color: #EA580C; }
+
+/* ── State visibility — a single data-state attribute on the root drives
+   which of the three sibling elements (fab / minimized bar / window) shows. ── */
+.fnotes[data-state="open"] .fnotes-window,
+.fnotes[data-state="maximized"] .fnotes-window {
+    display: flex;
+}
+.fnotes[data-state="minimized"] .fnotes-min-bar {
+    display: flex;
+}
+.fnotes[data-state="open"] .fnotes-fab,
+.fnotes[data-state="minimized"] .fnotes-fab,
+.fnotes[data-state="maximized"] .fnotes-fab {
+    display: none;
+}
+
+/* Maximized — full-screen, overrides any drag-set inline left/top/right/bottom */
+.fnotes[data-state="maximized"] .fnotes-window {
+    top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+    width: 100vw !important; height: 100vh !important;
+    max-width: 100vw !important; max-height: 100vh !important;
+    border-radius: 0 !important;
+    transform: none !important;
+}
+.fnotes[data-state="maximized"] .fnotes-header { cursor: default; }
+
+/* ── Mobile: responsive, centered, dragging disabled ── */
+@media (max-width: 767px) {
+    .fnotes-window {
+        left: 10px !important; right: 10px !important;
+        top: 50px !important; bottom: auto !important;
+        width: calc(100vw - 20px) !important;
+        max-width: 500px;
+        height: calc(100vh - 100px) !important;
+        max-height: calc(100vh - 100px);
+        margin: 0 auto;
+        transform: none !important;
+    }
+    .fnotes-header { cursor: default; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fnotes-window.fnotes-animate-open { animation: none; }
+    .fnotes-window.fnotes-transition { transition: none; }
+    .fnotes-fab, .fnotes-min-bar, .fnotes-header-btn { transition: none; }
+}
