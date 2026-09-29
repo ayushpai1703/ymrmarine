@@ -5,6 +5,12 @@
 // assets/js/floating-notes.js for the behavior and assets/css/floating-notes.css
 // for styling. Safe to include unconditionally: it renders one small, inert
 // DOM tree that does nothing until its own script runs.
+
+// Restricted to Admin, Super Admin and Surveyor — Client logins never see it.
+$__fnotes_role = $_SESSION['role'] ?? '';
+if (!in_array($__fnotes_role, ['Admin', 'Super Admin', 'Surveyor'], true)) {
+    return;
+}
 ?>
 <link rel="stylesheet" href="assets/css/floating-notes.css?v=<?= @filemtime(__DIR__ . '/../assets/css/floating-notes.css') ?: time() ?>">
 
