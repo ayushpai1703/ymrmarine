@@ -11,10 +11,15 @@ $__fnotes_role = $_SESSION['role'] ?? '';
 if (!in_array($__fnotes_role, ['Admin', 'Super Admin', 'Surveyor'], true)) {
     return;
 }
+// Notes are private per logged-in account: the user id is namespaced into
+// every localStorage key (see floating-notes.js), so on a shared computer
+// one admin/surveyor never sees another's notes — each login only ever
+// reads/writes its own key.
+$__fnotes_user_id = (int)($_SESSION['user_id'] ?? 0);
 ?>
 <link rel="stylesheet" href="assets/css/floating-notes.css?v=<?= @filemtime(__DIR__ . '/../assets/css/floating-notes.css') ?: time() ?>">
 
-<div class="fnotes" id="fnotesRoot" data-state="closed">
+<div class="fnotes" id="fnotesRoot" data-state="closed" data-user-id="<?= $__fnotes_user_id ?>">
     <!-- CLOSED state: floating trigger button -->
     <button type="button" class="fnotes-fab" id="fnotesFab" title="Notes" aria-label="Open Notes" data-testid="fnotes-fab">
         <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>

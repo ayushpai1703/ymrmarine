@@ -14,9 +14,14 @@
     if (!root) { return; }
     window.__ysmsFloatingNotesInitialized = true;
 
-    var STORAGE_KEY = 'ysms_floating_notes';
-    var STATE_KEY = 'ysms_floating_notes_state';
-    var POS_KEY = 'ysms_floating_notes_pos';
+    // Namespaced per logged-in user id (see includes/floating-notes.php) so
+    // that on a shared computer, one admin/surveyor's notes never show up
+    // for a different account that logs in afterward — each account only
+    // ever reads/writes its own key.
+    var userId = root.getAttribute('data-user-id') || '0';
+    var STORAGE_KEY = 'ysms_floating_notes_' + userId;
+    var STATE_KEY = 'ysms_floating_notes_state_' + userId;
+    var POS_KEY = 'ysms_floating_notes_pos_' + userId;
     var VALID_STATES = ['closed', 'open', 'minimized', 'maximized'];
 
     var fab = document.getElementById('fnotesFab');
