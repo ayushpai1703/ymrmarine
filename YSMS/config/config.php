@@ -319,4 +319,24 @@ function getSurveyAttachments($db, $surveyId, $legacyAttachmentPath = ''): array
     }
     return $rows;
 }
+
+// 🌟 SAFETY NET: floating_notes — one row per user (their single sticky
+// note), so it reads the same regardless of which device/browser they open
+// it from — a plain localStorage-only note can't do that since it never
+// leaves the device it was typed on. See ajax/floating_notes.php.
+function ensureFloatingNotesTable(PDO $db): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    try {
+        $db->exec("CREATE TABLE IF NOT EXISTS `floating_notes` (
+            `user_id` int(11) NOT NULL,
+            `note_text` mediumtext,
+            `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`user_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Throwable $e) {
+        error_log('ensureFloatingNotesTable: ' . $e->getMessage());
+    }
+}
 ?>

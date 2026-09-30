@@ -1,7 +1,11 @@
 /**
  * 🌟 Floating Sticky Notes — global widget (see includes/floating-notes.php).
- * Pure client-side, localStorage-only: no server calls, no DB, no dependency
- * on any other page script. Safe to include on every page via footer.php.
+ * Note CONTENT is synced through ajax/floating_notes.php (one row per user
+ * in the floating_notes table) so the same note shows up on every device —
+ * a localStorage-only note never leaves the device/browser it was typed on.
+ * localStorage is still used, but only as a same-device instant-paint cache
+ * and for the window's own open/minimized/maximized state and drag position
+ * (those are per-device UI preferences, not part of the note itself).
  */
 (function () {
     'use strict';
@@ -48,33 +52,83 @@
         try { window.localStorage.setItem(key, value); } catch (e) { /* storage unavailable/full — fail silently */ }
     }
 
-    // ── Restore note content ──
-    var savedNote = safeGet(STORAGE_KEY);
-    if (savedNote !== null) {
-        textarea.value = savedNote;
-        setStatus('saved');
-    }
-
-    // ── Autosave with a 400ms debounce ──
-    var saveTimer = null;
     function setStatus(kind) {
-        statusEl.classList.remove('is-saved', 'is-saving');
+        statusEl.classList.remove('is-saved', 'is-saving', 'is-error');
         if (kind === 'saving') {
             statusEl.classList.add('is-saving');
             statusEl.textContent = 'Saving…';
         } else if (kind === 'saved') {
             statusEl.classList.add('is-saved');
             statusEl.textContent = 'Saved ✓';
+        } else if (kind === 'error') {
+            statusEl.classList.add('is-error');
+            statusEl.textContent = 'Not saved — check connection';
         } else {
             statusEl.textContent = '';
         }
     }
+
+    // Fast local paint from the same-device cache (avoids a blank flash
+    // while the server request below is in flight); the server fetch then
+    // overwrites it with the authoritative copy, so the same note shows on
+    // every device the user opens it from.
+    var cachedNote = safeGet(STORAGE_KEY);
+    if (cachedNote !== null) {
+        textarea.value = cachedNote;
+        setStatus('saved');
+    }
+
+    // Guards a fetch that resolves late from clobbering text the user has
+    // already started typing since the page loaded.
+    var userHasEdited = false;
+
+    function loadNoteFromServer() {
+        fetch('ajax/floating_notes.php?action=get', { credentials: 'same-origin' })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data && data.ok && typeof data.note === 'string' && !userHasEdited) {
+                    textarea.value = data.note;
+                    safeSet(STORAGE_KEY, data.note);
+                    setStatus(data.note !== '' ? 'saved' : '');
+                }
+            })
+            .catch(function (err) {
+                console.error('Floating Notes: could not load from server, showing local copy', err);
+            });
+    }
+    loadNoteFromServer();
+
+    function saveNoteToServer(text) {
+        fetch('ajax/floating_notes.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            credentials: 'same-origin',
+            body: 'action=save&note=' + encodeURIComponent(text),
+        })
+            .then(function (res) {
+                if (!res.ok) { throw new Error('HTTP ' + res.status); }
+                return res.json();
+            })
+            .then(function (data) {
+                if (!data || !data.ok) { throw new Error('save rejected'); }
+                setStatus('saved');
+            })
+            .catch(function (err) {
+                console.error('Floating Notes: save failed', err);
+                setStatus('error');
+            });
+    }
+
+    // ── Autosave with a 400ms debounce ──
+    var saveTimer = null;
     textarea.addEventListener('input', function () {
+        userHasEdited = true;
         setStatus('saving');
         if (saveTimer) { clearTimeout(saveTimer); }
         saveTimer = setTimeout(function () {
-            safeSet(STORAGE_KEY, textarea.value);
-            setStatus('saved');
+            var text = textarea.value;
+            safeSet(STORAGE_KEY, text);
+            saveNoteToServer(text);
         }, 400);
     });
 
