@@ -75,6 +75,35 @@ include 'includes/header.php';
     margin-bottom: .55rem;
 }
 .prg-photo-item.dragging { opacity: .45; border: 2px dashed #00b4d8; }
+/* AI Description */
+.prg-ai-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: .35rem; }
+.prg-ai-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10.5px; font-weight: 650; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid transparent;
+}
+.prg-ai-badge.ai-pending { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
+.prg-ai-badge.ai-generating { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+.prg-ai-badge.ai-completed { background: #ecfdf3; color: #166534; border-color: #bbf0cd; }
+.prg-ai-badge.ai-failed { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+.prg-ai-badge.ai-manual { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+.prg-ai-btn {
+    font-size: 11px; padding: 2px 9px; border-radius: 7px;
+    border: 1px solid #a0c4d8; background: #fff; color: #0b1e46; font-weight: 600;
+}
+.prg-ai-btn:hover { background: #e8f4f8; }
+.prg-ai-btn:disabled { opacity: .55; cursor: default; }
+.prg-ai-btn i.fa-spin { margin-right: 3px; }
+.prg-ai-bulkbar {
+    display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-top: 8px; padding: 8px 10px; border-radius: 10px;
+    background: #f0f7fb; border: 1px solid #c5dce8; font-size: 12px;
+}
+.prg-ai-bulkbar.show { display: flex; }
+.prg-ai-bulkbar .progress { flex: 1 1 160px; min-width: 120px; height: 8px; }
+.prg-ai-bulkbar .progress-bar { background: #0b1e46; }
+.prg-ai-bulk-counts { display: flex; gap: 8px; flex-wrap: wrap; color: #475569; font-size: 11px; }
+.prg-ai-bulk-counts b { color: #1e293b; }
 /* Nested menu — mobile: fixed sheet (avoids overflow clip); desktop: side flyout */
 .hold-nest-wrap { position: relative; width: 100%; }
 .hold-nest-toggle {
@@ -457,7 +486,22 @@ include 'includes/header.php';
             <div id="photoControls" class="mt-2" style="display:none">
                 <button type="button" class="btn btn-outline-primary btn-sm me-1" onclick="sortPhotosForReport(); renderPhotos(); prgMarkDirty(); toast('Photos sorted by Ship / Hold / Deck structure order');"><i class="fa-solid fa-arrow-down-short-wide me-1"></i>Auto-sort order</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearAllPhotos()"><i class="fa-solid fa-trash me-1"></i>Clear All</button>
+                <?php if (AI_PHOTO_DESCRIPTION_ENABLED): ?>
+                <button type="button" class="btn btn-outline-info btn-sm" id="prgAiBulkBtn" onclick="generateAllAiDescriptions()" data-testid="ai-generate-all-button"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Generate AI Descriptions</button>
+                <?php endif; ?>
             </div>
+            <?php if (AI_PHOTO_DESCRIPTION_ENABLED): ?>
+            <div id="prgAiBulkBar" class="prg-ai-bulkbar" data-testid="ai-bulk-progress">
+                <div class="progress"><div id="prgAiBulkProgressBar" class="progress-bar" style="width:0%"></div></div>
+                <span id="prgAiBulkPct" style="min-width:34px;">0%</span>
+                <div class="prg-ai-bulk-counts">
+                    <span>Completed: <b id="prgAiCountCompleted">0</b></span>
+                    <span>Processing: <b id="prgAiCountProcessing">0</b></span>
+                    <span>Pending: <b id="prgAiCountPending">0</b></span>
+                    <span>Failed: <b id="prgAiCountFailed">0</b></span>
+                </div>
+            </div>
+            <?php endif; ?>
             <!-- Live estimated Word file size — Original / Compressed tabs -->
             <div id="prgSizeEstimate" class="mt-3 p-2 rounded border" style="display:none; background:#f0f7fb; border-color:#c5dce8 !important; font-size:12.5px;">
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
@@ -523,6 +567,15 @@ include 'includes/header.php';
 var PRG_SURVEY_ID = <?= (int)$id ?>;
 var PRG_DRAFT_KEY = 'prg_draft_v1_' + (PRG_SURVEY_ID > 0 ? String(PRG_SURVEY_ID) : 'standalone');
 var PRG_AUTOSAVE_MS = 10000;
+
+/* ===== AI Photo Description (Gemini) — feature flags from config.php.
+   The API key itself never reaches the browser; only these non-secret
+   toggles do, the same way PRG_SURVEY_ID is already injected above. ===== */
+var PRG_AI_ENABLED = <?= AI_PHOTO_DESCRIPTION_ENABLED ? 'true' : 'false' ?>;
+var PRG_AI_AUTO = <?= AI_AUTO_DESCRIPTION ? 'true' : 'false' ?>;
+var PRG_AI_MAX_CONCURRENT = <?= (int)AI_MAX_CONCURRENT ?>;
+var PRG_VESSEL_NAME = <?= json_encode($vesselName, JSON_UNESCAPED_UNICODE) ?>;
+var PRG_CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
 
 /* ===== Default description options (first = default selected) ===== */
 var DESC_OPTIONS = [
@@ -1036,7 +1089,12 @@ function prgSerializePhotos() {
       ext: p.ext || 'jpeg',
       holdMain: p.holdMain || '',
       holdSub: p.holdSub || '',
-      descManual: !!p.descManual
+      descManual: !!p.descManual,
+      // A photo saved mid-'generating' had its in-flight request lost with
+      // the tab, so it's restored as 'pending' instead (see prgLoadDraft).
+      aiStatus: p.aiStatus === 'generating' ? 'pending' : (p.aiStatus || ''),
+      aiError: p.aiError || '',
+      aiHash: p.aiHash || ''
     };
   });
 }
@@ -1135,7 +1193,13 @@ async function prgLoadDraft() {
           ext: sp.ext || 'jpeg',
           holdMain: sp.holdMain || '',
           holdSub: sp.holdSub || '',
-          descManual: !!sp.descManual
+          descManual: !!sp.descManual,
+          aiStatus: sp.aiStatus || '',
+          aiError: sp.aiError || '',
+          aiHash: sp.aiHash || ''
+          // _aiSourceFile intentionally omitted — the true original isn't
+          // persisted across reloads (same as the report image itself never
+          // was); Regenerate after a restore falls back to the stored `ab`.
         });
       }
       renderPhotos();
@@ -1665,6 +1729,7 @@ async function addPhotos(list) {
   var defaultDesc = isStructureCategory(cat) ? '' : DESC_OPTIONS[0];
   var saved = 0;
   var totalFiles = files.length;
+  var startIdx = photos.length;
   prgShowProgress('Uploading & compressing photos', '0 / ' + totalFiles + ' · please wait…');
   try {
     for (var i = 0; i < files.length; i++) {
@@ -1685,7 +1750,11 @@ async function addPhotos(list) {
         ext: compressed.ext || 'jpeg',
         holdMain: '',
         holdSub: '',
-        descManual: false
+        descManual: false,
+        aiStatus: '',
+        aiError: '',
+        aiHash: '',
+        _aiSourceFile: file
       });
       // Update every photo (or every few for very large batches stays responsive enough)
       prgUpdateProgress(i + 1, totalFiles, (i + 1) + ' / ' + totalFiles + ' compressed · ' + cat);
@@ -1708,15 +1777,362 @@ async function addPhotos(list) {
   }
   toast(msg);
   updateSizeEstimate();
+
+  if (PRG_AI_ENABLED && PRG_AI_AUTO) {
+    var newIdx = [];
+    for (var ni = startIdx; ni < photos.length; ni++) newIdx.push(ni);
+    if (newIdx.length) enqueueAiDescriptions(newIdx);
+  }
 }
 
+/* ==========================================================================
+   🌟 AI Photo Description (Google Gemini via ajax/gemini_describe.php)
+   Browser never talks to Gemini directly — only to our own PHP endpoint,
+   which holds the API key. This module only ever WRITES to the same p.desc
+   field the existing dropdown/description controls already use, so nothing
+   downstream (report generation, draft save/restore) needs to change.
+   ========================================================================== */
+var AI_IMAGE_MAX_DIM = 1280; // long edge, px — analysis copy only; never touches the report image
+var _aiQueue = [];
+var _aiActive = 0;
+var _aiQueueRunning = false;
+
+/** Proportional resize (no crop) from the true original file — the report's
+ *  own compressImage() center-crops to a fixed frame, which is right for the
+ *  Word doc but would hide parts of the photo from the AI, so this is a
+ *  separate, independent copy built only for analysis. */
+function resizeForAI(file) {
+  return new Promise(function (resolve) {
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = async function () {
+      try {
+        var iw = img.naturalWidth || 1, ih = img.naturalHeight || 1;
+        var scale = Math.min(1, AI_IMAGE_MAX_DIM / Math.max(iw, ih));
+        var cw = Math.max(1, Math.round(iw * scale));
+        var ch = Math.max(1, Math.round(ih * scale));
+        var canvas = document.createElement('canvas');
+        canvas.width = cw; canvas.height = ch;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, cw, ch);
+        var blob = await canvasToBlob(canvas, 0.82);
+        URL.revokeObjectURL(url);
+        if (!blob) { resolve(null); return; }
+        var ab = await blob.arrayBuffer();
+        resolve({ ab: ab, mime: 'image/jpeg' });
+      } catch (e) {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      }
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+function abToBase64(ab) {
+  var bytes = new Uint8Array(ab);
+  var binary = '';
+  var chunk = 0x8000;
+  for (var i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/** Cheap, non-cryptographic checksum — good enough to catch an accidental
+ *  duplicate upload without the cost/complexity of real hashing. */
+function quickHashArrayBuffer(ab) {
+  var view = new Uint8Array(ab);
+  var len = view.length;
+  var h = len >>> 0;
+  var step = Math.max(1, Math.floor(len / 256));
+  for (var i = 0; i < len; i += step) {
+    h = (h * 31 + view[i]) >>> 0;
+  }
+  return len + '_' + h.toString(16);
+}
+
+/** True original (this session only) when available; otherwise the photo's
+ *  already-stored report copy (still perfectly usable for analysis). */
+async function getAiImageSource(p) {
+  if (p._aiSourceFile) {
+    var r = await resizeForAI(p._aiSourceFile);
+    if (r) return r;
+  }
+  if (p.ab) {
+    return { ab: p.ab, mime: (p.ext === 'png' ? 'image/png' : 'image/jpeg') };
+  }
+  return null;
+}
+
+function aiStatusLabel(status) {
+  switch (status) {
+    case 'generating': return 'Generating…';
+    case 'completed': return 'AI description';
+    case 'failed': return 'AI failed';
+    case 'manual': return 'Manual';
+    case 'pending': return 'Queued';
+    default: return '';
+  }
+}
+
+function aiBadgeHtml(status) {
+  if (!status) return '';
+  var iconTag = status === 'pending'
+    ? '<i class="fa-regular fa-clock"></i>'
+    : '<i class="fa-solid ' + (
+        status === 'generating' ? 'fa-spinner fa-spin' :
+        status === 'completed' ? 'fa-wand-magic-sparkles' :
+        status === 'failed' ? 'fa-triangle-exclamation' :
+        'fa-pen'
+      ) + '"></i>';
+  return '<span class="prg-ai-badge ai-' + status + '">' + iconTag + ' ' + esc(aiStatusLabel(status)) + '</span>';
+}
+
+/** AI status badge + Generate/Regenerate button, shown under each photo's
+ *  description field. Single root element so a status change can replace it
+ *  in place (updateAiCardUI) without re-rendering the whole photo list. */
+function aiControlsHtml(p, idx) {
+  if (!PRG_AI_ENABLED) return '';
+  var status = p.descManual ? 'manual' : (p.aiStatus || '');
+  var busy = status === 'generating';
+  var hasResult = status === 'completed' || status === 'failed' || status === 'manual';
+  var btnLabel = hasResult ? 'Regenerate' : 'Generate AI Description';
+  var btnIcon = busy ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles';
+  var errHtml = (status === 'failed' && p.aiError)
+    ? '<div class="text-danger" style="font-size:10.5px;width:100%;">' + esc(p.aiError) + '</div>'
+    : '';
+  return (
+    '<div class="prg-ai-row" id="aiRow_' + idx + '">' +
+      aiBadgeHtml(status) +
+      '<button type="button" class="prg-ai-btn" id="aiBtn_' + idx + '"' + (busy ? ' disabled' : '') +
+        ' onclick="onAiButtonClick(' + idx + ')" data-testid="ai-generate-button-' + idx + '">' +
+        '<i class="fa-solid ' + btnIcon + '"></i> ' + esc(btnLabel) +
+      '</button>' +
+      errHtml +
+    '</div>'
+  );
+}
+
+/** In-place update of one photo's AI row + description field — avoids
+ *  re-rendering the whole (potentially 100+ photo) list on every status
+ *  change, which is what keeps bulk processing from freezing the page. */
+function updateAiCardUI(idx) {
+  var p = photos[idx];
+  if (!p) return;
+  var row = document.getElementById('aiRow_' + idx);
+  if (row) row.outerHTML = aiControlsHtml(p, idx);
+  if (isStructureCategory(p.category)) {
+    var descEl = document.getElementById('holdDesc_' + idx);
+    if (descEl && document.activeElement !== descEl) descEl.value = p.desc || '';
+  } else {
+    var othersInp = document.getElementById('othersDesc_' + idx);
+    if (othersInp && document.activeElement !== othersInp) othersInp.value = p.desc || '';
+  }
+  updateAiBulkBar();
+}
+
+function updateAiBulkBar() {
+  var barEl = document.getElementById('prgAiBulkBar');
+  if (!barEl) return;
+  var counts = { pending: 0, generating: 0, completed: 0, failed: 0 };
+  photos.forEach(function (p) {
+    var s = p.aiStatus || '';
+    if (counts.hasOwnProperty(s)) counts[s]++;
+  });
+  var totalTracked = counts.pending + counts.generating + counts.completed + counts.failed;
+  var elC = document.getElementById('prgAiCountCompleted'); if (elC) elC.textContent = counts.completed;
+  var elP = document.getElementById('prgAiCountProcessing'); if (elP) elP.textContent = counts.generating;
+  var elQ = document.getElementById('prgAiCountPending'); if (elQ) elQ.textContent = counts.pending;
+  var elF = document.getElementById('prgAiCountFailed'); if (elF) elF.textContent = counts.failed;
+  var pct = totalTracked ? Math.round((counts.completed + counts.failed) / totalTracked * 100) : 0;
+  var bar = document.getElementById('prgAiBulkProgressBar'); if (bar) bar.style.width = pct + '%';
+  var pctEl = document.getElementById('prgAiBulkPct'); if (pctEl) pctEl.textContent = pct + '%';
+  barEl.classList.toggle('show', totalTracked > 0);
+}
+
+/** One photo end-to-end: resize → (cache reuse) → call the backend → write
+ *  p.desc → update UI. Retries up to 2 times with exponential backoff
+ *  (1s, then 3s), or the server's own retry_after when it's a rate limit. */
+async function generateAiDescriptionForIndex(idx, attempt) {
+  attempt = attempt || 0;
+  var p = photos[idx];
+  if (!p) return;
+  p.aiStatus = 'generating';
+  p.aiError = '';
+  updateAiCardUI(idx);
+
+  try {
+    var src = await getAiImageSource(p);
+    if (!src) throw { message: 'Unable to analyze this image.', noRetry: true };
+    var hash = quickHashArrayBuffer(src.ab);
+
+    // Cost control: an identical image already described in this draft — reuse it.
+    var dup = null;
+    for (var di = 0; di < photos.length; di++) {
+      if (di !== idx && photos[di].aiHash === hash && photos[di].aiStatus === 'completed' && photos[di].desc) {
+        dup = photos[di];
+        break;
+      }
+    }
+    if (dup) {
+      p.desc = dup.desc;
+      p.aiHash = hash;
+      p.aiStatus = 'completed';
+      p.aiError = '';
+      updateAiCardUI(idx);
+      prgMarkDirty();
+      return;
+    }
+
+    var context = { vessel_name: PRG_VESSEL_NAME || '', category: p.category || '' };
+    if (p.holdMain) {
+      context.category = p.holdMain + (p.holdSub ? (' – ' + p.holdSub) : '');
+    }
+
+    var res = await fetch('ajax/gemini_describe.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': PRG_CSRF_TOKEN },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        image: abToBase64(src.ab),
+        mime: src.mime,
+        survey_id: PRG_SURVEY_ID,
+        context: context
+      })
+    });
+    var json = null;
+    try { json = await res.json(); } catch (e) { /* non-JSON response, e.g. a server error page */ }
+
+    if (!res.ok || !json || !json.success) {
+      var message = (json && json.message) || ('AI description could not be generated (HTTP ' + res.status + ').');
+      throw { message: message, retryAfter: json && json.retry_after ? json.retry_after : null };
+    }
+
+    p.desc = json.description;
+    p.aiHash = hash;
+    p.aiStatus = 'completed';
+    p.aiError = '';
+    updateAiCardUI(idx);
+    prgMarkDirty();
+  } catch (err) {
+    var msg = (err && err.message) || 'AI description could not be generated. Please try again.';
+    var noRetry = !!(err && err.noRetry);
+    var maxRetries = 2;
+    if (!noRetry && attempt < maxRetries) {
+      var delay = (err && err.retryAfter) ? (err.retryAfter * 1000) : (attempt === 0 ? 1000 : 3000);
+      updateAiCardUI(idx); // still 'generating' — keep the spinner visible through the backoff
+      await new Promise(function (r) { setTimeout(r, delay); });
+      return generateAiDescriptionForIndex(idx, attempt + 1);
+    }
+    p.aiStatus = 'failed';
+    p.aiError = msg;
+    updateAiCardUI(idx);
+  }
+}
+
+/** Concurrency-limited worker pool — never more than PRG_AI_MAX_CONCURRENT
+ *  requests in flight at once, however many photos are queued. */
+function pumpAiQueue() {
+  if (_aiQueueRunning) return;
+  _aiQueueRunning = true;
+  (async function () {
+    while (_aiQueue.length || _aiActive > 0) {
+      while (_aiActive < PRG_AI_MAX_CONCURRENT && _aiQueue.length) {
+        var idx = _aiQueue.shift();
+        _aiActive++;
+        (function (i) {
+          generateAiDescriptionForIndex(i, 0).finally(function () { _aiActive--; });
+        })(idx);
+      }
+      await new Promise(function (r) { setTimeout(r, 200); });
+    }
+    _aiQueueRunning = false;
+  })();
+}
+
+/** Queue one or more photos for AI description. Skips anything manually
+ *  edited or already completed (cost control — never regenerate silently). */
+function enqueueAiDescriptions(indices) {
+  if (!PRG_AI_ENABLED) return;
+  var added = false;
+  indices.forEach(function (idx) {
+    var p = photos[idx];
+    if (!p) return;
+    if (p.descManual) return;
+    if (p.aiStatus === 'completed' || p.aiStatus === 'pending' || p.aiStatus === 'generating') return;
+    p.aiStatus = 'pending';
+    updateAiCardUI(idx);
+    _aiQueue.push(idx);
+    added = true;
+  });
+  if (added) {
+    prgMarkDirty();
+    pumpAiQueue();
+  }
+}
+
+function generateAllAiDescriptions() {
+  if (!PRG_AI_ENABLED) { toast('AI description is disabled.', true); return; }
+  var idx = [];
+  photos.forEach(function (p, i) {
+    if (p.descManual || p.aiStatus === 'completed') return;
+    idx.push(i);
+  });
+  if (!idx.length) { toast('Nothing to generate — every photo already has a description.'); return; }
+  enqueueAiDescriptions(idx);
+  toast('Generating AI descriptions for ' + idx.length + ' photo(s)…');
+}
+
+/** Manual per-photo trigger — first generation runs immediately; a second
+ *  click (Regenerate) confirms first, since it replaces whatever is there. */
+function onAiButtonClick(idx) {
+  var p = photos[idx];
+  if (!p) return;
+  var hasExisting = p.aiStatus === 'completed' || p.aiStatus === 'failed' || p.descManual;
+  if (hasExisting) {
+    if (!window.confirm('This will replace the current description. Continue?')) return;
+  }
+  p.descManual = false;
+  p.aiStatus = ''; // clear so enqueueAiDescriptions doesn't treat this as already done/queued
+  enqueueAiDescriptions([idx]);
+}
+
+/** "Others" category: quick-pick dropdown + an editable text field underneath
+ *  (same pattern as the Hold/Ship/Deck structure categories) — needed so an
+ *  AI-generated sentence (which won't match any of the fixed DESC_OPTIONS)
+ *  has somewhere to actually show up and be edited. */
 function descDropdownHtml(selected, idx) {
-  var opts = '';
+  var opts = '<option value="">— Quick pick —</option>';
   for (var i = 0; i < DESC_OPTIONS.length; i++) {
     var sel = (DESC_OPTIONS[i] === selected) ? ' selected' : '';
     opts += '<option value="' + esc(DESC_OPTIONS[i]) + '"' + sel + '>' + esc(DESC_OPTIONS[i]) + '</option>';
   }
-  return '<select class="form-select form-select-sm" onchange="photos[' + idx + '].desc=this.value;prgMarkDirty()">' + opts + '</select>';
+  return (
+    '<select class="form-select form-select-sm" onchange="onOthersDescSelect(' + idx + ', this.value)">' + opts + '</select>' +
+    '<input type="text" class="form-control form-control-sm mt-1" id="othersDesc_' + idx + '" value="' + esc(selected || '') + '" ' +
+      'placeholder="Description" oninput="onOthersDescInput(' + idx + ', this.value)" aria-label="Description"/>'
+  );
+}
+function onOthersDescSelect(idx, val) {
+  var p = photos[idx];
+  if (!p) return;
+  if (val === '') return; // "— Quick pick —" placeholder, not a real choice
+  p.desc = val;
+  p.descManual = false;
+  var inp = document.getElementById('othersDesc_' + idx);
+  if (inp) inp.value = val;
+  updateAiCardUI(idx);
+  prgMarkDirty();
+}
+function onOthersDescInput(idx, val) {
+  var p = photos[idx];
+  if (!p) return;
+  p.desc = val;
+  p.descManual = true;
+  updateAiCardUI(idx);
+  prgMarkDirty();
 }
 
 /** Hold No.1–9: main + optional sub dropdowns + editable Description text */
@@ -2126,6 +2542,7 @@ function onHoldNestPick(idx, btn) {
   if (btnEl) btnEl.textContent = holdNestLabel(p);
   var descEl = document.getElementById('holdDesc_' + idx);
   if (descEl && !p.descManual) descEl.value = p.desc || '';
+  updateAiCardUI(idx);
   prgMarkDirty();
 }
 
@@ -2212,6 +2629,7 @@ function onHoldMenuPick(idx, btn) {
   }
   var descEl = document.getElementById("holdDesc_" + idx);
   if (descEl && !p.descManual) descEl.value = p.desc || "";
+  updateAiCardUI(idx);
   prgMarkDirty();
 }
 
@@ -2228,6 +2646,7 @@ function onHoldDescInput(idx, val) {
       if (descEl) descEl.value = p.desc || "";
     }
   }
+  updateAiCardUI(idx);
   prgMarkDirty();
 }
 
@@ -2348,6 +2767,7 @@ function renderPhotos() {
           '<div class="flex-grow-1">' +
             '<label class="form-label small mb-0">Description</label>' +
             descControlsHtml(p, i) +
+            aiControlsHtml(p, i) +
             '<div class="mt-1 d-flex gap-1 flex-wrap align-items-center">' +
               '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveP(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + ' title="Move up"><i class="fa-solid fa-arrow-up"></i></button>' +
               '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveP(' + i + ',1)"' + (i === photos.length - 1 ? ' disabled' : '') + ' title="Move down"><i class="fa-solid fa-arrow-down"></i></button>' +

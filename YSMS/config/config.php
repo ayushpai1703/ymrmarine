@@ -28,6 +28,16 @@ define('DB_NAME', getenv('YSMS_DB_NAME') ?: 'ysms_db');
 define('SITE_NAME', 'YMR Survey Management System');
 define('WHATSAPP_NUMBER', getenv('YSMS_WHATSAPP_NUMBER') ?: '');
 
+// 🌟 AI Photo Description (photo_report_generator.php) — feature flags only;
+// the Gemini API key itself is never defined here or exposed to the browser,
+// it stays purely in the environment and is read directly by
+// ajax/gemini_describe.php. AI_PHOTO_DESCRIPTION_ENABLED is the master
+// rollback switch: false hides the AI UI entirely and the rest of the photo
+// report tool (upload, sort, generate) keeps working exactly as before.
+define('AI_PHOTO_DESCRIPTION_ENABLED', filter_var(getenv('AI_PHOTO_DESCRIPTION_ENABLED') !== false ? getenv('AI_PHOTO_DESCRIPTION_ENABLED') : 'true', FILTER_VALIDATE_BOOLEAN));
+define('AI_AUTO_DESCRIPTION', filter_var(getenv('AI_AUTO_DESCRIPTION') !== false ? getenv('AI_AUTO_DESCRIPTION') : 'true', FILTER_VALIDATE_BOOLEAN));
+define('AI_MAX_CONCURRENT', max(1, (int)(getenv('AI_MAX_CONCURRENT') ?: 3)));
+
 function getDB() {
     try {
         // Cloud Run + Cloud SQL connects via Unix socket (path starts with /cloudsql/);

@@ -4,8 +4,10 @@
  * API key stays on the server; never exposed to the browser.
  *
  * POST JSON:
- *   { "image": "<base64>", "mime": "image/jpeg" }
+ *   { "image": "<base64>", "mime": "image/jpeg", "survey_id": 123,
+ *     "context": { "survey_type": "...", "vessel_name": "...", "port_name": "...", "category": "..." } }
  *   optional: "mime_type" (alias of mime)
+ * POST multipart: field "image" (file), optional "survey_id", "context[...]"
  *
  * Response JSON:
  *   { "success": true, "description": "..." }
@@ -26,11 +28,21 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Load config if available (for GEMINI_API_KEY via env or define).
-$configPath = dirname(__DIR__) . '/config/config.php';
-if (is_file($configPath)) {
-    // Avoid session/auth side-effects if config starts a session — still OK.
-    require_once $configPath;
+require_once dirname(__DIR__) . '/config/config.php';
+checkAuth();
+
+// Same role set as the AI widget itself — Client logins never reach this.
+$__role = $_SESSION['role'] ?? '';
+if (!in_array($__role, ['Admin', 'Super Admin', 'Surveyor'], true)) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Not authorized.']);
+    exit;
+}
+
+if (!AI_PHOTO_DESCRIPTION_ENABLED) {
+    http_response_code(503);
+    echo json_encode(['success' => false, 'message' => 'AI photo description is disabled.']);
+    exit;
 }
 
 // Prefer env / define; never hard-code a real key in the repo.
@@ -60,6 +72,8 @@ if (!is_array($data)) {
         $bin = file_get_contents($_FILES['image']['tmp_name']);
         $mime = $_FILES['image']['type'] ?: 'image/jpeg';
         $b64 = base64_encode($bin);
+        $surveyId = isset($_POST['survey_id']) ? (int) $_POST['survey_id'] : 0;
+        $context = isset($_POST['context']) && is_array($_POST['context']) ? $_POST['context'] : [];
     } else {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Invalid JSON body.']);
@@ -73,6 +87,21 @@ if (!is_array($data)) {
         $b64 = substr($b64, strpos($b64, ',') + 1);
     } else {
         $mime = (string) ($data['mime'] ?? $data['mime_type'] ?? 'image/jpeg');
+    }
+    $surveyId = isset($data['survey_id']) ? (int) $data['survey_id'] : 0;
+    $context = isset($data['context']) && is_array($data['context']) ? $data['context'] : [];
+}
+
+// Authorization: a Surveyor may only describe photos for a survey they're
+// actually assigned to. Admin/Super Admin bypass (same as report_detail.php).
+// survey_id = 0 means a standalone draft (not tied to any survey) — allowed
+// for any of the three roles above, same as opening the page itself with no ?id=.
+if ($surveyId > 0 && $__role === 'Surveyor') {
+    $db = getDB();
+    if (!isSurveyorAssignedToSurvey($db, $surveyId, (int) $_SESSION['user_id'])) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Not authorized for this survey.']);
+        exit;
     }
 }
 
@@ -107,7 +136,34 @@ if (!isset($allowedMimes[$mime])) {
     $mime = 'image/jpeg';
 }
 
-$prompt = 'You are a professional Marine Cargo, Hull, and Bunker Surveyor with over 20 years of experience.
+// Optional context (survey type / vessel / port / photo category) — for
+// reference only. The model is explicitly told not to assume anything from
+// it that isn't also visible in the photo, so a wrong/stale dropdown value
+// on the page can never override what the image actually shows.
+$contextPrefix = '';
+if (!empty($context)) {
+    $labels = [
+        'survey_type' => 'Survey Type',
+        'vessel_name' => 'Vessel',
+        'port_name'   => 'Location',
+        'category'    => 'Photo Category',
+    ];
+    $lines = [];
+    foreach ($labels as $key => $label) {
+        if (!empty($context[$key]) && is_string($context[$key])) {
+            $val = trim($context[$key]);
+            if ($val !== '') {
+                $lines[] = $label . ': ' . $val;
+            }
+        }
+    }
+    if ($lines) {
+        $contextPrefix = "Context, for reference only — do NOT mention or assume anything below that is not also clearly visible in the photograph itself:\n"
+            . implode("\n", $lines) . "\n\n";
+    }
+}
+
+$prompt = $contextPrefix . 'You are a professional Marine Cargo, Hull, and Bunker Surveyor with over 20 years of experience.
 Analyze ONLY what is clearly visible in the uploaded image.
 Your task is to identify the MAIN visible object or structure and generate a professional marine survey photo description.
 
