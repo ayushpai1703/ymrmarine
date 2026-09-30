@@ -170,6 +170,7 @@
 }
 .fnotes-status.is-saved { color: #16A34A; }
 .fnotes-status.is-saving { color: #EA580C; }
+.fnotes-status.is-error { color: #dc2626; }
 
 /* ── State visibility — a single data-state attribute on the root drives
    which of the three sibling elements (fab / minimized bar / window) shows. ── */
