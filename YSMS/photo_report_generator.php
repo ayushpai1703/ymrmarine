@@ -551,8 +551,8 @@ var HOLD_MAIN_OPTIONS = [
 var HOLD_SUB_MAP = {
   "Hatch Entrance": ["Top"],
   "Hatch Covers": ["Forward", "Port Side", "Starboard Side", "Aft"],
-  "Coamings": ["Port Side", "Starboard Side", "Aft", "Forward"],
-  "Bulkheads": ["Port Side", "Starboard Side", "Aft", "Forward"],
+  "Coamings": ["Forward", "Port Side", "Starboard Side", "Aft"],
+  "Bulkheads": ["Forward", "Port Side", "Starboard Side", "Aft"],
   "Bulk Frames": ["Port Side", "Starboard Side"],
   "Hoppers": {
     "Lower": ["Port Side", "Starboard Side"],
@@ -581,22 +581,25 @@ var HOLD_SINGULAR = {
 /* Order = report auto-sort order */
 var SHIP_MAIN_OPTIONS = [
   "Forward Section",
+  "Bulbous Bow",
   "Hull",
   "Draft Marks",
   "Weather Deck",
   "Mooring Station",
-  "Mooring Winches",
+  "Forward Mooring Winches",
   "Anchor Chain",
   "Windlass",
   "Life Boat",
   "Forward Cross Deck",
   "Aft Cross Deck",
+  "Aft Mooring Winches",
   "Aft Section",
   "Rudder"
 ];
 /* Array = 2-level; object = 3-level (side → section); [] = no sub */
 var SHIP_SUB_MAP = {
   "Forward Section": [],
+  "Bulbous Bow": [],
   "Hull": {
     "Port Side": ["At Bow Section", "At Midship", "At Aft Section"],
     "Starboard Side": ["At Bow Section", "At Midship", "At Aft Section"]
@@ -607,27 +610,30 @@ var SHIP_SUB_MAP = {
   },
   "Weather Deck": ["Port Side", "Starboard Side"],
   "Mooring Station": ["Forecastle Deck", "Poop Deck"],
-  "Mooring Winches": ["Port Side", "Starboard Side"],
+  "Forward Mooring Winches": ["Port Side", "Starboard Side"],
   "Anchor Chain": [],
   "Windlass": ["Port Side", "Starboard Side"],
   "Life Boat": ["Port Side", "Starboard Side"],
   "Forward Cross Deck": [],
   "Aft Cross Deck": [],
+  "Aft Mooring Winches": ["Port Side", "Starboard Side"],
   "Aft Section": [],
   "Rudder": []
 };
 var SHIP_SINGULAR = {
   "Forward Section": "Forward Section",
+  "Bulbous Bow": "Bulbous Bow",
   "Hull": "Hull",
   "Draft Marks": "Draft Marks",
   "Weather Deck": "Weather Deck",
   "Mooring Station": "Mooring Station",
-  "Mooring Winches": "Mooring Winches",
+  "Forward Mooring Winches": "Forward Mooring Winches",
   "Anchor Chain": "Anchor Chain",
   "Windlass": "Windlass",
   "Life Boat": "Life Boat",
   "Forward Cross Deck": "Forward Cross Deck",
   "Aft Cross Deck": "Aft Cross Deck",
+  "Aft Mooring Winches": "Aft Mooring Winches",
   "Aft Section": "Aft Section",
   "Rudder": "Rudder"
 };
@@ -636,18 +642,21 @@ var SHIP_SINGULAR = {
 /* Order = report auto-sort order */
 var DECK_MAIN_OPTIONS = [
   "Main Deck",
-  "Main Deck Railing"
+  "Forward Main Deck Railing",
+  "Aft Main Deck Railing"
 ];
 var DECK_SUB_MAP = {
   "Main Deck": {
     "Port Side": ["From Aft Side", "From Forward Side"],
     "Starboard Side": ["From Aft Side", "From Forward Side"]
   },
-  "Main Deck Railing": ["Port Side", "Starboard Side"]
+  "Forward Main Deck Railing": ["Port Side", "Starboard Side"],
+  "Aft Main Deck Railing": ["Port Side", "Starboard Side"]
 };
 var DECK_SINGULAR = {
   "Main Deck": "Main Deck",
-  "Main Deck Railing": "Main Deck Railing"
+  "Forward Main Deck Railing": "Forward Main Deck Railing",
+  "Aft Main Deck Railing": "Aft Main Deck Railing"
 };
 
 /** Structure config for Hold / Ship Side / Deck Side (shared nest UI) */
@@ -749,6 +758,11 @@ function prgInferStructure(p) {
       break;
     }
   }
+  // "Stern Section" isn't its own dropdown option — it's the same place as
+  // the existing "Aft Section", just a different word surveyors also use.
+  if (!foundMain && p.category === 'Ship Side' && text.indexOf('stern') >= 0) {
+    foundMain = 'Aft Section';
+  }
   if (!foundMain) return;
   p.holdMain = foundMain;
   // Try match a leaf / sub label
@@ -778,36 +792,115 @@ function prgInferStructure(p) {
 }
 
 /**
- * Sort photos into report order:
- *  Ship Side → Hold No.1…9 → Deck Side → Others
- *  Within Ship Side: Forward Section → Hull → … → Rudder
- *  Within each Hold: Hatch Entrance → Hatch Covers → Coamings → … → Drain Channel
- *  Within Deck Side: Main Deck → Main Deck Railing
- *  Within same structure: sub-option order
+ * Master walk-around order for "Auto-sort order" — a single sequence that
+ * spans Ship Side, Deck Side and the Holds together (not grouped into
+ * separate blocks), matching how a surveyor actually walks the vessel:
+ *
+ *  Forward Section → Bulbous Bow → Hull → Draft Marks → Rudder → Aft Section
+ *  → Mooring Station (Forecastle) → Forward Mooring Winches → Anchor Chain
+ *  → Windlass → Life Boat → Weather Deck
+ *  → Main Deck (from Forward) → Forward Main Deck Railing → Forward Cross Deck
+ *  → Hold No.1 … Hold No.9 (each: Hatch Entrance → Hatch Covers → Coamings
+ *    Forward/Port/Starboard/Aft → Bulkheads Forward/Port/Starboard →
+ *    Bulk Frames → Hoppers → Tank Top → Bilge Tanks Port/Starboard →
+ *    Ladders Vertical/Australian/Inclination → Bulkheads Aft → Drain Channel)
+ *  → Aft Cross Deck → Main Deck (from Aft) → Aft Main Deck Railing
+ *  → Mooring Station (Poop) → Aft Mooring Winches
+ *  → Others (unclassified, always last)
  */
-function sortPhotosForReport() {
-  var catOrder = ["Ship Side","Hold No. 1","Hold No. 2","Hold No. 3","Hold No. 4","Hold No. 5","Hold No. 6","Hold No. 7","Hold No. 8","Hold No. 9","Deck Side","Others"];
-  function catRank(c) {
-    var i = catOrder.indexOf(c || '');
-    return i >= 0 ? i : 998;
+var PRG_MASTER_ORDER = (function () {
+  var rules = [];
+  function r(cat, main, sub) { rules.push({ cat: cat, main: main, sub: sub || null }); }
+
+  r('Ship Side', 'Forward Section');
+  r('Ship Side', 'Bulbous Bow');
+  r('Ship Side', 'Hull');
+  r('Ship Side', 'Draft Marks');
+  r('Ship Side', 'Rudder');
+  r('Ship Side', 'Aft Section');
+
+  r('Ship Side', 'Mooring Station', 'Forecastle Deck');
+  r('Ship Side', 'Forward Mooring Winches', 'Port Side');
+  r('Ship Side', 'Forward Mooring Winches', 'Starboard Side');
+  r('Ship Side', 'Forward Mooring Winches'); // fallback: sub not chosen yet
+  r('Ship Side', 'Anchor Chain');
+  r('Ship Side', 'Windlass');
+  r('Ship Side', 'Life Boat');
+  r('Ship Side', 'Weather Deck');
+
+  r('Deck Side', 'Main Deck', 'From Forward Side');
+  r('Deck Side', 'Forward Main Deck Railing');
+  r('Ship Side', 'Forward Cross Deck');
+
+  for (var h = 1; h <= 9; h++) {
+    var cat = 'Hold No. ' + h;
+    r(cat, 'Hatch Entrance');
+    r(cat, 'Hatch Covers');
+    r(cat, 'Coamings', 'Forward');
+    r(cat, 'Coamings', 'Port Side');
+    r(cat, 'Coamings', 'Starboard Side');
+    r(cat, 'Coamings', 'Aft');
+    r(cat, 'Coamings'); // fallback: sub not chosen yet
+    r(cat, 'Bulkheads', 'Forward');
+    r(cat, 'Bulkheads', 'Port Side');
+    r(cat, 'Bulkheads', 'Starboard Side');
+    r(cat, 'Bulkheads'); // fallback: sub not chosen yet (placed with the above, not with "Aft" below)
+    r(cat, 'Bulk Frames');
+    r(cat, 'Hoppers');
+    r(cat, 'Tank Top');
+    r(cat, 'Bilge Tanks', 'Port Side');
+    r(cat, 'Bilge Tanks', 'Starboard Side');
+    r(cat, 'Bilge Tanks');
+    r(cat, 'Ladders', 'Vertical');
+    r(cat, 'Ladders', 'Australian');
+    r(cat, 'Ladders', 'Inclination');
+    r(cat, 'Ladders');
+    r(cat, 'Bulkheads', 'Aft'); // deliberately after Tank Top / Bilge Tanks / Ladders
+    r(cat, 'Drain Channel');
   }
+
+  r('Ship Side', 'Aft Cross Deck');
+  r('Deck Side', 'Main Deck', 'From Aft Side');
+  r('Deck Side', 'Aft Main Deck Railing');
+  r('Ship Side', 'Mooring Station', 'Poop Deck');
+  r('Ship Side', 'Aft Mooring Winches', 'Port Side');
+  r('Ship Side', 'Aft Mooring Winches', 'Starboard Side');
+  r('Ship Side', 'Aft Mooring Winches'); // fallback: sub not chosen yet
+
+  return rules;
+})();
+
+var PRG_MASTER_CAT_ORDER = ["Ship Side","Hold No. 1","Hold No. 2","Hold No. 3","Hold No. 4","Hold No. 5","Hold No. 6","Hold No. 7","Hold No. 8","Hold No. 9","Deck Side","Others"];
+
+/**
+ * Rank of one photo in PRG_MASTER_ORDER — most specific rule wins:
+ *  1) exact category + main + a sub the photo's holdSub contains
+ *  2) category + main only (no sub restriction on the rule)
+ *  3) category only (keeps a reasonable block position for anything
+ *     unmatched — e.g. a category/main this list doesn't know about)
+ */
+function masterRankOf(p) {
+  var cat = p.category, main = p.holdMain, sub = p.holdSub ? String(p.holdSub).toLowerCase() : '';
+  var i;
+  for (i = 0; i < PRG_MASTER_ORDER.length; i++) {
+    var ru = PRG_MASTER_ORDER[i];
+    if (ru.cat === cat && ru.main === main && ru.sub && sub && sub.indexOf(String(ru.sub).toLowerCase()) >= 0) return i;
+  }
+  for (i = 0; i < PRG_MASTER_ORDER.length; i++) {
+    var ru2 = PRG_MASTER_ORDER[i];
+    if (ru2.cat === cat && ru2.main === main && !ru2.sub) return i;
+  }
+  var ci = PRG_MASTER_CAT_ORDER.indexOf(cat || '');
+  return PRG_MASTER_ORDER.length + (ci >= 0 ? ci : 999) * 1000;
+}
+
+function sortPhotosForReport() {
   // Infer structure fields before ranking
   photos.forEach(function (p) { prgInferStructure(p); });
 
-  var decorated = photos.map(function (p, i) { return { p: p, i: i }; });
+  var decorated = photos.map(function (p, i) { return { p: p, i: i, rank: masterRankOf(p) }; });
   decorated.sort(function (a, b) {
-    var ca = catRank(a.p.category), cb = catRank(b.p.category);
-    if (ca !== cb) return ca - cb;
-
-    // Same category → structure order (Hold / Ship / Deck)
-    if (isStructureCategory(a.p.category) && a.p.category === b.p.category) {
-      var ma = holdMainRank(a.p.holdMain, a.p.category);
-      var mb = holdMainRank(b.p.holdMain, b.p.category);
-      if (ma !== mb) return ma - mb;
-      var sa = holdSubRank(a.p.holdMain, a.p.holdSub, a.p.category);
-      var sb = holdSubRank(b.p.holdMain, b.p.holdSub, b.p.category);
-      if (sa !== sb) return sa - sb;
-    }
+    if (a.rank !== b.rank) return a.rank - b.rank;
     return a.i - b.i;
   });
   photos = decorated.map(function (d) { return d.p; });
