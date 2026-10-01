@@ -223,7 +223,13 @@ Rules:
         ],
         'generationConfig' => [
             'temperature'     => 0,
-            'maxOutputTokens' => 60,
+            'maxOutputTokens' => 150,
+            // 2.5+/3.x Flash models think by default and those thinking
+            // tokens are billed against maxOutputTokens — with a small cap
+            // a model can spend the whole budget "reasoning" and never
+            // actually emit the answer text, coming back empty. This is a
+            // one-item pick from a fixed list; no reasoning is needed.
+            'thinkingConfig'  => ['thinkingBudget' => 0],
         ],
     ];
 
@@ -291,6 +297,14 @@ Rules:
     } elseif (preg_match('/\b(\d+)\b/', $raw, $nm)) {
         // Fallback: model replied with a bare number, no JSON wrapper
         $index = (int) $nm[1];
+    } elseif (trim($raw) === '') {
+        // No index AND no explicit "null" — the model returned no usable
+        // text at all (e.g. finishReason MAX_TOKENS from thinking tokens
+        // eating the budget, or a safety block). Log it so it's visible in
+        // Cloud Run logs without needing another round-trip to diagnose —
+        // no API key or image data here, just Gemini's own response shape.
+        $finishReason = $json['candidates'][0]['finishReason'] ?? 'unknown';
+        error_log('gemini_describe.php classify: empty response text, finishReason=' . $finishReason);
     }
 
     // Reject anything outside the list we actually sent — never trust a
@@ -358,6 +372,9 @@ $payload = [
     'generationConfig' => [
         'temperature'     => 0.2,
         'maxOutputTokens' => 180,
+        // See the classification-mode payload above for why this matters —
+        // same thinking-tokens-eat-the-budget risk applies here too.
+        'thinkingConfig'  => ['thinkingBudget' => 0],
     ],
 ];
 
