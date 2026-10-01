@@ -1853,6 +1853,33 @@ function quickHashArrayBuffer(ab) {
   return len + '_' + h.toString(16);
 }
 
+/** The fixed list of description choices for a photo's category, in display
+ *  order — the exact same options the dropdown/nested-menu UI already
+ *  offers. AI picks ONE of these (by position) instead of writing free
+ *  text, so the result always matches the report's own standard phrasing. */
+function aiOptionsForPhoto(p) {
+  var cat = p.category || '';
+  if (!isStructureCategory(cat)) {
+    return DESC_OPTIONS.map(function (label) {
+      return { label: label, main: null, sub: null };
+    });
+  }
+  var cfg = structCfg(cat);
+  var out = [];
+  cfg.main.forEach(function (main) {
+    var leaves = holdAllLeafLabels(main, cat);
+    if (!leaves.length) {
+      out.push({ label: main, main: main, sub: '' });
+    } else {
+      leaves.forEach(function (leaf) {
+        var label = (main === 'Tank Top') ? 'Tank Top' : (main + ' › ' + leaf);
+        out.push({ label: label, main: main, sub: leaf });
+      });
+    }
+  });
+  return out;
+}
+
 /** True original (this session only) when available; otherwise the photo's
  *  already-stored report copy (still perfectly usable for analysis). */
 async function getAiImageSource(p) {
@@ -1924,6 +1951,8 @@ function updateAiCardUI(idx) {
   var row = document.getElementById('aiRow_' + idx);
   if (row) row.outerHTML = aiControlsHtml(p, idx);
   if (isStructureCategory(p.category)) {
+    var nestBtn = document.getElementById('holdNestBtn_' + idx);
+    if (nestBtn) nestBtn.textContent = holdNestLabel(p);
     var descEl = document.getElementById('holdDesc_' + idx);
     if (descEl && document.activeElement !== descEl) descEl.value = p.desc || '';
   } else {
@@ -1978,6 +2007,8 @@ async function generateAiDescriptionForIndex(idx, attempt) {
     }
     if (dup) {
       p.desc = dup.desc;
+      p.holdMain = dup.holdMain || '';
+      p.holdSub = dup.holdSub || '';
       p.aiHash = hash;
       p.aiStatus = 'completed';
       p.aiError = '';
@@ -1987,9 +2018,7 @@ async function generateAiDescriptionForIndex(idx, attempt) {
     }
 
     var context = { vessel_name: PRG_VESSEL_NAME || '', category: p.category || '' };
-    if (p.holdMain) {
-      context.category = p.holdMain + (p.holdSub ? (' – ' + p.holdSub) : '');
-    }
+    var opts = aiOptionsForPhoto(p);
 
     var res = await fetch('ajax/gemini_describe.php', {
       method: 'POST',
@@ -1999,7 +2028,8 @@ async function generateAiDescriptionForIndex(idx, attempt) {
         image: abToBase64(src.ab),
         mime: src.mime,
         survey_id: PRG_SURVEY_ID,
-        context: context
+        context: context,
+        options: opts.map(function (o) { return o.label; })
       })
     });
     var json = null;
@@ -2010,7 +2040,18 @@ async function generateAiDescriptionForIndex(idx, attempt) {
       throw { message: message, retryAfter: json && json.retry_after ? json.retry_after : null };
     }
 
-    p.desc = json.description;
+    var pick = (json.index && json.index >= 1 && json.index <= opts.length) ? opts[json.index - 1] : null;
+    if (!pick) {
+      throw { message: 'AI could not confidently match this photo to any option — please select manually.', noRetry: true };
+    }
+
+    if (pick.main !== null) {
+      p.holdMain = pick.main;
+      p.holdSub = pick.sub || '';
+      p.desc = buildHoldAutoDesc(pick.main, pick.sub, p.category);
+    } else {
+      p.desc = pick.label;
+    }
     p.aiHash = hash;
     p.aiStatus = 'completed';
     p.aiError = '';

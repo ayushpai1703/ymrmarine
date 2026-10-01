@@ -5,11 +5,21 @@
  *
  * POST JSON:
  *   { "image": "<base64>", "mime": "image/jpeg", "survey_id": 123,
- *     "context": { "survey_type": "...", "vessel_name": "...", "port_name": "...", "category": "..." } }
+ *     "context": { "survey_type": "...", "vessel_name": "...", "port_name": "...", "category": "..." },
+ *     "options": ["Forward Section", "Hull › Port Side › At Bow Section", ...] }
  *   optional: "mime_type" (alias of mime)
- * POST multipart: field "image" (file), optional "survey_id", "context[...]"
+ * POST multipart: field "image" (file), optional "survey_id", "context[...]", "options[...]"
  *
- * Response JSON:
+ * When "options" is a non-empty list, the endpoint runs in classification
+ * mode: instead of writing free text, Gemini picks the single best-matching
+ * item from that fixed list (the report's own existing structure/description
+ * dropdown options) and only its 1-based list position is returned — faster
+ * (a few output tokens instead of a full sentence) and it reuses the report's
+ * own standard phrasing instead of inventing new wording.
+ *   { "success": true, "index": 7 }       — matched options[6]
+ *   { "success": true, "index": null }    — no option matched confidently
+ *
+ * Without "options" (or an empty list), falls back to free-text mode:
  *   { "success": true, "description": "..." }
  *   { "success": false, "message": "..." }
  */
@@ -74,6 +84,7 @@ if (!is_array($data)) {
         $b64 = base64_encode($bin);
         $surveyId = isset($_POST['survey_id']) ? (int) $_POST['survey_id'] : 0;
         $context = isset($_POST['context']) && is_array($_POST['context']) ? $_POST['context'] : [];
+        $options = isset($_POST['options']) && is_array($_POST['options']) ? $_POST['options'] : [];
     } else {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Invalid JSON body.']);
@@ -90,6 +101,7 @@ if (!is_array($data)) {
     }
     $surveyId = isset($data['survey_id']) ? (int) $data['survey_id'] : 0;
     $context = isset($data['context']) && is_array($data['context']) ? $data['context'] : [];
+    $options = isset($data['options']) && is_array($data['options']) ? $data['options'] : [];
 }
 
 // Authorization: a Surveyor may only describe photos for a survey they're
@@ -161,6 +173,134 @@ if (!empty($context)) {
         $contextPrefix = "Context, for reference only — do NOT mention or assume anything below that is not also clearly visible in the photograph itself:\n"
             . implode("\n", $lines) . "\n\n";
     }
+}
+
+// Classification mode — pick one item from the report's own existing
+// structure/description dropdown instead of writing free text. Much less
+// for Gemini to generate (a few tokens vs a full sentence), so it's both
+// faster and guarantees the report's standard phrasing is reused as-is.
+$cleanOptions = [];
+foreach ($options as $o) {
+    if (is_string($o) && trim($o) !== '') {
+        $cleanOptions[] = trim($o);
+    }
+}
+$cleanOptions = array_slice($cleanOptions, 0, 200);
+
+if (count($cleanOptions) > 0) {
+    $listText = '';
+    foreach ($cleanOptions as $i => $label) {
+        $listText .= ($i + 1) . '. ' . $label . "\n";
+    }
+
+    $classifyPrompt = $contextPrefix . 'You are a professional Marine Cargo, Hull, and Bunker Surveyor with over 20 years of experience.
+Analyze ONLY what is clearly visible in the uploaded photograph.
+
+Below is a fixed numbered list of standard ship/hold structure locations used to organize photographs in this survey report. Your task is to pick the ONE item from this list that best matches what is actually, visibly shown in the photograph.
+
+Numbered list:
+' . $listText . '
+Rules:
+1. Base your choice only on what is visible in the photograph — never on assumptions or on the context above.
+2. If the photograph clearly shows one of the listed items, choose that item\'s number, regardless of its visible condition or damage.
+3. If NONE of the listed items reasonably match what is shown, respond with null instead of forcing a guess.
+4. Respond with ONLY one JSON object and nothing else — no markdown, no explanation, no extra text:
+{"index": <number or null>}';
+
+    $classifyPayload = [
+        'contents' => [
+            [
+                'parts' => [
+                    ['text' => $classifyPrompt],
+                    [
+                        'inline_data' => [
+                            'mime_type' => $mime,
+                            'data'      => $b64,
+                        ],
+                    ],
+                ],
+            ],
+        ],
+        'generationConfig' => [
+            'temperature'     => 0,
+            'maxOutputTokens' => 60,
+        ],
+    ];
+
+    $model = getenv('YSMS_GEMINI_MODEL') ?: (defined('GEMINI_MODEL') ? GEMINI_MODEL : 'gemini-3.6-flash');
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/'
+        . rawurlencode($model)
+        . ':generateContent?key=' . rawurlencode($apiKey);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS     => json_encode($classifyPayload),
+        CURLOPT_TIMEOUT        => 60,
+        CURLOPT_CONNECTTIMEOUT => 15,
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr  = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false || $response === '') {
+        http_response_code(502);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Could not reach Gemini API' . ($curlErr ? (': ' . $curlErr) : '.'),
+        ]);
+        exit;
+    }
+
+    $json = json_decode($response, true);
+    if ($httpCode >= 400 || !is_array($json)) {
+        $msg = 'Gemini API error (HTTP ' . $httpCode . ').';
+        if (is_array($json) && isset($json['error']['message'])) {
+            $msg = $json['error']['message'];
+        }
+        $retryAfter = null;
+        if (preg_match('/retry in\s*([0-9]+(?:\.[0-9]+)?)\s*s/i', $msg, $rm)) {
+            $retryAfter = (int) ceil((float) $rm[1]) + 1;
+        }
+        http_response_code($httpCode >= 400 ? $httpCode : 502);
+        $out = ['success' => false, 'message' => $msg];
+        if ($retryAfter !== null) {
+            $out['retry_after'] = $retryAfter;
+        }
+        echo json_encode($out);
+        exit;
+    }
+
+    $raw = '';
+    if (!empty($json['candidates'][0]['content']['parts'])) {
+        foreach ($json['candidates'][0]['content']['parts'] as $part) {
+            if (isset($part['text'])) {
+                $raw .= $part['text'];
+            }
+        }
+    }
+
+    $index = null;
+    if (preg_match('/"?index"?\s*:\s*(\d+)/i', $raw, $im)) {
+        $index = (int) $im[1];
+    } elseif (preg_match('/\bnull\b/i', $raw)) {
+        $index = null;
+    } elseif (preg_match('/\b(\d+)\b/', $raw, $nm)) {
+        // Fallback: model replied with a bare number, no JSON wrapper
+        $index = (int) $nm[1];
+    }
+
+    // Reject anything outside the list we actually sent — never trust a
+    // number the model invented.
+    if ($index !== null && ($index < 1 || $index > count($cleanOptions))) {
+        $index = null;
+    }
+
+    echo json_encode(['success' => true, 'index' => $index]);
+    exit;
 }
 
 $prompt = $contextPrefix . 'You are a professional Marine Cargo, Hull, and Bunker Surveyor with over 20 years of experience.
