@@ -15,13 +15,13 @@
  * item from that fixed list (the report's own existing structure/description
  * dropdown options) and only its 1-based list position is returned — faster
  * (a few output tokens instead of a full sentence) and it reuses the report's
- * own standard phrasing instead of inventing new wording. A borderline-
- * confidence pick (70-84) gets a second, independent verification call
- * before being accepted; below 70, or when the two passes disagree, or when
- * nothing confidently matches, the pick is flagged review_required instead
- * of being silently trusted.
- *   { "success": true, "index": 7, "confidence": 92, "review_required": false, "evidence": "..." }
- *   { "success": true, "index": null, "confidence": 40, "review_required": true, "evidence": "..." }
+ * own standard phrasing instead of inventing new wording. The model always
+ * commits to one pick (majority-of-frame object + its side), never an
+ * "unable to determine" — confidence/evidence come back for logging and
+ * quality tracking only, not to withhold an answer. A reply that genuinely
+ * can't be parsed even after one server-side retry is surfaced as an error
+ * (success: false) so the client's normal retry/backoff handles it.
+ *   { "success": true, "index": 7, "confidence": 92, "evidence": "..." }
  *
  * Without "options" (or an empty list), falls back to free-text mode:
  *   { "success": true, "description": "..." }
@@ -300,32 +300,32 @@ if (count($cleanOptions) > 0) {
     }
 
     // Targets the two failure modes actually seen in production: Gemini
-    // defaulting almost every Bulkhead photo to "Forward" regardless of
-    // evidence, and confusing a close-up Ladder shot with the Bulkhead
-    // it's mounted on (or vice versa). Kept short for cost — this is the
-    // one addition to the prompt beyond picking a list item.
+    // defaulting almost every Bulkhead photo to "Forward" out of habit
+    // rather than evidence, and confusing a close-up Ladder shot with the
+    // Bulkhead it's mounted on (or vice versa). Always commits to a single
+    // pick — the report's dropdown has no "unsure" option, so the model's
+    // job is to make its best professional call, not to abstain.
     $domainGuidance = 'Special guidance:
-- Never default to "Forward" (or the first-listed option) just because you are unsure. Forward/Aft/Port Side/Starboard Side orientation must be independently justified by visible evidence (surrounding hold/ship structure, access arrangements, ladder position, longitudinal/transverse arrangement). If that evidence is not visible, respond with index null rather than guessing.
+- Always choose the option whose object occupies the majority of the photograph\'s frame — that is the subject the photo is documenting. Do not default to "Forward" (or the first-listed option) out of habit; independently look at whatever side/orientation evidence is visible (surrounding hold/ship structure, access arrangements, ladder position, longitudinal/transverse arrangement) and make your best judgment even if that evidence is only partial — never leave a photo unclassified.
 - Do not classify a Bulkhead photo as a Ladder just because a ladder is attached to or near it, and do not classify a Ladder close-up as a Bulkhead. Classify by what the photograph PRIMARILY documents: if a full/major portion of a bulkhead is visible, classify the bulkhead\'s orientation; if only a close-up of a ladder is the main subject and the bulkhead cannot be reliably identified, classify the ladder type instead.
-- If classifying a ladder, distinguish by shape: a straight ladder with parallel rails roughly vertical is "Vertical"; a curved or spiral ladder is "Australian"; a straight ladder installed at a clear angle/slope is the inclined one. Never guess a ladder type from a photo where no ladder is visible.
+- If classifying a ladder, distinguish by shape: a straight ladder with parallel rails roughly vertical is "Vertical"; a curved or spiral ladder is "Australian"; a straight ladder installed at a clear angle/slope is the inclined one.
 ';
 
     $classifyPromptBase = $contextPrefix . 'You are a professional Marine Cargo, Hull, and Bunker Surveyor with over 20 years of experience.
 Analyze ONLY what is clearly visible in the uploaded photograph.
 
-Below is a fixed numbered list of standard ship/hold structure locations used to organize photographs in this survey report. Your task is to pick the ONE item from this list that best matches what is actually, visibly shown in the photograph.
+Below is a fixed numbered list of standard ship/hold structure locations used to organize photographs in this survey report. Your task is to pick the ONE item from this list that best matches what is actually, visibly shown in the photograph — specifically, the object/structure that takes up the majority portion of the frame, and its side where applicable.
 
 Numbered list:
 ' . $listText . '
 ' . $domainGuidance . '
 Rules:
 1. Base your choice only on what is visible in the photograph — never on assumptions or on the context above.
-2. If the photograph clearly shows one of the listed items, choose that item\'s number, regardless of its visible condition or damage.
-3. If NONE of the listed items reasonably match what is shown, or there is not enough evidence to confidently tell apart visually similar options (e.g. which side/orientation), respond with index null instead of forcing a guess. Accuracy matters more than completing every classification.
-4. confidence is an integer 0-100 reflecting how strong the visual evidence is: 90-100 very strong, 75-89 good but some uncertainty, 60-74 moderate uncertainty, below 60 insufficient (use with index null).
-5. evidence is a very short phrase (under 12 words) naming the visual cue that justified the choice (or why it could not be determined).
-6. Respond with ONLY one JSON object and nothing else — no markdown, no explanation, no extra text:
-{"index": <number or null>, "confidence": <0-100>, "evidence": "<short phrase>"}';
+2. Always choose exactly one item\'s number from the list, regardless of the object\'s visible condition or damage. The list is not exhaustive of every possible structure, so pick whichever listed item is the closest reasonable match to the majority-portion object and its side — do not leave this unanswered.
+3. confidence is an integer 0-100 reflecting how strong the visual evidence is for that specific pick (used only for logging/quality tracking, not to withhold an answer).
+4. evidence is a very short phrase (under 12 words) naming the visual cue that justified the choice.
+5. Respond with ONLY one JSON object and nothing else — no markdown, no explanation, no extra text:
+{"index": <number>, "confidence": <0-100>, "evidence": "<short phrase>"}';
 
     function gemini_classify_payload($prompt, $mime, $b64)
     {
@@ -340,7 +340,7 @@ Rules:
             ],
             'generationConfig' => [
                 'temperature'     => 0,
-                'maxOutputTokens' => 250,
+                'maxOutputTokens' => 150,
                 // 2.5+/3.x Flash models think by default and those thinking
                 // tokens are billed against maxOutputTokens — with a small
                 // cap a model can spend the whole budget "reasoning" and
@@ -353,7 +353,6 @@ Rules:
 
     $model = getenv('YSMS_GEMINI_MODEL') ?: (defined('GEMINI_MODEL') ? GEMINI_MODEL : 'gemini-3.6-flash');
 
-    // Pass 1
     $r1 = gemini_call(gemini_classify_payload($classifyPromptBase, $mime, $b64), $apiKey, $model);
     if ($r1['error']) {
         http_response_code($r1['http']);
@@ -367,84 +366,42 @@ Rules:
     $p1 = gemini_parse_classification($r1['raw'], count($cleanOptions));
 
     // "IF JSON is invalid -> retry the API request once" — only for a
-    // genuinely unparseable reply, not a confident/explicit null.
-    if (!$p1['parsed_ok']) {
-        error_log('gemini_describe.php classify: unparseable first attempt (finishReason=' . $r1['finishReason'] . '), retrying once');
+    // genuinely unparseable reply.
+    if (!$p1['parsed_ok'] || $p1['index'] === null) {
+        error_log('gemini_describe.php classify: unparseable/empty first attempt (finishReason=' . $r1['finishReason'] . '), retrying once');
         $r1b = gemini_call(gemini_classify_payload($classifyPromptBase, $mime, $b64), $apiKey, $model);
         if (!$r1b['error']) {
             $p1b = gemini_parse_classification($r1b['raw'], count($cleanOptions));
-            if ($p1b['parsed_ok']) {
+            if ($p1b['parsed_ok'] && $p1b['index'] !== null) {
                 $p1 = $p1b;
             }
         }
     }
 
-    if (!$p1['parsed_ok']) {
-        error_log('gemini_describe.php classify: still unparseable after retry, marking review_required');
-        echo json_encode([
-            'success'         => true,
-            'index'           => null,
-            'confidence'      => 0,
-            'review_required' => true,
-            'evidence'        => 'AI response could not be read — please select manually.',
-        ]);
+    // Still nothing usable after the retry — this is a genuine technical
+    // failure (not a legitimate "no match", which the prompt no longer
+    // allows), so surface it as an error. The client's existing retry/
+    // backoff handles it the same as any other transient API hiccup.
+    if (!$p1['parsed_ok'] || $p1['index'] === null) {
+        error_log('gemini_describe.php classify: still unparseable/empty after retry');
+        http_response_code(502);
+        echo json_encode(['success' => false, 'message' => 'AI could not produce a classification for this photo. Please try again.']);
         exit;
     }
 
-    $finalIndex      = $p1['index'];
-    $finalConfidence = $p1['confidence'] !== null ? $p1['confidence'] : 50; // unknown -> neutral, forces review below
-    $finalEvidence   = $p1['evidence'];
-    $secondPassRun   = false;
-
-    if ($finalIndex === null) {
-        // "Unable to Determine" — never auto-select, always a review item.
-        $reviewRequired = true;
-    } elseif ($finalConfidence >= 85) {
-        $reviewRequired = false;
-    } elseif ($finalConfidence >= 70) {
-        // Borderline — spend a second, independent verification call only
-        // for this uncertain band (cost control: most clear photos settle
-        // on pass 1 alone; only a minority need the extra call).
-        $secondPassRun = true;
-        $verifyPrompt = $classifyPromptBase . "\n\nThis is a second, STRICT INDEPENDENT VERIFICATION pass — re-examine the photograph from scratch as if for the first time. Do not assume any prior answer. Be especially skeptical of Forward/Aft/Port Side/Starboard Side calls — only confirm one if the surrounding structure clearly proves that specific side; otherwise return index null.";
-        $r2 = gemini_call(gemini_classify_payload($verifyPrompt, $mime, $b64), $apiKey, $model);
-        if (!$r2['error']) {
-            $p2 = gemini_parse_classification($r2['raw'], count($cleanOptions));
-            if ($p2['parsed_ok'] && $p2['index'] === $finalIndex) {
-                $reviewRequired = false;
-                if ($p2['confidence'] !== null) {
-                    $finalConfidence = min($finalConfidence, $p2['confidence']);
-                }
-            } else {
-                $reviewRequired = true;
-                $finalEvidence = 'Two independent analyses disagreed — manual review recommended.';
-            }
-        } else {
-            // Verification call itself failed (network/rate-limit) — fail
-            // safe to review rather than silently accepting the borderline
-            // first-pass result.
-            $reviewRequired = true;
-        }
-    } else {
-        $reviewRequired = true;
-    }
-
     error_log(json_encode([
-        'evt'             => 'ai_classify',
-        'survey_id'       => $surveyId,
-        'index'           => $finalIndex,
-        'confidence'      => $finalConfidence,
-        'review_required' => $reviewRequired,
-        'second_pass'     => $secondPassRun,
-        'elapsed_ms'      => (int) round((microtime(true) - $t0) * 1000),
+        'evt'         => 'ai_classify',
+        'survey_id'   => $surveyId,
+        'index'       => $p1['index'],
+        'confidence'  => $p1['confidence'],
+        'elapsed_ms'  => (int) round((microtime(true) - $t0) * 1000),
     ]));
 
     echo json_encode([
-        'success'         => true,
-        'index'           => $finalIndex,
-        'confidence'      => $finalConfidence,
-        'review_required' => $reviewRequired,
-        'evidence'        => $finalEvidence,
+        'success'    => true,
+        'index'      => $p1['index'],
+        'confidence' => $p1['confidence'],
+        'evidence'   => $p1['evidence'],
     ]);
     exit;
 }

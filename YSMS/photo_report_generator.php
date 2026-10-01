@@ -87,7 +87,6 @@ include 'includes/header.php';
 .prg-ai-badge.ai-completed { background: #ecfdf3; color: #166534; border-color: #bbf0cd; }
 .prg-ai-badge.ai-failed { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
 .prg-ai-badge.ai-manual { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
-.prg-ai-badge.ai-review { background: #fffbeb; color: #92400e; border-color: #fde68a; }
 .prg-ai-btn {
     font-size: 11px; padding: 2px 9px; border-radius: 7px;
     border: 1px solid #a0c4d8; background: #fff; color: #0b1e46; font-weight: 600;
@@ -497,7 +496,6 @@ include 'includes/header.php';
                 <span id="prgAiBulkPct" style="min-width:34px;">0%</span>
                 <div class="prg-ai-bulk-counts">
                     <span>Completed: <b id="prgAiCountCompleted">0</b></span>
-                    <span>Review: <b id="prgAiCountReview">0</b></span>
                     <span>Processing: <b id="prgAiCountProcessing">0</b></span>
                     <span>Pending: <b id="prgAiCountPending">0</b></span>
                     <span>Failed: <b id="prgAiCountFailed">0</b></span>
@@ -1908,7 +1906,6 @@ function aiStatusLabel(status) {
   switch (status) {
     case 'generating': return 'Generating…';
     case 'completed': return 'AI description';
-    case 'review': return 'Review Required';
     case 'failed': return 'AI failed';
     case 'manual': return 'Manual';
     case 'pending': return 'Queued';
@@ -1923,7 +1920,6 @@ function aiBadgeHtml(status) {
     : '<i class="fa-solid ' + (
         status === 'generating' ? 'fa-spinner fa-spin' :
         status === 'completed' ? 'fa-wand-magic-sparkles' :
-        status === 'review' ? 'fa-magnifying-glass' :
         status === 'failed' ? 'fa-triangle-exclamation' :
         'fa-pen'
       ) + '"></i>';
@@ -1937,11 +1933,11 @@ function aiControlsHtml(p, idx) {
   if (!PRG_AI_ENABLED) return '';
   var status = p.descManual ? 'manual' : (p.aiStatus || '');
   var busy = status === 'generating';
-  var hasResult = status === 'completed' || status === 'review' || status === 'failed' || status === 'manual';
+  var hasResult = status === 'completed' || status === 'failed' || status === 'manual';
   var btnLabel = hasResult ? 'Regenerate' : 'Generate AI Description';
   var btnIcon = busy ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles';
-  var errHtml = ((status === 'failed' || status === 'review') && p.aiError)
-    ? '<div class="' + (status === 'review' ? 'text-warning-emphasis' : 'text-danger') + '" style="font-size:10.5px;width:100%;">' + esc(p.aiError) + '</div>'
+  var errHtml = (status === 'failed' && p.aiError)
+    ? '<div class="text-danger" style="font-size:10.5px;width:100%;">' + esc(p.aiError) + '</div>'
     : '';
   return (
     '<div class="prg-ai-row" id="aiRow_' + idx + '">' +
@@ -1978,18 +1974,17 @@ function updateAiCardUI(idx) {
 function updateAiBulkBar() {
   var barEl = document.getElementById('prgAiBulkBar');
   if (!barEl) return;
-  var counts = { pending: 0, generating: 0, completed: 0, review: 0, failed: 0 };
+  var counts = { pending: 0, generating: 0, completed: 0, failed: 0 };
   photos.forEach(function (p) {
     var s = p.aiStatus || '';
     if (counts.hasOwnProperty(s)) counts[s]++;
   });
-  var totalTracked = counts.pending + counts.generating + counts.completed + counts.review + counts.failed;
+  var totalTracked = counts.pending + counts.generating + counts.completed + counts.failed;
   var elC = document.getElementById('prgAiCountCompleted'); if (elC) elC.textContent = counts.completed;
-  var elR = document.getElementById('prgAiCountReview'); if (elR) elR.textContent = counts.review;
   var elP = document.getElementById('prgAiCountProcessing'); if (elP) elP.textContent = counts.generating;
   var elQ = document.getElementById('prgAiCountPending'); if (elQ) elQ.textContent = counts.pending;
   var elF = document.getElementById('prgAiCountFailed'); if (elF) elF.textContent = counts.failed;
-  var pct = totalTracked ? Math.round((counts.completed + counts.review + counts.failed) / totalTracked * 100) : 0;
+  var pct = totalTracked ? Math.round((counts.completed + counts.failed) / totalTracked * 100) : 0;
   var bar = document.getElementById('prgAiBulkProgressBar'); if (bar) bar.style.width = pct + '%';
   var pctEl = document.getElementById('prgAiBulkPct'); if (pctEl) pctEl.textContent = pct + '%';
   barEl.classList.toggle('show', totalTracked > 0);
@@ -2012,11 +2007,11 @@ async function generateAiDescriptionForIndex(idx, attempt) {
     var hash = quickHashArrayBuffer(src.ab);
 
     // Cost control: an identical image already classified in this draft (byte-
-    // for-byte, e.g. the exact same file uploaded twice) — reuse that result,
-    // review flag and all, instead of spending another Gemini call on it.
+    // for-byte, e.g. the exact same file uploaded twice) — reuse that result
+    // instead of spending another Gemini call on it.
     var dup = null;
     for (var di = 0; di < photos.length; di++) {
-      if (di !== idx && photos[di].aiHash === hash && (photos[di].aiStatus === 'completed' || photos[di].aiStatus === 'review') && photos[di].desc) {
+      if (di !== idx && photos[di].aiHash === hash && photos[di].aiStatus === 'completed' && photos[di].desc) {
         dup = photos[di];
         break;
       }
@@ -2026,9 +2021,9 @@ async function generateAiDescriptionForIndex(idx, attempt) {
       p.holdMain = dup.holdMain || '';
       p.holdSub = dup.holdSub || '';
       p.aiHash = hash;
-      p.aiStatus = dup.aiStatus;
+      p.aiStatus = 'completed';
       p.aiConfidence = dup.aiConfidence;
-      p.aiError = dup.aiError || '';
+      p.aiError = '';
       updateAiCardUI(idx);
       prgMarkDirty();
       return;
@@ -2058,26 +2053,25 @@ async function generateAiDescriptionForIndex(idx, attempt) {
     }
 
     var pick = (json.index && json.index >= 1 && json.index <= opts.length) ? opts[json.index - 1] : null;
-    var reviewRequired = !!json.review_required || !pick; // "Unable to Determine" is always a review item
-
-    if (pick) {
-      if (pick.main !== null) {
-        p.holdMain = pick.main;
-        p.holdSub = pick.sub || '';
-        p.desc = buildHoldAutoDesc(pick.main, pick.sub, p.category);
-      } else {
-        p.desc = pick.label;
-      }
+    if (!pick) {
+      // The server always commits to a pick on success; a missing/invalid
+      // index here means something is genuinely wrong, not a legitimate
+      // "no match" — surface it as a failure rather than guessing.
+      throw { message: 'AI returned an unexpected result for this photo. Please try again.', noRetry: true };
     }
-    // No pick -> leave holdMain/holdSub/desc untouched rather than guessing;
-    // the surveyor picks manually from the same dropdown everyone else uses.
+
+    if (pick.main !== null) {
+      p.holdMain = pick.main;
+      p.holdSub = pick.sub || '';
+      p.desc = buildHoldAutoDesc(pick.main, pick.sub, p.category);
+    } else {
+      p.desc = pick.label;
+    }
 
     p.aiHash = hash;
     p.aiConfidence = (typeof json.confidence === 'number') ? json.confidence : null;
-    p.aiStatus = reviewRequired ? 'review' : 'completed';
-    p.aiError = reviewRequired
-      ? (json.evidence || (pick ? 'Low-confidence match — please verify.' : 'AI could not confidently match this photo to any option — please select manually.'))
-      : '';
+    p.aiStatus = 'completed';
+    p.aiError = '';
     updateAiCardUI(idx);
     prgMarkDirty();
   } catch (err) {
@@ -2120,9 +2114,7 @@ function pumpAiQueue() {
 }
 
 /** Queue one or more photos for AI description. Skips anything manually
- *  edited, already completed, or already flagged for review (cost control —
- *  never silently re-spend a Gemini call on a photo that already has a
- *  result, reviewed or not; the surveyor can still hit Regenerate). */
+ *  edited or already completed (cost control — never regenerate silently). */
 function enqueueAiDescriptions(indices) {
   if (!PRG_AI_ENABLED) return;
   var added = false;
@@ -2130,7 +2122,7 @@ function enqueueAiDescriptions(indices) {
     var p = photos[idx];
     if (!p) return;
     if (p.descManual) return;
-    if (p.aiStatus === 'completed' || p.aiStatus === 'review' || p.aiStatus === 'pending' || p.aiStatus === 'generating') return;
+    if (p.aiStatus === 'completed' || p.aiStatus === 'pending' || p.aiStatus === 'generating') return;
     p.aiStatus = 'pending';
     updateAiCardUI(idx);
     _aiQueue.push(idx);
@@ -2146,7 +2138,7 @@ function generateAllAiDescriptions() {
   if (!PRG_AI_ENABLED) { toast('AI description is disabled.', true); return; }
   var idx = [];
   photos.forEach(function (p, i) {
-    if (p.descManual || p.aiStatus === 'completed' || p.aiStatus === 'review') return;
+    if (p.descManual || p.aiStatus === 'completed') return;
     idx.push(i);
   });
   if (!idx.length) { toast('Nothing to generate — every photo already has a description.'); return; }
