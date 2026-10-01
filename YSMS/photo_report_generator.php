@@ -1796,6 +1796,12 @@ var AI_IMAGE_MAX_DIM = 1280; // long edge, px — analysis copy only; never touc
 var _aiQueue = [];
 var _aiActive = 0;
 var _aiQueueRunning = false;
+/** Shared rate-limit cooldown (ms epoch) — when Gemini's free-tier quota is
+ *  hit, every in-flight photo discovers it independently, but a NOT-yet-
+ *  started photo would otherwise fire into the same exhausted quota right
+ *  away. Pausing new starts until this clears lets the quota window recover
+ *  before spending more of each photo's limited retry budget on it. */
+var _aiCooldownUntil = 0;
 
 /** Proportional resize (no crop) from the true original file — the report's
  *  own compressImage() center-crops to a fixed frame, which is right for the
@@ -2063,6 +2069,9 @@ async function generateAiDescriptionForIndex(idx, attempt) {
     var maxRetries = 2;
     if (!noRetry && attempt < maxRetries) {
       var delay = (err && err.retryAfter) ? (err.retryAfter * 1000) : (attempt === 0 ? 1000 : 3000);
+      if (err && err.retryAfter) {
+        _aiCooldownUntil = Math.max(_aiCooldownUntil, Date.now() + delay);
+      }
       updateAiCardUI(idx); // still 'generating' — keep the spinner visible through the backoff
       await new Promise(function (r) { setTimeout(r, delay); });
       return generateAiDescriptionForIndex(idx, attempt + 1);
@@ -2080,7 +2089,7 @@ function pumpAiQueue() {
   _aiQueueRunning = true;
   (async function () {
     while (_aiQueue.length || _aiActive > 0) {
-      while (_aiActive < PRG_AI_MAX_CONCURRENT && _aiQueue.length) {
+      while (_aiActive < PRG_AI_MAX_CONCURRENT && _aiQueue.length && Date.now() >= _aiCooldownUntil) {
         var idx = _aiQueue.shift();
         _aiActive++;
         (function (i) {
