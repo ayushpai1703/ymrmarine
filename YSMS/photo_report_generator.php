@@ -107,6 +107,13 @@ include 'includes/header.php';
     font-size: 10.5px; width: 100%; color: #9a3412; background: #fff7ed;
     border: 1px solid #fed7aa; border-radius: 6px; padding: 3px 8px; margin-top: 2px;
 }
+/* Section · Hold N · Subsection · Position · confidence — UI requirement:
+   surface the AI's detected classification next to the structure dropdown. */
+.prg-classify-info {
+    font-size: 10.5px; color: #475569; margin-top: 3px; padding-left: 1px;
+}
+.prg-classify-info.empty { display: none; }
+.prg-classify-info i { color: #94a3b8; margin-right: 3px; }
 .prg-ai-bulkbar {
     display: none; align-items: center; gap: 10px; flex-wrap: wrap;
     margin-top: 8px; padding: 8px 10px; border-radius: 10px;
@@ -870,7 +877,7 @@ function prgInferStructure(p) {
  *    Forward/Port/Starboard/Aft → Bulkheads Forward/Port/Starboard →
  *    Bulk Frames → Hoppers → Tank Top → Bilge Tanks Port/Starboard →
  *    Ladders Vertical/Australian/Inclination → Bulkheads Aft → Drain Channel)
- *  → Aft Cross Deck → Main Deck (from Aft) → Aft Main Deck Railing
+ *  → Main Deck (from Aft) → Aft Main Deck Railing → Aft Cross Deck
  *  → Mooring Station (Poop) → Aft Mooring Winches
  *  → Others (unclassified, always last)
  */
@@ -925,9 +932,9 @@ var PRG_MASTER_ORDER = (function () {
     r(cat, 'Drain Channel');
   }
 
-  r('Ship Side', 'Aft Cross Deck');
   r('Deck Side', 'Main Deck', 'From Aft Side');
   r('Deck Side', 'Aft Main Deck Railing');
+  r('Ship Side', 'Aft Cross Deck'); // symmetric with Forward Cross Deck, which likewise follows its Main Deck + Railing block
   r('Ship Side', 'Mooring Station', 'Poop Deck');
   r('Ship Side', 'Aft Mooring Winches', 'Port Side');
   r('Ship Side', 'Aft Mooring Winches', 'Starboard Side');
@@ -2155,6 +2162,8 @@ function updateAiCardUI(idx) {
     if (nestBtn) nestBtn.textContent = holdNestLabel(p);
     var descEl = document.getElementById('holdDesc_' + idx);
     if (descEl && document.activeElement !== descEl) descEl.value = p.desc || '';
+    var classifyInfoEl = document.getElementById('classifyInfo_' + idx);
+    if (classifyInfoEl) classifyInfoEl.outerHTML = aiClassificationInfoHtml(p, idx);
   } else {
     var othersInp = document.getElementById('othersDesc_' + idx);
     if (othersInp && document.activeElement !== othersInp) othersInp.value = p.desc || '';
@@ -2409,6 +2418,34 @@ function holdNestLabel(p) {
   return '— Select structure —';
 }
 
+/** ADD-ON: compact "Section · Hold N · Subsection · Position · NN% confidence"
+ *  caption, per the UI requirement to surface the AI's detected
+ *  classification next to the (always-editable) structure dropdown above.
+ *  Shown only once there's something to report; blank for a not-yet-
+ *  classified photo rather than cluttering it with an empty line. */
+function aiClassificationInfoHtml(p, idx) {
+  var bits = [];
+  if (p.holdMain || typeof p.aiConfidence === 'number') {
+    if (isHoldCategory(p.category)) {
+      bits.push('Holds');
+      var hm = (String(p.category).match(/\d+/) || [])[0];
+      if (hm) bits.push('Hold ' + hm);
+    } else if (isShipSideCategory(p.category)) {
+      bits.push('Ship Side');
+    } else if (isDeckSideCategory(p.category)) {
+      bits.push('Deck Side');
+    }
+    if (p.holdMain) bits.push(p.holdMain);
+    if (p.holdSub) bits.push(p.holdSub);
+    if (typeof p.aiConfidence === 'number') bits.push(p.aiConfidence + '% confidence');
+  }
+  // Always render the element (even empty) so updateAiCardUI can refresh it
+  // in place by id; CSS hides it until there's something to show.
+  return '<div class="prg-classify-info' + (bits.length ? '' : ' empty') + '" id="classifyInfo_' + idx + '" title="AI-detected classification — use the dropdown above to correct it">' +
+    (bits.length ? ('<i class="fa-solid fa-diagram-project"></i> ' + esc(bits.join(' · '))) : '') +
+  '</div>';
+}
+
 function holdDescControlsHtml(p, idx) {
   var cat = p.category || '';
   var cfg = structCfg(cat);
@@ -2501,7 +2538,8 @@ function holdDescControlsHtml(p, idx) {
       '</div>' +
     '</div>' +
     '<input type="text" class="form-control form-control-sm mt-1" id="holdDesc_' + idx + '" value="' + esc(p.desc || '') + '" ' +
-      'placeholder="Description (auto or type)" oninput="onHoldDescInput(' + idx + ', this.value)" aria-label="Description"/>'
+      'placeholder="Description (auto or type)" oninput="onHoldDescInput(' + idx + ', this.value)" aria-label="Description"/>' +
+    aiClassificationInfoHtml(p, idx)
   );
 }
 
