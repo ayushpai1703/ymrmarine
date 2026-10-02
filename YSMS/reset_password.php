@@ -73,16 +73,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     * { box-sizing: border-box; }
     body {
         font-family:'Lexend',sans-serif; margin:0; min-height:100vh;
-        background: radial-gradient(circle at top left, #12275c 0%, #06163a 55%, #030b21 100%);
+        background: radial-gradient(circle at top left, #1e4fa8 0%, #123879 55%, #081c48 100%);
         display:flex; align-items:center; justify-content:center; padding:20px;
         position: relative; overflow-x: hidden;
     }
-    .bg-glow { position: fixed; border-radius: 50%; filter: blur(90px); opacity: .3; z-index: 0; pointer-events: none; }
-    .bg-glow.one { width: 300px; height: 300px; background: #3b32b3; top: -60px; left: -60px; }
+    .bg-glow { position: fixed; border-radius: 50%; filter: blur(90px); opacity: .32; z-index: 0; pointer-events: none; }
+    .bg-glow.one { width: 300px; height: 300px; background: #3b5bdb; top: -60px; left: -60px; }
     .bg-glow.two { width: 260px; height: 260px; background: #0ea5e9; bottom: -40px; right: -40px; }
     .auth-shell { position: relative; z-index: 1; width: 100%; max-width: 420px; }
     .brand-row { display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:20px; animation: fadeDown .6s ease; }
-    .brand-row .brand-mark { width:44px; height:44px; border-radius:14px; background:linear-gradient(135deg,#4338ca,#0ea5e9); display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px; box-shadow:0 10px 25px rgba(59,50,179,.45); flex-shrink:0; }
+    .brand-row .brand-mark { width:44px; height:44px; border-radius:14px; background:rgba(255,255,255,.92); display:flex; align-items:center; justify-content:center; box-shadow:0 10px 25px rgba(5,18,48,.35); flex-shrink:0; padding:6px; }
+    .brand-mark-img { width:100%; height:100%; object-fit:contain; display:block; }
     .brand-row .brand-text { color:#fff; line-height:1.2; }
     .brand-row .brand-text b { display:block; font-size:14.5px; font-weight:700; letter-spacing:.3px; }
     .brand-row .brand-text span { display:block; font-size:10px; font-weight:500; color:rgba(255,255,255,.6); letter-spacing:.5px; text-transform:uppercase; }
@@ -130,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="bg-glow two"></div>
     <div class="auth-shell">
         <div class="brand-row">
-            <div class="brand-mark"><i class="fa-solid fa-anchor"></i></div>
+            <div class="brand-mark"><img src="assets/images/logo.png" alt="YMR Survey logo" class="brand-mark-img"></div>
             <div class="brand-text"><b>YMR SURVEY</b><span>Management System</span></div>
         </div>
         <div class="auth-card">

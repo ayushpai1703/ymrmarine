@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         html { overflow-x: hidden; }
         body {
             font-family: 'Lexend', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #06163a;
+            background: #0e3b82;
             margin: 0; padding: 0;
             min-height: 100vh; min-height: 100dvh;
             overflow-x: hidden;
@@ -91,20 +91,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             position: relative;
             flex: 1 1 52%;
             overflow: hidden;
-            background: #06163a;
+            background: #0e3b82;
         }
         .showcase-panel .showcase-bg {
             position: absolute; inset: 0;
-            background: url('https://images.unsplash.com/photo-1566288623394-377af472d81b?auto=format&fit=crop&w=1400&q=80') center/cover no-repeat;
-            transform: scale(1.04);
-            animation: slowZoom 22s ease-in-out infinite alternate;
-        }
-        @keyframes slowZoom { from { transform: scale(1.04); } to { transform: scale(1.12); } }
-        .showcase-panel .showcase-overlay {
-            position: absolute; inset: 0;
             background:
-                linear-gradient(180deg, rgba(6,22,58,.55) 0%, rgba(6,22,58,.4) 40%, rgba(5,13,34,.92) 100%),
-                linear-gradient(120deg, rgba(59,50,179,.5) 0%, rgba(6,22,58,0) 55%);
+                radial-gradient(circle at 80% 8%, rgba(125,211,252,.22) 0%, rgba(125,211,252,0) 45%),
+                linear-gradient(160deg, #123879 0%, #1e5fb0 48%, #0ea5e9 100%);
+        }
+        .showcase-panel .showcase-watermark {
+            position: absolute; top: -70px; right: -90px; width: 480px; height: 480px;
+            background: url('assets/images/logo.png') center/contain no-repeat;
+            opacity: .1; transform: rotate(-6deg); pointer-events: none;
+            filter: brightness(0) invert(1);
+        }
+        .showcase-panel .showcase-scene { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; line-height: 0; z-index: 1; }
+        .showcase-panel .showcase-scene svg { width: 100%; height: auto; display: block; }
+        .showcase-panel .showcase-overlay {
+            position: absolute; inset: 0; z-index: 1;
+            background:
+                linear-gradient(180deg, rgba(7,26,66,.18) 0%, rgba(7,26,66,.1) 40%, rgba(5,18,48,.82) 100%);
         }
         .showcase-content {
             position: relative; z-index: 2;
@@ -113,13 +119,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             color: #fff;
         }
         .showcase-brand { display: flex; align-items: center; gap: 14px; }
-        .showcase-brand .brand-mark {
+        .showcase-brand .brand-mark, .brand-row .brand-mark {
             width: 50px; height: 50px; border-radius: 15px;
-            background: rgba(255,255,255,.12); backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,.25);
-            display: flex; align-items: center; justify-content: center; font-size: 21px;
-            flex-shrink: 0;
+            background: rgba(255,255,255,.92); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,.4);
+            box-shadow: 0 10px 25px rgba(5,18,48,.35);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; padding: 7px;
         }
+        .brand-mark-img { width: 100%; height: 100%; object-fit: contain; display: block; }
         .showcase-brand b { display: block; font-size: 17px; font-weight: 700; letter-spacing: .3px; }
         .showcase-brand span { display: block; font-size: 11px; font-weight: 500; color: rgba(255,255,255,.65); letter-spacing: .5px; text-transform: uppercase; }
 
@@ -141,12 +149,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .form-panel {
             flex: 1 1 48%;
             display: flex; align-items: center; justify-content: center;
-            background: radial-gradient(circle at 85% 15%, #12275c 0%, #06163a 50%, #030b21 100%);
+            background: radial-gradient(circle at 85% 15%, #1e4fa8 0%, #123879 50%, #081c48 100%);
             position: relative;
             padding: 32px 20px;
         }
-        .bg-glow { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .3; z-index: 0; pointer-events: none; }
-        .bg-glow.one { width: 320px; height: 320px; background: #3b32b3; top: -60px; right: -60px; }
+        .bg-glow { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .32; z-index: 0; pointer-events: none; }
+        .bg-glow.one { width: 320px; height: 320px; background: #3b5bdb; top: -60px; right: -60px; }
         .bg-glow.two { width: 260px; height: 260px; background: #0ea5e9; bottom: -40px; left: -40px; }
 
         .auth-shell {
@@ -159,13 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             align-items: center; justify-content: center; gap: 12px;
             margin-bottom: 24px; animation: fadeDown .6s ease;
         }
-        .brand-row .brand-mark {
-            width: 48px; height: 48px; border-radius: 15px;
-            background: linear-gradient(135deg, #4338ca, #0ea5e9);
-            display: flex; align-items: center; justify-content: center;
-            color: #fff; font-size: 20px; box-shadow: 0 10px 25px rgba(59,50,179,.45);
-            flex-shrink: 0;
-        }
+        .brand-row .brand-mark { width: 48px; height: 48px; padding: 6px; }
         .brand-row .brand-text { color: #fff; line-height: 1.2; }
         .brand-row .brand-text b { display: block; font-size: 16px; font-weight: 700; letter-spacing: .3px; }
         .brand-row .brand-text span { display: block; font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,.6); letter-spacing: .5px; text-transform: uppercase; }
@@ -260,10 +262,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <!-- Left showcase panel: desktop only -->
         <div class="showcase-panel">
             <div class="showcase-bg"></div>
+            <div class="showcase-watermark"></div>
+            <div class="showcase-scene">
+                <svg viewBox="0 0 1200 420" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M0,230 C160,195 330,255 560,225 C790,195 980,250 1200,215 L1200,420 L0,420 Z" fill="rgba(255,255,255,.07)"/>
+                    <g fill="rgba(255,255,255,.2)">
+                        <rect x="640" y="150" width="26" height="30" rx="2"/>
+                        <rect x="670" y="140" width="26" height="40" rx="2"/>
+                        <rect x="700" y="155" width="26" height="25" rx="2"/>
+                        <path d="M605,180 L760,180 L748,205 L617,205 Z"/>
+                        <rect x="726" y="118" width="18" height="34" rx="2"/>
+                        <rect x="731" y="100" width="3" height="20"/>
+                        <path d="M560,205 L800,205 L808,215 L552,215 Z"/>
+                    </g>
+                    <path d="M0,265 C200,235 360,285 600,260 C840,235 1020,280 1200,250 L1200,420 L0,420 Z" fill="rgba(255,255,255,.1)"/>
+                    <path d="M0,305 C220,280 400,320 620,300 C860,278 1030,312 1200,292 L1200,420 L0,420 Z" fill="rgba(255,255,255,.14)"/>
+                </svg>
+            </div>
             <div class="showcase-overlay"></div>
             <div class="showcase-content">
                 <div class="showcase-brand">
-                    <div class="brand-mark"><i class="fa-solid fa-anchor"></i></div>
+                    <div class="brand-mark"><img src="assets/images/logo.png" alt="YMR Survey logo" class="brand-mark-img"></div>
                     <div>
                         <b>YMR SURVEY</b>
                         <span>Management System</span>
@@ -291,7 +310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <div class="auth-shell">
                 <div class="brand-row">
-                    <div class="brand-mark"><i class="fa-solid fa-anchor"></i></div>
+                    <div class="brand-mark"><img src="assets/images/logo.png" alt="YMR Survey logo" class="brand-mark-img"></div>
                     <div class="brand-text">
                         <b>YMR SURVEY</b>
                         <span>Management System</span>
