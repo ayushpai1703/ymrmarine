@@ -57,6 +57,10 @@ $survey_types_filter = [];
 $survey_places_filter = [];
 $survey_clients_filter = [];
 $survey_surveyors_filter = [];
+// Month filter ('YYYY-MM' => ['label' => 'October 2026', 'count' => 12]) —
+// lets every role see how many vessels were completed in a given month,
+// right in the dropdown label.
+$survey_months_filter = [];
 foreach ($db->query("SELECT type_name FROM survey_types ORDER BY type_name ASC")->fetchAll() as $st_row) {
     if (!empty($st_row['type_name'])) $survey_types_filter[$st_row['type_name']] = $st_row['type_name'];
 }
@@ -65,7 +69,19 @@ foreach ($surveys as $row) {
     if (!empty($row['company_name'])) $survey_clients_filter[$row['company_name']] = $row['company_name'];
     $rowSurveyorNames = getCombinedSurveyorNames($db, $row['id'], $row['surveyor_name'] ?? '');
     if (!empty($rowSurveyorNames)) $survey_surveyors_filter[$rowSurveyorNames] = $rowSurveyorNames;
+
+    $row_date_src = $row['report_uploaded_date'] ?? $row['survey_completed_date'] ?? $row['assign_date'] ?? '';
+    $row_ts = (!empty($row_date_src) && $row_date_src !== '0000-00-00' && $row_date_src !== '0000-00-00 00:00:00')
+        ? strtotime($row_date_src) : false;
+    if ($row_ts) {
+        $month_key = date('Y-m', $row_ts);
+        if (!isset($survey_months_filter[$month_key])) {
+            $survey_months_filter[$month_key] = ['label' => date('F Y', $row_ts), 'count' => 0];
+        }
+        $survey_months_filter[$month_key]['count']++;
+    }
 }
+krsort($survey_months_filter);
 
 /* Desktop: pagination */
 $perPage = 25;
@@ -297,6 +313,7 @@ include 'includes/header.php';
         <?php if ($is_full_access): ?>
         <select data-filter-surveyor><option value="">All surveyors</option><?php foreach ($survey_surveyors_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
         <?php endif; ?>
+        <select data-filter-month><option value="">All months</option><?php foreach ($survey_months_filter as $m_key => $m_info): ?><option value="<?= sanitize($m_key) ?>"><?= sanitize($m_info['label']) ?> (<?= (int)$m_info['count'] ?>)</option><?php endforeach; ?></select>
         <button type="button" class="clear-filters-btn" data-clear-filters><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
     </div>
     <div class="px-3 mb-3">
@@ -307,6 +324,9 @@ include 'includes/header.php';
     <div class="vessel-list-container" data-list-container>
         <?php if (count($surveys) > 0): foreach ($surveys as $survey):
             $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
+            $card_date_src = $survey['report_uploaded_date'] ?? $survey['survey_completed_date'] ?? $survey['assign_date'] ?? '';
+            $card_ts = (!empty($card_date_src) && $card_date_src !== '0000-00-00' && $card_date_src !== '0000-00-00 00:00:00')
+                ? strtotime($card_date_src) : false;
         ?>
         <div class="vessel-card completed-list-card" onclick="location.href='completed_detail.php?id=<?= (int)$survey['id'] ?>'"
              style="background:white;border-radius:16px;padding:15px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;border-left:4px solid #10b981;cursor:pointer;"
@@ -317,6 +337,7 @@ include 'includes/header.php';
              data-client="<?= sanitize($survey['company_name'] ?? '') ?>"
              data-surveyor="<?= sanitize($surveyorNames) ?>"
              data-status="completed"
+             data-month="<?= $card_ts ? sanitize(date('Y-m', $card_ts)) : '' ?>"
              data-date="<?= strtotime($survey['report_uploaded_date'] ?? '1970-01-01') ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$survey['vessel_name'] ?? '', $survey['company_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>">
             <div style="display:flex;align-items:center;gap:12px;">
@@ -385,6 +406,12 @@ include 'includes/header.php';
                             <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
                         <?php endforeach; ?>
                     </select>
+                    <select data-desk-month>
+                        <option value="">All months</option>
+                        <?php foreach ($survey_months_filter as $m_key => $m_info): ?>
+                            <option value="<?= sanitize($m_key) ?>"><?= sanitize($m_info['label']) ?> (<?= (int)$m_info['count'] ?>)</option>
+                        <?php endforeach; ?>
+                    </select>
                     <?php if ($is_full_access): ?>
                     <select data-desk-surveyor>
                         <option value="">All surveyors</option>
@@ -436,6 +463,7 @@ include 'includes/header.php';
                                 data-place="<?= sanitize(strtolower($survey['port_name'] ?? '')) ?>"
                                 data-client="<?= sanitize(strtolower($survey['company_name'] ?? '')) ?>"
                                 data-surveyor="<?= sanitize(strtolower($surveyorNames)) ?>"
+                                data-month="<?= $ts ? sanitize(date('Y-m', $ts)) : '' ?>"
                                 data-date="<?= (int)$ts ?>">
                                 <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
                                 <td>
@@ -495,6 +523,7 @@ include 'includes/header.php';
   var placeSel = root.querySelector('[data-desk-place]');
   var clientSel = root.querySelector('[data-desk-client]');
   var surveyorSel = root.querySelector('[data-desk-surveyor]');
+  var monthSel = root.querySelector('[data-desk-month]');
   var clearBtn = root.querySelector('[data-desk-clear]');
   var tbody = root.querySelector('.vd-table tbody');
   var meta = root.querySelector('[data-desk-meta]');
@@ -514,6 +543,7 @@ include 'includes/header.php';
     var place = val(placeSel);
     var client = val(clientSel);
     var surveyor = val(surveyorSel);
+    var month = val(monthSel);
     var sort = sortSel ? sortSel.value : 'newest';
 
     var rows = allRows.filter(function (row) {
@@ -523,6 +553,7 @@ include 'includes/header.php';
       if (place && (row.getAttribute('data-place') || '').toLowerCase() !== place) return false;
       if (client && (row.getAttribute('data-client') || '').toLowerCase() !== client) return false;
       if (surveyor && (row.getAttribute('data-surveyor') || '').toLowerCase() !== surveyor) return false;
+      if (month && (row.getAttribute('data-month') || '').toLowerCase() !== month) return false;
       return true;
     });
 
@@ -598,13 +629,13 @@ include 'includes/header.php';
   function onChange() { page = 1; render(); }
 
   if (search) search.addEventListener('input', onChange);
-  [sortSel, typeSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
+  [sortSel, typeSel, placeSel, clientSel, surveyorSel, monthSel].forEach(function (el) {
     if (el) el.addEventListener('change', onChange);
   });
   if (clearBtn) clearBtn.addEventListener('click', function (ev) {
     ev.preventDefault();
     if (search) search.value = '';
-    [sortSel, typeSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
+    [sortSel, typeSel, placeSel, clientSel, surveyorSel, monthSel].forEach(function (el) {
       if (!el) return;
       if (el === sortSel) el.value = 'newest';
       else el.value = '';

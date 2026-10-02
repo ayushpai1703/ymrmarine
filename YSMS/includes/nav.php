@@ -122,13 +122,14 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
     </a>
 
         <?php elseif ($user_role === 'Client'): ?>
-        <!-- Desktop sidebar + mobile drawer: Client-only Documents link — all
-             of this client's uploaded report files in one place (see
-             documents.php, scoped to their own clients.id). -->
+        <!-- Desktop sidebar + mobile drawer: Client-only section. Request
+             Survey mirrors the mobile FAB's "Request Survey" option so it's
+             reachable from the desktop sidebar too (desktop hides the FAB
+             trigger entirely). -->
         <div class="desktop-sidebar-section-label desktop-only-nav drawer-reveal">Client</div>
-        <a href="documents.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'documents.php') ? 'active' : '' ?>" data-testid="sidebar-documents-link">
-            <i class="fa-solid fa-folder-open"></i>
-            <span>Documents</span>
+        <a href="assign_vessel.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'assign_vessel.php') ? 'active' : '' ?>" data-testid="sidebar-request-survey-link">
+            <i class="fa-solid fa-ship"></i>
+            <span>Request Survey</span>
         </a>
         <?php elseif ($user_role === 'Super Admin'): ?>
         <!-- Desktop only: Super Admin Quick Actions — Add Client + Add Admin only
