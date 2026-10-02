@@ -37,12 +37,26 @@
  *   { "success": true,
  *     "primary_object": "Bulkhead", "direction": "Forward" | "",
  *     "location_context": "Cargo Hold", "photo_quality": "Good" | "Fair" | "Poor",
- *     "confidence": 90, "description": "View of Forward Bulkhead, showing ..." }
+ *     "confidence": 90, "description": "View of Forward Bulkhead, showing ...",
+ *     "main_category": "Bulkheads" | null, "subcategory": "Forward" | null,
+ *     "sub_subcategory": null }
  *   { "success": false, "message": "..." }
  * The surveyor can still correct the side with the one-click Forward/Aft/
  * Port Side/Starboard Side quick-select, and correct the object via the
  * report's structure dropdown (itself a separate, fully manual pick that
  * never calls this endpoint) — see photo_report_generator.php.
+ *
+ * main_category/subcategory/sub_subcategory — when the caller's
+ * context.allowed_categories carries this photo's existing dropdown
+ * hierarchy ({"main": [...], "sub": {...}} straight from the report's own
+ * structCfg()) — are Gemini's best-guess pick from THAT exact hierarchy,
+ * copied character-for-character, never a new/renamed/paraphrased value.
+ * gemini_validate_hierarchy() below re-checks every one of these fields
+ * against the same allowed_categories before they're ever returned to the
+ * client, and nulls out (never substitutes or invents) anything that
+ * isn't a real, existing option at the right place in the hierarchy. When
+ * no allowed_categories was sent (e.g. "Others" category), all three
+ * fields are simply always null.
  */
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -123,6 +137,28 @@ if (!is_array($data)) {
     $surveyId = isset($data['survey_id']) ? (int) $data['survey_id'] : 0;
     $context = isset($data['context']) && is_array($data['context']) ? $data['context'] : [];
     $options = isset($data['options']) && is_array($data['options']) ? $data['options'] : [];
+}
+
+// The caller's own existing dropdown hierarchy for this photo's category
+// (straight from photo_report_generator.php's structCfg() — "main": a flat
+// list of existing main options, "sub": each main's existing sub-value(s),
+// either a flat array or a 3-level {mid: [leaf, ...]} map). This — and
+// ONLY this — is the allowed vocabulary for main_category/subcategory/
+// sub_subcategory below; nothing outside it is ever accepted.
+$allowedMainList = [];
+$allowedSubMap = [];
+if (isset($context['allowed_categories']) && is_array($context['allowed_categories'])) {
+    $ac = $context['allowed_categories'];
+    if (isset($ac['main']) && is_array($ac['main'])) {
+        foreach ($ac['main'] as $m) {
+            if (is_string($m) && trim($m) !== '') {
+                $allowedMainList[] = $m;
+            }
+        }
+    }
+    if (isset($ac['sub']) && is_array($ac['sub'])) {
+        $allowedSubMap = $ac['sub'];
+    }
 }
 
 // Authorization: a Surveyor may only describe photos for a survey they're
@@ -427,6 +463,74 @@ Rules:
     exit;
 }
 
+/** Renders $allowedMainList/$allowedSubMap (this photo's own existing
+ *  dropdown hierarchy) as an indented bullet list for the prompt — the
+ *  ONLY vocabulary main_category/subcategory/sub_subcategory may be
+ *  picked from. Handles a main with no sub-list, a flat sub-list, and a
+ *  3-level nested {mid: [leaf, ...]} map (e.g. Hull -> Port Side -> At Bow
+ *  Section) exactly as structCfg() on the client defines them. */
+function gemini_render_hierarchy_text($mainList, $subMap)
+{
+    $lines = [];
+    foreach ($mainList as $main) {
+        $lines[] = '- ' . $main;
+        $subs = isset($subMap[$main]) ? $subMap[$main] : [];
+        if (!is_array($subs) || !$subs) {
+            continue;
+        }
+        $isNested = array_keys($subs) !== range(0, count($subs) - 1);
+        if ($isNested) {
+            foreach ($subs as $mid => $leaves) {
+                $lines[] = '  - ' . $mid;
+                if (is_array($leaves)) {
+                    foreach ($leaves as $leaf) {
+                        $lines[] = '    - ' . $leaf;
+                    }
+                }
+            }
+        } else {
+            foreach ($subs as $sub) {
+                $lines[] = '  - ' . $sub;
+            }
+        }
+    }
+    return implode("\n", $lines);
+}
+
+/** Checks (mainCategory, subcategory, subSubcategory) against the exact
+ *  allowed hierarchy and returns the same 3 values with anything that
+ *  isn't a real, existing option at the right place replaced with null —
+ *  never substituted, renamed, or guessed at. This is the "Critical
+ *  validation" step: it runs server-side, before the AI's pick is ever
+ *  sent back to the client, so an invented/renamed category can never
+ *  reach the browser (the client independently re-checks again too, via
+ *  prgApplyAiHierarchyPick, before actually saving it onto a photo). */
+function gemini_validate_hierarchy($mainCategory, $subcategory, $subSubcategory, $allowedMainList, $allowedSubMap)
+{
+    if ($mainCategory === '' || !in_array($mainCategory, $allowedMainList, true)) {
+        return [null, null, null];
+    }
+    $subs = isset($allowedSubMap[$mainCategory]) ? $allowedSubMap[$mainCategory] : [];
+    if (!is_array($subs) || !$subs) {
+        return [$mainCategory, null, null];
+    }
+    $isNested = array_keys($subs) !== range(0, count($subs) - 1);
+    if ($isNested) {
+        if ($subcategory === '' || !array_key_exists($subcategory, $subs)) {
+            return [$mainCategory, null, null];
+        }
+        $leaves = $subs[$subcategory];
+        if ($subSubcategory !== '' && is_array($leaves) && in_array($subSubcategory, $leaves, true)) {
+            return [$mainCategory, $subcategory, $subSubcategory];
+        }
+        return [$mainCategory, $subcategory, null];
+    }
+    if ($subcategory === '' || !in_array($subcategory, $subs, true)) {
+        return [$mainCategory, null, null];
+    }
+    return [$mainCategory, $subcategory, null];
+}
+
 // Free-text / structured mode — ONE call returns primary_object (the actual
 // physical component), direction, location_context (kept strictly separate
 // from primary_object so the model can never substitute one for the other —
@@ -436,12 +540,19 @@ $describeDomainGuidance = 'CRITICAL PRINCIPLE — object vs. location:
 Identify the actual physical object that is the primary subject of the photograph. Do not confuse the surrounding location or vessel area with the object being photographed. A photograph taken inside a Cargo Hold does not mean the subject is "Cargo Hold". If the photograph primarily shows a Bulkhead, the primary object is Bulkhead. If it primarily shows a Bulk Frame, the primary object is Bulk Frame. If it primarily shows a Ladder, the primary object is Ladder. If it primarily shows Coaming, the primary object is Coaming. If it primarily shows a Drain Channel, the primary object is Drain Channel. Determine the primary subject using visual dominance, framing, area occupied, camera focus, and photographic intent. Only use the general location/context (Cargo Hold, Tank, Engine Room, Deck, Accommodation, etc.) as supporting metadata in "location_context" — NEVER as "primary_object".
 ';
 
+$hasHierarchy = !empty($allowedMainList);
+$hierarchyBlock = $hasHierarchy
+    ? ("\nAllowed classification hierarchy for this photo's category — main_category, subcategory and sub_subcategory below MUST be chosen ONLY from the exact values in this list, copied character-for-character (same spelling, spacing and capitalization). Do NOT invent, rename, abbreviate, shorten, paraphrase, or create any new value under any circumstance. If nothing in the list is a confident match, return null for that field instead of guessing:\n"
+        . gemini_render_hierarchy_text($allowedMainList, $allowedSubMap) . "\n")
+    : "\nNo classification hierarchy was provided for this photo — always return null for main_category, subcategory, and sub_subcategory.\n";
+
 $prompt = $contextPrefix . 'You are a professional Marine Cargo, Hull, and Bunker Surveyor with over 20 years of experience.
 Analyze ONLY what is clearly visible in the uploaded image.
 
 ' . $describeDomainGuidance . '
+' . $hierarchyBlock . '
 Your task is to return ONE JSON object describing the photograph:
-{"primary_object": "...", "direction": "...", "location_context": "...", "photo_quality": "...", "confidence": 0, "description": "..."}
+{"primary_object": "...", "direction": "...", "location_context": "...", "photo_quality": "...", "confidence": 0, "description": "...", "main_category": "...", "subcategory": "...", "sub_subcategory": "..."}
 
 Field rules:
 1. primary_object: the specific physical component actually shown (e.g. Bulkhead, Bulk Frame, Hopper, Tank Top, Coaming, Hatch Cover, Side Shell, Pipe, Ladder, Manhole, Bilge Well, Drain Channel, Handrail, Door, Hatch, etc.) — NEVER a general location such as Cargo Hold, Tank, Engine Room, Deck, or Accommodation. Do not hallucinate an object that is not clearly visible.
@@ -450,18 +561,21 @@ Field rules:
 4. photo_quality: "Good", "Fair", or "Poor" based on sharpness, focus, exposure, blur, obstruction, and whether the primary object is clearly visible. Use "Poor" only for genuinely unusable photos (severe blur, extreme darkness/brightness, subject not identifiable) — most normal survey photos are "Good".
 5. confidence: integer 0-100 reflecting confidence in the primary_object identification.
 6. description: one complete, professional, concise sentence. Mention only visible conditions. If damage is visible, mention the damage type such as: Corrosion, Surface Rust, Heavy Rust Scale, Coating Breakdown, Coating Peeling, Crack, Dent, Deformation, Pitting, Indentation, Buckling, Cargo Residue, Water Stain, Temporary Repair. If no damage is visible, write "No visible damage observed." Never guess information that is not clearly visible.
+7. main_category: if a classification hierarchy was provided above, the single EXACT top-level value from that list matching what is shown, copied character-for-character — otherwise null. Never a value that is not in the provided list.
+8. subcategory: the EXACT value from main_category\'s own sub-list above, copied character-for-character, or null if none applies, none was confidently visible, or no hierarchy was provided.
+9. sub_subcategory: only when the hierarchy has a further level nested under the chosen subcategory — the EXACT matching value, copied character-for-character — otherwise null.
 
 Description format (strict):
 If direction is non-empty: "View of [Direction] [Primary Object], [Visible Condition]."
 If direction is empty: "View of [Primary Object], [Visible Condition]."
 
-Examples (each a complete JSON object):
-{"primary_object":"Bulkhead","direction":"Forward","location_context":"Cargo Hold","photo_quality":"Good","confidence":90,"description":"View of Forward Bulkhead, showing moderate surface corrosion."}
-{"primary_object":"Bulkhead","direction":"","location_context":"Cargo Hold","photo_quality":"Good","confidence":75,"description":"View of Bulkhead, showing minor surface rust."}
-{"primary_object":"Bulk Frame","direction":"Port Side","location_context":"Cargo Hold","photo_quality":"Good","confidence":85,"description":"View of Port Side Bulk Frame, showing heavy rust scale and coating deterioration."}
-{"primary_object":"Ladder","direction":"","location_context":"Cargo Hold","photo_quality":"Fair","confidence":70,"description":"View of Ladder, showing clean condition with no visible damage observed."}
-{"primary_object":"Coaming","direction":"Aft","location_context":"Cargo Hold","photo_quality":"Good","confidence":88,"description":"View of Aft Coaming, showing minor paint peeling."}
-{"primary_object":"Drain Channel","direction":"","location_context":"Cargo Hold","photo_quality":"Good","confidence":80,"description":"View of Drain Channel, showing cargo residue accumulation."}
+Examples (each a complete JSON object — main_category/subcategory/sub_subcategory values shown here are illustrative only; always pick from THIS photo\'s own hierarchy list above, never these literal strings):
+{"primary_object":"Bulkhead","direction":"Forward","location_context":"Cargo Hold","photo_quality":"Good","confidence":90,"description":"View of Forward Bulkhead, showing moderate surface corrosion.","main_category":"Bulkheads","subcategory":"Forward","sub_subcategory":null}
+{"primary_object":"Bulkhead","direction":"","location_context":"Cargo Hold","photo_quality":"Good","confidence":75,"description":"View of Bulkhead, showing minor surface rust.","main_category":"Bulkheads","subcategory":null,"sub_subcategory":null}
+{"primary_object":"Bulk Frame","direction":"Port Side","location_context":"Cargo Hold","photo_quality":"Good","confidence":85,"description":"View of Port Side Bulk Frame, showing heavy rust scale and coating deterioration.","main_category":"Bulk Frames","subcategory":"Port Side","sub_subcategory":null}
+{"primary_object":"Ladder","direction":"","location_context":"Cargo Hold","photo_quality":"Fair","confidence":70,"description":"View of Ladder, showing clean condition with no visible damage observed.","main_category":"Ladders","subcategory":"Vertical","sub_subcategory":null}
+{"primary_object":"Coaming","direction":"Aft","location_context":"Cargo Hold","photo_quality":"Good","confidence":88,"description":"View of Aft Coaming, showing minor paint peeling.","main_category":"Coamings","subcategory":"Aft","sub_subcategory":null}
+{"primary_object":"Drain Channel","direction":"","location_context":"Cargo Hold","photo_quality":"Good","confidence":80,"description":"View of Drain Channel, showing cargo residue accumulation.","main_category":"Drain Channel","subcategory":null,"sub_subcategory":null}
 
 Do not include introductions, explanations, reasoning steps, markdown, bullets, or any text outside the single JSON object. Respond with ONLY that one JSON object and nothing else.';
 
@@ -470,8 +584,13 @@ Do not include introductions, explanations, reasoning steps, markdown, bullets, 
  *  model sometimes wraps JSON in despite instructions not to); falls back
  *  to field-by-field regex extraction — same robustness pattern as
  *  gemini_parse_classification() above — for a reply that isn't clean JSON.
- *  'parsed_ok' is false only when nothing usable came back at all. */
-function gemini_parse_describe($raw)
+ *  'parsed_ok' is false only when nothing usable came back at all.
+ *  $allowedMainList/$allowedSubMap are this photo's own existing dropdown
+ *  hierarchy — main_category/subcategory/sub_subcategory are run through
+ *  gemini_validate_hierarchy() against them before being returned, so
+ *  anything Gemini invented, renamed, or got wrong is nulled out here,
+ *  before this function's caller ever sees it. */
+function gemini_parse_describe($raw, $allowedMainList = [], $allowedSubMap = [])
 {
     $primaryObject = '';
     $direction = '';
@@ -479,6 +598,9 @@ function gemini_parse_describe($raw)
     $photoQuality = '';
     $confidence = null;
     $description = '';
+    $mainCategory = '';
+    $subcategory = '';
+    $subSubcategory = '';
 
     $cleaned = trim($raw);
     $cleaned = preg_replace('/^```(?:json)?\s*/i', '', $cleaned);
@@ -492,6 +614,9 @@ function gemini_parse_describe($raw)
         $photoQuality    = isset($decoded['photo_quality']) ? trim((string) $decoded['photo_quality']) : '';
         $confidence      = (isset($decoded['confidence']) && is_numeric($decoded['confidence'])) ? max(0, min(100, (int) $decoded['confidence'])) : null;
         $description     = isset($decoded['description']) ? trim((string) $decoded['description']) : '';
+        $mainCategory    = (isset($decoded['main_category']) && is_string($decoded['main_category'])) ? trim($decoded['main_category']) : '';
+        $subcategory     = (isset($decoded['subcategory']) && is_string($decoded['subcategory'])) ? trim($decoded['subcategory']) : '';
+        $subSubcategory  = (isset($decoded['sub_subcategory']) && is_string($decoded['sub_subcategory'])) ? trim($decoded['sub_subcategory']) : '';
     } else {
         if (preg_match('/"primary_object"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $primaryObject = stripcslashes($m[1]);
         if (preg_match('/"direction"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $direction = stripcslashes($m[1]);
@@ -499,6 +624,9 @@ function gemini_parse_describe($raw)
         if (preg_match('/"photo_quality"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $photoQuality = stripcslashes($m[1]);
         if (preg_match('/"confidence"\s*:\s*(\d+)/i', $raw, $m)) $confidence = max(0, min(100, (int) $m[1]));
         if (preg_match('/"description"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $description = stripcslashes($m[1]);
+        if (preg_match('/"main_category"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $mainCategory = stripcslashes($m[1]);
+        if (preg_match('/"subcategory"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $subcategory = stripcslashes($m[1]);
+        if (preg_match('/"sub_subcategory"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $subSubcategory = stripcslashes($m[1]);
     }
 
     if (!in_array($photoQuality, ['Good', 'Fair', 'Poor'], true)) {
@@ -508,6 +636,14 @@ function gemini_parse_describe($raw)
         $norm = ucwords(strtolower(trim($direction)));
         $direction = in_array($norm, ['Forward', 'Aft', 'Port Side', 'Starboard Side'], true) ? $norm : '';
     }
+
+    // Critical validation — never trust the model's hierarchy pick at face
+    // value: reject (null out) anything that isn't character-for-character
+    // one of this photo's own existing dropdown options at the right spot
+    // in the hierarchy. Never substitutes a "closest guess" — an invalid
+    // pick simply comes back null, same as "no confident match".
+    list($mainCategory, $subcategory, $subSubcategory) =
+        gemini_validate_hierarchy($mainCategory, $subcategory, $subSubcategory, $allowedMainList, $allowedSubMap);
 
     // Same cleanup safety-net the old plain-sentence response always applied
     // — still worth running even on a JSON-decoded description, in case the
@@ -538,6 +674,9 @@ function gemini_parse_describe($raw)
         'photo_quality'    => $photoQuality,
         'confidence'       => $confidence,
         'description'      => $description,
+        'main_category'    => $mainCategory,
+        'subcategory'      => $subcategory,
+        'sub_subcategory'  => $subSubcategory,
         'parsed_ok'        => $parsedOk,
     ];
 }
@@ -555,7 +694,9 @@ function gemini_describe_payload($prompt, $mime, $b64)
         ],
         'generationConfig' => [
             'temperature'     => 0.2,
-            'maxOutputTokens' => 320,
+            // Bumped from 320: the response now also carries main_category/
+            // subcategory/sub_subcategory alongside the original fields.
+            'maxOutputTokens' => 420,
             // See the classification-mode payload above for why this matters —
             // same thinking-tokens-eat-the-budget risk applies here too.
             'thinkingConfig'  => ['thinkingBudget' => 0],
@@ -576,7 +717,7 @@ if ($d1['error']) {
     echo json_encode($out);
     exit;
 }
-$dp1 = gemini_parse_describe($d1['raw']);
+$dp1 = gemini_parse_describe($d1['raw'], $allowedMainList, $allowedSubMap);
 
 // "IF JSON is invalid -> retry the API request once" — same convention as
 // the classification branch — only for a genuinely unparseable reply.
@@ -584,7 +725,7 @@ if (!$dp1['parsed_ok']) {
     error_log('gemini_describe.php describe: unparseable/empty first attempt (finishReason=' . $d1['finishReason'] . '), retrying once');
     $d1b = gemini_call(gemini_describe_payload($prompt, $mime, $b64), $apiKey, $model);
     if (!$d1b['error']) {
-        $dp1b = gemini_parse_describe($d1b['raw']);
+        $dp1b = gemini_parse_describe($d1b['raw'], $allowedMainList, $allowedSubMap);
         if ($dp1b['parsed_ok']) {
             $dp1 = $dp1b;
         }
@@ -606,6 +747,9 @@ error_log(json_encode([
     'location_context'  => $dp1['location_context'],
     'photo_quality'     => $dp1['photo_quality'],
     'confidence'        => $dp1['confidence'],
+    'main_category'     => $dp1['main_category'],
+    'subcategory'       => $dp1['subcategory'],
+    'sub_subcategory'   => $dp1['sub_subcategory'],
     'elapsed_ms'        => (int) round((microtime(true) - $td0) * 1000),
 ]));
 
@@ -617,4 +761,7 @@ echo json_encode([
     'photo_quality'    => $dp1['photo_quality'],
     'confidence'       => $dp1['confidence'],
     'description'      => $dp1['description'],
+    'main_category'    => $dp1['main_category'],
+    'subcategory'      => $dp1['subcategory'],
+    'sub_subcategory'  => $dp1['sub_subcategory'],
 ]);

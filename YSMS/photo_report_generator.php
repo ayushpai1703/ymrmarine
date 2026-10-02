@@ -891,14 +891,27 @@ function prgClassificationStatus(p) {
  *  have changed (AI result, manual dropdown pick, direction toggle); also
  *  called unconditionally on every photo right before sorting, so the
  *  codes used for report order are always current regardless of which
- *  code path last touched the photo. */
+ *  code path last touched the photo.
+ *
+ *  category_name is NEVER taken from the code table's own (internal-only)
+ *  label — it is built fresh every time from this exact photo's own
+ *  p.holdMain / p.holdSub, which are themselves always one of the existing
+ *  dropdown's real values (HOLD/SHIP/DECK_MAIN_OPTIONS + their sub-maps).
+ *  That guarantees category_name can never drift into a renamed,
+ *  abbreviated, or invented value — only category_code (an internal sort
+ *  key, not a category name) is table-driven. */
 function prgUpdateCategoryCode(p) {
   if (!p) return;
   var row = prgLookupCategoryCode(p);
   p.categoryCode = row ? row.code : '';
-  p.categoryName = row ? row.name : '';
   var hm = isHoldCategory(p.category) ? (String(p.category).match(/\d+/) || [])[0] : '';
   p.holdNumber = hm ? parseInt(hm, 10) : null;
+  if (p.holdMain) {
+    var namePath = p.holdMain + (p.holdSub ? (' - ' + p.holdSub) : '');
+    p.categoryName = p.holdNumber ? ('Hold ' + p.holdNumber + ' - ' + namePath) : namePath;
+  } else {
+    p.categoryName = '';
+  }
   p.classificationStatus = prgClassificationStatus(p);
 }
 
@@ -1006,23 +1019,30 @@ var PRG_MASTER_CAT_ORDER = ["Ship Side","Hold No. 1","Hold No. 2","Hold No. 3","
    example would otherwise collide with once extended to 9 holds. Relative
    order is identical to the request; only the illustrative numbers differ.
    ========================================================================== */
+// Label fragments below are built ONLY from the exact HOLD_MAIN_OPTIONS /
+// HOLD_SUB_MAP strings (main option, plus its exact sub value where one
+// applies) — never a paraphrase, abbreviation, or renamed version of the
+// real dropdown text. These labels are for internal code-table reference
+// only; the per-photo category_name a user actually sees is always derived
+// straight from that photo's own p.holdMain/p.holdSub (see
+// prgUpdateCategoryCode), never from this table.
 var PRG_HOLD_INTERNAL_CODES = [
   // [code suffix, label fragment, main option, sub-match substring or null]
-  ['01', 'Hold Entrance',                   'Hatch Entrance', null],
-  ['02', 'Hatch Coamings - Forward',        'Coamings', 'Forward'],
-  ['03', 'Hatch Coamings - Port Side',      'Coamings', 'Port Side'],
-  ['04', 'Hatch Coamings - Starboard Side', 'Coamings', 'Starboard Side'],
-  ['05', 'Hatch Coamings - Aft',            'Coamings', 'Aft'],
-  ['06', 'Bulkheads - Forward',             'Bulkheads', 'Forward'],
-  ['07', 'Bulkheads - Port Side',           'Bulkheads', 'Port Side'],
-  ['08', 'Bulkheads - Starboard Side',      'Bulkheads', 'Starboard Side'],
-  ['09', 'Tank Top',                        'Tank Top', null],
-  ['10', 'Bilge Tank - Port Side',          'Bilge Tanks', 'Port Side'],
-  ['11', 'Bilge Tank - Starboard Side',     'Bilge Tanks', 'Starboard Side'],
-  ['12', 'Vertical Ladder',                 'Ladders', 'Vertical'],
-  ['13', 'Australian Ladder',               'Ladders', 'Australian'],
-  ['14', 'Bulkheads - Aft',                 'Bulkheads', 'Aft'],
-  ['15', 'Drain Channel',                   'Drain Channel', null]
+  ['01', 'Hatch Entrance',                 'Hatch Entrance', null],
+  ['02', 'Coamings - Forward',             'Coamings', 'Forward'],
+  ['03', 'Coamings - Port Side',           'Coamings', 'Port Side'],
+  ['04', 'Coamings - Starboard Side',      'Coamings', 'Starboard Side'],
+  ['05', 'Coamings - Aft',                 'Coamings', 'Aft'],
+  ['06', 'Bulkheads - Forward',            'Bulkheads', 'Forward'],
+  ['07', 'Bulkheads - Port Side',          'Bulkheads', 'Port Side'],
+  ['08', 'Bulkheads - Starboard Side',     'Bulkheads', 'Starboard Side'],
+  ['09', 'Tank Top',                       'Tank Top', null],
+  ['10', 'Bilge Tanks - Port Side',        'Bilge Tanks', 'Port Side'],
+  ['11', 'Bilge Tanks - Starboard Side',   'Bilge Tanks', 'Starboard Side'],
+  ['12', 'Ladders - Vertical',             'Ladders', 'Vertical'],
+  ['13', 'Ladders - Australian',           'Ladders', 'Australian'],
+  ['14', 'Bulkheads - Aft',                'Bulkheads', 'Aft'],
+  ['15', 'Drain Channel',                  'Drain Channel', null]
 ];
 
 // Extra hold-level dropdown values that exist in HOLD_MAIN_OPTIONS/HOLD_SUB_MAP
@@ -1048,13 +1068,13 @@ var PRG_CATEGORY_CODE_TABLE = (function () {
   }
 
   add('F01', 'Forward Section', 100, 'Ship Side', 'Forward Section', null);
-  add('F02', 'Bulbows', 110, 'Ship Side', 'Bulbous Bow', null);
-  add('F03', 'Hull Photos', 120, 'Ship Side', 'Hull', null);
+  add('F02', 'Bulbous Bow', 110, 'Ship Side', 'Bulbous Bow', null);
+  add('F03', 'Hull', 120, 'Ship Side', 'Hull', null);
   add('F03D', 'Draft Marks', 125, 'Ship Side', 'Draft Marks', null); // existing dropdown value, not named in the spec; kept between Hull and Rudder per the proven walk-around order
   add('F04', 'Rudder', 130, 'Ship Side', 'Rudder', null);
-  add('F05', 'Stern Section', 140, 'Ship Side', 'Aft Section', null);
+  add('F05', 'Aft Section', 140, 'Ship Side', 'Aft Section', null);
 
-  add('FM01', 'Forward Mooring Station', 200, 'Ship Side', 'Mooring Station', 'Forecastle');
+  add('FM01', 'Mooring Station - Forecastle Deck', 200, 'Ship Side', 'Mooring Station', 'Forecastle Deck');
   add('FM02', 'Forward Mooring Winches - Port Side', 210, 'Ship Side', 'Forward Mooring Winches', 'Port Side');
   add('FM03', 'Forward Mooring Winches - Starboard Side', 220, 'Ship Side', 'Forward Mooring Winches', 'Starboard Side');
   add('FM04', 'Anchor Chain', 230, 'Ship Side', 'Anchor Chain', null);
@@ -1064,8 +1084,8 @@ var PRG_CATEGORY_CODE_TABLE = (function () {
   add('WD01', 'Weather Deck - Port Side', 300, 'Ship Side', 'Weather Deck', 'Port Side');
   add('WD02', 'Weather Deck - Starboard Side', 310, 'Ship Side', 'Weather Deck', 'Starboard Side');
 
-  add('MD01', 'Main Deck From Forward', 400, 'Deck Side', 'Main Deck', 'From Forward Side');
-  add('MD02', 'Main Deck Railing - Forward', 410, 'Deck Side', 'Forward Main Deck Railing', null);
+  add('MD01', 'Main Deck - From Forward Side', 400, 'Deck Side', 'Main Deck', 'From Forward Side');
+  add('MD02', 'Forward Main Deck Railing', 410, 'Deck Side', 'Forward Main Deck Railing', null);
   add('MD03', 'Forward Cross Deck', 420, 'Ship Side', 'Forward Cross Deck', null);
 
   for (var h = 1; h <= 9; h++) {
@@ -1079,11 +1099,11 @@ var PRG_CATEGORY_CODE_TABLE = (function () {
     });
   }
 
-  add('MA01', 'Main Deck From Aft', 1200, 'Deck Side', 'Main Deck', 'From Aft Side');
-  add('MA02', 'Main Deck Railing - Aft', 1210, 'Deck Side', 'Aft Main Deck Railing', null);
+  add('MA01', 'Main Deck - From Aft Side', 1200, 'Deck Side', 'Main Deck', 'From Aft Side');
+  add('MA02', 'Aft Main Deck Railing', 1210, 'Deck Side', 'Aft Main Deck Railing', null);
   add('MA03', 'Aft Cross Deck', 1220, 'Ship Side', 'Aft Cross Deck', null); // not named in the spec, but symmetric with MD03 (Forward Cross Deck) — same existing dropdown value, must not be dropped
 
-  add('AM01', 'Aft Mooring Station', 1300, 'Ship Side', 'Mooring Station', 'Poop');
+  add('AM01', 'Mooring Station - Poop Deck', 1300, 'Ship Side', 'Mooring Station', 'Poop Deck');
   add('AM02', 'Aft Mooring Winches - Port Side', 1310, 'Ship Side', 'Aft Mooring Winches', 'Port Side');
   add('AM03', 'Aft Mooring Winches - Starboard Side', 1320, 'Ship Side', 'Aft Mooring Winches', 'Starboard Side');
 
@@ -2229,6 +2249,45 @@ function prgSyncHoldDropdownFromAi(p, primaryObject, direction) {
   p.holdSub = (Array.isArray(subs) && direction && subs.indexOf(direction) !== -1) ? direction : '';
 }
 
+/** ---- AI hierarchy pick (ADD-ON) ----
+ *  Applies main_category / subcategory / sub_subcategory returned by
+ *  ajax/gemini_describe.php — values the server has ALREADY strictly
+ *  validated against this exact photo's own existing dropdown hierarchy
+ *  (structCfg) and nulled out if not found. This function re-validates
+ *  independently anyway (never trust a value just because it arrived from
+ *  the server) before ever touching p.holdMain/p.holdSub, and only ever
+ *  assigns one of the real, existing option strings — never a new,
+ *  renamed, or paraphrased one. Covers Hold, Ship Side AND Deck Side
+ *  (prgSyncHoldDropdownFromAi above stays Hold-only/fuzzy-match as the
+ *  fallback when the AI didn't return a hierarchy pick at all).
+ *  Returns true if it set the dropdown, false if there was nothing valid
+ *  to apply (caller should fall back to prgSyncHoldDropdownFromAi). */
+function prgApplyAiHierarchyPick(p, mainCategory, subcategory, subSubcategory) {
+  if (!mainCategory || !isStructureCategory(p.category)) return false;
+  var cfg = structCfg(p.category);
+  if (cfg.main.indexOf(mainCategory) === -1) return false; // not an existing option — reject, never invent
+  var subs = cfg.sub ? cfg.sub[mainCategory] : null;
+  var finalSub = '';
+  if (Array.isArray(subs) && subs.length) {
+    if (subcategory && subs.indexOf(subcategory) !== -1) finalSub = subcategory;
+  } else if (subs && typeof subs === 'object') {
+    // 3-level nested (e.g. Hull -> Port Side -> At Bow Section): subcategory
+    // is the mid key, sub_subcategory the leaf. A mid-level pick with no
+    // confidently-matched leaf leaves holdSub empty rather than guessing a
+    // leaf — same "main known, exact spot still TBD" state holdNestLabel
+    // already renders as "Main › …" for a manual in-progress pick.
+    if (subcategory && subs.hasOwnProperty(subcategory)) {
+      var leaves = subs[subcategory];
+      if (subSubcategory && Array.isArray(leaves) && leaves.indexOf(subSubcategory) !== -1) {
+        finalSub = subcategory + ' › ' + subSubcategory;
+      }
+    }
+  }
+  p.holdMain = mainCategory;
+  p.holdSub = finalSub;
+  return true;
+}
+
 /** Swaps the AI-identified object phrase for a new one, case-preserving,
  *  leaving direction/condition/extra detail untouched — same principle as
  *  the direction quick-select. If the exact old phrase can't be found
@@ -2435,6 +2494,15 @@ async function generateAiDescriptionForIndex(idx, attempt) {
     }
 
     var context = { vessel_name: PRG_VESSEL_NAME || '', category: p.category || '' };
+    // Send this photo's own existing dropdown hierarchy (exact option
+    // strings, nothing invented) as Gemini's allowed classification
+    // vocabulary — see "AI selection" / "Critical validation" requirement:
+    // the server builds the prompt's allowed-values list from this and
+    // strictly rejects anything Gemini returns that isn't in it.
+    if (isStructureCategory(p.category)) {
+      var hCfg = structCfg(p.category);
+      context.allowed_categories = { main: hCfg.main, sub: hCfg.sub };
+    }
 
     // Structured free-text mode (no "options" sent): ONE call returns the
     // primary physical object (kept strictly separate from the general
@@ -2467,13 +2535,19 @@ async function generateAiDescriptionForIndex(idx, attempt) {
     p.aiPrimaryObject = json.primary_object || '';
     p.aiLocationContext = json.location_context || '';
     p.aiPhotoQuality = json.photo_quality || '';
-    // Dropdown auto-sync (ADD-ON): when the category is a Hold (the clean,
-    // flat Forward/Aft/Port Side/Starboard Side case) and the detected
-    // primary_object matches one of THIS category's existing dropdown
-    // values, select it automatically — using ONLY existing dropdown
-    // values, never inventing one. No match -> dropdown stays exactly as
-    // it was (manual pick remains fully available either way).
-    prgSyncHoldDropdownFromAi(p, json.primary_object, json.direction);
+    // Dropdown auto-sync (ADD-ON): prefer the server-validated exact
+    // hierarchy pick (main_category/subcategory/sub_subcategory — already
+    // checked against this photo's own allowed_categories and nulled if
+    // not an existing option) for ANY structure category. Only when that's
+    // not present/valid does this fall back to the older fuzzy
+    // primary_object match, which stays Hold-only as before. Either way,
+    // only existing dropdown values are ever selected, never invented, and
+    // no match leaves the dropdown exactly as it was (manual pick remains
+    // fully available either way).
+    var hierarchyApplied = prgApplyAiHierarchyPick(p, json.main_category, json.subcategory, json.sub_subcategory);
+    if (!hierarchyApplied) {
+      prgSyncHoldDropdownFromAi(p, json.primary_object, json.direction);
+    }
     p.aiHash = hash;
     p.aiConfidence = (typeof json.confidence === 'number') ? json.confidence : null;
     p.aiStatus = 'completed';
@@ -2621,9 +2695,12 @@ function holdNestLabel(p) {
   return '— Select structure —';
 }
 
-/** ADD-ON: compact "Section · Hold N · Subsection · Position · NN% confidence"
+/** ADD-ON: compact "Section · Hold N · Main › Sub · NN% confidence"
  *  caption, per the UI requirement to surface the AI's detected
  *  classification next to the (always-editable) structure dropdown above.
+ *  The Main › Sub breadcrumb is always the photo's own exact p.holdMain /
+ *  p.holdSub — the same existing dropdown values shown by the structure
+ *  picker itself, never a renamed or shortened version of them.
  *  Shown only once there's something to report; blank for a not-yet-
  *  classified photo rather than cluttering it with an empty line. */
 function aiClassificationInfoHtml(p, idx) {
@@ -2639,8 +2716,7 @@ function aiClassificationInfoHtml(p, idx) {
     } else if (isDeckSideCategory(p.category)) {
       bits.push('Deck Side');
     }
-    if (p.holdMain) bits.push(p.holdMain);
-    if (p.holdSub) bits.push(p.holdSub);
+    if (p.holdMain) bits.push(p.holdMain + (p.holdSub ? (' › ' + p.holdSub) : ''));
     if (typeof p.aiConfidence === 'number') bits.push(p.aiConfidence + '% confidence');
   }
   // Non-blocking low-confidence flag — report generation still includes
