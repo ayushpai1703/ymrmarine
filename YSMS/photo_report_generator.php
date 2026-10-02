@@ -129,186 +129,34 @@ include 'includes/header.php';
 .prg-ai-bulkbar .progress-bar { background: #0b1e46; }
 .prg-ai-bulk-counts { display: flex; gap: 8px; flex-wrap: wrap; color: #475569; font-size: 11px; }
 .prg-ai-bulk-counts b { color: #1e293b; }
-/* Nested menu — mobile: fixed sheet (avoids overflow clip); desktop: side flyout */
-.hold-nest-wrap { position: relative; width: 100%; }
-.hold-nest-toggle {
-  width: 100%; min-height: 42px; text-align: left; font-size: 13px;
-  padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;
-  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M4.646 6.646a.5.5 0 0 1 .708 0L8 9.293l2.646-2.647a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E") right 12px center no-repeat;
-  color: #1e293b; cursor: pointer;
+/* Structure picker — always-visible button group (no dropdown/popover):
+   every main option is its own small pill button; tapping one that has
+   sub-options reveals them right below as another pill row (simple
+   accordion, one section open at a time); the actually-picked pill is
+   highlighted. All levels still use the exact existing dropdown values —
+   this only changes the PRESENTATION from a menu/dropdown to buttons. */
+.hold-pill-group { display: flex; flex-direction: column; gap: 4px; }
+.hold-pill-block { border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; overflow: hidden; }
+.hold-pill-row { display: none; flex-wrap: wrap; gap: 6px; padding: 8px; background: #fff; }
+.hold-pill-block.open > .hold-pill-row { display: flex; }
+.hold-pill-mid-block { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.hold-pill-mid-row { display: flex; }
+.hold-pill-leaf-row { display: none; flex-wrap: wrap; gap: 6px; padding: 8px; background: #f1f5f9; }
+.hold-pill-mid-block.open > .hold-pill-leaf-row { display: flex; }
+.hold-pill {
+  display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 600;
+  padding: 7px 12px; border-radius: 999px; border: 1px solid #cbd5e1;
+  background: #fff; color: #1e293b; cursor: pointer; line-height: 1.2;
 }
-.hold-nest-toggle:focus { border-color: #3b32b3; outline: none; box-shadow: 0 0 0 2px rgba(59,50,179,.15); }
-.hold-nest-menu {
-  display: none; position: absolute; z-index: 1100; left: 0; right: 0; top: calc(100% + 3px);
-  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(15,23,42,.16); padding: 0;
-  max-height: min(420px, 65vh); overflow: hidden;
-  -webkit-overflow-scrolling: touch;
-  flex-direction: column;
+.hold-pill:hover { background: #f1f5f9; }
+.hold-pill.active { background: #1e40af; border-color: #1e40af; color: #fff; }
+.hold-pill-main {
+  width: 100%; border: 0; border-radius: 0; text-align: left;
+  padding: 10px 12px; background: transparent;
 }
-.hold-nest-wrap.open > .hold-nest-menu { display: flex; }
-/* Fixed menu escapes parent overflow (left/top/width/maxHeight set by JS) */
-.hold-nest-menu.hold-nest-fixed {
-  position: fixed !important;
-  z-index: 12050 !important;
-  box-shadow: 0 16px 48px rgba(15,23,42,.28);
-  border-radius: 14px;
-  display: flex !important;
-  flex-direction: column;
-  overflow: hidden;
-}
-.hold-nest-search-wrap {
-  flex: 0 0 auto;
-  padding: 8px 10px 6px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
-  border-radius: 14px 14px 0 0;
-}
-.hold-nest-search {
-  width: 100%;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 8px 10px 8px 32px;
-  font-size: 13px;
-  outline: none;
-  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.656a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E") 10px center no-repeat;
-  color: #1e293b;
-}
-.hold-nest-search:focus { border-color: #3b32b3; box-shadow: 0 0 0 2px rgba(59,50,179,.12); }
-.hold-nest-list {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  padding: 4px 0 8px;
-  max-height: none;
-}
-.hold-nest-group.nest-hidden { display: none !important; }
-.hold-nest-empty {
-  display: none;
-  padding: 16px 14px;
-  text-align: center;
-  color: #94a3b8;
-  font-size: 12.5px;
-}
-.hold-nest-empty.show { display: block; }
-.hold-nest-backdrop {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 12040;
-  background: rgba(15, 23, 42, 0.28);
-}
-.hold-nest-backdrop.show { display: block; }
-.hold-nest-group { position: relative; }
-.hold-nest-item {
-  display: flex; align-items: center; justify-content: space-between;
-  width: 100%; border: 0; background: #fff; text-align: left;
-  padding: 12px 14px; font-size: 14px; color: #1e293b; cursor: pointer;
-  min-height: 44px;
-}
-.hold-nest-item:hover { background: #f1f5f9; }
-.hold-nest-item.active-main { background: #1e40af; color: #fff; }
-.hold-nest-item .nest-arrow { font-size: 10px; color: #94a3b8; margin-left: 10px; flex-shrink: 0; }
-.hold-nest-item.active-main .nest-arrow { color: #fff; }
-/* Default (mobile/touch): accordion expands downward */
-.hold-nest-sub {
-  display: none; background: #f8fafc; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;
-  padding: 4px 0;
-}
-.hold-nest-group.open-sub > .hold-nest-sub { display: block; }
-.hold-nest-subitem {
-  display: block; width: 100%; border: 0; background: transparent; text-align: left;
-  padding: 11px 14px 11px 28px; font-size: 14px; color: #1e293b; cursor: pointer;
-  min-height: 42px;
-}
-.hold-nest-subitem:hover { background: #e2e8f0; }
-.hold-nest-subitem.active { background: #1e40af; color: #fff; }
-.hold-nest-mid-btn {
-  display: flex !important; align-items: center; justify-content: space-between;
-  font-weight: 600; padding-left: 28px !important;
-}
-.hold-nest-leaf { margin-left: 0; background: #fff; border-radius: 6px; }
-.hold-nest-leaf .hold-nest-subitem { padding-left: 16px; }
-.hold-nest-mid-panel { background: #f1f5f9; }
-
-/* Desktop (width >= 640): RIGHT flyout sub-menus on CLICK */
-@media (min-width: 640px) {
-  .hold-nest-list { overflow-y: auto; overflow-x: visible; }
-  .hold-nest-group { position: relative; }
-  .hold-nest-group.open-fly > .hold-nest-item {
-    background: #1e40af; color: #fff;
-  }
-  .hold-nest-group.open-fly > .hold-nest-item .nest-arrow { color: #fff; }
-
-  /* Level-1 / level-2 panels fly out to the RIGHT (shown via .open-fly only) */
-  .hold-nest-group > .hold-nest-sub,
-  .hold-nest-mid > .hold-nest-sub {
-    display: none;
-    position: fixed;
-    z-index: 12100;
-    min-width: 180px;
-    max-width: 280px;
-    max-height: min(70vh, 420px);
-    overflow-y: auto;
-    overflow-x: hidden;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    box-shadow: 0 12px 32px rgba(15,23,42,.18);
-    padding: 4px 0;
-  }
-  .hold-nest-group.open-fly > .hold-nest-sub,
-  .hold-nest-mid.open-fly > .hold-nest-sub {
-    display: block;
-  }
-  .hold-nest-mid.open-fly > .hold-nest-mid-btn {
-    background: #e2e8f0;
-  }
-  .hold-nest-subitem { padding-left: 14px; min-height: auto; }
-  .hold-nest-mid-btn { padding-left: 14px !important; }
-  .hold-nest-leaf .hold-nest-subitem { padding-left: 14px; }
-
-  /* SEARCH mode: no fixed flyouts — inline accordion list */
-  .hold-nest-menu.is-filtering .hold-nest-group > .hold-nest-sub,
-  .hold-nest-menu.is-filtering .hold-nest-mid > .hold-nest-sub {
-    position: static !important;
-    left: auto !important;
-    top: auto !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    max-height: none !important;
-    box-shadow: none !important;
-    border: 0 !important;
-    border-top: 1px solid #e2e8f0 !important;
-    border-radius: 0 !important;
-    background: #f8fafc !important;
-    z-index: auto !important;
-  }
-  .hold-nest-menu.is-filtering .hold-nest-group.open-sub > .hold-nest-sub,
-  .hold-nest-menu.is-filtering .hold-nest-mid.open-sub > .hold-nest-sub {
-    display: block !important;
-  }
-  .hold-nest-menu.is-filtering .hold-nest-group.open-sub > .hold-nest-item {
-    background: #1e40af; color: #fff;
-  }
-  .hold-nest-menu.is-filtering .hold-nest-group.open-sub > .hold-nest-item .nest-arrow { color: #fff; }
-  .hold-nest-menu.is-filtering .hold-nest-subitem { padding-left: 22px; }
-  .hold-nest-menu.is-filtering .hold-nest-mid-btn { padding-left: 22px !important; }
-}
-
-@media (min-width: 640px) {
-  .hold-nest-menu { right: auto; min-width: 220px; }
-  .hold-nest-menu.hold-nest-fixed {
-    position: fixed !important;
-    z-index: 12050 !important;
-    box-shadow: 0 12px 32px rgba(15,23,42,.16);
-    border-radius: 10px;
-  }
-  .hold-nest-backdrop.show { display: block !important; }
-  .hold-nest-group.open-sub > .hold-nest-item { background: #1e40af; color: #fff; }
-  .hold-nest-group.open-sub > .hold-nest-item .nest-arrow { color: #fff; }
-}
+.hold-pill-main:hover { background: #eef2f6; }
+.hold-pill-main.active { background: #1e40af; color: #fff; }
+.hold-pill-mid { border-radius: 0; font-weight: 650; }
 
 .prg-photo-thumb {
     width: 90px;
@@ -2273,9 +2121,9 @@ function prgApplyAiHierarchyPick(p, mainCategory, subcategory, subSubcategory) {
   } else if (subs && typeof subs === 'object') {
     // 3-level nested (e.g. Hull -> Port Side -> At Bow Section): subcategory
     // is the mid key, sub_subcategory the leaf. A mid-level pick with no
-    // confidently-matched leaf leaves holdSub empty rather than guessing a
-    // leaf — same "main known, exact spot still TBD" state holdNestLabel
-    // already renders as "Main › …" for a manual in-progress pick.
+    // confidently-matched leaf leaves holdSub empty rather than guessing
+    // a leaf — the main is still shown as selected, just without a sub
+    // highlighted, until the exact spot is confirmed.
     if (subcategory && subs.hasOwnProperty(subcategory)) {
       var leaves = subs[subcategory];
       if (subSubcategory && Array.isArray(leaves) && leaves.indexOf(subSubcategory) !== -1) {
@@ -2418,8 +2266,8 @@ function updateAiCardUI(idx) {
   var row = document.getElementById('aiRow_' + idx);
   if (row) row.outerHTML = aiControlsHtml(p, idx);
   if (isStructureCategory(p.category)) {
-    var nestBtn = document.getElementById('holdNestBtn_' + idx);
-    if (nestBtn) nestBtn.textContent = holdNestLabel(p);
+    var pillGroupEl = document.getElementById('holdPillGroup_' + idx);
+    if (pillGroupEl) pillGroupEl.outerHTML = holdPillGroupHtml(p, idx);
     var descEl = document.getElementById('holdDesc_' + idx);
     if (descEl && document.activeElement !== descEl) descEl.value = p.desc || '';
     var classifyInfoEl = document.getElementById('classifyInfo_' + idx);
@@ -2677,23 +2525,7 @@ function onOthersDescInput(idx, val) {
   prgMarkDirty();
 }
 
-/** Hold No.1–9: main + optional sub dropdowns + editable Description text */
-/**
- * Nested flyout menu — like Administration > Structure > Menus.
- * Level 1: structure | Level 2 (side): Forward / Port / Starboard / Aft
- */
-function holdNestLabel(p) {
-  if (p.holdMain === 'Tank Top') return 'Tank Top';
-  if (p.holdMain && p.holdSub) return p.holdMain + ' › ' + p.holdSub;
-  if (p.holdMain) {
-    var leaves = holdAllLeafLabels(p.holdMain, p.category);
-    if (!leaves.length) return p.holdMain;
-    return p.holdMain + ' › …';
-  }
-  if (isShipSideCategory(p.category)) return '— Select ship structure —';
-  if (isDeckSideCategory(p.category)) return '— Select deck structure —';
-  return '— Select structure —';
-}
+/** Hold No.1–9: main + optional sub button group + editable Description text */
 
 /** ADD-ON: compact "Section · Hold N · Main › Sub · NN% confidence"
  *  caption, per the UI requirement to surface the AI's detected
@@ -2733,382 +2565,124 @@ function aiClassificationInfoHtml(p, idx) {
   '</div>';
 }
 
-function holdDescControlsHtml(p, idx) {
+/** Always-visible button-group version of the structure picker (replaces
+ *  the old click-to-open dropdown/flyout menu) — same exact existing
+ *  dropdown values (structCfg), same commit semantics as before (a pick
+ *  only takes effect when a leaf-level button is clicked; clicking a
+ *  main/mid that has sub-options just expands/collapses its row, same as
+ *  the old accordion toggle did), just laid out as plain pill buttons
+ *  that are always on screen instead of hidden behind a toggle. */
+function holdPillGroupHtml(p, idx) {
   var cat = p.category || '';
   var cfg = structCfg(cat);
   var mainList = cfg.main;
-  var items = '';
+  var blocks = '';
   for (var i = 0; i < mainList.length; i++) {
     var main = mainList[i];
-    var mainActive = (p.holdMain === main) ? ' active-main' : '';
+    var mainActive = (p.holdMain === main);
 
     if (holdSubIsNested(main, cat)) {
       // 3-level: e.g. Hull → Port Side → At Bow Section / Hoppers → Lower → Port
       var mids = holdMidKeys(main, cat);
-      var midHtml = '';
+      var midBlocks = '';
       for (var m = 0; m < mids.length; m++) {
         var mid = mids[m];
+        var midOpen = mainActive && p.holdSub && p.holdSub.indexOf(mid + ' ›') === 0;
         var leaves = holdLeafSubs(main, mid, cat);
         var leafHtml = '';
         for (var L = 0; L < leaves.length; L++) {
           var leaf = leaves[L];
           var full = mid + ' › ' + leaf;
-          var lAct = (p.holdMain === main && p.holdSub === full) ? ' active' : '';
+          var lAct = (mainActive && p.holdSub === full) ? ' active' : '';
           leafHtml +=
-            '<button type="button" class="hold-nest-subitem' + lAct + '" data-main="' + esc(main) + '" data-sub="' + esc(full) + '" ' +
-            'onclick="event.stopPropagation(); onHoldNestPick(' + idx + ', this)">' + esc(leaf) + '</button>';
+            '<button type="button" class="hold-pill hold-pill-leaf' + lAct + '" data-main="' + esc(main) + '" data-sub="' + esc(full) + '" ' +
+            'onclick="onHoldNestPick(' + idx + ', this)">' + esc(leaf) + '</button>';
         }
-        var midOpen = (p.holdMain === main && p.holdSub && p.holdSub.indexOf(mid + ' ›') === 0) ? ' open-sub' : '';
-        midHtml +=
-          '<div class="hold-nest-group hold-nest-mid' + midOpen + '">' +
-            '<button type="button" class="hold-nest-subitem hold-nest-mid-btn" data-mid="' + esc(mid) + '" ' +
-            'onclick="onHoldNestMid(event, this)">' +
-              '<span>' + esc(mid) + '</span>' +
-              '<i class="fa-solid fa-chevron-right nest-arrow"></i>' +
-            '</button>' +
-            '<div class="hold-nest-sub hold-nest-leaf">' + leafHtml + '</div>' +
+        midBlocks +=
+          '<div class="hold-pill-mid-block' + (midOpen ? ' open' : '') + '">' +
+            '<button type="button" class="hold-pill hold-pill-mid' + (midOpen ? ' active' : '') + '" ' +
+            'onclick="onHoldPillMid(' + idx + ', this)">' + esc(mid) + '</button>' +
+            '<div class="hold-pill-leaf-row">' + leafHtml + '</div>' +
           '</div>';
       }
-      items +=
-        '<div class="hold-nest-group">' +
-          '<button type="button" class="hold-nest-item' + mainActive + '" data-main="' + esc(main) + '" ' +
-          'onclick="onHoldNestParent(event, this)">' +
-            '<span>' + esc(main) + '</span>' +
-            '<i class="fa-solid fa-chevron-right nest-arrow"></i>' +
-          '</button>' +
-          '<div class="hold-nest-sub hold-nest-mid-panel">' + midHtml + '</div>' +
+      blocks +=
+        '<div class="hold-pill-block' + (mainActive ? ' open' : '') + '">' +
+          '<button type="button" class="hold-pill hold-pill-main' + (mainActive ? ' active' : '') + '" data-main="' + esc(main) + '" ' +
+          'onclick="onHoldPillToggle(' + idx + ', this)">' + esc(main) + '</button>' +
+          '<div class="hold-pill-row hold-pill-mid-row">' + midBlocks + '</div>' +
         '</div>';
     } else {
       var subs = cfg.sub[main] || [];
       if (!subs || subs.length === 0) {
-        items +=
-          '<div class="hold-nest-group">' +
-            '<button type="button" class="hold-nest-item' + mainActive + '" data-main="' + esc(main) + '" data-sub="" ' +
-            'onclick="event.stopPropagation(); onHoldNestPick(' + idx + ', this)">' + esc(main) + '</button>' +
+        blocks +=
+          '<div class="hold-pill-block">' +
+            '<button type="button" class="hold-pill hold-pill-main' + (mainActive ? ' active' : '') + '" data-main="' + esc(main) + '" data-sub="" ' +
+            'onclick="onHoldNestPick(' + idx + ', this)">' + esc(main) + '</button>' +
           '</div>';
       } else {
         var subHtml = '';
         for (var j = 0; j < subs.length; j++) {
           var sub = subs[j];
-          var sAct = (p.holdMain === main && p.holdSub === sub) ? ' active' : '';
+          var sAct = (mainActive && p.holdSub === sub) ? ' active' : '';
           subHtml +=
-            '<button type="button" class="hold-nest-subitem' + sAct + '" data-main="' + esc(main) + '" data-sub="' + esc(sub) + '" ' +
-            'onclick="event.stopPropagation(); onHoldNestPick(' + idx + ', this)">' + esc(sub) + '</button>';
+            '<button type="button" class="hold-pill hold-pill-sub' + sAct + '" data-main="' + esc(main) + '" data-sub="' + esc(sub) + '" ' +
+            'onclick="onHoldNestPick(' + idx + ', this)">' + esc(sub) + '</button>';
         }
-        items +=
-          '<div class="hold-nest-group">' +
-            '<button type="button" class="hold-nest-item' + mainActive + '" data-main="' + esc(main) + '" ' +
-            'onclick="onHoldNestParent(event, this)">' +
-              '<span>' + esc(main) + '</span>' +
-              '<i class="fa-solid fa-chevron-right nest-arrow"></i>' +
-            '</button>' +
-            '<div class="hold-nest-sub">' + subHtml + '</div>' +
+        blocks +=
+          '<div class="hold-pill-block' + (mainActive ? ' open' : '') + '">' +
+            '<button type="button" class="hold-pill hold-pill-main' + (mainActive ? ' active' : '') + '" data-main="' + esc(main) + '" ' +
+            'onclick="onHoldPillToggle(' + idx + ', this)">' + esc(main) + '</button>' +
+            '<div class="hold-pill-row">' + subHtml + '</div>' +
           '</div>';
       }
     }
   }
+  return '<div class="hold-pill-group" id="holdPillGroup_' + idx + '">' + blocks + '</div>';
+}
 
+function holdDescControlsHtml(p, idx) {
   return (
-    '<div class="hold-nest-wrap" id="holdNest_' + idx + '">' +
-      '<button type="button" class="hold-nest-toggle" id="holdNestBtn_' + idx + '" ' +
-        'onclick="toggleHoldNest(' + idx + ', event)">' + esc(holdNestLabel(p)) + '</button>' +
-      '<div class="hold-nest-menu" id="holdNestMenu_' + idx + '" role="menu">' +
-        '<div class="hold-nest-search-wrap">' +
-          '<input type="search" class="hold-nest-search" id="holdNestSearch_' + idx + '" ' +
-            'placeholder="Search structure…" autocomplete="off" ' +
-            'onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" ' +
-            'oninput="filterHoldNestMenu(' + idx + ', this.value)"/>' +
-        '</div>' +
-        '<div class="hold-nest-list" id="holdNestList_' + idx + '">' + items +
-          '<div class="hold-nest-empty" id="holdNestEmpty_' + idx + '">No matching structure</div>' +
-        '</div>' +
-      '</div>' +
-    '</div>' +
+    holdPillGroupHtml(p, idx) +
     '<input type="text" class="form-control form-control-sm mt-1" id="holdDesc_' + idx + '" value="' + esc(p.desc || '') + '" ' +
       'placeholder="Description (auto or type)" oninput="onHoldDescInput(' + idx + ', this.value)" aria-label="Description"/>' +
     aiClassificationInfoHtml(p, idx)
   );
 }
 
-function prgEnsureHoldBackdrop() {
-  var bd = document.getElementById('holdNestBackdrop');
-  if (!bd) {
-    bd = document.createElement('div');
-    bd.id = 'holdNestBackdrop';
-    bd.className = 'hold-nest-backdrop';
-    bd.addEventListener('click', function () { closeAllHoldNests(); });
-    document.body.appendChild(bd);
-  }
-  return bd;
-}
-
-function prgClearHoldMenuPos(menu) {
-  if (!menu) return;
-  menu.classList.remove('hold-nest-fixed');
-  menu.style.top = '';
-  menu.style.bottom = '';
-  menu.style.left = '';
-  menu.style.right = '';
-  menu.style.maxHeight = '';
-}
-
-/** Pin menu fixed + smart flip (open up if more space above) + scrollable list */
-function positionHoldNestMenu(wrap) {
-  var menu = wrap.querySelector('.hold-nest-menu');
-  var btn = wrap.querySelector('.hold-nest-toggle');
-  if (!menu || !btn) return;
-  menu.classList.add('hold-nest-fixed');
-  var r = btn.getBoundingClientRect();
-  var isDesktop = window.innerWidth >= 640;
-  var spaceBelow = window.innerHeight - r.bottom - 10;
-  var spaceAbove = r.top - 10;
-  var openUp = spaceBelow < 220 && spaceAbove > spaceBelow;
-  var avail = openUp ? spaceAbove : spaceBelow;
-  var maxH = Math.min(
-    isDesktop ? 560 : 480,
-    Math.round(window.innerHeight * 0.72),
-    Math.max(200, avail - 4)
-  );
-  if (isDesktop) {
-    var left = Math.max(8, Math.min(r.left, window.innerWidth - 300));
-    menu.style.left = left + 'px';
-    menu.style.right = 'auto';
-    menu.style.width = Math.max(260, Math.min(340, Math.max(r.width, 280))) + 'px';
-  } else {
-    menu.style.left = '10px';
-    menu.style.right = '10px';
-    menu.style.width = 'auto';
-  }
-  menu.style.maxHeight = maxH + 'px';
-  if (openUp) {
-    menu.style.top = 'auto';
-    menu.style.bottom = Math.max(6, window.innerHeight - r.top + 4) + 'px';
-  } else {
-    menu.style.bottom = 'auto';
-    menu.style.top = Math.max(6, r.bottom + 4) + 'px';
-  }
-  var bd = prgEnsureHoldBackdrop();
-  bd.classList.add('show');
-}
-
-/** Filter structure menu by search text (Ship Side / Hold / Deck Side) */
-function filterHoldNestMenu(idx, q) {
-  var list = document.getElementById('holdNestList_' + idx);
-  var empty = document.getElementById('holdNestEmpty_' + idx);
-  var menu = document.getElementById('holdNestMenu_' + idx);
-  if (!list) return;
-  q = String(q || '').trim().toLowerCase();
-
-  if (menu) {
-    if (q) menu.classList.add('is-filtering');
-    else menu.classList.remove('is-filtering');
-  }
-
-  var groups = list.querySelectorAll(':scope > .hold-nest-group');
-  var shown = 0;
-  for (var i = 0; i < groups.length; i++) {
-    var g = groups[i];
-    // Always clear flyout state while filtering
-    g.classList.remove('open-fly');
-    g.querySelectorAll('.hold-nest-mid.open-fly, .hold-nest-mid.open-sub').forEach(function (m) {
-      m.classList.remove('open-fly');
-      m.classList.remove('open-sub');
-    });
-
-    if (!q) {
-      g.classList.remove('nest-hidden');
-      g.classList.remove('open-sub');
-      // show all leaf/mid items again
-      g.querySelectorAll('.hold-nest-subitem, .hold-nest-mid').forEach(function (el) {
-        el.classList.remove('nest-hidden');
-      });
-      shown++;
-      continue;
-    }
-
-    // Match against main label first, then any sub label
-    var mainBtn = g.querySelector(':scope > .hold-nest-item');
-    var mainText = mainBtn ? (mainBtn.textContent || '').toLowerCase().replace(/\s+/g, ' ') : '';
-    var mainMatch = mainText.indexOf(q) >= 0;
-
-    var subMatch = false;
-    var subItems = g.querySelectorAll('.hold-nest-subitem, .hold-nest-mid-btn');
-    for (var s = 0; s < subItems.length; s++) {
-      var st = (subItems[s].textContent || '').toLowerCase().replace(/\s+/g, ' ');
-      var sm = st.indexOf(q) >= 0;
-      if (sm) {
-        subMatch = true;
-        subItems[s].classList.remove('nest-hidden');
-        // reveal parent mid if this is a leaf under mid
-        var mid = subItems[s].closest('.hold-nest-mid');
-        if (mid) {
-          mid.classList.remove('nest-hidden');
-          mid.classList.add('open-sub');
-        }
-      } else if (!mainMatch) {
-        subItems[s].classList.add('nest-hidden');
-      } else {
-        subItems[s].classList.remove('nest-hidden');
-      }
-    }
-
-    if (mainMatch || subMatch) {
-      g.classList.remove('nest-hidden');
-      shown++;
-      // Expand inline so matching subs are visible (no right flyout)
-      if (subMatch || mainMatch) g.classList.add('open-sub');
-    } else {
-      g.classList.add('nest-hidden');
-      g.classList.remove('open-sub');
-    }
-  }
-  if (empty) {
-    if (shown === 0) empty.classList.add('show');
-    else empty.classList.remove('show');
-  }
-}
-
-function closeAllHoldNests(exceptIdx) {
-  document.querySelectorAll('.hold-nest-wrap.open').forEach(function (el) {
-    if (exceptIdx !== undefined && el.id === 'holdNest_' + exceptIdx) return;
-    el.classList.remove('open');
-    el.querySelectorAll('.hold-nest-group.open-sub, .hold-nest-group.open-fly, .hold-nest-mid.open-fly, .hold-nest-mid.open-sub').forEach(function (g) {
-      g.classList.remove('open-sub');
-      g.classList.remove('open-fly');
-    });
-    prgClearHoldMenuPos(el.querySelector('.hold-nest-menu'));
-  });
-  var bd = document.getElementById('holdNestBackdrop');
-  if (bd) bd.classList.remove('show');
-}
-
-function toggleHoldNest(idx, e) {
-  if (e) { e.preventDefault(); e.stopPropagation(); }
-  var wrap = document.getElementById('holdNest_' + idx);
-  if (!wrap) return;
-  var wasOpen = wrap.classList.contains('open');
-  closeAllHoldNests();
-  if (!wasOpen) {
-    wrap.classList.add('open');
-    // Reset search each open
-    var searchEl = document.getElementById('holdNestSearch_' + idx);
-    if (searchEl) {
-      searchEl.value = '';
-      filterHoldNestMenu(idx, '');
-    }
-    var menuEl = document.getElementById('holdNestMenu_' + idx);
-    if (menuEl) menuEl.classList.remove('is-filtering');
-    positionHoldNestMenu(wrap);
-    if (searchEl) setTimeout(function () { try { searchEl.focus(); } catch (e) {} }, 40);
-    // Keep menu aligned if user scrolls the page while open
-    var onScroll = function () {
-      if (!wrap.classList.contains('open')) {
-        window.removeEventListener('scroll', onScroll, true);
-        return;
-      }
-      positionHoldNestMenu(wrap);
-    };
-    window.addEventListener('scroll', onScroll, true);
-    wrap._prgScrollHandler = onScroll;
-  }
-}
-
-function prgUseRightFlyout() {
-  return window.innerWidth >= 640;
-}
-
-/** Position a sub-panel to the RIGHT of its trigger (fixed coords so it escapes overflow) */
-function positionHoldFlyout(group) {
-  if (!group || !prgUseRightFlyout()) return;
-  var sub = group.querySelector(':scope > .hold-nest-sub');
-  var trigger = group.querySelector(':scope > .hold-nest-item, :scope > .hold-nest-mid-btn, :scope > .hold-nest-subitem.hold-nest-mid-btn');
-  if (!sub || !trigger) return;
-  var r = trigger.getBoundingClientRect();
-  var panelW = 200;
-  var spaceRight = window.innerWidth - r.right - 8;
-  var spaceLeft = r.left - 8;
-  var openLeft = spaceRight < panelW && spaceLeft > spaceRight;
-  sub.style.minWidth = Math.min(280, Math.max(160, panelW)) + 'px';
-  if (openLeft) {
-    sub.style.left = Math.max(6, r.left - panelW - 4) + 'px';
-  } else {
-    sub.style.left = Math.min(window.innerWidth - panelW - 6, r.right + 2) + 'px';
-  }
-  var maxH = Math.min(420, Math.round(window.innerHeight * 0.7));
-  sub.style.maxHeight = maxH + 'px';
-  var top = r.top;
-  if (top + maxH > window.innerHeight - 8) {
-    top = Math.max(6, window.innerHeight - maxH - 8);
-  }
-  sub.style.top = top + 'px';
-  sub.style.bottom = 'auto';
-}
-
-function onHoldNestParent(e, el) {
-  if (e) { e.preventDefault(); e.stopPropagation(); }
-  var group = el.closest('.hold-nest-group');
-  if (!group) return;
-  // Desktop: click toggles RIGHT flyout
-  if (prgUseRightFlyout()) {
-    var parent = group.parentNode;
-    var wasOpen = group.classList.contains('open-fly');
-    if (parent) {
-      parent.querySelectorAll(':scope > .hold-nest-group.open-fly, :scope > .hold-nest-mid.open-fly').forEach(function (sib) {
-        sib.classList.remove('open-fly');
-      });
-    }
-    // Also clear nested mid flyouts when switching main
-    group.querySelectorAll('.hold-nest-mid.open-fly').forEach(function (m) {
-      m.classList.remove('open-fly');
-    });
-    if (!wasOpen) {
-      group.classList.add('open-fly');
-      positionHoldFlyout(group);
-    }
-    return;
-  }
-  // Mobile: accordion downward
-  var menu = group.closest('.hold-nest-menu');
-  if (menu) {
-    var list = menu.querySelector('.hold-nest-list') || menu;
-    list.querySelectorAll(':scope > .hold-nest-group.open-sub').forEach(function (g) {
-      if (g !== group) g.classList.remove('open-sub');
+/** Expands/collapses one main option's sub-button row — pure display
+ *  toggle, never touches the photo's actual holdMain/holdSub (the pick
+ *  only commits when a leaf-level pill is clicked, via onHoldNestPick).
+ *  Collapses any other open main in the same group (one section open at
+ *  a time, keeping the button group tidy). */
+function onHoldPillToggle(idx, btn) {
+  var block = btn.closest('.hold-pill-block');
+  if (!block) return;
+  var group = block.parentNode;
+  var wasOpen = block.classList.contains('open');
+  if (group) {
+    group.querySelectorAll(':scope > .hold-pill-block.open').forEach(function (b) {
+      if (b !== block) b.classList.remove('open');
     });
   }
-  group.classList.toggle('open-sub');
+  block.classList.toggle('open', !wasOpen);
 }
 
-function onHoldNestMid(e, el) {
-  if (e) { e.preventDefault(); e.stopPropagation(); }
-  var group = el.closest('.hold-nest-mid');
-  if (!group) return;
-  if (prgUseRightFlyout()) {
-    var panel = group.parentNode;
-    var wasOpen = group.classList.contains('open-fly');
-    if (panel) {
-      panel.querySelectorAll(':scope > .hold-nest-mid.open-fly').forEach(function (sib) {
-        sib.classList.remove('open-fly');
-      });
-    }
-    if (!wasOpen) {
-      group.classList.add('open-fly');
-      positionHoldFlyout(group);
-    }
-    return;
-  }
-  var panel2 = group.parentNode;
-  if (panel2) {
-    panel2.querySelectorAll('.hold-nest-mid.open-sub').forEach(function (g) {
-      if (g !== group) g.classList.remove('open-sub');
+/** Same idea as onHoldPillToggle, one level down — expands/collapses a
+ *  single mid option's leaf row within a 3-level nested main. */
+function onHoldPillMid(idx, btn) {
+  var block = btn.closest('.hold-pill-mid-block');
+  if (!block) return;
+  var panel = block.parentNode;
+  var wasOpen = block.classList.contains('open');
+  if (panel) {
+    panel.querySelectorAll(':scope > .hold-pill-mid-block.open').forEach(function (b) {
+      if (b !== block) b.classList.remove('open');
     });
   }
-  group.classList.toggle('open-sub');
+  block.classList.toggle('open', !wasOpen);
 }
 
 function onHoldNestPick(idx, btn) {
-  if (window.event) {
-    try { window.event.stopPropagation(); window.event.preventDefault(); } catch (e) {}
-  }
   var main = btn.getAttribute('data-main') || '';
   var sub = btn.getAttribute('data-sub') || '';
   var p = photos[idx];
@@ -3132,21 +2706,11 @@ function onHoldNestPick(idx, btn) {
       p.desc = buildHoldAutoDesc(main, sub, p.category);
     }
   }
-  closeAllHoldNests();
-  var btnEl = document.getElementById('holdNestBtn_' + idx);
-  if (btnEl) btnEl.textContent = holdNestLabel(p);
-  var descEl = document.getElementById('holdDesc_' + idx);
-  if (descEl && !wasManual) descEl.value = p.desc || '';
   p.descManual = true; // an explicit structure pick is a manual correction — AI must never auto-overwrite it again
   prgUpdateCategoryCode(p); // MANUAL CORRECTION — category_code/sort_order must reflect the corrected value
   updateAiCardUI(idx);
   prgMarkDirty();
 }
-
-// Close nested menus on outside click
-document.addEventListener('click', function (e) {
-  if (!e.target.closest('.hold-nest-wrap')) closeAllHoldNests();
-});
 
 
 
