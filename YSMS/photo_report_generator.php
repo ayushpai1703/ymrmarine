@@ -94,6 +94,12 @@ include 'includes/header.php';
 .prg-ai-btn:hover { background: #e8f4f8; }
 .prg-ai-btn:disabled { opacity: .55; cursor: default; }
 .prg-ai-btn i.fa-spin { margin-right: 3px; }
+/* Direction (Forward/Aft/Port/Starboard) one-click toggle — small accent
+   variant of the same button so it reads as a quick correction, not a
+   second primary action. */
+.prg-dir-btn { border-color: #00b4d8; color: #006e85; }
+.prg-dir-btn:hover { background: #e3fbff; }
+.prg-dir-btn i { margin-right: 3px; }
 .prg-ai-bulkbar {
     display: none; align-items: center; gap: 10px; flex-wrap: wrap;
     margin-top: 8px; padding: 8px 10px; border-radius: 10px;
@@ -1902,6 +1908,57 @@ async function getAiImageSource(p) {
   return null;
 }
 
+/** ---- Directional "Change to <opposite>" toggle (ADD-ON) ----
+ *  Works purely on the already-generated description text — no extra AI
+ *  call. Detects a Forward/Aft/Port/Starboard word already present and
+ *  swaps ONLY that whole word for its opposite (case-preserving), so
+ *  everything else in the sentence — object, condition, equipment, etc. —
+ *  is left exactly as it was. */
+var PRG_DIRECTION_OPPOSITE = { forward: 'aft', aft: 'forward', port: 'starboard', starboard: 'port' };
+
+function prgDetectDirectionWord(text) {
+  if (!text) return null;
+  var t = String(text);
+  if (/\bforward\b/i.test(t)) return 'forward';
+  if (/\baft\b/i.test(t)) return 'aft';
+  if (/\bstarboard\b/i.test(t)) return 'starboard';
+  // "port" alone is ambiguous (port-of-call vs. port side) — the survey
+  // domain means it's the ship side in practice, but skip the "port of ..."
+  // phrasing just in case it ever appears in free-text descriptions.
+  if (/\bport\b/i.test(t) && !/\bport\s+of\b/i.test(t)) return 'port';
+  return null;
+}
+
+function prgMatchWordCase(sample, word) {
+  if (sample === sample.toUpperCase() && sample !== sample.toLowerCase()) return word.toUpperCase();
+  if (sample.charAt(0) === sample.charAt(0).toUpperCase()) return word.charAt(0).toUpperCase() + word.slice(1);
+  return word;
+}
+
+/** Whole-word, case-preserving swap — never touches any other word, so
+ *  "port side bulkhead and coaming" -> "starboard side bulkhead and coaming"
+ *  (not "starboard bulkhead" or "starboard side"). */
+function prgSwapDirectionWord(text, fromWord, toWord) {
+  if (!text) return text;
+  var re = new RegExp('\\b' + fromWord + '\\b', 'gi');
+  return String(text).replace(re, function (m) { return prgMatchWordCase(m, toWord); });
+}
+
+function onDirectionToggleClick(idx) {
+  var p = photos[idx];
+  if (!p) return;
+  var dirWord = prgDetectDirectionWord(p.desc);
+  if (!dirWord) return;
+  var opp = PRG_DIRECTION_OPPOSITE[dirWord];
+  p.desc = prgSwapDirectionWord(p.desc, dirWord, opp);
+  // Keep the structure dropdown's own side value in sync too, so its label
+  // and any future manual re-pick reflect the new side consistently.
+  if (p.holdSub) p.holdSub = prgSwapDirectionWord(p.holdSub, dirWord, opp);
+  p.descManual = true; // one-click correction — AI must never auto-overwrite it again (same convention as onHoldNestPick)
+  updateAiCardUI(idx);
+  prgMarkDirty();
+}
+
 function aiStatusLabel(status) {
   switch (status) {
     case 'generating': return 'Generating…';
@@ -1939,6 +1996,20 @@ function aiControlsHtml(p, idx) {
   var errHtml = (status === 'failed' && p.aiError)
     ? '<div class="text-danger" style="font-size:10.5px;width:100%;">' + esc(p.aiError) + '</div>'
     : '';
+  // ADD-ON: one-click Forward↔Aft / Port↔Starboard toggle, shown only when
+  // the current description actually contains one of those words — reuses
+  // whatever text is already there, no extra AI call.
+  var dirWord = prgDetectDirectionWord(p.desc);
+  var dirBtnHtml = '';
+  if (dirWord) {
+    var oppWord = PRG_DIRECTION_OPPOSITE[dirWord];
+    var oppLabel = oppWord.charAt(0).toUpperCase() + oppWord.slice(1);
+    dirBtnHtml =
+      '<button type="button" class="prg-ai-btn prg-dir-btn" id="dirBtn_' + idx + '"' + (busy ? ' disabled' : '') +
+        ' onclick="onDirectionToggleClick(' + idx + ')" title="Swap the directional side/orientation — everything else in the description stays the same" data-testid="ai-direction-toggle-' + idx + '">' +
+        '<i class="fa-solid fa-right-left"></i> Change to ' + esc(oppLabel) +
+      '</button>';
+  }
   return (
     '<div class="prg-ai-row" id="aiRow_' + idx + '">' +
       aiBadgeHtml(status) +
@@ -1946,6 +2017,7 @@ function aiControlsHtml(p, idx) {
         ' onclick="onAiButtonClick(' + idx + ')" data-testid="ai-generate-button-' + idx + '">' +
         '<i class="fa-solid ' + btnIcon + '"></i> ' + esc(btnLabel) +
       '</button>' +
+      dirBtnHtml +
       errHtml +
     '</div>'
   );

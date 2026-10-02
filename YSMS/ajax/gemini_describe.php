@@ -309,6 +309,10 @@ if (count($cleanOptions) > 0) {
 - Always choose the option whose object occupies the majority of the photograph\'s frame — that is the subject the photo is documenting. Do not default to "Forward" (or the first-listed option) out of habit; independently look at whatever side/orientation evidence is visible (surrounding hold/ship structure, access arrangements, ladder position, longitudinal/transverse arrangement) and make your best judgment even if that evidence is only partial — never leave a photo unclassified.
 - Do not classify a Bulkhead photo as a Ladder just because a ladder is attached to or near it, and do not classify a Ladder close-up as a Bulkhead. Classify by what the photograph PRIMARILY documents: if a full/major portion of a bulkhead is visible, classify the bulkhead\'s orientation; if only a close-up of a ladder is the main subject and the bulkhead cannot be reliably identified, classify the ladder type instead.
 - If classifying a ladder, distinguish by shape: a straight ladder with parallel rails roughly vertical is "Vertical"; a curved or spiral ladder is "Australian"; a straight ladder installed at a clear angle/slope is the inclined one.
+- Identify the primary subject of the photograph based on the largest visually significant and contextually relevant object. Do not select a secondary object merely because it is clearly visible. If multiple objects are present, determine which object represents the main focus of the photograph.
+- Do not hallucinate objects that are not clearly visible.
+- If confidence between two objects is close, select the object that occupies the larger visually relevant area.
+- Always map the result to one of the existing numbered list options — never invent a new one.
 ';
 
     $classifyPromptBase = $contextPrefix . 'You are a professional Marine Cargo, Hull, and Bunker Surveyor with over 20 years of experience.
