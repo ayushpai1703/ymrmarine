@@ -1908,13 +1908,16 @@ async function getAiImageSource(p) {
   return null;
 }
 
-/** ---- Directional "Change to <opposite>" toggle (ADD-ON) ----
+/** ---- Directional "Change to <side>" toggle (ADD-ON) ----
  *  Works purely on the already-generated description text — no extra AI
  *  call. Detects a Forward/Aft/Port/Starboard word already present and
- *  swaps ONLY that whole word for its opposite (case-preserving), so
- *  everything else in the sentence — object, condition, equipment, etc. —
- *  is left exactly as it was. */
-var PRG_DIRECTION_OPPOSITE = { forward: 'aft', aft: 'forward', port: 'starboard', starboard: 'port' };
+ *  swaps ONLY that whole word for a different one of the four (case-
+ *  preserving), so everything else in the sentence — object, condition,
+ *  equipment, etc. — is left exactly as it was. All four sides are shown
+ *  as one-click options (not just the forward/aft or port/starboard pair)
+ *  since the report's own structure picker treats all four as siblings
+ *  of the same "side" selection. */
+var PRG_DIRECTIONS = ['forward', 'aft', 'port', 'starboard'];
 
 function prgDetectDirectionWord(text) {
   if (!text) return null;
@@ -1944,19 +1947,101 @@ function prgSwapDirectionWord(text, fromWord, toWord) {
   return String(text).replace(re, function (m) { return prgMatchWordCase(m, toWord); });
 }
 
-function onDirectionToggleClick(idx) {
+function onDirectionToggleClick(idx, toWord) {
   var p = photos[idx];
   if (!p) return;
   var dirWord = prgDetectDirectionWord(p.desc);
-  if (!dirWord) return;
-  var opp = PRG_DIRECTION_OPPOSITE[dirWord];
-  p.desc = prgSwapDirectionWord(p.desc, dirWord, opp);
+  if (!dirWord || dirWord === toWord) return;
+  p.desc = prgSwapDirectionWord(p.desc, dirWord, toWord);
   // Keep the structure dropdown's own side value in sync too, so its label
   // and any future manual re-pick reflect the new side consistently.
-  if (p.holdSub) p.holdSub = prgSwapDirectionWord(p.holdSub, dirWord, opp);
+  if (p.holdSub) p.holdSub = prgSwapDirectionWord(p.holdSub, dirWord, toWord);
   p.descManual = true; // one-click correction — AI must never auto-overwrite it again (same convention as onHoldNestPick)
   updateAiCardUI(idx);
   prgMarkDirty();
+}
+
+/** ---- Per-photo "free text" AI description (ADD-ON) ----
+ *  Escape hatch for when the fixed dropdown options don't actually match
+ *  a photo: calls the SAME backend endpoint but in its existing free-text
+ *  mode (no "options" list sent), which returns an independent AI-written
+ *  sentence instead of a dropdown pick — reusing the already-implemented
+ *  free-text path in ajax/gemini_describe.php rather than adding a new
+ *  endpoint. Runs per photo, independent of every other photo's state. */
+async function generateFreeAiDescriptionForIndex(idx, attempt) {
+  attempt = attempt || 0;
+  var p = photos[idx];
+  if (!p) return;
+  p.aiStatus = 'generating';
+  p.aiError = '';
+  updateAiCardUI(idx);
+
+  try {
+    var src = await getAiImageSource(p);
+    if (!src) throw { message: 'Unable to analyze this image.', noRetry: true };
+
+    var context = { vessel_name: PRG_VESSEL_NAME || '', category: p.category || '' };
+
+    var res = await fetch('ajax/gemini_describe.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': PRG_CSRF_TOKEN },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        image: abToBase64(src.ab),
+        mime: src.mime,
+        survey_id: PRG_SURVEY_ID,
+        context: context
+        // no "options" — free-text mode, independent of the fixed dropdown list
+      })
+    });
+    var json = null;
+    try { json = await res.json(); } catch (e) { /* non-JSON response, e.g. a server error page */ }
+
+    if (!res.ok || !json || !json.success || !json.description) {
+      var message = (json && json.message) || ('AI description could not be generated (HTTP ' + res.status + ').');
+      throw { message: message, retryAfter: json && json.retry_after ? json.retry_after : null };
+    }
+
+    p.desc = json.description;
+    // Deliberately NOT setting p.aiHash here — the classification-mode
+    // dedupe cache (generateAiDescriptionForIndex) matches on aiHash and
+    // would otherwise copy this free-text sentence (with no holdMain/
+    // holdSub) onto an unrelated duplicate photo expecting a dropdown pick.
+    p.aiStatus = 'completed';
+    p.aiError = '';
+    // A free-text result is independent of the dropdown pick — treat it the
+    // same as any other manual correction so bulk/AI regenerate never
+    // silently overwrites what the surveyor specifically asked for here.
+    p.descManual = true;
+    updateAiCardUI(idx);
+    prgMarkDirty();
+  } catch (err) {
+    var msg = (err && err.message) || 'AI description could not be generated. Please try again.';
+    var noRetry = !!(err && err.noRetry);
+    var maxRetries = 2;
+    if (!noRetry && attempt < maxRetries) {
+      var delay = (err && err.retryAfter) ? (err.retryAfter * 1000) : (attempt === 0 ? 1000 : 3000);
+      if (err && err.retryAfter) {
+        _aiCooldownUntil = Math.max(_aiCooldownUntil, Date.now() + delay);
+      }
+      updateAiCardUI(idx);
+      await new Promise(function (r) { setTimeout(r, delay); });
+      return generateFreeAiDescriptionForIndex(idx, attempt + 1);
+    }
+    p.aiStatus = 'failed';
+    p.aiError = msg;
+    updateAiCardUI(idx);
+  }
+}
+
+function onFreeAiDescriptionClick(idx) {
+  var p = photos[idx];
+  if (!p) return;
+  var hasExisting = p.aiStatus === 'completed' || p.aiStatus === 'failed' || p.descManual;
+  if (hasExisting) {
+    if (!window.confirm('This will replace the current description with a fresh, independent AI description for this photo. Continue?')) return;
+  }
+  generateFreeAiDescriptionForIndex(idx, 0);
 }
 
 function aiStatusLabel(status) {
@@ -1996,20 +2081,31 @@ function aiControlsHtml(p, idx) {
   var errHtml = (status === 'failed' && p.aiError)
     ? '<div class="text-danger" style="font-size:10.5px;width:100%;">' + esc(p.aiError) + '</div>'
     : '';
-  // ADD-ON: one-click Forward↔Aft / Port↔Starboard toggle, shown only when
-  // the current description actually contains one of those words — reuses
-  // whatever text is already there, no extra AI call.
+  // ADD-ON: one-click side toggle — shown only when the current description
+  // actually contains one of the 4 directional words — reuses whatever text
+  // is already there, no extra AI call. All 3 OTHER sides are offered (not
+  // just the forward/aft or port/starboard pair) since the structure picker
+  // treats all 4 as options of the same "side" field.
   var dirWord = prgDetectDirectionWord(p.desc);
   var dirBtnHtml = '';
   if (dirWord) {
-    var oppWord = PRG_DIRECTION_OPPOSITE[dirWord];
-    var oppLabel = oppWord.charAt(0).toUpperCase() + oppWord.slice(1);
-    dirBtnHtml =
-      '<button type="button" class="prg-ai-btn prg-dir-btn" id="dirBtn_' + idx + '"' + (busy ? ' disabled' : '') +
-        ' onclick="onDirectionToggleClick(' + idx + ')" title="Swap the directional side/orientation — everything else in the description stays the same" data-testid="ai-direction-toggle-' + idx + '">' +
-        '<i class="fa-solid fa-right-left"></i> Change to ' + esc(oppLabel) +
-      '</button>';
+    PRG_DIRECTIONS.forEach(function (d) {
+      if (d === dirWord) return;
+      var label = d.charAt(0).toUpperCase() + d.slice(1);
+      dirBtnHtml +=
+        '<button type="button" class="prg-ai-btn prg-dir-btn" id="dirBtn_' + idx + '_' + d + '"' + (busy ? ' disabled' : '') +
+          ' onclick="onDirectionToggleClick(' + idx + ',\'' + d + '\')" title="Change the directional side/orientation to ' + esc(label) + ' — everything else in the description stays the same" data-testid="ai-direction-toggle-' + idx + '-' + d + '">' +
+          '<i class="fa-solid fa-right-left"></i> Change to ' + esc(label) +
+        '</button>';
+    });
   }
+  // ADD-ON: independent free-text AI description per photo — for when the
+  // fixed dropdown list above doesn't actually have a matching option.
+  var freeAiBtnHtml =
+    '<button type="button" class="prg-ai-btn prg-dir-btn" id="freeAiBtn_' + idx + '"' + (busy ? ' disabled' : '') +
+      ' onclick="onFreeAiDescriptionClick(' + idx + ')" title="Dropdown pick not matching this photo? Get an independent AI-written description for just this photo." data-testid="ai-free-description-button-' + idx + '">' +
+      '<i class="fa-solid fa-comment-dots"></i> Free AI Description' +
+    '</button>';
   return (
     '<div class="prg-ai-row" id="aiRow_' + idx + '">' +
       aiBadgeHtml(status) +
@@ -2018,6 +2114,7 @@ function aiControlsHtml(p, idx) {
         '<i class="fa-solid ' + btnIcon + '"></i> ' + esc(btnLabel) +
       '</button>' +
       dirBtnHtml +
+      freeAiBtnHtml +
       errHtml +
     '</div>'
   );
