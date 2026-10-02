@@ -899,7 +899,9 @@ var PRG_MASTER_ORDER = (function () {
   r('Ship Side', 'Anchor Chain');
   r('Ship Side', 'Windlass');
   r('Ship Side', 'Life Boat');
-  r('Ship Side', 'Weather Deck');
+  r('Ship Side', 'Weather Deck', 'Port Side');
+  r('Ship Side', 'Weather Deck', 'Starboard Side');
+  r('Ship Side', 'Weather Deck'); // fallback: sub not chosen yet
 
   r('Deck Side', 'Main Deck', 'From Forward Side');
   r('Deck Side', 'Forward Main Deck Railing');
