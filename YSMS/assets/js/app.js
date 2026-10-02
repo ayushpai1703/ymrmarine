@@ -105,6 +105,7 @@ $(document).ready(function() {
         const client = String($scope.find('[data-filter-client]').val() || '');
         const status = String($scope.find('[data-filter-status]').val() || '');
         const surveyor = String($scope.find('[data-filter-surveyor]').val() || '');
+        const month = String($scope.find('[data-filter-month]').val() || '');
         const sort = String($scope.find('[data-list-sort]').val() || 'newest');
         const cards = container.find('[data-survey-card]').get();
 
@@ -135,7 +136,8 @@ $(document).ready(function() {
                 && (!place || cardAttr($card, 'place') === place)
                 && (!client || cardAttr($card, 'client') === client)
                 && (!status || cardAttr($card, 'status') === status)
-                && (!surveyor || cardAttr($card, 'surveyor') === surveyor);
+                && (!surveyor || cardAttr($card, 'surveyor') === surveyor)
+                && (!month || cardAttr($card, 'month') === month);
             $card.toggle(show);
             if (show) {
                 visible++;
@@ -149,7 +151,7 @@ $(document).ready(function() {
         $scope.find('[data-list-count]').text(visible);
     }
 
-    $(document).on('input change', '[data-list-search], [data-filter-type], [data-filter-place], [data-filter-client], [data-filter-status], [data-filter-surveyor], [data-list-sort]', function() {
+    $(document).on('input change', '[data-list-search], [data-filter-type], [data-filter-place], [data-filter-client], [data-filter-status], [data-filter-surveyor], [data-filter-month], [data-list-sort]', function() {
         updateSurveyList($(this).closest('[data-list-scope]'));
     });
     $(document).on('click', '[data-filter-toggle]', function() {
@@ -160,7 +162,7 @@ $(document).ready(function() {
     $(document).on('click', '[data-clear-filters]', function() {
         const scope = $(this).closest('[data-list-scope]');
         scope.find('[data-list-search]').val('');
-        scope.find('[data-filter-type], [data-filter-place], [data-filter-client], [data-filter-status], [data-filter-surveyor]').val('');
+        scope.find('[data-filter-type], [data-filter-place], [data-filter-client], [data-filter-status], [data-filter-surveyor], [data-filter-month]').val('');
         scope.find('[data-list-sort]').val('newest');
         updateSurveyList(scope);
     });
