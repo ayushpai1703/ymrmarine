@@ -100,6 +100,9 @@ include 'includes/header.php';
 .prg-dir-btn { border-color: #00b4d8; color: #006e85; }
 .prg-dir-btn:hover { background: #e3fbff; }
 .prg-dir-btn i { margin-right: 3px; }
+.prg-dir-btn.active { background: #006e85; border-color: #006e85; color: #fff; }
+.prg-dir-btn.active:hover { background: #006e85; }
+.prg-side-label { font-size: 10.5px; font-weight: 650; color: #64748b; margin-right: 2px; }
 .prg-ai-bulkbar {
     display: none; align-items: center; gap: 10px; flex-wrap: wrap;
     margin-top: 8px; padding: 8px 10px; border-radius: 10px;
@@ -1868,33 +1871,6 @@ function quickHashArrayBuffer(ab) {
   return len + '_' + h.toString(16);
 }
 
-/** The fixed list of description choices for a photo's category, in display
- *  order — the exact same options the dropdown/nested-menu UI already
- *  offers. AI picks ONE of these (by position) instead of writing free
- *  text, so the result always matches the report's own standard phrasing. */
-function aiOptionsForPhoto(p) {
-  var cat = p.category || '';
-  if (!isStructureCategory(cat)) {
-    return DESC_OPTIONS.map(function (label) {
-      return { label: label, main: null, sub: null };
-    });
-  }
-  var cfg = structCfg(cat);
-  var out = [];
-  cfg.main.forEach(function (main) {
-    var leaves = holdAllLeafLabels(main, cat);
-    if (!leaves.length) {
-      out.push({ label: main, main: main, sub: '' });
-    } else {
-      leaves.forEach(function (leaf) {
-        var label = (main === 'Tank Top') ? 'Tank Top' : (main + ' › ' + leaf);
-        out.push({ label: label, main: main, sub: leaf });
-      });
-    }
-  });
-  return out;
-}
-
 /** True original (this session only) when available; otherwise the photo's
  *  already-stored report copy (still perfectly usable for analysis). */
 async function getAiImageSource(p) {
@@ -1908,16 +1884,22 @@ async function getAiImageSource(p) {
   return null;
 }
 
-/** ---- Directional "Change to <side>" toggle (ADD-ON) ----
+/** ---- Directional "side" quick-select (ADD-ON) ----
  *  Works purely on the already-generated description text — no extra AI
- *  call. Detects a Forward/Aft/Port/Starboard word already present and
- *  swaps ONLY that whole word for a different one of the four (case-
- *  preserving), so everything else in the sentence — object, condition,
- *  equipment, etc. — is left exactly as it was. All four sides are shown
- *  as one-click options (not just the forward/aft or port/starboard pair)
- *  since the report's own structure picker treats all four as siblings
- *  of the same "side" selection. */
+ *  call. The AI's own description deliberately never includes a side (see
+ *  the free-text prompt in ajax/gemini_describe.php) — the surveyor picks
+ *  it here with one click. If a side word is already present (e.g. after
+ *  an earlier click, or a manual structure-dropdown pick), clicking a
+ *  different side SWAPS only that whole word, case-preserving, leaving
+ *  everything else in the sentence — object, condition, equipment, etc. —
+ *  exactly as it was. If no side is present yet, the chosen side is
+ *  inserted right after "View of ", matching the report's own existing
+ *  phrasing convention (side before object, e.g. "View of Port Side
+ *  Bulkhead"). All four sides are always offered as one-click options,
+ *  since the report's own structure picker treats them as siblings of the
+ *  same "side" selection. */
 var PRG_DIRECTIONS = ['forward', 'aft', 'port', 'starboard'];
+var PRG_SIDE_CANONICAL = { forward: 'Forward', aft: 'Aft', port: 'Port Side', starboard: 'Starboard Side' };
 
 function prgDetectDirectionWord(text) {
   if (!text) return null;
@@ -1932,116 +1914,61 @@ function prgDetectDirectionWord(text) {
   return null;
 }
 
+/** Case-adapts a (possibly multi-word) replacement to match the matched
+ *  original text's case style: ALL CAPS stays ALL CAPS, all lowercase
+ *  stays all lowercase, anything else (e.g. "Port Side") becomes Title
+ *  Case on each word. */
 function prgMatchWordCase(sample, word) {
   if (sample === sample.toUpperCase() && sample !== sample.toLowerCase()) return word.toUpperCase();
-  if (sample.charAt(0) === sample.charAt(0).toUpperCase()) return word.charAt(0).toUpperCase() + word.slice(1);
-  return word;
+  if (sample === sample.toLowerCase()) return word.toLowerCase();
+  return word.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
 }
 
-/** Whole-word, case-preserving swap — never touches any other word, so
- *  "port side bulkhead and coaming" -> "starboard side bulkhead and coaming"
- *  (not "starboard bulkhead" or "starboard side"). */
+/** Case-preserving swap of the whole side phrase — never touches any other
+ *  word, so "port side bulkhead and coaming" -> "starboard side bulkhead
+ *  and coaming" (not "starboard bulkhead" or "starboard side"). Matches
+ *  the direction word TOGETHER with any existing "side"/"-side" suffix as
+ *  one unit and replaces it with the target's own canonical form (Port/
+ *  Starboard always carry "Side", Forward/Aft never do) — so switching
+ *  correctly adds or drops that suffix instead of keeping whatever
+ *  suffix the original text happened to have. */
 function prgSwapDirectionWord(text, fromWord, toWord) {
   if (!text) return text;
-  var re = new RegExp('\\b' + fromWord + '\\b', 'gi');
-  return String(text).replace(re, function (m) { return prgMatchWordCase(m, toWord); });
+  var toLabel = PRG_SIDE_CANONICAL[toWord] || toWord;
+  var re = new RegExp('\\b' + fromWord + '\\b(\\s*-?\\s*side)?', 'gi');
+  return String(text).replace(re, function (m) { return prgMatchWordCase(m, toLabel); });
+}
+
+/** Inserts a side right after the leading "View of " (matching the
+ *  report's existing side-before-object phrasing), e.g.
+ *  "View of bulkhead, showing rust." -> "View of Forward bulkhead, showing rust."
+ *  Falls back to prepending "View of <side> " if the text doesn't already
+ *  start with "View of" for some reason. */
+function prgInsertSideWord(text, toWord) {
+  var label = PRG_SIDE_CANONICAL[toWord] || toWord;
+  var t = String(text || '');
+  if (!t.trim()) return t;
+  var m = t.match(/^(View of\s+)(.*)$/i);
+  if (m) return m[1] + label + ' ' + m[2];
+  return 'View of ' + label + ' ' + t;
 }
 
 function onDirectionToggleClick(idx, toWord) {
   var p = photos[idx];
-  if (!p) return;
+  if (!p || !p.desc) return;
   var dirWord = prgDetectDirectionWord(p.desc);
-  if (!dirWord || dirWord === toWord) return;
-  p.desc = prgSwapDirectionWord(p.desc, dirWord, toWord);
-  // Keep the structure dropdown's own side value in sync too, so its label
-  // and any future manual re-pick reflect the new side consistently.
-  if (p.holdSub) p.holdSub = prgSwapDirectionWord(p.holdSub, dirWord, toWord);
+  if (dirWord === toWord) return;
+  if (dirWord) {
+    p.desc = prgSwapDirectionWord(p.desc, dirWord, toWord);
+    // Keep the structure dropdown's own side value in sync too, so its
+    // label and any future manual re-pick reflect the new side consistently.
+    if (p.holdSub) p.holdSub = prgSwapDirectionWord(p.holdSub, dirWord, toWord);
+  } else {
+    p.desc = prgInsertSideWord(p.desc, toWord);
+  }
   p.descManual = true; // one-click correction — AI must never auto-overwrite it again (same convention as onHoldNestPick)
   updateAiCardUI(idx);
   prgMarkDirty();
-}
-
-/** ---- Per-photo "free text" AI description (ADD-ON) ----
- *  Escape hatch for when the fixed dropdown options don't actually match
- *  a photo: calls the SAME backend endpoint but in its existing free-text
- *  mode (no "options" list sent), which returns an independent AI-written
- *  sentence instead of a dropdown pick — reusing the already-implemented
- *  free-text path in ajax/gemini_describe.php rather than adding a new
- *  endpoint. Runs per photo, independent of every other photo's state. */
-async function generateFreeAiDescriptionForIndex(idx, attempt) {
-  attempt = attempt || 0;
-  var p = photos[idx];
-  if (!p) return;
-  p.aiStatus = 'generating';
-  p.aiError = '';
-  updateAiCardUI(idx);
-
-  try {
-    var src = await getAiImageSource(p);
-    if (!src) throw { message: 'Unable to analyze this image.', noRetry: true };
-
-    var context = { vessel_name: PRG_VESSEL_NAME || '', category: p.category || '' };
-
-    var res = await fetch('ajax/gemini_describe.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': PRG_CSRF_TOKEN },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        image: abToBase64(src.ab),
-        mime: src.mime,
-        survey_id: PRG_SURVEY_ID,
-        context: context
-        // no "options" — free-text mode, independent of the fixed dropdown list
-      })
-    });
-    var json = null;
-    try { json = await res.json(); } catch (e) { /* non-JSON response, e.g. a server error page */ }
-
-    if (!res.ok || !json || !json.success || !json.description) {
-      var message = (json && json.message) || ('AI description could not be generated (HTTP ' + res.status + ').');
-      throw { message: message, retryAfter: json && json.retry_after ? json.retry_after : null };
-    }
-
-    p.desc = json.description;
-    // Deliberately NOT setting p.aiHash here — the classification-mode
-    // dedupe cache (generateAiDescriptionForIndex) matches on aiHash and
-    // would otherwise copy this free-text sentence (with no holdMain/
-    // holdSub) onto an unrelated duplicate photo expecting a dropdown pick.
-    p.aiStatus = 'completed';
-    p.aiError = '';
-    // A free-text result is independent of the dropdown pick — treat it the
-    // same as any other manual correction so bulk/AI regenerate never
-    // silently overwrites what the surveyor specifically asked for here.
-    p.descManual = true;
-    updateAiCardUI(idx);
-    prgMarkDirty();
-  } catch (err) {
-    var msg = (err && err.message) || 'AI description could not be generated. Please try again.';
-    var noRetry = !!(err && err.noRetry);
-    var maxRetries = 2;
-    if (!noRetry && attempt < maxRetries) {
-      var delay = (err && err.retryAfter) ? (err.retryAfter * 1000) : (attempt === 0 ? 1000 : 3000);
-      if (err && err.retryAfter) {
-        _aiCooldownUntil = Math.max(_aiCooldownUntil, Date.now() + delay);
-      }
-      updateAiCardUI(idx);
-      await new Promise(function (r) { setTimeout(r, delay); });
-      return generateFreeAiDescriptionForIndex(idx, attempt + 1);
-    }
-    p.aiStatus = 'failed';
-    p.aiError = msg;
-    updateAiCardUI(idx);
-  }
-}
-
-function onFreeAiDescriptionClick(idx) {
-  var p = photos[idx];
-  if (!p) return;
-  var hasExisting = p.aiStatus === 'completed' || p.aiStatus === 'failed' || p.descManual;
-  if (hasExisting) {
-    if (!window.confirm('This will replace the current description with a fresh, independent AI description for this photo. Continue?')) return;
-  }
-  generateFreeAiDescriptionForIndex(idx, 0);
 }
 
 function aiStatusLabel(status) {
@@ -2081,31 +2008,25 @@ function aiControlsHtml(p, idx) {
   var errHtml = (status === 'failed' && p.aiError)
     ? '<div class="text-danger" style="font-size:10.5px;width:100%;">' + esc(p.aiError) + '</div>'
     : '';
-  // ADD-ON: one-click side toggle — shown only when the current description
-  // actually contains one of the 4 directional words — reuses whatever text
-  // is already there, no extra AI call. All 3 OTHER sides are offered (not
-  // just the forward/aft or port/starboard pair) since the structure picker
-  // treats all 4 as options of the same "side" field.
+  // ADD-ON: side quick-select — always offered once there's a description
+  // to attach a side to (the AI's own text never includes one). Shows all 4
+  // sides; the currently-selected one (if any) is marked active/disabled,
+  // clicking any other one swaps it in-place (or inserts it, if none is
+  // set yet) with no extra AI call.
   var dirWord = prgDetectDirectionWord(p.desc);
   var dirBtnHtml = '';
-  if (dirWord) {
+  if (p.desc && String(p.desc).trim()) {
+    dirBtnHtml += '<span class="prg-side-label">Side:</span>';
     PRG_DIRECTIONS.forEach(function (d) {
-      if (d === dirWord) return;
-      var label = d.charAt(0).toUpperCase() + d.slice(1);
+      var isActive = d === dirWord;
+      var label = PRG_SIDE_CANONICAL[d];
       dirBtnHtml +=
-        '<button type="button" class="prg-ai-btn prg-dir-btn" id="dirBtn_' + idx + '_' + d + '"' + (busy ? ' disabled' : '') +
-          ' onclick="onDirectionToggleClick(' + idx + ',\'' + d + '\')" title="Change the directional side/orientation to ' + esc(label) + ' — everything else in the description stays the same" data-testid="ai-direction-toggle-' + idx + '-' + d + '">' +
-          '<i class="fa-solid fa-right-left"></i> Change to ' + esc(label) +
+        '<button type="button" class="prg-ai-btn prg-dir-btn' + (isActive ? ' active' : '') + '" id="dirBtn_' + idx + '_' + d + '"' + ((busy || isActive) ? ' disabled' : '') +
+          ' onclick="onDirectionToggleClick(' + idx + ',\'' + d + '\')" title="' + (isActive ? 'Current side' : ('Set the side to ' + esc(label) + ' — everything else in the description stays the same')) + '" data-testid="ai-direction-toggle-' + idx + '-' + d + '">' +
+          '<i class="fa-solid ' + (isActive ? 'fa-check' : 'fa-right-left') + '"></i> ' + esc(label) +
         '</button>';
     });
   }
-  // ADD-ON: independent free-text AI description per photo — for when the
-  // fixed dropdown list above doesn't actually have a matching option.
-  var freeAiBtnHtml =
-    '<button type="button" class="prg-ai-btn prg-dir-btn" id="freeAiBtn_' + idx + '"' + (busy ? ' disabled' : '') +
-      ' onclick="onFreeAiDescriptionClick(' + idx + ')" title="Dropdown pick not matching this photo? Get an independent AI-written description for just this photo." data-testid="ai-free-description-button-' + idx + '">' +
-      '<i class="fa-solid fa-comment-dots"></i> Free AI Description' +
-    '</button>';
   return (
     '<div class="prg-ai-row" id="aiRow_' + idx + '">' +
       aiBadgeHtml(status) +
@@ -2114,7 +2035,6 @@ function aiControlsHtml(p, idx) {
         '<i class="fa-solid ' + btnIcon + '"></i> ' + esc(btnLabel) +
       '</button>' +
       dirBtnHtml +
-      freeAiBtnHtml +
       errHtml +
     '</div>'
   );
@@ -2199,8 +2119,14 @@ async function generateAiDescriptionForIndex(idx, attempt) {
     }
 
     var context = { vessel_name: PRG_VESSEL_NAME || '', category: p.category || '' };
-    var opts = aiOptionsForPhoto(p);
 
+    // Free-text mode (no "options" sent): the AI writes its own description
+    // directly — "View of [Object], [Condition]." — instead of picking from
+    // the fixed dropdown list. The dropdown itself (holdMain/holdSub) is
+    // left untouched here; it's still available as an independent manual
+    // pick via the structure selector, same as before. The side (Forward/
+    // Aft/Port Side/Starboard Side) is deliberately never written by the
+    // AI either — see the direction quick-select buttons in aiControlsHtml.
     var res = await fetch('ajax/gemini_describe.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': PRG_CSRF_TOKEN },
@@ -2209,36 +2135,19 @@ async function generateAiDescriptionForIndex(idx, attempt) {
         image: abToBase64(src.ab),
         mime: src.mime,
         survey_id: PRG_SURVEY_ID,
-        context: context,
-        options: opts.map(function (o) { return o.label; })
+        context: context
       })
     });
     var json = null;
     try { json = await res.json(); } catch (e) { /* non-JSON response, e.g. a server error page */ }
 
-    if (!res.ok || !json || !json.success) {
+    if (!res.ok || !json || !json.success || !json.description) {
       var message = (json && json.message) || ('AI description could not be generated (HTTP ' + res.status + ').');
       throw { message: message, retryAfter: json && json.retry_after ? json.retry_after : null };
     }
 
-    var pick = (json.index && json.index >= 1 && json.index <= opts.length) ? opts[json.index - 1] : null;
-    if (!pick) {
-      // The server always commits to a pick on success; a missing/invalid
-      // index here means something is genuinely wrong, not a legitimate
-      // "no match" — surface it as a failure rather than guessing.
-      throw { message: 'AI returned an unexpected result for this photo. Please try again.', noRetry: true };
-    }
-
-    if (pick.main !== null) {
-      p.holdMain = pick.main;
-      p.holdSub = pick.sub || '';
-      p.desc = buildHoldAutoDesc(pick.main, pick.sub, p.category);
-    } else {
-      p.desc = pick.label;
-    }
-
+    p.desc = json.description;
     p.aiHash = hash;
-    p.aiConfidence = (typeof json.confidence === 'number') ? json.confidence : null;
     p.aiStatus = 'completed';
     p.aiError = '';
     updateAiCardUI(idx);

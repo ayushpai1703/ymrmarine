@@ -12,16 +12,24 @@
  *
  * When "options" is a non-empty list, the endpoint runs in classification
  * mode: instead of writing free text, Gemini picks the single best-matching
- * item from that fixed list (the report's own existing structure/description
- * dropdown options) and only its 1-based list position is returned — faster
- * (a few output tokens instead of a full sentence) and it reuses the report's
- * own standard phrasing instead of inventing new wording. The model always
- * commits to one pick (majority-of-frame object + its side), never an
- * "unable to determine" — confidence/evidence come back for logging and
- * quality tracking only, not to withhold an answer. A reply that genuinely
- * can't be parsed even after one server-side retry is surfaced as an error
- * (success: false) so the client's normal retry/backoff handles it.
+ * item from that fixed list and only its 1-based list position is returned —
+ * faster (a few output tokens instead of a full sentence) and it reuses
+ * whatever fixed phrasing the caller supplied instead of inventing new
+ * wording. The model always commits to one pick (majority-of-frame object +
+ * its side), never an "unable to determine" — confidence/evidence come back
+ * for logging and quality tracking only, not to withhold an answer. A reply
+ * that genuinely can't be parsed even after one server-side retry is
+ * surfaced as an error (success: false) so the client's normal retry/
+ * backoff handles it.
  *   { "success": true, "index": 7, "confidence": 92, "evidence": "..." }
+ * NOTE: photo_report_generator.php currently always calls this in free-text
+ * mode (below) — the AI writes its own "View of [Object], [Condition]."
+ * sentence with no side/position, which the surveyor then adds with a
+ * one-click Forward/Aft/Port Side/Starboard Side quick-select, independent
+ * of the report's structure dropdown (itself a separate, fully manual
+ * pick that never calls this endpoint). Classification mode above is kept
+ * as-is since it's a documented, independently usable mode of this shared
+ * endpoint — not dead code, just not the current caller's choice.
  *
  * Without "options" (or an empty list), falls back to free-text mode:
  *   { "success": true, "description": "..." }
@@ -416,7 +424,7 @@ Your task is to identify the MAIN visible object or structure and generate a pro
 
 Rules:
 1. Identify the primary object only (Bulkhead, Bulk Frame, Hopper, Tank Top, Coaming, Hatch Cover, Side Shell, Cargo Hold, Pipe, Ladder, Manhole, Bilge Well, etc.).
-2. Identify its visible position whenever possible (Port Side, Starboard Side, Forward, Aft, Upper, Lower, Center, Fore End, Aft End, etc.).
+2. Do NOT identify, guess, or mention the vessel side/position/orientation (Port, Starboard, Forward, Aft, Upper, Lower, Center, etc.) even if it looks visible — the surveyor selects that separately afterward, not you.
 3. Mention only visible conditions.
 4. If damage is visible, mention the damage type such as: Corrosion, Surface Rust, Heavy Rust Scale, Coating Breakdown, Coating Peeling, Crack, Dent, Deformation, Pitting, Indentation, Buckling, Cargo Residue, Water Stain, Temporary Repair.
 5. Never guess information that is not clearly visible.
@@ -426,18 +434,18 @@ Rules:
 9. Do not include introductions, explanations, reasoning steps, confidence scores, markdown, bullets, asterisks, or quotation marks.
 10. Never start with phrases like \"Let\'s\", \"I can see\", \"Looking at\", \"The image shows\", or any thinking text.
 
-Output Format (strict):
-View of [Object Name] at [Position], showing [Visible Condition].
+Output Format (strict — no side/position, that is added separately):
+View of [Object Name], [Visible Condition].
 
 Examples:
-View of Port Side Bulkhead, showing moderate surface corrosion.
-View of Starboard Lower Hopper, showing coating breakdown and localized rust.
-View of Tank Top at Centre, showing clean surface with no visible damage observed.
-View of Forward Hatch Coaming, showing minor paint peeling.
+View of Bulkhead, showing moderate surface corrosion.
+View of Hopper, showing coating breakdown and localized rust.
+View of Tank Top, showing clean surface with no visible damage observed.
+View of Hatch Coaming, showing minor paint peeling.
 View of Bulk Frame, showing heavy rust scale and coating deterioration.
 View of Bilge Well, showing clean condition with no visible damage observed.
 
-If the object or position cannot be confidently determined, use:
+If the object cannot be confidently determined, use:
 View of marine structure, showing [Visible Condition].
 
 Return only that one sentence and nothing else.';
