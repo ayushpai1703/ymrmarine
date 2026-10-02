@@ -134,13 +134,6 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-ship"></i>
             <span>Request Survey</span>
         </a>
-        <!-- Documents — mobile drawer only now (desktop-only-nav removed), all
-             of this client's uploaded report files (see documents.php, scoped
-             to their own clients.id). -->
-        <a href="documents.php" class="nav-item-btn drawer-reveal <?= ($current_page == 'documents.php') ? 'active' : '' ?>" data-testid="sidebar-documents-link">
-            <i class="fa-solid fa-folder-open"></i>
-            <span>Documents</span>
-        </a>
         <?php elseif ($user_role === 'Super Admin'): ?>
         <!-- Desktop sidebar + mobile drawer: Super Admin Quick Actions — Add Client +
              Add Admin only (Assign Vessel / Admin Controls / Manage Templates /
