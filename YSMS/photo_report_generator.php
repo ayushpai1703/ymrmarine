@@ -114,6 +114,11 @@ include 'includes/header.php';
 }
 .prg-classify-info.empty { display: none; }
 .prg-classify-info i { color: #94a3b8; margin-right: 3px; }
+.prg-review-flag {
+    display: inline-flex; align-items: center; gap: 3px; margin-left: 7px;
+    color: #9a3412; font-weight: 650;
+}
+.prg-review-flag i { color: #d97706; margin-right: 0; }
 .prg-ai-bulkbar {
     display: none; align-items: center; gap: 10px; flex-wrap: wrap;
     margin-top: 8px; padding: 8px 10px; border-radius: 10px;
@@ -864,6 +869,39 @@ function prgInferStructure(p) {
   }
 }
 
+// Confidence (0-100, matches the scale already used by p.aiConfidence
+// throughout this module) below which a photo is flagged for review —
+// non-blocking: the photo still gets its best-guess category_code and
+// still appears in the report in the right place, it's just visibly
+// marked so the surveyor double-checks it. Clears automatically once the
+// photo has been manually confirmed/corrected (p.descManual).
+var PRG_LOW_CONFIDENCE_THRESHOLD = 80;
+
+function prgClassificationStatus(p) {
+  if (!p.holdMain) return 'unclassified';
+  if (typeof p.aiConfidence === 'number' && p.aiConfidence < PRG_LOW_CONFIDENCE_THRESHOLD && !p.descManual) {
+    return 'review_required';
+  }
+  return 'classified';
+}
+
+/** Keeps p.categoryCode / p.categoryName / p.holdNumber / p.classificationStatus
+ *  in sync with the photo's current (category, holdMain, holdSub) — the
+ *  "SAVE CATEGORY CODE" step. Safe to call any time holdMain/holdSub may
+ *  have changed (AI result, manual dropdown pick, direction toggle); also
+ *  called unconditionally on every photo right before sorting, so the
+ *  codes used for report order are always current regardless of which
+ *  code path last touched the photo. */
+function prgUpdateCategoryCode(p) {
+  if (!p) return;
+  var row = prgLookupCategoryCode(p);
+  p.categoryCode = row ? row.code : '';
+  p.categoryName = row ? row.name : '';
+  var hm = isHoldCategory(p.category) ? (String(p.category).match(/\d+/) || [])[0] : '';
+  p.holdNumber = hm ? parseInt(hm, 10) : null;
+  p.classificationStatus = prgClassificationStatus(p);
+}
+
 /**
  * Master walk-around order for "Auto-sort order" — a single sequence that
  * spans Ship Side, Deck Side and the Holds together (not grouped into
@@ -947,6 +985,141 @@ var PRG_MASTER_ORDER = (function () {
 
 var PRG_MASTER_CAT_ORDER = ["Ship Side","Hold No. 1","Hold No. 2","Hold No. 3","Hold No. 4","Hold No. 5","Hold No. 6","Hold No. 7","Hold No. 8","Hold No. 9","Deck Side","Others"];
 
+/* ==========================================================================
+   🌟 MASTER CATEGORY CODE CONFIGURATION — single source of truth for the
+   fixed report order (F01, FM02, H04-07, ...). This is the formal, explicit
+   version of the walk-around order above: every report section gets a
+   stable, human-readable code and an explicit numeric sort_order, and the
+   final report is sorted by THAT number, never by upload order.
+
+   The AI is never asked to produce this code — it only identifies the
+   primary object + direction (ajax/gemini_describe.php), which the
+   application resolves into the photo's category/holdMain/holdSub (via
+   prgSyncHoldDropdownFromAi, or a manual structure-dropdown pick); THIS
+   table then maps that already-known (category, holdMain, holdSub) onto
+   one of the fixed codes below. "AI identifies. CODE sorts. REPORT renders."
+
+   Numbering follows the requested scheme (distinct codes 10 apart; each
+   hold a 20-wide block with its 15 codes at +1..+15) but holds are based
+   at 1000+ instead of 500+ so that all 9 holds (up to 1175) fit cleanly
+   before Main Deck From Aft, which the request's own abbreviated 3-hold
+   example would otherwise collide with once extended to 9 holds. Relative
+   order is identical to the request; only the illustrative numbers differ.
+   ========================================================================== */
+var PRG_HOLD_INTERNAL_CODES = [
+  // [code suffix, label fragment, main option, sub-match substring or null]
+  ['01', 'Hold Entrance',                   'Hatch Entrance', null],
+  ['02', 'Hatch Coamings - Forward',        'Coamings', 'Forward'],
+  ['03', 'Hatch Coamings - Port Side',      'Coamings', 'Port Side'],
+  ['04', 'Hatch Coamings - Starboard Side', 'Coamings', 'Starboard Side'],
+  ['05', 'Hatch Coamings - Aft',            'Coamings', 'Aft'],
+  ['06', 'Bulkheads - Forward',             'Bulkheads', 'Forward'],
+  ['07', 'Bulkheads - Port Side',           'Bulkheads', 'Port Side'],
+  ['08', 'Bulkheads - Starboard Side',      'Bulkheads', 'Starboard Side'],
+  ['09', 'Tank Top',                        'Tank Top', null],
+  ['10', 'Bilge Tank - Port Side',          'Bilge Tanks', 'Port Side'],
+  ['11', 'Bilge Tank - Starboard Side',     'Bilge Tanks', 'Starboard Side'],
+  ['12', 'Vertical Ladder',                 'Ladders', 'Vertical'],
+  ['13', 'Australian Ladder',               'Ladders', 'Australian'],
+  ['14', 'Bulkheads - Aft',                 'Bulkheads', 'Aft'],
+  ['15', 'Drain Channel',                   'Drain Channel', null]
+];
+
+// Extra hold-level dropdown values that exist in HOLD_MAIN_OPTIONS/HOLD_SUB_MAP
+// but aren't named in the 15-step spec above. Not given their own numbered
+// code letters (01-15 are fixed and must keep their exact mandated numbers),
+// so each gets a distinct code suffix and a fractional sort offset placed
+// at its correct historical position (per the pre-existing walk-around
+// order: Hatch Entrance -> Hatch Covers -> Coamings..., and
+// ...Bulkheads-Starboard -> Bulk Frames -> Hoppers -> Tank Top..., and
+// ...Australian Ladder -> Ladders-Inclination -> Bulkheads-Aft...).
+var PRG_HOLD_EXTRA_CODES = [
+  // [code suffix, label fragment, main option, sub-match substring or null, offset]
+  ['HC', 'Hatch Covers',     'Hatch Covers', null,          1.5],
+  ['BF', 'Bulk Frames',      'Bulk Frames',  null,          8.3],
+  ['HO', 'Hoppers',          'Hoppers',      null,          8.6],
+  ['LI', 'Ladders - Inclination', 'Ladders', 'Inclination', 13.5]
+];
+
+var PRG_CATEGORY_CODE_TABLE = (function () {
+  var rows = [];
+  function add(code, name, sortOrder, cat, main, subContains) {
+    rows.push({ code: code, name: name, sort_order: sortOrder, cat: cat, main: main, subContains: subContains || null });
+  }
+
+  add('F01', 'Forward Section', 100, 'Ship Side', 'Forward Section', null);
+  add('F02', 'Bulbows', 110, 'Ship Side', 'Bulbous Bow', null);
+  add('F03', 'Hull Photos', 120, 'Ship Side', 'Hull', null);
+  add('F03D', 'Draft Marks', 125, 'Ship Side', 'Draft Marks', null); // existing dropdown value, not named in the spec; kept between Hull and Rudder per the proven walk-around order
+  add('F04', 'Rudder', 130, 'Ship Side', 'Rudder', null);
+  add('F05', 'Stern Section', 140, 'Ship Side', 'Aft Section', null);
+
+  add('FM01', 'Forward Mooring Station', 200, 'Ship Side', 'Mooring Station', 'Forecastle');
+  add('FM02', 'Forward Mooring Winches - Port Side', 210, 'Ship Side', 'Forward Mooring Winches', 'Port Side');
+  add('FM03', 'Forward Mooring Winches - Starboard Side', 220, 'Ship Side', 'Forward Mooring Winches', 'Starboard Side');
+  add('FM04', 'Anchor Chain', 230, 'Ship Side', 'Anchor Chain', null);
+  add('FMW1', 'Windlass', 231, 'Ship Side', 'Windlass', null); // existing dropdown value, not named in the spec; kept between Anchor Chain and Weather Deck per the proven walk-around order
+  add('FML1', 'Life Boat', 232, 'Ship Side', 'Life Boat', null); // existing dropdown value, not named in the spec; same reasoning as Windlass above
+
+  add('WD01', 'Weather Deck - Port Side', 300, 'Ship Side', 'Weather Deck', 'Port Side');
+  add('WD02', 'Weather Deck - Starboard Side', 310, 'Ship Side', 'Weather Deck', 'Starboard Side');
+
+  add('MD01', 'Main Deck From Forward', 400, 'Deck Side', 'Main Deck', 'From Forward Side');
+  add('MD02', 'Main Deck Railing - Forward', 410, 'Deck Side', 'Forward Main Deck Railing', null);
+  add('MD03', 'Forward Cross Deck', 420, 'Ship Side', 'Forward Cross Deck', null);
+
+  for (var h = 1; h <= 9; h++) {
+    var cat = 'Hold No. ' + h;
+    var base = 1000 + (h - 1) * 20;
+    PRG_HOLD_INTERNAL_CODES.forEach(function (row, idx) {
+      add('H0' + h + '-' + row[0], 'Hold ' + h + ' - ' + row[1], base + idx + 1, cat, row[2], row[3]);
+    });
+    PRG_HOLD_EXTRA_CODES.forEach(function (row) {
+      add('H0' + h + '-' + row[0], 'Hold ' + h + ' - ' + row[1], base + row[4], cat, row[2], row[3]);
+    });
+  }
+
+  add('MA01', 'Main Deck From Aft', 1200, 'Deck Side', 'Main Deck', 'From Aft Side');
+  add('MA02', 'Main Deck Railing - Aft', 1210, 'Deck Side', 'Aft Main Deck Railing', null);
+  add('MA03', 'Aft Cross Deck', 1220, 'Ship Side', 'Aft Cross Deck', null); // not named in the spec, but symmetric with MD03 (Forward Cross Deck) — same existing dropdown value, must not be dropped
+
+  add('AM01', 'Aft Mooring Station', 1300, 'Ship Side', 'Mooring Station', 'Poop');
+  add('AM02', 'Aft Mooring Winches - Port Side', 1310, 'Ship Side', 'Aft Mooring Winches', 'Port Side');
+  add('AM03', 'Aft Mooring Winches - Starboard Side', 1320, 'Ship Side', 'Aft Mooring Winches', 'Starboard Side');
+
+  return rows;
+})();
+
+// Mains that are genuinely ambiguous between two non-symmetric codes
+// (forward vs. aft) when no side has been chosen yet — e.g. "Mooring
+// Station" alone could mean Forecastle (FM01) or Poop (AM01). Unlike a
+// Port/Starboard pair (safe to default to Port until confirmed), these
+// must NOT silently guess; prgLookupCategoryCode returns no match instead,
+// leaving the photo to the safety-net fallback (see prgReportSortOrder)
+// until a side is actually chosen, exactly like the proven walk-around
+// order above (which likewise has no bare fallback rule for either).
+var PRG_CODE_NO_BLIND_FALLBACK_MAINS = ['Mooring Station', 'Main Deck'];
+
+/** Looks up the single fixed category_code row for a photo's CURRENT
+ *  (category, holdMain, holdSub) — never invents a code, never asks the
+ *  AI for one. Returns null when nothing in the table matches yet (not
+ *  a structure category, holdMain not set, or an ambiguous forward/aft
+ *  main with no side chosen yet). */
+function prgLookupCategoryCode(p) {
+  if (!p || !isStructureCategory(p.category) || !p.holdMain) return null;
+  var matches = PRG_CATEGORY_CODE_TABLE.filter(function (row) {
+    return row.cat === p.category && row.main === p.holdMain;
+  });
+  if (!matches.length) return null;
+  var subLower = p.holdSub ? String(p.holdSub).toLowerCase() : '';
+  for (var i = 0; i < matches.length; i++) {
+    if (matches[i].subContains && subLower.indexOf(matches[i].subContains.toLowerCase()) >= 0) return matches[i];
+  }
+  if (matches.length > 1 && PRG_CODE_NO_BLIND_FALLBACK_MAINS.indexOf(p.holdMain) !== -1) return null;
+  matches = matches.slice().sort(function (a, b) { return a.sort_order - b.sort_order; });
+  return matches[0];
+}
+
 /**
  * Rank of one photo in PRG_MASTER_ORDER — most specific rule wins:
  *  1) exact category + main + a sub the photo's holdSub contains
@@ -969,11 +1142,24 @@ function masterRankOf(p) {
   return PRG_MASTER_ORDER.length + (ci >= 0 ? ci : 999) * 1000;
 }
 
+/** PRIMARY report ordering key: the fixed numeric sort_order from the
+ *  category_code table (section 7/13 of the spec — "the only primary
+ *  ordering field must be category_code"). Falls back to the already-
+ *  proven walk-around rank (pushed well past every real code) only for
+ *  the rare case prgLookupCategoryCode can't yet resolve — an ambiguous
+ *  forward/aft main with no side chosen, or a category this table
+ *  doesn't cover — so nothing is ever silently misplaced mid-report. */
+function prgReportSortOrder(p) {
+  var row = prgLookupCategoryCode(p);
+  if (row) return row.sort_order;
+  return 100000 + masterRankOf(p);
+}
+
 function sortPhotosForReport() {
   // Infer structure fields before ranking
-  photos.forEach(function (p) { prgInferStructure(p); });
+  photos.forEach(function (p) { prgInferStructure(p); prgUpdateCategoryCode(p); });
 
-  var decorated = photos.map(function (p, i) { return { p: p, i: i, rank: masterRankOf(p) }; });
+  var decorated = photos.map(function (p, i) { return { p: p, i: i, rank: prgReportSortOrder(p) }; });
   decorated.sort(function (a, b) {
     if (a.rank !== b.rank) return a.rank - b.rank;
     return a.i - b.i;
@@ -1120,7 +1306,11 @@ function prgSerializePhotos() {
       aiConfidence: (typeof p.aiConfidence === 'number') ? p.aiConfidence : null,
       aiPrimaryObject: p.aiPrimaryObject || '',
       aiLocationContext: p.aiLocationContext || '',
-      aiPhotoQuality: p.aiPhotoQuality || ''
+      aiPhotoQuality: p.aiPhotoQuality || '',
+      categoryCode: p.categoryCode || '',
+      categoryName: p.categoryName || '',
+      holdNumber: (typeof p.holdNumber === 'number') ? p.holdNumber : null,
+      classificationStatus: p.classificationStatus || ''
     };
   });
 }
@@ -1226,7 +1416,11 @@ async function prgLoadDraft() {
           aiConfidence: (typeof sp.aiConfidence === 'number') ? sp.aiConfidence : null,
           aiPrimaryObject: sp.aiPrimaryObject || '',
           aiLocationContext: sp.aiLocationContext || '',
-          aiPhotoQuality: sp.aiPhotoQuality || ''
+          aiPhotoQuality: sp.aiPhotoQuality || '',
+          categoryCode: sp.categoryCode || '',
+          categoryName: sp.categoryName || '',
+          holdNumber: (typeof sp.holdNumber === 'number') ? sp.holdNumber : null,
+          classificationStatus: sp.classificationStatus || ''
           // _aiSourceFile intentionally omitted — the true original isn't
           // persisted across reloads (same as the report image itself never
           // was); Regenerate after a restore falls back to the stored `ab`.
@@ -1788,6 +1982,10 @@ async function addPhotos(list) {
         aiPrimaryObject: '',
         aiLocationContext: '',
         aiPhotoQuality: '',
+        categoryCode: '',
+        categoryName: '',
+        holdNumber: isHoldCategory(cat) ? parseInt((String(cat).match(/\d+/) || [])[0], 10) : null,
+        classificationStatus: 'unclassified',
         _aiSourceFile: file
       });
       // Update every photo (or every few for very large batches stays responsive enough)
@@ -2071,6 +2269,7 @@ function onDirectionToggleClick(idx, toWord) {
     p.desc = prgInsertSideWord(p.desc, toWord);
   }
   p.descManual = true; // one-click correction — AI must never auto-overwrite it again (same convention as onHoldNestPick)
+  prgUpdateCategoryCode(p); // side changed -> category_code may change too (e.g. H04-06 -> H04-08)
   updateAiCardUI(idx);
   prgMarkDirty();
 }
@@ -2229,6 +2428,7 @@ async function generateAiDescriptionForIndex(idx, attempt) {
       p.aiStatus = 'completed';
       p.aiConfidence = dup.aiConfidence;
       p.aiError = '';
+      prgUpdateCategoryCode(p);
       updateAiCardUI(idx);
       prgMarkDirty();
       return;
@@ -2278,6 +2478,7 @@ async function generateAiDescriptionForIndex(idx, attempt) {
     p.aiConfidence = (typeof json.confidence === 'number') ? json.confidence : null;
     p.aiStatus = 'completed';
     p.aiError = '';
+    prgUpdateCategoryCode(p); // SAVE CATEGORY CODE — keeps it current for both the UI and report sorting
     updateAiCardUI(idx);
     prgMarkDirty();
   } catch (err) {
@@ -2428,6 +2629,7 @@ function holdNestLabel(p) {
 function aiClassificationInfoHtml(p, idx) {
   var bits = [];
   if (p.holdMain || typeof p.aiConfidence === 'number') {
+    if (p.categoryCode) bits.push(p.categoryCode);
     if (isHoldCategory(p.category)) {
       bits.push('Holds');
       var hm = (String(p.category).match(/\d+/) || [])[0];
@@ -2441,10 +2643,17 @@ function aiClassificationInfoHtml(p, idx) {
     if (p.holdSub) bits.push(p.holdSub);
     if (typeof p.aiConfidence === 'number') bits.push(p.aiConfidence + '% confidence');
   }
+  // Non-blocking low-confidence flag — report generation still includes
+  // and correctly places the photo; this just asks the surveyor to glance
+  // at it. Clears automatically once manually confirmed/corrected.
+  var reviewHtml = (p.classificationStatus === 'review_required')
+    ? '<span class="prg-review-flag"><i class="fa-solid fa-triangle-exclamation"></i> Review Required</span>'
+    : '';
   // Always render the element (even empty) so updateAiCardUI can refresh it
   // in place by id; CSS hides it until there's something to show.
   return '<div class="prg-classify-info' + (bits.length ? '' : ' empty') + '" id="classifyInfo_' + idx + '" title="AI-detected classification — use the dropdown above to correct it">' +
     (bits.length ? ('<i class="fa-solid fa-diagram-project"></i> ' + esc(bits.join(' · '))) : '') +
+    reviewHtml +
   '</div>';
 }
 
@@ -2853,6 +3062,7 @@ function onHoldNestPick(idx, btn) {
   var descEl = document.getElementById('holdDesc_' + idx);
   if (descEl && !wasManual) descEl.value = p.desc || '';
   p.descManual = true; // an explicit structure pick is a manual correction — AI must never auto-overwrite it again
+  prgUpdateCategoryCode(p); // MANUAL CORRECTION — category_code/sort_order must reflect the corrected value
   updateAiCardUI(idx);
   prgMarkDirty();
 }
