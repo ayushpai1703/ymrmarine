@@ -75,60 +75,27 @@ include 'includes/header.php';
     margin-bottom: .55rem;
 }
 .prg-photo-item.dragging { opacity: .45; border: 2px dashed #00b4d8; }
-/* AI Description */
-.prg-ai-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: .35rem; }
-.prg-ai-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 10.5px; font-weight: 650; padding: 2px 8px; border-radius: 999px;
-    border: 1px solid transparent;
-}
-.prg-ai-badge.ai-pending { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
-.prg-ai-badge.ai-generating { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
-.prg-ai-badge.ai-completed { background: #ecfdf3; color: #166534; border-color: #bbf0cd; }
-.prg-ai-badge.ai-failed { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
-.prg-ai-badge.ai-manual { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
-.prg-ai-btn {
-    font-size: 11px; padding: 2px 9px; border-radius: 7px;
-    border: 1px solid #a0c4d8; background: #fff; color: #0b1e46; font-weight: 600;
-}
-.prg-ai-btn:hover { background: #e8f4f8; }
-.prg-ai-btn:disabled { opacity: .55; cursor: default; }
-.prg-ai-btn i.fa-spin { margin-right: 3px; }
-/* Direction (Forward/Aft/Port/Starboard) one-click toggle — small accent
-   variant of the same button so it reads as a quick correction, not a
-   second primary action. */
-.prg-dir-btn { border-color: #00b4d8; color: #006e85; }
-.prg-dir-btn:hover { background: #e3fbff; }
-.prg-dir-btn i { margin-right: 3px; }
-.prg-dir-btn.active { background: #006e85; border-color: #006e85; color: #fff; }
-.prg-dir-btn.active:hover { background: #006e85; }
+/* Side (Forward/Aft/Port/Starboard) quick-select — always-visible button
+   row, site blue (--accent-blue / --btn-blue from header.php), rounded-
+   rect style. Click any side to set it; the current one shows solid/filled. */
+.prg-side-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: .35rem; }
 .prg-side-label { font-size: 10.5px; font-weight: 650; color: #64748b; margin-right: 2px; }
-.prg-ai-quality-warn {
-    font-size: 10.5px; width: 100%; color: #9a3412; background: #fff7ed;
-    border: 1px solid #fed7aa; border-radius: 6px; padding: 3px 8px; margin-top: 2px;
+.prg-side-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: 10px;
+    border: 1.5px solid #2563eb; background: #fff; color: #1e3a8a;
 }
-/* Section · Hold N · Subsection · Position · confidence — UI requirement:
-   surface the AI's detected classification next to the structure dropdown. */
+.prg-side-btn:hover { background: #eff4ff; }
+.prg-side-btn i { font-size: 11px; }
+.prg-side-btn.active { background: #1e3a8a; border-color: #1e3a8a; color: #fff; }
+.prg-side-btn.active:hover { background: #1e3a8a; }
+/* Section · Hold N · Subsection · Position — surfaces which report
+   section/category_code a photo (manually picked) will sort into. */
 .prg-classify-info {
     font-size: 10.5px; color: #475569; margin-top: 3px; padding-left: 1px;
 }
 .prg-classify-info.empty { display: none; }
 .prg-classify-info i { color: #94a3b8; margin-right: 3px; }
-.prg-review-flag {
-    display: inline-flex; align-items: center; gap: 3px; margin-left: 7px;
-    color: #9a3412; font-weight: 650;
-}
-.prg-review-flag i { color: #d97706; margin-right: 0; }
-.prg-ai-bulkbar {
-    display: none; align-items: center; gap: 10px; flex-wrap: wrap;
-    margin-top: 8px; padding: 8px 10px; border-radius: 10px;
-    background: #f0f7fb; border: 1px solid #c5dce8; font-size: 12px;
-}
-.prg-ai-bulkbar.show { display: flex; }
-.prg-ai-bulkbar .progress { flex: 1 1 160px; min-width: 120px; height: 8px; }
-.prg-ai-bulkbar .progress-bar { background: #0b1e46; }
-.prg-ai-bulk-counts { display: flex; gap: 8px; flex-wrap: wrap; color: #475569; font-size: 11px; }
-.prg-ai-bulk-counts b { color: #1e293b; }
 /* Structure picker — always-visible button group (no dropdown/popover):
    every main option is its own small pill button; tapping one that has
    sub-options reveals them right below as another pill row (simple
@@ -359,22 +326,7 @@ include 'includes/header.php';
             <div id="photoControls" class="mt-2" style="display:none">
                 <button type="button" class="btn btn-outline-primary btn-sm me-1" onclick="sortPhotosForReport(); renderPhotos(); prgMarkDirty(); toast('Photos sorted by Ship / Hold / Deck structure order');"><i class="fa-solid fa-arrow-down-short-wide me-1"></i>Auto-sort order</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearAllPhotos()"><i class="fa-solid fa-trash me-1"></i>Clear All</button>
-                <?php if (AI_PHOTO_DESCRIPTION_ENABLED): ?>
-                <button type="button" class="btn btn-outline-info btn-sm" id="prgAiBulkBtn" onclick="generateAllAiDescriptions()" data-testid="ai-generate-all-button"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Generate AI Descriptions</button>
-                <?php endif; ?>
             </div>
-            <?php if (AI_PHOTO_DESCRIPTION_ENABLED): ?>
-            <div id="prgAiBulkBar" class="prg-ai-bulkbar" data-testid="ai-bulk-progress">
-                <div class="progress"><div id="prgAiBulkProgressBar" class="progress-bar" style="width:0%"></div></div>
-                <span id="prgAiBulkPct" style="min-width:34px;">0%</span>
-                <div class="prg-ai-bulk-counts">
-                    <span>Completed: <b id="prgAiCountCompleted">0</b></span>
-                    <span>Processing: <b id="prgAiCountProcessing">0</b></span>
-                    <span>Pending: <b id="prgAiCountPending">0</b></span>
-                    <span>Failed: <b id="prgAiCountFailed">0</b></span>
-                </div>
-            </div>
-            <?php endif; ?>
             <!-- Live estimated Word file size — Original / Compressed tabs -->
             <div id="prgSizeEstimate" class="mt-3 p-2 rounded border" style="display:none; background:#f0f7fb; border-color:#c5dce8 !important; font-size:12.5px;">
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
@@ -441,14 +393,7 @@ var PRG_SURVEY_ID = <?= (int)$id ?>;
 var PRG_DRAFT_KEY = 'prg_draft_v1_' + (PRG_SURVEY_ID > 0 ? String(PRG_SURVEY_ID) : 'standalone');
 var PRG_AUTOSAVE_MS = 10000;
 
-/* ===== AI Photo Description (Gemini) — feature flags from config.php.
-   The API key itself never reaches the browser; only these non-secret
-   toggles do, the same way PRG_SURVEY_ID is already injected above. ===== */
-var PRG_AI_ENABLED = <?= AI_PHOTO_DESCRIPTION_ENABLED ? 'true' : 'false' ?>;
-var PRG_AI_AUTO = <?= AI_AUTO_DESCRIPTION ? 'true' : 'false' ?>;
-var PRG_AI_MAX_CONCURRENT = <?= (int)AI_MAX_CONCURRENT ?>;
 var PRG_VESSEL_NAME = <?= json_encode($vesselName, JSON_UNESCAPED_UNICODE) ?>;
-var PRG_CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
 
 /* ===== Default description options (first = default selected) ===== */
 var DESC_OPTIONS = [
@@ -717,29 +662,13 @@ function prgInferStructure(p) {
   }
 }
 
-// Confidence (0-100, matches the scale already used by p.aiConfidence
-// throughout this module) below which a photo is flagged for review —
-// non-blocking: the photo still gets its best-guess category_code and
-// still appears in the report in the right place, it's just visibly
-// marked so the surveyor double-checks it. Clears automatically once the
-// photo has been manually confirmed/corrected (p.descManual).
-var PRG_LOW_CONFIDENCE_THRESHOLD = 80;
-
-function prgClassificationStatus(p) {
-  if (!p.holdMain) return 'unclassified';
-  if (typeof p.aiConfidence === 'number' && p.aiConfidence < PRG_LOW_CONFIDENCE_THRESHOLD && !p.descManual) {
-    return 'review_required';
-  }
-  return 'classified';
-}
-
-/** Keeps p.categoryCode / p.categoryName / p.holdNumber / p.classificationStatus
- *  in sync with the photo's current (category, holdMain, holdSub) — the
- *  "SAVE CATEGORY CODE" step. Safe to call any time holdMain/holdSub may
- *  have changed (AI result, manual dropdown pick, direction toggle); also
- *  called unconditionally on every photo right before sorting, so the
- *  codes used for report order are always current regardless of which
- *  code path last touched the photo.
+/** Keeps p.categoryCode / p.categoryName / p.holdNumber in sync with the
+ *  photo's current (category, holdMain, holdSub) — the "SAVE CATEGORY
+ *  CODE" step. Safe to call any time holdMain/holdSub may have changed
+ *  (manual dropdown pick, direction toggle); also called unconditionally
+ *  on every photo right before sorting, so the codes used for report
+ *  order are always current regardless of which code path last touched
+ *  the photo.
  *
  *  category_name is NEVER taken from the code table's own (internal-only)
  *  label — it is built fresh every time from this exact photo's own
@@ -760,7 +689,6 @@ function prgUpdateCategoryCode(p) {
   } else {
     p.categoryName = '';
   }
-  p.classificationStatus = prgClassificationStatus(p);
 }
 
 /**
@@ -853,12 +781,10 @@ var PRG_MASTER_CAT_ORDER = ["Ship Side","Hold No. 1","Hold No. 2","Hold No. 3","
    stable, human-readable code and an explicit numeric sort_order, and the
    final report is sorted by THAT number, never by upload order.
 
-   The AI is never asked to produce this code — it only identifies the
-   primary object + direction (ajax/gemini_describe.php), which the
-   application resolves into the photo's category/holdMain/holdSub (via
-   prgSyncHoldDropdownFromAi, or a manual structure-dropdown pick); THIS
-   table then maps that already-known (category, holdMain, holdSub) onto
-   one of the fixed codes below. "AI identifies. CODE sorts. REPORT renders."
+   Nothing produces this code directly — a photo's (category, holdMain,
+   holdSub) is set by the manual structure-dropdown pick, and THIS table
+   then maps that already-known combination onto one of the fixed codes
+   below. "CODE sorts. REPORT renders."
 
    Numbering follows the requested scheme (distinct codes 10 apart; each
    hold a 20-wide block with its 15 codes at +1..+15) but holds are based
@@ -969,8 +895,8 @@ var PRG_CATEGORY_CODE_TABLE = (function () {
 var PRG_CODE_NO_BLIND_FALLBACK_MAINS = ['Mooring Station', 'Main Deck'];
 
 /** Looks up the single fixed category_code row for a photo's CURRENT
- *  (category, holdMain, holdSub) — never invents a code, never asks the
- *  AI for one. Returns null when nothing in the table matches yet (not
+ *  (category, holdMain, holdSub) — never invents a code. Returns null
+ *  when nothing in the table matches yet (not
  *  a structure category, holdMain not set, or an ambiguous forward/aft
  *  main with no side chosen yet). */
 function prgLookupCategoryCode(p) {
@@ -1166,19 +1092,9 @@ function prgSerializePhotos() {
       holdMain: p.holdMain || '',
       holdSub: p.holdSub || '',
       descManual: !!p.descManual,
-      // A photo saved mid-'generating' had its in-flight request lost with
-      // the tab, so it's restored as 'pending' instead (see prgLoadDraft).
-      aiStatus: p.aiStatus === 'generating' ? 'pending' : (p.aiStatus || ''),
-      aiError: p.aiError || '',
-      aiHash: p.aiHash || '',
-      aiConfidence: (typeof p.aiConfidence === 'number') ? p.aiConfidence : null,
-      aiPrimaryObject: p.aiPrimaryObject || '',
-      aiLocationContext: p.aiLocationContext || '',
-      aiPhotoQuality: p.aiPhotoQuality || '',
       categoryCode: p.categoryCode || '',
       categoryName: p.categoryName || '',
-      holdNumber: (typeof p.holdNumber === 'number') ? p.holdNumber : null,
-      classificationStatus: p.classificationStatus || ''
+      holdNumber: (typeof p.holdNumber === 'number') ? p.holdNumber : null
     };
   });
 }
@@ -1278,20 +1194,9 @@ async function prgLoadDraft() {
           holdMain: sp.holdMain || '',
           holdSub: sp.holdSub || '',
           descManual: !!sp.descManual,
-          aiStatus: sp.aiStatus || '',
-          aiError: sp.aiError || '',
-          aiHash: sp.aiHash || '',
-          aiConfidence: (typeof sp.aiConfidence === 'number') ? sp.aiConfidence : null,
-          aiPrimaryObject: sp.aiPrimaryObject || '',
-          aiLocationContext: sp.aiLocationContext || '',
-          aiPhotoQuality: sp.aiPhotoQuality || '',
           categoryCode: sp.categoryCode || '',
           categoryName: sp.categoryName || '',
-          holdNumber: (typeof sp.holdNumber === 'number') ? sp.holdNumber : null,
-          classificationStatus: sp.classificationStatus || ''
-          // _aiSourceFile intentionally omitted — the true original isn't
-          // persisted across reloads (same as the report image itself never
-          // was); Regenerate after a restore falls back to the stored `ab`.
+          holdNumber: (typeof sp.holdNumber === 'number') ? sp.holdNumber : null
         });
       }
       renderPhotos();
@@ -1821,7 +1726,6 @@ async function addPhotos(list) {
   var defaultDesc = isStructureCategory(cat) ? '' : DESC_OPTIONS[0];
   var saved = 0;
   var totalFiles = files.length;
-  var startIdx = photos.length;
   prgShowProgress('Uploading & compressing photos', '0 / ' + totalFiles + ' · please wait…');
   try {
     for (var i = 0; i < files.length; i++) {
@@ -1843,18 +1747,9 @@ async function addPhotos(list) {
         holdMain: '',
         holdSub: '',
         descManual: false,
-        aiStatus: '',
-        aiError: '',
-        aiHash: '',
-        aiConfidence: null,
-        aiPrimaryObject: '',
-        aiLocationContext: '',
-        aiPhotoQuality: '',
         categoryCode: '',
         categoryName: '',
-        holdNumber: isHoldCategory(cat) ? parseInt((String(cat).match(/\d+/) || [])[0], 10) : null,
-        classificationStatus: 'unclassified',
-        _aiSourceFile: file
+        holdNumber: isHoldCategory(cat) ? parseInt((String(cat).match(/\d+/) || [])[0], 10) : null
       });
       // Update every photo (or every few for very large batches stays responsive enough)
       prgUpdateProgress(i + 1, totalFiles, (i + 1) + ' / ' + totalFiles + ' compressed · ' + cat);
@@ -1877,107 +1772,12 @@ async function addPhotos(list) {
   }
   toast(msg);
   updateSizeEstimate();
-
-  if (PRG_AI_ENABLED && PRG_AI_AUTO) {
-    var newIdx = [];
-    for (var ni = startIdx; ni < photos.length; ni++) newIdx.push(ni);
-    if (newIdx.length) enqueueAiDescriptions(newIdx);
-  }
 }
 
-/* ==========================================================================
-   🌟 AI Photo Description (Google Gemini via ajax/gemini_describe.php)
-   Browser never talks to Gemini directly — only to our own PHP endpoint,
-   which holds the API key. This module only ever WRITES to the same p.desc
-   field the existing dropdown/description controls already use, so nothing
-   downstream (report generation, draft save/restore) needs to change.
-   ========================================================================== */
-var AI_IMAGE_MAX_DIM = 1280; // long edge, px — analysis copy only; never touches the report image
-var _aiQueue = [];
-var _aiActive = 0;
-var _aiQueueRunning = false;
-/** Shared rate-limit cooldown (ms epoch) — when Gemini's free-tier quota is
- *  hit, every in-flight photo discovers it independently, but a NOT-yet-
- *  started photo would otherwise fire into the same exhausted quota right
- *  away. Pausing new starts until this clears lets the quota window recover
- *  before spending more of each photo's limited retry budget on it. */
-var _aiCooldownUntil = 0;
-
-/** Proportional resize (no crop) from the true original file — the report's
- *  own compressImage() center-crops to a fixed frame, which is right for the
- *  Word doc but would hide parts of the photo from the AI, so this is a
- *  separate, independent copy built only for analysis. */
-function resizeForAI(file) {
-  return new Promise(function (resolve) {
-    var url = URL.createObjectURL(file);
-    var img = new Image();
-    img.onload = async function () {
-      try {
-        var iw = img.naturalWidth || 1, ih = img.naturalHeight || 1;
-        var scale = Math.min(1, AI_IMAGE_MAX_DIM / Math.max(iw, ih));
-        var cw = Math.max(1, Math.round(iw * scale));
-        var ch = Math.max(1, Math.round(ih * scale));
-        var canvas = document.createElement('canvas');
-        canvas.width = cw; canvas.height = ch;
-        var ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, cw, ch);
-        var blob = await canvasToBlob(canvas, 0.82);
-        URL.revokeObjectURL(url);
-        if (!blob) { resolve(null); return; }
-        var ab = await blob.arrayBuffer();
-        resolve({ ab: ab, mime: 'image/jpeg' });
-      } catch (e) {
-        URL.revokeObjectURL(url);
-        resolve(null);
-      }
-    };
-    img.onerror = function () { URL.revokeObjectURL(url); resolve(null); };
-    img.src = url;
-  });
-}
-
-function abToBase64(ab) {
-  var bytes = new Uint8Array(ab);
-  var binary = '';
-  var chunk = 0x8000;
-  for (var i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
-
-/** Cheap, non-cryptographic checksum — good enough to catch an accidental
- *  duplicate upload without the cost/complexity of real hashing. */
-function quickHashArrayBuffer(ab) {
-  var view = new Uint8Array(ab);
-  var len = view.length;
-  var h = len >>> 0;
-  var step = Math.max(1, Math.floor(len / 256));
-  for (var i = 0; i < len; i += step) {
-    h = (h * 31 + view[i]) >>> 0;
-  }
-  return len + '_' + h.toString(16);
-}
-
-/** True original (this session only) when available; otherwise the photo's
- *  already-stored report copy (still perfectly usable for analysis). */
-async function getAiImageSource(p) {
-  if (p._aiSourceFile) {
-    var r = await resizeForAI(p._aiSourceFile);
-    if (r) return r;
-  }
-  if (p.ab) {
-    return { ab: p.ab, mime: (p.ext === 'png' ? 'image/png' : 'image/jpeg') };
-  }
-  return null;
-}
-
-/** ---- Directional "side" quick-select (ADD-ON) ----
- *  Works purely on the already-generated description text — no extra AI
- *  call. The AI's own description deliberately never includes a side (see
- *  the free-text prompt in ajax/gemini_describe.php) — the surveyor picks
- *  it here with one click. If a side word is already present (e.g. after
- *  an earlier click, or a manual structure-dropdown pick), clicking a
+/** ---- Directional "side" quick-select ----
+ *  Works purely on the already-typed description text. If a side word is
+ *  already present (e.g. after an earlier click, or a manual structure-
+ *  dropdown pick), clicking a
  *  different side SWAPS only that whole word, case-preserving, leaving
  *  everything else in the sentence — object, condition, equipment, etc. —
  *  exactly as it was. If no side is present yet, the chosen side is
@@ -2041,127 +1841,6 @@ function prgInsertSideWord(text, toWord) {
   return 'View of ' + label + ' ' + t;
 }
 
-/** ---- Primary-object dropdown auto-sync (ADD-ON) ----
- *  Matches the AI's detected primary_object (e.g. "Bulkhead") against THIS
- *  category's existing dropdown main options (e.g. "Bulkheads") — never
- *  inventing a new dropdown value. Scoped to Hold categories only, where
- *  every relevant main option takes a single flat Forward/Aft/Port Side/
- *  Starboard Side side (Ship Side / Deck Side have more complex nested
- *  side->section structures and are left exactly as before: manual-only). */
-function prgMatchPrimaryObjectToMain(primaryObject, category) {
-  if (!primaryObject) return null;
-  var norm = String(primaryObject).trim().toLowerCase();
-  if (!norm) return null;
-  var cfg = structCfg(category);
-  var mainList = cfg.main || [];
-  var singularMap = cfg.singular || {};
-  // 1) exact match against the singular form already used in this report's
-  //    own auto-descriptions (e.g. "Bulkhead" -> main option "Bulkheads").
-  for (var i = 0; i < mainList.length; i++) {
-    var m = mainList[i];
-    if ((singularMap[m] || m).toLowerCase() === norm) return m;
-  }
-  // 2) exact match against the main option itself (e.g. "Hull").
-  for (var i = 0; i < mainList.length; i++) {
-    if (mainList[i].toLowerCase() === norm) return mainList[i];
-  }
-  // 3) minimal plural tolerance only (trailing "s", e.g. AI said "Ladders"
-  //    instead of "Ladder"). Deliberately NOT a broad substring/prefix
-  //    match — that would let a bare location word like "Tank" falsely
-  //    match "Tank Top" and reintroduce the exact bug this is fixing.
-  for (var i = 0; i < mainList.length; i++) {
-    var m2 = mainList[i];
-    var sing = (singularMap[m2] || m2).toLowerCase();
-    if (sing + 's' === norm || norm + 's' === sing) return m2;
-  }
-  return null; // no confident match — leave the dropdown exactly as it was
-}
-
-/** True if `main`'s sub-list is a flat Forward/Aft/Port Side/Starboard Side
- *  set — used to decide whether to keep or strip a direction word when the
- *  object is changed (e.g. switching to Tank Top, which has no sides). */
-function prgMainSupportsDirection(main, category) {
-  var cfg = structCfg(category);
-  var subs = cfg.sub ? cfg.sub[main] : null;
-  if (!Array.isArray(subs)) return false;
-  return subs.indexOf('Forward') !== -1 || subs.indexOf('Aft') !== -1 ||
-    subs.indexOf('Port Side') !== -1 || subs.indexOf('Starboard Side') !== -1;
-}
-
-function prgSyncHoldDropdownFromAi(p, primaryObject, direction) {
-  if (!isHoldCategory(p.category)) return;
-  var matchedMain = prgMatchPrimaryObjectToMain(primaryObject, p.category);
-  if (!matchedMain) return;
-  p.holdMain = matchedMain;
-  var subs = HOLD_SUB_MAP[matchedMain];
-  p.holdSub = (Array.isArray(subs) && direction && subs.indexOf(direction) !== -1) ? direction : '';
-}
-
-/** ---- AI hierarchy pick (ADD-ON) ----
- *  Applies main_category / subcategory / sub_subcategory returned by
- *  ajax/gemini_describe.php — values the server has ALREADY strictly
- *  validated against this exact photo's own existing dropdown hierarchy
- *  (structCfg) and nulled out if not found. This function re-validates
- *  independently anyway (never trust a value just because it arrived from
- *  the server) before ever touching p.holdMain/p.holdSub, and only ever
- *  assigns one of the real, existing option strings — never a new,
- *  renamed, or paraphrased one. Covers Hold, Ship Side AND Deck Side
- *  (prgSyncHoldDropdownFromAi above stays Hold-only/fuzzy-match as the
- *  fallback when the AI didn't return a hierarchy pick at all).
- *  Returns true if it set the dropdown, false if there was nothing valid
- *  to apply (caller should fall back to prgSyncHoldDropdownFromAi). */
-function prgApplyAiHierarchyPick(p, mainCategory, subcategory, subSubcategory) {
-  if (!mainCategory || !isStructureCategory(p.category)) return false;
-  var cfg = structCfg(p.category);
-  if (cfg.main.indexOf(mainCategory) === -1) return false; // not an existing option — reject, never invent
-  var subs = cfg.sub ? cfg.sub[mainCategory] : null;
-  var finalSub = '';
-  if (Array.isArray(subs) && subs.length) {
-    if (subcategory && subs.indexOf(subcategory) !== -1) finalSub = subcategory;
-  } else if (subs && typeof subs === 'object') {
-    // 3-level nested (e.g. Hull -> Port Side -> At Bow Section): subcategory
-    // is the mid key, sub_subcategory the leaf. A mid-level pick with no
-    // confidently-matched leaf leaves holdSub empty rather than guessing
-    // a leaf — the main is still shown as selected, just without a sub
-    // highlighted, until the exact spot is confirmed.
-    if (subcategory && subs.hasOwnProperty(subcategory)) {
-      var leaves = subs[subcategory];
-      if (subSubcategory && Array.isArray(leaves) && leaves.indexOf(subSubcategory) !== -1) {
-        finalSub = subcategory + ' › ' + subSubcategory;
-      }
-    }
-  }
-  p.holdMain = mainCategory;
-  p.holdSub = finalSub;
-  return true;
-}
-
-/** Swaps the AI-identified object phrase for a new one, case-preserving,
- *  leaving direction/condition/extra detail untouched — same principle as
- *  the direction quick-select. If the exact old phrase can't be found
- *  verbatim (e.g. minor AI rephrasing), the text is left unchanged rather
- *  than guessing. */
-function prgSwapObjectWord(text, fromObject, toObject) {
-  var t = String(text || '');
-  if (!t || !fromObject) return t;
-  var escaped = String(fromObject).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  var re = new RegExp('\\b' + escaped + '\\b', 'i');
-  if (re.test(t)) {
-    return t.replace(re, function (m) { return prgMatchWordCase(m, toObject); });
-  }
-  return t;
-}
-
-/** Removes an existing Forward/Aft/Port Side/Starboard Side word (and its
- *  trailing space) — used when the newly-picked object doesn't take a side. */
-function prgStripDirectionWord(text) {
-  var t = String(text || '');
-  var dirWord = prgDetectDirectionWord(t);
-  if (!dirWord) return t;
-  var re = new RegExp('\\b' + dirWord + '\\b(\\s*-?\\s*side)?\\s*', 'i');
-  return t.replace(re, '').replace(/\s{2,}/g, ' ').trim();
-}
-
 function onDirectionToggleClick(idx, toWord) {
   var p = photos[idx];
   if (!p || !p.desc) return;
@@ -2175,323 +1854,56 @@ function onDirectionToggleClick(idx, toWord) {
   } else {
     p.desc = prgInsertSideWord(p.desc, toWord);
   }
-  p.descManual = true; // one-click correction — AI must never auto-overwrite it again (same convention as onHoldNestPick)
+  p.descManual = true; // one-click correction
   prgUpdateCategoryCode(p); // side changed -> category_code may change too (e.g. H04-06 -> H04-08)
-  updateAiCardUI(idx);
+  updatePhotoCardUI(idx);
   prgMarkDirty();
 }
 
-function aiStatusLabel(status) {
-  switch (status) {
-    case 'generating': return 'Generating…';
-    case 'completed': return 'AI description';
-    case 'failed': return 'AI failed';
-    case 'manual': return 'Manual';
-    case 'pending': return 'Queued';
-    default: return '';
-  }
-}
-
-function aiBadgeHtml(status) {
-  if (!status) return '';
-  var iconTag = status === 'pending'
-    ? '<i class="fa-regular fa-clock"></i>'
-    : '<i class="fa-solid ' + (
-        status === 'generating' ? 'fa-spinner fa-spin' :
-        status === 'completed' ? 'fa-wand-magic-sparkles' :
-        status === 'failed' ? 'fa-triangle-exclamation' :
-        'fa-pen'
-      ) + '"></i>';
-  return '<span class="prg-ai-badge ai-' + status + '">' + iconTag + ' ' + esc(aiStatusLabel(status)) + '</span>';
-}
-
-/** AI status badge + Generate/Regenerate button, shown under each photo's
- *  description field. Single root element so a status change can replace it
- *  in place (updateAiCardUI) without re-rendering the whole photo list. */
-function aiControlsHtml(p, idx) {
-  if (!PRG_AI_ENABLED) return '';
-  var status = p.descManual ? 'manual' : (p.aiStatus || '');
-  var busy = status === 'generating';
-  var hasResult = status === 'completed' || status === 'failed' || status === 'manual';
-  var btnLabel = hasResult ? 'Regenerate' : 'Generate AI Description';
-  var btnIcon = busy ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles';
-  var errHtml = (status === 'failed' && p.aiError)
-    ? '<div class="text-danger" style="font-size:10.5px;width:100%;">' + esc(p.aiError) + '</div>'
-    : '';
-  // ADD-ON: side quick-select — always offered once there's a description
-  // to attach a side to (the AI's own text never includes one). Shows all 4
-  // sides; the currently-selected one (if any) is marked active/disabled,
-  // clicking any other one swaps it in-place (or inserts it, if none is
-  // set yet) with no extra AI call.
+/** Side (Forward/Aft/Port Side/Starboard Side) quick-select — a plain
+ *  always-visible button row, shown once there's a description to attach a
+ *  side to. Single root element so a swap can replace it in place
+ *  (updatePhotoCardUI) without re-rendering the whole photo list. */
+function directionButtonsHtml(p, idx) {
+  if (!p.desc || !String(p.desc).trim()) return '<div class="prg-side-row" id="sideRow_' + idx + '"></div>';
   var dirWord = prgDetectDirectionWord(p.desc);
-  var dirBtnHtml = '';
-  if (p.desc && String(p.desc).trim()) {
-    dirBtnHtml += '<span class="prg-side-label">Side:</span>';
-    PRG_DIRECTIONS.forEach(function (d) {
-      var isActive = d === dirWord;
-      var label = PRG_SIDE_CANONICAL[d];
-      dirBtnHtml +=
-        '<button type="button" class="prg-ai-btn prg-dir-btn' + (isActive ? ' active' : '') + '" id="dirBtn_' + idx + '_' + d + '"' + ((busy || isActive) ? ' disabled' : '') +
-          ' onclick="onDirectionToggleClick(' + idx + ',\'' + d + '\')" title="' + (isActive ? 'Current side' : ('Set the side to ' + esc(label) + ' — everything else in the description stays the same')) + '" data-testid="ai-direction-toggle-' + idx + '-' + d + '">' +
-          '<i class="fa-solid ' + (isActive ? 'fa-check' : 'fa-right-left') + '"></i> ' + esc(label) +
-        '</button>';
-    });
-  }
-  // ADD-ON: low-quality photo warning — informational only, never blocks or
-  // auto-rejects the photo; the surveyor just gets a nudge to double-check
-  // the detected object. Comes from the SAME AI call, no extra request.
-  var qualityWarnHtml = (p.aiPhotoQuality === 'Poor')
-    ? '<div class="prg-ai-quality-warn"><i class="fa-solid fa-triangle-exclamation"></i> Photo quality is low. Please verify the detected object.</div>'
-    : '';
-  return (
-    '<div class="prg-ai-row" id="aiRow_' + idx + '">' +
-      aiBadgeHtml(status) +
-      '<button type="button" class="prg-ai-btn" id="aiBtn_' + idx + '"' + (busy ? ' disabled' : '') +
-        ' onclick="onAiButtonClick(' + idx + ')" data-testid="ai-generate-button-' + idx + '">' +
-        '<i class="fa-solid ' + btnIcon + '"></i> ' + esc(btnLabel) +
-      '</button>' +
-      dirBtnHtml +
-      qualityWarnHtml +
-      errHtml +
-    '</div>'
-  );
+  var btnHtml = '<span class="prg-side-label">Side:</span>';
+  PRG_DIRECTIONS.forEach(function (d) {
+    var isActive = d === dirWord;
+    var label = PRG_SIDE_CANONICAL[d];
+    btnHtml +=
+      '<button type="button" class="prg-side-btn' + (isActive ? ' active' : '') + '" id="dirBtn_' + idx + '_' + d + '"' + (isActive ? ' disabled' : '') +
+        ' onclick="onDirectionToggleClick(' + idx + ',\'' + d + '\')" title="' + (isActive ? 'Current side' : ('Set the side to ' + esc(label) + ' — everything else in the description stays the same')) + '" data-testid="direction-toggle-' + idx + '-' + d + '">' +
+        '<i class="fa-solid ' + (isActive ? 'fa-check' : 'fa-right-left') + '"></i> ' + esc(label) +
+      '</button>';
+  });
+  return '<div class="prg-side-row" id="sideRow_' + idx + '">' + btnHtml + '</div>';
 }
 
-/** In-place update of one photo's AI row + description field — avoids
- *  re-rendering the whole (potentially 100+ photo) list on every status
- *  change, which is what keeps bulk processing from freezing the page. */
-function updateAiCardUI(idx) {
+/** In-place update of one photo's side-buttons row + description field —
+ *  avoids re-rendering the whole (potentially 100+ photo) list on every
+ *  edit, which is what keeps bulk editing from freezing the page. */
+function updatePhotoCardUI(idx) {
   var p = photos[idx];
   if (!p) return;
-  var row = document.getElementById('aiRow_' + idx);
-  if (row) row.outerHTML = aiControlsHtml(p, idx);
+  var row = document.getElementById('sideRow_' + idx);
+  if (row) row.outerHTML = directionButtonsHtml(p, idx);
   if (isStructureCategory(p.category)) {
     var pillGroupEl = document.getElementById('holdPillGroup_' + idx);
     if (pillGroupEl) pillGroupEl.outerHTML = holdPillGroupHtml(p, idx);
     var descEl = document.getElementById('holdDesc_' + idx);
     if (descEl && document.activeElement !== descEl) descEl.value = p.desc || '';
     var classifyInfoEl = document.getElementById('classifyInfo_' + idx);
-    if (classifyInfoEl) classifyInfoEl.outerHTML = aiClassificationInfoHtml(p, idx);
+    if (classifyInfoEl) classifyInfoEl.outerHTML = structureInfoHtml(p, idx);
   } else {
     var othersInp = document.getElementById('othersDesc_' + idx);
     if (othersInp && document.activeElement !== othersInp) othersInp.value = p.desc || '';
   }
-  updateAiBulkBar();
-}
-
-function updateAiBulkBar() {
-  var barEl = document.getElementById('prgAiBulkBar');
-  if (!barEl) return;
-  var counts = { pending: 0, generating: 0, completed: 0, failed: 0 };
-  photos.forEach(function (p) {
-    var s = p.aiStatus || '';
-    if (counts.hasOwnProperty(s)) counts[s]++;
-  });
-  var totalTracked = counts.pending + counts.generating + counts.completed + counts.failed;
-  var elC = document.getElementById('prgAiCountCompleted'); if (elC) elC.textContent = counts.completed;
-  var elP = document.getElementById('prgAiCountProcessing'); if (elP) elP.textContent = counts.generating;
-  var elQ = document.getElementById('prgAiCountPending'); if (elQ) elQ.textContent = counts.pending;
-  var elF = document.getElementById('prgAiCountFailed'); if (elF) elF.textContent = counts.failed;
-  var pct = totalTracked ? Math.round((counts.completed + counts.failed) / totalTracked * 100) : 0;
-  var bar = document.getElementById('prgAiBulkProgressBar'); if (bar) bar.style.width = pct + '%';
-  var pctEl = document.getElementById('prgAiBulkPct'); if (pctEl) pctEl.textContent = pct + '%';
-  barEl.classList.toggle('show', totalTracked > 0);
-}
-
-/** One photo end-to-end: resize → (cache reuse) → call the backend → write
- *  p.desc → update UI. Retries up to 2 times with exponential backoff
- *  (1s, then 3s), or the server's own retry_after when it's a rate limit. */
-async function generateAiDescriptionForIndex(idx, attempt) {
-  attempt = attempt || 0;
-  var p = photos[idx];
-  if (!p) return;
-  p.aiStatus = 'generating';
-  p.aiError = '';
-  updateAiCardUI(idx);
-
-  try {
-    var src = await getAiImageSource(p);
-    if (!src) throw { message: 'Unable to analyze this image.', noRetry: true };
-    var hash = quickHashArrayBuffer(src.ab);
-
-    // Cost control: an identical image already classified in this draft (byte-
-    // for-byte, e.g. the exact same file uploaded twice) — reuse that result
-    // instead of spending another Gemini call on it.
-    var dup = null;
-    for (var di = 0; di < photos.length; di++) {
-      if (di !== idx && photos[di].aiHash === hash && photos[di].aiStatus === 'completed' && photos[di].desc) {
-        dup = photos[di];
-        break;
-      }
-    }
-    if (dup) {
-      p.desc = dup.desc;
-      p.holdMain = dup.holdMain || '';
-      p.holdSub = dup.holdSub || '';
-      p.aiPrimaryObject = dup.aiPrimaryObject || '';
-      p.aiLocationContext = dup.aiLocationContext || '';
-      p.aiPhotoQuality = dup.aiPhotoQuality || '';
-      p.aiHash = hash;
-      p.aiStatus = 'completed';
-      p.aiConfidence = dup.aiConfidence;
-      p.aiError = '';
-      prgUpdateCategoryCode(p);
-      updateAiCardUI(idx);
-      prgMarkDirty();
-      return;
-    }
-
-    var context = { vessel_name: PRG_VESSEL_NAME || '', category: p.category || '' };
-    // Send this photo's own existing dropdown hierarchy (exact option
-    // strings, nothing invented) as Gemini's allowed classification
-    // vocabulary — see "AI selection" / "Critical validation" requirement:
-    // the server builds the prompt's allowed-values list from this and
-    // strictly rejects anything Gemini returns that isn't in it.
-    if (isStructureCategory(p.category)) {
-      var hCfg = structCfg(p.category);
-      context.allowed_categories = { main: hCfg.main, sub: hCfg.sub };
-    }
-
-    // Structured free-text mode (no "options" sent): ONE call returns the
-    // primary physical object (kept strictly separate from the general
-    // location/vessel-area — a Cargo Hold photo that mainly shows a
-    // Bulkhead returns primary_object "Bulkhead", never "Cargo Hold"), a
-    // confidently-detected side if any, a basic photo-quality read, and the
-    // final "View of [Direction] [Object], [Condition]." sentence — all
-    // reused below for the description, the dropdown auto-sync, the
-    // direction quick-select, and the quality warning, with no second call.
-    var res = await fetch('ajax/gemini_describe.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': PRG_CSRF_TOKEN },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        image: abToBase64(src.ab),
-        mime: src.mime,
-        survey_id: PRG_SURVEY_ID,
-        context: context
-      })
-    });
-    var json = null;
-    try { json = await res.json(); } catch (e) { /* non-JSON response, e.g. a server error page */ }
-
-    if (!res.ok || !json || !json.success || !json.description) {
-      var message = (json && json.message) || ('AI description could not be generated (HTTP ' + res.status + ').');
-      throw { message: message, retryAfter: json && json.retry_after ? json.retry_after : null };
-    }
-
-    p.desc = json.description;
-    p.aiPrimaryObject = json.primary_object || '';
-    p.aiLocationContext = json.location_context || '';
-    p.aiPhotoQuality = json.photo_quality || '';
-    // Dropdown auto-sync (ADD-ON): prefer the server-validated exact
-    // hierarchy pick (main_category/subcategory/sub_subcategory — already
-    // checked against this photo's own allowed_categories and nulled if
-    // not an existing option) for ANY structure category. Only when that's
-    // not present/valid does this fall back to the older fuzzy
-    // primary_object match, which stays Hold-only as before. Either way,
-    // only existing dropdown values are ever selected, never invented, and
-    // no match leaves the dropdown exactly as it was (manual pick remains
-    // fully available either way).
-    var hierarchyApplied = prgApplyAiHierarchyPick(p, json.main_category, json.subcategory, json.sub_subcategory);
-    if (!hierarchyApplied) {
-      prgSyncHoldDropdownFromAi(p, json.primary_object, json.direction);
-    }
-    p.aiHash = hash;
-    p.aiConfidence = (typeof json.confidence === 'number') ? json.confidence : null;
-    p.aiStatus = 'completed';
-    p.aiError = '';
-    prgUpdateCategoryCode(p); // SAVE CATEGORY CODE — keeps it current for both the UI and report sorting
-    updateAiCardUI(idx);
-    prgMarkDirty();
-  } catch (err) {
-    var msg = (err && err.message) || 'AI description could not be generated. Please try again.';
-    var noRetry = !!(err && err.noRetry);
-    var maxRetries = 2;
-    if (!noRetry && attempt < maxRetries) {
-      var delay = (err && err.retryAfter) ? (err.retryAfter * 1000) : (attempt === 0 ? 1000 : 3000);
-      if (err && err.retryAfter) {
-        _aiCooldownUntil = Math.max(_aiCooldownUntil, Date.now() + delay);
-      }
-      updateAiCardUI(idx); // still 'generating' — keep the spinner visible through the backoff
-      await new Promise(function (r) { setTimeout(r, delay); });
-      return generateAiDescriptionForIndex(idx, attempt + 1);
-    }
-    p.aiStatus = 'failed';
-    p.aiError = msg;
-    updateAiCardUI(idx);
-  }
-}
-
-/** Concurrency-limited worker pool — never more than PRG_AI_MAX_CONCURRENT
- *  requests in flight at once, however many photos are queued. */
-function pumpAiQueue() {
-  if (_aiQueueRunning) return;
-  _aiQueueRunning = true;
-  (async function () {
-    while (_aiQueue.length || _aiActive > 0) {
-      while (_aiActive < PRG_AI_MAX_CONCURRENT && _aiQueue.length && Date.now() >= _aiCooldownUntil) {
-        var idx = _aiQueue.shift();
-        _aiActive++;
-        (function (i) {
-          generateAiDescriptionForIndex(i, 0).finally(function () { _aiActive--; });
-        })(idx);
-      }
-      await new Promise(function (r) { setTimeout(r, 200); });
-    }
-    _aiQueueRunning = false;
-  })();
-}
-
-/** Queue one or more photos for AI description. Skips anything manually
- *  edited or already completed (cost control — never regenerate silently). */
-function enqueueAiDescriptions(indices) {
-  if (!PRG_AI_ENABLED) return;
-  var added = false;
-  indices.forEach(function (idx) {
-    var p = photos[idx];
-    if (!p) return;
-    if (p.descManual) return;
-    if (p.aiStatus === 'completed' || p.aiStatus === 'pending' || p.aiStatus === 'generating') return;
-    p.aiStatus = 'pending';
-    updateAiCardUI(idx);
-    _aiQueue.push(idx);
-    added = true;
-  });
-  if (added) {
-    prgMarkDirty();
-    pumpAiQueue();
-  }
-}
-
-function generateAllAiDescriptions() {
-  if (!PRG_AI_ENABLED) { toast('AI description is disabled.', true); return; }
-  var idx = [];
-  photos.forEach(function (p, i) {
-    if (p.descManual || p.aiStatus === 'completed') return;
-    idx.push(i);
-  });
-  if (!idx.length) { toast('Nothing to generate — every photo already has a description.'); return; }
-  enqueueAiDescriptions(idx);
-  toast('Generating AI descriptions for ' + idx.length + ' photo(s)…');
-}
-
-/** Manual per-photo trigger — first generation runs immediately; a second
- *  click (Regenerate) confirms first, since it replaces whatever is there. */
-function onAiButtonClick(idx) {
-  var p = photos[idx];
-  if (!p) return;
-  var hasExisting = p.aiStatus === 'completed' || p.aiStatus === 'failed' || p.descManual;
-  if (hasExisting) {
-    if (!window.confirm('This will replace the current description. Continue?')) return;
-  }
-  p.descManual = false;
-  p.aiStatus = ''; // clear so enqueueAiDescriptions doesn't treat this as already done/queued
-  enqueueAiDescriptions([idx]);
 }
 
 /** "Others" category: quick-pick dropdown + an editable text field underneath
- *  (same pattern as the Hold/Ship/Deck structure categories) — needed so an
- *  AI-generated sentence (which won't match any of the fixed DESC_OPTIONS)
+ *  (same pattern as the Hold/Ship/Deck structure categories) — needed so a
+ *  freely-typed sentence (which won't match any of the fixed DESC_OPTIONS)
  *  has somewhere to actually show up and be edited. */
 function descDropdownHtml(selected, idx) {
   var opts = '<option value="">— Quick pick —</option>';
@@ -2513,7 +1925,7 @@ function onOthersDescSelect(idx, val) {
   p.descManual = false;
   var inp = document.getElementById('othersDesc_' + idx);
   if (inp) inp.value = val;
-  updateAiCardUI(idx);
+  updatePhotoCardUI(idx);
   prgMarkDirty();
 }
 function onOthersDescInput(idx, val) {
@@ -2521,23 +1933,22 @@ function onOthersDescInput(idx, val) {
   if (!p) return;
   p.desc = val;
   p.descManual = true;
-  updateAiCardUI(idx);
+  updatePhotoCardUI(idx);
   prgMarkDirty();
 }
 
 /** Hold No.1–9: main + optional sub button group + editable Description text */
 
-/** ADD-ON: compact "Section · Hold N · Main › Sub · NN% confidence"
- *  caption, per the UI requirement to surface the AI's detected
- *  classification next to the (always-editable) structure dropdown above.
+/** Compact "Section · Hold N · Main › Sub" caption, surfacing which report
+ *  section/category_code a photo's current structure pick will sort into.
  *  The Main › Sub breadcrumb is always the photo's own exact p.holdMain /
  *  p.holdSub — the same existing dropdown values shown by the structure
  *  picker itself, never a renamed or shortened version of them.
  *  Shown only once there's something to report; blank for a not-yet-
- *  classified photo rather than cluttering it with an empty line. */
-function aiClassificationInfoHtml(p, idx) {
+ *  picked photo rather than cluttering it with an empty line. */
+function structureInfoHtml(p, idx) {
   var bits = [];
-  if (p.holdMain || typeof p.aiConfidence === 'number') {
+  if (p.holdMain) {
     if (p.categoryCode) bits.push(p.categoryCode);
     if (isHoldCategory(p.category)) {
       bits.push('Holds');
@@ -2548,20 +1959,12 @@ function aiClassificationInfoHtml(p, idx) {
     } else if (isDeckSideCategory(p.category)) {
       bits.push('Deck Side');
     }
-    if (p.holdMain) bits.push(p.holdMain + (p.holdSub ? (' › ' + p.holdSub) : ''));
-    if (typeof p.aiConfidence === 'number') bits.push(p.aiConfidence + '% confidence');
+    bits.push(p.holdMain + (p.holdSub ? (' › ' + p.holdSub) : ''));
   }
-  // Non-blocking low-confidence flag — report generation still includes
-  // and correctly places the photo; this just asks the surveyor to glance
-  // at it. Clears automatically once manually confirmed/corrected.
-  var reviewHtml = (p.classificationStatus === 'review_required')
-    ? '<span class="prg-review-flag"><i class="fa-solid fa-triangle-exclamation"></i> Review Required</span>'
-    : '';
-  // Always render the element (even empty) so updateAiCardUI can refresh it
+  // Always render the element (even empty) so updatePhotoCardUI can refresh it
   // in place by id; CSS hides it until there's something to show.
-  return '<div class="prg-classify-info' + (bits.length ? '' : ' empty') + '" id="classifyInfo_' + idx + '" title="AI-detected classification — use the dropdown above to correct it">' +
+  return '<div class="prg-classify-info' + (bits.length ? '' : ' empty') + '" id="classifyInfo_' + idx + '" title="Report section this photo will sort into — use the dropdown above to correct it">' +
     (bits.length ? ('<i class="fa-solid fa-diagram-project"></i> ' + esc(bits.join(' · '))) : '') +
-    reviewHtml +
   '</div>';
 }
 
@@ -2645,7 +2048,7 @@ function holdDescControlsHtml(p, idx) {
     holdPillGroupHtml(p, idx) +
     '<input type="text" class="form-control form-control-sm mt-1" id="holdDesc_' + idx + '" value="' + esc(p.desc || '') + '" ' +
       'placeholder="Description (auto or type)" oninput="onHoldDescInput(' + idx + ', this.value)" aria-label="Description"/>' +
-    aiClassificationInfoHtml(p, idx)
+    structureInfoHtml(p, idx)
   );
 }
 
@@ -2691,24 +2094,11 @@ function onHoldNestPick(idx, btn) {
   p.holdSub = sub;
   var wasManual = p.descManual;
   if (!wasManual) {
-    if (p.desc && p.aiPrimaryObject) {
-      // ADD-ON: intelligent object swap — preserves direction/condition/
-      // extra detail the AI already wrote instead of wholesale
-      // regenerating, same principle as the direction quick-select.
-      var cfg = structCfg(p.category);
-      var newSingular = (cfg.singular && cfg.singular[main]) || main;
-      p.desc = prgSwapObjectWord(p.desc, p.aiPrimaryObject, newSingular);
-      if (!prgMainSupportsDirection(main, p.category)) {
-        p.desc = prgStripDirectionWord(p.desc);
-      }
-      p.aiPrimaryObject = newSingular;
-    } else {
-      p.desc = buildHoldAutoDesc(main, sub, p.category);
-    }
+    p.desc = buildHoldAutoDesc(main, sub, p.category);
   }
-  p.descManual = true; // an explicit structure pick is a manual correction — AI must never auto-overwrite it again
-  prgUpdateCategoryCode(p); // MANUAL CORRECTION — category_code/sort_order must reflect the corrected value
-  updateAiCardUI(idx);
+  p.descManual = true; // an explicit structure pick is a manual correction
+  prgUpdateCategoryCode(p); // category_code/sort_order must reflect the corrected value
+  updatePhotoCardUI(idx);
   prgMarkDirty();
 }
 
@@ -2790,8 +2180,8 @@ function onHoldMenuPick(idx, btn) {
   }
   var descEl = document.getElementById("holdDesc_" + idx);
   if (descEl && !p.descManual) descEl.value = p.desc || "";
-  p.descManual = true; // an explicit structure pick is a manual correction — AI must never auto-overwrite it again
-  updateAiCardUI(idx);
+  p.descManual = true; // an explicit structure pick is a manual correction
+  updatePhotoCardUI(idx);
   prgMarkDirty();
 }
 
@@ -2808,7 +2198,7 @@ function onHoldDescInput(idx, val) {
       if (descEl) descEl.value = p.desc || "";
     }
   }
-  updateAiCardUI(idx);
+  updatePhotoCardUI(idx);
   prgMarkDirty();
 }
 
@@ -2929,7 +2319,7 @@ function renderPhotos() {
           '<div class="flex-grow-1">' +
             '<label class="form-label small mb-0">Description</label>' +
             descControlsHtml(p, i) +
-            aiControlsHtml(p, i) +
+            directionButtonsHtml(p, i) +
             '<div class="mt-1 d-flex gap-1 flex-wrap align-items-center">' +
               '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveP(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + ' title="Move up"><i class="fa-solid fa-arrow-up"></i></button>' +
               '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveP(' + i + ',1)"' + (i === photos.length - 1 ? ' disabled' : '') + ' title="Move down"><i class="fa-solid fa-arrow-down"></i></button>' +
