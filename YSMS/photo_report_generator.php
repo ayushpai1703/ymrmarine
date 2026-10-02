@@ -103,6 +103,10 @@ include 'includes/header.php';
 .prg-dir-btn.active { background: #006e85; border-color: #006e85; color: #fff; }
 .prg-dir-btn.active:hover { background: #006e85; }
 .prg-side-label { font-size: 10.5px; font-weight: 650; color: #64748b; margin-right: 2px; }
+.prg-ai-quality-warn {
+    font-size: 10.5px; width: 100%; color: #9a3412; background: #fff7ed;
+    border: 1px solid #fed7aa; border-radius: 6px; padding: 3px 8px; margin-top: 2px;
+}
 .prg-ai-bulkbar {
     display: none; align-items: center; gap: 10px; flex-wrap: wrap;
     margin-top: 8px; padding: 8px 10px; border-radius: 10px;
@@ -1104,7 +1108,10 @@ function prgSerializePhotos() {
       aiStatus: p.aiStatus === 'generating' ? 'pending' : (p.aiStatus || ''),
       aiError: p.aiError || '',
       aiHash: p.aiHash || '',
-      aiConfidence: (typeof p.aiConfidence === 'number') ? p.aiConfidence : null
+      aiConfidence: (typeof p.aiConfidence === 'number') ? p.aiConfidence : null,
+      aiPrimaryObject: p.aiPrimaryObject || '',
+      aiLocationContext: p.aiLocationContext || '',
+      aiPhotoQuality: p.aiPhotoQuality || ''
     };
   });
 }
@@ -1207,7 +1214,10 @@ async function prgLoadDraft() {
           aiStatus: sp.aiStatus || '',
           aiError: sp.aiError || '',
           aiHash: sp.aiHash || '',
-          aiConfidence: (typeof sp.aiConfidence === 'number') ? sp.aiConfidence : null
+          aiConfidence: (typeof sp.aiConfidence === 'number') ? sp.aiConfidence : null,
+          aiPrimaryObject: sp.aiPrimaryObject || '',
+          aiLocationContext: sp.aiLocationContext || '',
+          aiPhotoQuality: sp.aiPhotoQuality || ''
           // _aiSourceFile intentionally omitted — the true original isn't
           // persisted across reloads (same as the report image itself never
           // was); Regenerate after a restore falls back to the stored `ab`.
@@ -1766,6 +1776,9 @@ async function addPhotos(list) {
         aiError: '',
         aiHash: '',
         aiConfidence: null,
+        aiPrimaryObject: '',
+        aiLocationContext: '',
+        aiPhotoQuality: '',
         _aiSourceFile: file
       });
       // Update every photo (or every few for very large batches stays responsive enough)
@@ -1953,6 +1966,88 @@ function prgInsertSideWord(text, toWord) {
   return 'View of ' + label + ' ' + t;
 }
 
+/** ---- Primary-object dropdown auto-sync (ADD-ON) ----
+ *  Matches the AI's detected primary_object (e.g. "Bulkhead") against THIS
+ *  category's existing dropdown main options (e.g. "Bulkheads") — never
+ *  inventing a new dropdown value. Scoped to Hold categories only, where
+ *  every relevant main option takes a single flat Forward/Aft/Port Side/
+ *  Starboard Side side (Ship Side / Deck Side have more complex nested
+ *  side->section structures and are left exactly as before: manual-only). */
+function prgMatchPrimaryObjectToMain(primaryObject, category) {
+  if (!primaryObject) return null;
+  var norm = String(primaryObject).trim().toLowerCase();
+  if (!norm) return null;
+  var cfg = structCfg(category);
+  var mainList = cfg.main || [];
+  var singularMap = cfg.singular || {};
+  // 1) exact match against the singular form already used in this report's
+  //    own auto-descriptions (e.g. "Bulkhead" -> main option "Bulkheads").
+  for (var i = 0; i < mainList.length; i++) {
+    var m = mainList[i];
+    if ((singularMap[m] || m).toLowerCase() === norm) return m;
+  }
+  // 2) exact match against the main option itself (e.g. "Hull").
+  for (var i = 0; i < mainList.length; i++) {
+    if (mainList[i].toLowerCase() === norm) return mainList[i];
+  }
+  // 3) minimal plural tolerance only (trailing "s", e.g. AI said "Ladders"
+  //    instead of "Ladder"). Deliberately NOT a broad substring/prefix
+  //    match — that would let a bare location word like "Tank" falsely
+  //    match "Tank Top" and reintroduce the exact bug this is fixing.
+  for (var i = 0; i < mainList.length; i++) {
+    var m2 = mainList[i];
+    var sing = (singularMap[m2] || m2).toLowerCase();
+    if (sing + 's' === norm || norm + 's' === sing) return m2;
+  }
+  return null; // no confident match — leave the dropdown exactly as it was
+}
+
+/** True if `main`'s sub-list is a flat Forward/Aft/Port Side/Starboard Side
+ *  set — used to decide whether to keep or strip a direction word when the
+ *  object is changed (e.g. switching to Tank Top, which has no sides). */
+function prgMainSupportsDirection(main, category) {
+  var cfg = structCfg(category);
+  var subs = cfg.sub ? cfg.sub[main] : null;
+  if (!Array.isArray(subs)) return false;
+  return subs.indexOf('Forward') !== -1 || subs.indexOf('Aft') !== -1 ||
+    subs.indexOf('Port Side') !== -1 || subs.indexOf('Starboard Side') !== -1;
+}
+
+function prgSyncHoldDropdownFromAi(p, primaryObject, direction) {
+  if (!isHoldCategory(p.category)) return;
+  var matchedMain = prgMatchPrimaryObjectToMain(primaryObject, p.category);
+  if (!matchedMain) return;
+  p.holdMain = matchedMain;
+  var subs = HOLD_SUB_MAP[matchedMain];
+  p.holdSub = (Array.isArray(subs) && direction && subs.indexOf(direction) !== -1) ? direction : '';
+}
+
+/** Swaps the AI-identified object phrase for a new one, case-preserving,
+ *  leaving direction/condition/extra detail untouched — same principle as
+ *  the direction quick-select. If the exact old phrase can't be found
+ *  verbatim (e.g. minor AI rephrasing), the text is left unchanged rather
+ *  than guessing. */
+function prgSwapObjectWord(text, fromObject, toObject) {
+  var t = String(text || '');
+  if (!t || !fromObject) return t;
+  var escaped = String(fromObject).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  var re = new RegExp('\\b' + escaped + '\\b', 'i');
+  if (re.test(t)) {
+    return t.replace(re, function (m) { return prgMatchWordCase(m, toObject); });
+  }
+  return t;
+}
+
+/** Removes an existing Forward/Aft/Port Side/Starboard Side word (and its
+ *  trailing space) — used when the newly-picked object doesn't take a side. */
+function prgStripDirectionWord(text) {
+  var t = String(text || '');
+  var dirWord = prgDetectDirectionWord(t);
+  if (!dirWord) return t;
+  var re = new RegExp('\\b' + dirWord + '\\b(\\s*-?\\s*side)?\\s*', 'i');
+  return t.replace(re, '').replace(/\s{2,}/g, ' ').trim();
+}
+
 function onDirectionToggleClick(idx, toWord) {
   var p = photos[idx];
   if (!p || !p.desc) return;
@@ -2027,6 +2122,12 @@ function aiControlsHtml(p, idx) {
         '</button>';
     });
   }
+  // ADD-ON: low-quality photo warning — informational only, never blocks or
+  // auto-rejects the photo; the surveyor just gets a nudge to double-check
+  // the detected object. Comes from the SAME AI call, no extra request.
+  var qualityWarnHtml = (p.aiPhotoQuality === 'Poor')
+    ? '<div class="prg-ai-quality-warn"><i class="fa-solid fa-triangle-exclamation"></i> Photo quality is low. Please verify the detected object.</div>'
+    : '';
   return (
     '<div class="prg-ai-row" id="aiRow_' + idx + '">' +
       aiBadgeHtml(status) +
@@ -2035,6 +2136,7 @@ function aiControlsHtml(p, idx) {
         '<i class="fa-solid ' + btnIcon + '"></i> ' + esc(btnLabel) +
       '</button>' +
       dirBtnHtml +
+      qualityWarnHtml +
       errHtml +
     '</div>'
   );
@@ -2109,6 +2211,9 @@ async function generateAiDescriptionForIndex(idx, attempt) {
       p.desc = dup.desc;
       p.holdMain = dup.holdMain || '';
       p.holdSub = dup.holdSub || '';
+      p.aiPrimaryObject = dup.aiPrimaryObject || '';
+      p.aiLocationContext = dup.aiLocationContext || '';
+      p.aiPhotoQuality = dup.aiPhotoQuality || '';
       p.aiHash = hash;
       p.aiStatus = 'completed';
       p.aiConfidence = dup.aiConfidence;
@@ -2120,13 +2225,14 @@ async function generateAiDescriptionForIndex(idx, attempt) {
 
     var context = { vessel_name: PRG_VESSEL_NAME || '', category: p.category || '' };
 
-    // Free-text mode (no "options" sent): the AI writes its own description
-    // directly — "View of [Object], [Condition]." — instead of picking from
-    // the fixed dropdown list. The dropdown itself (holdMain/holdSub) is
-    // left untouched here; it's still available as an independent manual
-    // pick via the structure selector, same as before. The side (Forward/
-    // Aft/Port Side/Starboard Side) is deliberately never written by the
-    // AI either — see the direction quick-select buttons in aiControlsHtml.
+    // Structured free-text mode (no "options" sent): ONE call returns the
+    // primary physical object (kept strictly separate from the general
+    // location/vessel-area — a Cargo Hold photo that mainly shows a
+    // Bulkhead returns primary_object "Bulkhead", never "Cargo Hold"), a
+    // confidently-detected side if any, a basic photo-quality read, and the
+    // final "View of [Direction] [Object], [Condition]." sentence — all
+    // reused below for the description, the dropdown auto-sync, the
+    // direction quick-select, and the quality warning, with no second call.
     var res = await fetch('ajax/gemini_describe.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': PRG_CSRF_TOKEN },
@@ -2147,7 +2253,18 @@ async function generateAiDescriptionForIndex(idx, attempt) {
     }
 
     p.desc = json.description;
+    p.aiPrimaryObject = json.primary_object || '';
+    p.aiLocationContext = json.location_context || '';
+    p.aiPhotoQuality = json.photo_quality || '';
+    // Dropdown auto-sync (ADD-ON): when the category is a Hold (the clean,
+    // flat Forward/Aft/Port Side/Starboard Side case) and the detected
+    // primary_object matches one of THIS category's existing dropdown
+    // values, select it automatically — using ONLY existing dropdown
+    // values, never inventing one. No match -> dropdown stays exactly as
+    // it was (manual pick remains fully available either way).
+    prgSyncHoldDropdownFromAi(p, json.primary_object, json.direction);
     p.aiHash = hash;
+    p.aiConfidence = (typeof json.confidence === 'number') ? json.confidence : null;
     p.aiStatus = 'completed';
     p.aiError = '';
     updateAiCardUI(idx);
@@ -2673,14 +2790,28 @@ function onHoldNestPick(idx, btn) {
   if (!p) return;
   p.holdMain = main;
   p.holdSub = sub;
-  if (!p.descManual) {
-    p.desc = buildHoldAutoDesc(main, sub, p.category);
+  var wasManual = p.descManual;
+  if (!wasManual) {
+    if (p.desc && p.aiPrimaryObject) {
+      // ADD-ON: intelligent object swap — preserves direction/condition/
+      // extra detail the AI already wrote instead of wholesale
+      // regenerating, same principle as the direction quick-select.
+      var cfg = structCfg(p.category);
+      var newSingular = (cfg.singular && cfg.singular[main]) || main;
+      p.desc = prgSwapObjectWord(p.desc, p.aiPrimaryObject, newSingular);
+      if (!prgMainSupportsDirection(main, p.category)) {
+        p.desc = prgStripDirectionWord(p.desc);
+      }
+      p.aiPrimaryObject = newSingular;
+    } else {
+      p.desc = buildHoldAutoDesc(main, sub, p.category);
+    }
   }
   closeAllHoldNests();
   var btnEl = document.getElementById('holdNestBtn_' + idx);
   if (btnEl) btnEl.textContent = holdNestLabel(p);
   var descEl = document.getElementById('holdDesc_' + idx);
-  if (descEl && !p.descManual) descEl.value = p.desc || '';
+  if (descEl && !wasManual) descEl.value = p.desc || '';
   p.descManual = true; // an explicit structure pick is a manual correction — AI must never auto-overwrite it again
   updateAiCardUI(idx);
   prgMarkDirty();

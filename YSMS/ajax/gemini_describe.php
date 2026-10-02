@@ -22,18 +22,27 @@
  * surfaced as an error (success: false) so the client's normal retry/
  * backoff handles it.
  *   { "success": true, "index": 7, "confidence": 92, "evidence": "..." }
- * NOTE: photo_report_generator.php currently always calls this in free-text
- * mode (below) — the AI writes its own "View of [Object], [Condition]."
- * sentence with no side/position, which the surveyor then adds with a
- * one-click Forward/Aft/Port Side/Starboard Side quick-select, independent
- * of the report's structure dropdown (itself a separate, fully manual
- * pick that never calls this endpoint). Classification mode above is kept
- * as-is since it's a documented, independently usable mode of this shared
- * endpoint — not dead code, just not the current caller's choice.
+ * NOTE: photo_report_generator.php currently always calls this in free-text/
+ * structured mode (below). Classification mode above is kept as-is since
+ * it's a documented, independently usable mode of this shared endpoint —
+ * not dead code, just not the current caller's choice.
  *
- * Without "options" (or an empty list), falls back to free-text mode:
- *   { "success": true, "description": "..." }
+ * Without "options" (or an empty list), falls back to free-text/structured
+ * mode — ONE call returns the primary physical object (explicitly kept
+ * separate from the general location/vessel-area, so a photo taken inside
+ * a Cargo Hold that mainly shows a Bulkhead returns primary_object:
+ * "Bulkhead", never "Cargo Hold"), a confidently-detected side if any, a
+ * basic photo-quality read, and the final description sentence, all from
+ * one Gemini call (no second request for quality or structure):
+ *   { "success": true,
+ *     "primary_object": "Bulkhead", "direction": "Forward" | "",
+ *     "location_context": "Cargo Hold", "photo_quality": "Good" | "Fair" | "Poor",
+ *     "confidence": 90, "description": "View of Forward Bulkhead, showing ..." }
  *   { "success": false, "message": "..." }
+ * The surveyor can still correct the side with the one-click Forward/Aft/
+ * Port Side/Starboard Side quick-select, and correct the object via the
+ * report's structure dropdown (itself a separate, fully manual pick that
+ * never calls this endpoint) — see photo_report_generator.php.
  */
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -418,144 +427,194 @@ Rules:
     exit;
 }
 
+// Free-text / structured mode — ONE call returns primary_object (the actual
+// physical component), direction, location_context (kept strictly separate
+// from primary_object so the model can never substitute one for the other —
+// see CRITICAL PRINCIPLE below), photo_quality, confidence, and the final
+// description sentence, all in a single JSON object. No second API call.
+$describeDomainGuidance = 'CRITICAL PRINCIPLE — object vs. location:
+Identify the actual physical object that is the primary subject of the photograph. Do not confuse the surrounding location or vessel area with the object being photographed. A photograph taken inside a Cargo Hold does not mean the subject is "Cargo Hold". If the photograph primarily shows a Bulkhead, the primary object is Bulkhead. If it primarily shows a Bulk Frame, the primary object is Bulk Frame. If it primarily shows a Ladder, the primary object is Ladder. If it primarily shows Coaming, the primary object is Coaming. If it primarily shows a Drain Channel, the primary object is Drain Channel. Determine the primary subject using visual dominance, framing, area occupied, camera focus, and photographic intent. Only use the general location/context (Cargo Hold, Tank, Engine Room, Deck, Accommodation, etc.) as supporting metadata in "location_context" — NEVER as "primary_object".
+';
+
 $prompt = $contextPrefix . 'You are a professional Marine Cargo, Hull, and Bunker Surveyor with over 20 years of experience.
 Analyze ONLY what is clearly visible in the uploaded image.
-Your task is to identify the MAIN visible object or structure and generate a professional marine survey photo description.
 
-Rules:
-1. Identify the primary object only (Bulkhead, Bulk Frame, Hopper, Tank Top, Coaming, Hatch Cover, Side Shell, Cargo Hold, Pipe, Ladder, Manhole, Bilge Well, etc.).
-2. Do NOT identify, guess, or mention the vessel side/position/orientation (Port, Starboard, Forward, Aft, Upper, Lower, Center, etc.) even if it looks visible — the surveyor selects that separately afterward, not you.
-3. Mention only visible conditions.
-4. If damage is visible, mention the damage type such as: Corrosion, Surface Rust, Heavy Rust Scale, Coating Breakdown, Coating Peeling, Crack, Dent, Deformation, Pitting, Indentation, Buckling, Cargo Residue, Water Stain, Temporary Repair.
-5. Never guess information that is not clearly visible.
-6. If no damage is visible, write \"No visible damage observed.\"
-7. Keep the description professional and concise.
-8. Return ONLY one complete sentence.
-9. Do not include introductions, explanations, reasoning steps, confidence scores, markdown, bullets, asterisks, or quotation marks.
-10. Never start with phrases like \"Let\'s\", \"I can see\", \"Looking at\", \"The image shows\", or any thinking text.
+' . $describeDomainGuidance . '
+Your task is to return ONE JSON object describing the photograph:
+{"primary_object": "...", "direction": "...", "location_context": "...", "photo_quality": "...", "confidence": 0, "description": "..."}
 
-Output Format (strict — no side/position, that is added separately):
-View of [Object Name], [Visible Condition].
+Field rules:
+1. primary_object: the specific physical component actually shown (e.g. Bulkhead, Bulk Frame, Hopper, Tank Top, Coaming, Hatch Cover, Side Shell, Pipe, Ladder, Manhole, Bilge Well, Drain Channel, Handrail, Door, Hatch, etc.) — NEVER a general location such as Cargo Hold, Tank, Engine Room, Deck, or Accommodation. Do not hallucinate an object that is not clearly visible.
+2. direction: "Forward", "Aft", "Port Side", or "Starboard Side" ONLY if confidently visible from surrounding structure/orientation evidence; otherwise an empty string "" — never guess.
+3. location_context: the general vessel area/location shown (Cargo Hold, Tank, Engine Room, Deck, Accommodation, etc.) — supporting metadata only, never used as primary_object.
+4. photo_quality: "Good", "Fair", or "Poor" based on sharpness, focus, exposure, blur, obstruction, and whether the primary object is clearly visible. Use "Poor" only for genuinely unusable photos (severe blur, extreme darkness/brightness, subject not identifiable) — most normal survey photos are "Good".
+5. confidence: integer 0-100 reflecting confidence in the primary_object identification.
+6. description: one complete, professional, concise sentence. Mention only visible conditions. If damage is visible, mention the damage type such as: Corrosion, Surface Rust, Heavy Rust Scale, Coating Breakdown, Coating Peeling, Crack, Dent, Deformation, Pitting, Indentation, Buckling, Cargo Residue, Water Stain, Temporary Repair. If no damage is visible, write "No visible damage observed." Never guess information that is not clearly visible.
 
-Examples:
-View of Bulkhead, showing moderate surface corrosion.
-View of Hopper, showing coating breakdown and localized rust.
-View of Tank Top, showing clean surface with no visible damage observed.
-View of Hatch Coaming, showing minor paint peeling.
-View of Bulk Frame, showing heavy rust scale and coating deterioration.
-View of Bilge Well, showing clean condition with no visible damage observed.
+Description format (strict):
+If direction is non-empty: "View of [Direction] [Primary Object], [Visible Condition]."
+If direction is empty: "View of [Primary Object], [Visible Condition]."
 
-If the object cannot be confidently determined, use:
-View of marine structure, showing [Visible Condition].
+Examples (each a complete JSON object):
+{"primary_object":"Bulkhead","direction":"Forward","location_context":"Cargo Hold","photo_quality":"Good","confidence":90,"description":"View of Forward Bulkhead, showing moderate surface corrosion."}
+{"primary_object":"Bulkhead","direction":"","location_context":"Cargo Hold","photo_quality":"Good","confidence":75,"description":"View of Bulkhead, showing minor surface rust."}
+{"primary_object":"Bulk Frame","direction":"Port Side","location_context":"Cargo Hold","photo_quality":"Good","confidence":85,"description":"View of Port Side Bulk Frame, showing heavy rust scale and coating deterioration."}
+{"primary_object":"Ladder","direction":"","location_context":"Cargo Hold","photo_quality":"Fair","confidence":70,"description":"View of Ladder, showing clean condition with no visible damage observed."}
+{"primary_object":"Coaming","direction":"Aft","location_context":"Cargo Hold","photo_quality":"Good","confidence":88,"description":"View of Aft Coaming, showing minor paint peeling."}
+{"primary_object":"Drain Channel","direction":"","location_context":"Cargo Hold","photo_quality":"Good","confidence":80,"description":"View of Drain Channel, showing cargo residue accumulation."}
 
-Return only that one sentence and nothing else.';
+Do not include introductions, explanations, reasoning steps, markdown, bullets, or any text outside the single JSON object. Respond with ONLY that one JSON object and nothing else.';
 
-// Latest stable multimodal Flash model (vision). Change via env if needed.
-$model = getenv('YSMS_GEMINI_MODEL') ?: (defined('GEMINI_MODEL') ? GEMINI_MODEL : 'gemini-3.6-flash');
-$url = 'https://generativelanguage.googleapis.com/v1beta/models/'
-    . rawurlencode($model)
-    . ':generateContent?key=' . rawurlencode($apiKey);
+/** Pulls the structured describe-mode fields out of a free-text response's
+ *  raw text. Tries a clean json_decode first (stripping markdown fences the
+ *  model sometimes wraps JSON in despite instructions not to); falls back
+ *  to field-by-field regex extraction — same robustness pattern as
+ *  gemini_parse_classification() above — for a reply that isn't clean JSON.
+ *  'parsed_ok' is false only when nothing usable came back at all. */
+function gemini_parse_describe($raw)
+{
+    $primaryObject = '';
+    $direction = '';
+    $locationContext = '';
+    $photoQuality = '';
+    $confidence = null;
+    $description = '';
 
-$payload = [
-    'contents' => [
-        [
-            'parts' => [
-                ['text' => $prompt],
-                [
-                    'inline_data' => [
-                        'mime_type' => $mime,
-                        'data'      => $b64,
-                    ],
+    $cleaned = trim($raw);
+    $cleaned = preg_replace('/^```(?:json)?\s*/i', '', $cleaned);
+    $cleaned = preg_replace('/```\s*$/', '', $cleaned);
+    $decoded = json_decode(trim($cleaned), true);
+
+    if (is_array($decoded)) {
+        $primaryObject   = isset($decoded['primary_object']) ? trim((string) $decoded['primary_object']) : '';
+        $direction       = isset($decoded['direction']) ? trim((string) $decoded['direction']) : '';
+        $locationContext = isset($decoded['location_context']) ? trim((string) $decoded['location_context']) : '';
+        $photoQuality    = isset($decoded['photo_quality']) ? trim((string) $decoded['photo_quality']) : '';
+        $confidence      = (isset($decoded['confidence']) && is_numeric($decoded['confidence'])) ? max(0, min(100, (int) $decoded['confidence'])) : null;
+        $description     = isset($decoded['description']) ? trim((string) $decoded['description']) : '';
+    } else {
+        if (preg_match('/"primary_object"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $primaryObject = stripcslashes($m[1]);
+        if (preg_match('/"direction"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $direction = stripcslashes($m[1]);
+        if (preg_match('/"location_context"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $locationContext = stripcslashes($m[1]);
+        if (preg_match('/"photo_quality"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $photoQuality = stripcslashes($m[1]);
+        if (preg_match('/"confidence"\s*:\s*(\d+)/i', $raw, $m)) $confidence = max(0, min(100, (int) $m[1]));
+        if (preg_match('/"description"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/i', $raw, $m)) $description = stripcslashes($m[1]);
+    }
+
+    if (!in_array($photoQuality, ['Good', 'Fair', 'Poor'], true)) {
+        $photoQuality = '';
+    }
+    if ($direction !== '' && !in_array($direction, ['Forward', 'Aft', 'Port Side', 'Starboard Side'], true)) {
+        $norm = ucwords(strtolower(trim($direction)));
+        $direction = in_array($norm, ['Forward', 'Aft', 'Port Side', 'Starboard Side'], true) ? $norm : '';
+    }
+
+    // Same cleanup safety-net the old plain-sentence response always applied
+    // — still worth running even on a JSON-decoded description, in case the
+    // model embedded stray quoting/markdown inside the field itself.
+    if ($description !== '') {
+        $description = trim(preg_replace('/\s+/u', ' ', $description));
+        $description = trim($description, " \t\n\r\0\x0B\"'`");
+        $description = preg_replace('/^[\\.\\*\\-\\s]+/', '', $description);
+        $description = preg_replace('/^(?:Let\'s|I can see|Looking at|The image shows|Here is|Based on)[^.]*?[.!?]?\s*/i', '', $description);
+        $description = trim($description);
+        if ($description !== '' && !preg_match('/[.!?]$/', $description)) {
+            $description .= '.';
+        }
+    }
+
+    // If the description field came back empty/unusable but we do have a
+    // primary_object, build the same strict-format sentence ourselves
+    // rather than failing outright — avoids a wasted retry for partial data.
+    if ($description === '' && $primaryObject !== '') {
+        $description = 'View of ' . ($direction !== '' ? ($direction . ' ') : '') . $primaryObject . '.';
+    }
+
+    $parsedOk = $primaryObject !== '' || $description !== '';
+    return [
+        'primary_object'   => $primaryObject,
+        'direction'        => $direction,
+        'location_context' => $locationContext,
+        'photo_quality'    => $photoQuality,
+        'confidence'       => $confidence,
+        'description'      => $description,
+        'parsed_ok'        => $parsedOk,
+    ];
+}
+
+function gemini_describe_payload($prompt, $mime, $b64)
+{
+    return [
+        'contents' => [
+            [
+                'parts' => [
+                    ['text' => $prompt],
+                    ['inline_data' => ['mime_type' => $mime, 'data' => $b64]],
                 ],
             ],
         ],
-    ],
-    'generationConfig' => [
-        'temperature'     => 0.2,
-        'maxOutputTokens' => 180,
-        // See the classification-mode payload above for why this matters —
-        // same thinking-tokens-eat-the-budget risk applies here too.
-        'thinkingConfig'  => ['thinkingBudget' => 0],
-    ],
-];
-
-$ch = curl_init($url);
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST           => true,
-    CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-    CURLOPT_POSTFIELDS     => json_encode($payload),
-    CURLOPT_TIMEOUT        => 60,
-    CURLOPT_CONNECTTIMEOUT => 15,
-]);
-$response = curl_exec($ch);
-$httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curlErr  = curl_error($ch);
-curl_close($ch);
-
-if ($response === false || $response === '') {
-    http_response_code(502);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Could not reach Gemini API' . ($curlErr ? (': ' . $curlErr) : '.'),
-    ]);
-    exit;
+        'generationConfig' => [
+            'temperature'     => 0.2,
+            'maxOutputTokens' => 320,
+            // See the classification-mode payload above for why this matters —
+            // same thinking-tokens-eat-the-budget risk applies here too.
+            'thinkingConfig'  => ['thinkingBudget' => 0],
+        ],
+    ];
 }
 
-$json = json_decode($response, true);
-if ($httpCode >= 400 || !is_array($json)) {
-    $msg = 'Gemini API error (HTTP ' . $httpCode . ').';
-    if (is_array($json) && isset($json['error']['message'])) {
-        $msg = $json['error']['message'];
-    }
-    $retryAfter = null;
-    if (preg_match('/retry in\s*([0-9]+(?:\.[0-9]+)?)\s*s/i', $msg, $rm)) {
-        $retryAfter = (int) ceil((float) $rm[1]) + 1;
-    }
-    http_response_code($httpCode >= 400 ? $httpCode : 502);
-    $out = ['success' => false, 'message' => $msg];
-    if ($retryAfter !== null) {
-        $out['retry_after'] = $retryAfter;
+$model = getenv('YSMS_GEMINI_MODEL') ?: (defined('GEMINI_MODEL') ? GEMINI_MODEL : 'gemini-3.6-flash');
+$td0 = microtime(true);
+
+$d1 = gemini_call(gemini_describe_payload($prompt, $mime, $b64), $apiKey, $model);
+if ($d1['error']) {
+    http_response_code($d1['http']);
+    $out = ['success' => false, 'message' => $d1['message']];
+    if (!empty($d1['retry_after'])) {
+        $out['retry_after'] = $d1['retry_after'];
     }
     echo json_encode($out);
     exit;
 }
+$dp1 = gemini_parse_describe($d1['raw']);
 
-$description = '';
-if (!empty($json['candidates'][0]['content']['parts'])) {
-    foreach ($json['candidates'][0]['content']['parts'] as $part) {
-        if (isset($part['text'])) {
-            $description .= $part['text'];
+// "IF JSON is invalid -> retry the API request once" — same convention as
+// the classification branch — only for a genuinely unparseable reply.
+if (!$dp1['parsed_ok']) {
+    error_log('gemini_describe.php describe: unparseable/empty first attempt (finishReason=' . $d1['finishReason'] . '), retrying once');
+    $d1b = gemini_call(gemini_describe_payload($prompt, $mime, $b64), $apiKey, $model);
+    if (!$d1b['error']) {
+        $dp1b = gemini_parse_describe($d1b['raw']);
+        if ($dp1b['parsed_ok']) {
+            $dp1 = $dp1b;
         }
     }
 }
-$description = trim(preg_replace('/\s+/u', ' ', $description));
 
-// Strip accidental quotes / markdown wrappers and model reasoning leakage
-$description = trim($description, " \t\n\r\0\x0B\"'`");
-// Drop leading junk like ". * Let's identify..." or markdown bullets
-$description = preg_replace('/^[\\.\\*\\-\\s]+/', '', $description);
-$description = preg_replace('/^(?:Let\'s|I can see|Looking at|The image shows|Here is|Based on)[^.]*?[.!?]?\s*/i', '', $description);
-$description = trim($description);
-// Keep only the first sentence that starts with "View of" if mixed garbage present
-if (preg_match('/View of\s+.+?(?:\.|$)/i', $description, $vm)) {
-    $description = trim($vm[0]);
-}
-// Ensure it ends with a period
-if ($description !== '' && !preg_match('/[.!?]$/', $description)) {
-    $description .= '.';
-}
-
-if ($description === '') {
-    $blockReason = $json['candidates'][0]['finishReason'] ?? ($json['promptFeedback']['blockReason'] ?? '');
-    echo json_encode([
-        'success' => false,
-        'message' => 'No description returned' . ($blockReason ? (' (' . $blockReason . ')') : '.') ,
-    ]);
+if (!$dp1['parsed_ok']) {
+    error_log('gemini_describe.php describe: still unparseable/empty after retry');
+    http_response_code(502);
+    echo json_encode(['success' => false, 'message' => 'No description returned. Please try again.']);
     exit;
 }
 
+error_log(json_encode([
+    'evt'               => 'ai_describe',
+    'survey_id'         => $surveyId,
+    'primary_object'    => $dp1['primary_object'],
+    'direction'         => $dp1['direction'],
+    'location_context'  => $dp1['location_context'],
+    'photo_quality'     => $dp1['photo_quality'],
+    'confidence'        => $dp1['confidence'],
+    'elapsed_ms'        => (int) round((microtime(true) - $td0) * 1000),
+]));
+
 echo json_encode([
-    'success'     => true,
-    'description' => $description,
+    'success'          => true,
+    'primary_object'   => $dp1['primary_object'],
+    'direction'        => $dp1['direction'],
+    'location_context' => $dp1['location_context'],
+    'photo_quality'    => $dp1['photo_quality'],
+    'confidence'       => $dp1['confidence'],
+    'description'      => $dp1['description'],
 ]);
