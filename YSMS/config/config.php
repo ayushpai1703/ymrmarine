@@ -38,6 +38,13 @@ define('AI_PHOTO_DESCRIPTION_ENABLED', filter_var(getenv('AI_PHOTO_DESCRIPTION_E
 define('AI_AUTO_DESCRIPTION', filter_var(getenv('AI_AUTO_DESCRIPTION') !== false ? getenv('AI_AUTO_DESCRIPTION') : 'true', FILTER_VALIDATE_BOOLEAN));
 define('AI_MAX_CONCURRENT', max(1, (int)(getenv('AI_MAX_CONCURRENT') ?: 3)));
 
+// 🌟 AI Email -> Vessel Assignment extraction (assign_vessel.php "Paste Email"
+// tab, ajax/email_vessel_extract.php) — same Gemini credentials/env vars as
+// AI Photo Description above (YSMS_GEMINI_API_KEY / GEMINI_API_KEY,
+// YSMS_GEMINI_MODEL), but its own independent on/off switch so one feature
+// can be disabled without touching the other.
+define('AI_EMAIL_EXTRACTION_ENABLED', filter_var(getenv('AI_EMAIL_EXTRACTION_ENABLED') !== false ? getenv('AI_EMAIL_EXTRACTION_ENABLED') : 'true', FILTER_VALIDATE_BOOLEAN));
+
 function getDB() {
     try {
         // Cloud Run + Cloud SQL connects via Unix socket (path starts with /cloudsql/);

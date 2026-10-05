@@ -55,6 +55,40 @@ try {
     error_log('assign_vessel.php attachment_path column: ' . $e->getMessage());
 }
 
+// 🌟 SAFETY NET: imo_number column — already added by database/migration_imo_number.sql
+// for vessels.php/reports.php/completed.php's "Search by IMO Number" filter, but this
+// form never had an input for it. Re-used here (not duplicated) now that the Paste
+// Email AI extraction also has an IMO Number to save.
+try {
+    $imo_exists = $db->query("SHOW COLUMNS FROM surveys LIKE 'imo_number'")->fetchAll();
+    if (empty($imo_exists)) {
+        $db->exec("ALTER TABLE surveys ADD COLUMN imo_number VARCHAR(20) NULL DEFAULT NULL AFTER vessel_name");
+        try {
+            $db->exec("ALTER TABLE surveys ADD INDEX idx_surveys_imo_number (imo_number)");
+        } catch (Exception $ie) {
+            error_log('assign_vessel.php imo_number index: ' . $ie->getMessage());
+        }
+    }
+} catch (Exception $e) {
+    error_log('assign_vessel.php imo_number column check/add error: ' . $e->getMessage());
+}
+
+// 🌟 SAFETY NET: source_type column — tracks whether an assignment was
+// entered through the plain Manual Form or built from an AI Paste Email
+// extraction (ajax/email_vessel_extract.php), same lightweight provenance-flag
+// pattern already used for client_submitted below. The full original email +
+// extracted JSON live in email_extraction_log (includes/email_ai_helpers.php);
+// this column is just a quick "how did this assignment originate" marker on
+// the survey itself, e.g. for vessels.php/reports filtering later.
+try {
+    $src_exists = $db->query("SHOW COLUMNS FROM surveys LIKE 'source_type'")->fetchAll();
+    if (empty($src_exists)) {
+        $db->exec("ALTER TABLE surveys ADD COLUMN source_type VARCHAR(20) NOT NULL DEFAULT 'MANUAL'");
+    }
+} catch (Exception $e) {
+    error_log('assign_vessel.php source_type column check/add error: ' . $e->getMessage());
+}
+
 // 🌟 SAFETY NET: live status columns (used by vessels.php / vessel_detail / export)
 try {
     $cols = $db->query("SHOW COLUMNS FROM surveys LIKE 'custom_live_status'")->fetchAll();
@@ -283,6 +317,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $client_id = (int)$_POST['client_id'];
     $agent_name = mb_strtoupper(trim($_POST['agent_name']), 'UTF-8');
     $port_id = (int)$_POST['port_id'];
+    // 🌟 Optional — capped length matches the imo_number column (VARCHAR(20)).
+    $imo_number = mb_substr(trim($_POST['imo_number'] ?? ''), 0, 20, 'UTF-8');
 
     // 🌟 బహుళ Survey Types (checkbox multi-select) — CSV గా వస్తుంది, ఉదా. "3,5,7"
     $survey_type_ids_csv = trim($_POST['survey_type_ids'] ?? '');
@@ -323,7 +359,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // సర్వేయర్ ఐడి హ్యాండ్లింగ్ (Outsourcing అయితే యూజర్ టేబుల్‌లో లేని ఐడి లేదా అడ్మిన్ ఐడి సెట్ చేయవచ్చు)
     // ఇక్కడ ఔట్‌సోర్సింగ్ కోసం ఒక డమ్మీ వాల్యూ (उदा. 1 లేదా అడ్మిన్ ఐడి) లేదా ప్రత్యేక లాజిక్ ఇవ్వచ్చు.
-    $final_surveyor_id = ($surveyor_id === 'outsourcing' || $surveyor_id === 'unassigned') ? 1 : (int)$surveyor_id; 
+    $final_surveyor_id = ($surveyor_id === 'outsourcing' || $surveyor_id === 'unassigned') ? 1 : (int)$surveyor_id;
+
+    // 🌟 Paste Email (AI) provenance — both inputs are plain hidden fields the
+    // Paste Email JS sets only after the admin reaches "Review & Assign
+    // Vessel"; a normal manual submission leaves source_type as 'MANUAL' and
+    // email_extraction_log_id blank, so this never affects the existing flow.
+    $source_type = (trim((string)($_POST['source_type'] ?? 'MANUAL')) === 'EMAIL_AI') ? 'EMAIL_AI' : 'MANUAL';
+    $email_extraction_log_id = (int)($_POST['email_extraction_log_id'] ?? 0);
+
     if($surveyor_id === 'outsourcing' && $remarks == '') {
         $remarks = "Outsourced Survey.";
     }
@@ -345,11 +389,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $upd = $db->prepare("
                     UPDATE surveys SET
-                        vessel_name = ?, client_id = ?, agent_name = ?, surveyor_id = ?,
+                        vessel_name = ?, imo_number = ?, client_id = ?, agent_name = ?, surveyor_id = ?,
                         survey_type_id = ?, survey_type_ids = ?, port_id = ?, remarks = ?
                     WHERE id = ?
                 ");
-                $upd->execute([$vessel_name, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $post_edit_id]);
+                $upd->execute([$vessel_name, $imo_number !== '' ? $imo_number : null, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $post_edit_id]);
 
                 // Replace the surveyor assignment set entirely with whatever
                 // is selected now (full replace, matching "save this form's
@@ -497,11 +541,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $report_number = generateNextReportNumberForClient($db, (int)$client_id);
                 $stmt = $db->prepare("
                     INSERT INTO surveys
-                    (vessel_name, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks, client_submitted)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?, ?)
+                    (vessel_name, imo_number, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks, client_submitted, source_type)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?, ?, ?)
                 ");
 
-                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $is_client_role ? 1 : 0])) {
+                if ($stmt->execute([$vessel_name, $imo_number !== '' ? $imo_number : null, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $is_client_role ? 1 : 0, $source_type])) {
                     // Capture id immediately after INSERT (before any other query)
                     $new_survey_id = (int)$db->lastInsertId();
                     if ($new_survey_id <= 0) {
@@ -513,6 +557,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $new_survey_id = 0;
                         }
                     }
+
+                    // 🌟 Link this new survey back to the Paste Email audit row (if
+                    // this assignment came from an AI extraction) — scoped to the
+                    // same admin so a stale/foreign log_id can never attach to
+                    // someone else's extraction. Never blocks assignment on failure.
+                    if ($source_type === 'EMAIL_AI' && $email_extraction_log_id > 0 && $new_survey_id > 0) {
+                        try {
+                            $db->prepare("UPDATE email_extraction_log SET survey_id = ? WHERE id = ? AND admin_user_id = ?")
+                               ->execute([$new_survey_id, $email_extraction_log_id, (int)($_SESSION['user_id'] ?? 0)]);
+                        } catch (Throwable $le) {
+                            error_log('assign_vessel.php email_extraction_log link: ' . $le->getMessage());
+                        }
+                    }
+
                     $success = "Vessel assigned successfully! Report No: " . $report_number;
                     
                     // 🌟 Optional assignment attachment(s) — the file input allows
@@ -1106,6 +1164,97 @@ include 'includes/header.php';
         .searchable-select.open { z-index: 400; }
         .searchable-select.open .ss-panel { z-index: 400; }
     }
+
+    /* 🌟 Manual Form | Paste Email tabs + Paste Email panel — Assign Vessel
+       (AI Email -> Auto Vessel Assignment). Same color scheme/typography as
+       the rest of this page (--accent-blue / #3b32b3 primary action color,
+       var(--border-color), var(--text-muted)). */
+    .vessel-input-tabs { display: flex; gap: 8px; }
+    .vit-tab {
+        flex: 1 1 0;
+        display: flex; align-items: center; justify-content: center; gap: 7px;
+        padding: 11px 10px; border-radius: 12px; border: 1px solid var(--border-color);
+        background: #fff; color: var(--text-muted); font-size: 13px; font-weight: 650;
+    }
+    .vit-tab.active { background: #3b32b3; border-color: #3b32b3; color: #fff; }
+
+    .paste-email-card {
+        background: var(--card-bg); border: 1px solid var(--border-color);
+        border-radius: 16px; padding: 16px;
+    }
+    .pe-head { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+    .pe-head-icon {
+        width: 36px; height: 36px; border-radius: 10px; background: #eef2ff; color: #3b32b3;
+        display: flex; align-items: center; justify-content: center; font-size: 15px; flex: 0 0 auto;
+    }
+    .pe-head-title { font-size: 14px; font-weight: 700; color: var(--text-dark); }
+    .pe-head-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+    #pasteEmailTextarea {
+        width: 100%; border: 1px solid var(--border-color); border-radius: 12px;
+        padding: 12px; font-size: 13px; background: #f8fafc; outline: none; resize: vertical;
+    }
+    #pasteEmailTextarea:focus { border-color: #3b32b3; background: #fff; }
+    .pe-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .pe-btn {
+        border: none; border-radius: 10px; padding: 11px 16px; font-size: 13px; font-weight: 650;
+        display: inline-flex; align-items: center; gap: 7px;
+    }
+    .pe-btn-primary { background: #3b32b3; color: #fff; flex: 1 1 auto; justify-content: center; }
+    .pe-btn-ghost { background: #f1f5f9; color: var(--text-muted); }
+    .pe-loading { margin-top: 12px; font-size: 12.5px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+    .pe-spinner {
+        width: 15px; height: 15px; border-radius: 50%; border: 2px solid #dbe0f5; border-top-color: #3b32b3;
+        display: inline-block; animation: pe-spin .7s linear infinite;
+    }
+    @keyframes pe-spin { to { transform: rotate(360deg); } }
+    .pe-error { margin-top: 12px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
+
+    .pe-multi { margin-top: 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 12px; }
+    .pe-multi-title { font-size: 12.5px; font-weight: 700; color: #92400e; margin-bottom: 8px; }
+    .pe-multi-list { display: flex; flex-direction: column; gap: 6px; }
+    .pe-multi-item {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        background: #fff; border: 1px solid var(--border-color); border-radius: 10px; padding: 9px 11px;
+        font-size: 12.5px; font-weight: 600; color: var(--text-dark);
+    }
+    .pe-multi-item button {
+        border: none; background: #3b32b3; color: #fff; border-radius: 8px; padding: 6px 12px;
+        font-size: 11.5px; font-weight: 650;
+    }
+
+    .pe-result { margin-top: 14px; }
+    .pe-result-head { font-size: 13.5px; font-weight: 700; color: #15803d; display: flex; align-items: center; gap: 7px; }
+    .pe-confidence {
+        margin-left: auto; font-size: 11px; font-weight: 700; color: #3b32b3; background: #eef2ff;
+        padding: 3px 9px; border-radius: 999px;
+    }
+    .pe-result-sub { font-size: 11.5px; color: var(--text-muted); margin: 4px 0 10px; }
+    .pe-fields { display: flex; flex-direction: column; gap: 6px; }
+    .pe-field-row {
+        display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid var(--border-color);
+        border-radius: 9px; padding: 8px 10px; font-size: 12.5px;
+    }
+    .pe-field-label { color: var(--text-muted); flex: 0 0 120px; font-weight: 600; }
+    .pe-field-value { flex: 1; color: var(--text-dark); font-weight: 650; word-break: break-word; }
+    .pe-field-value.empty { color: #cbd5e1; font-weight: 500; font-style: italic; }
+    .pe-field-badge { font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; flex: 0 0 auto; }
+    .pe-field-badge.ok { background: #dcfce7; color: #16a34a; }
+    .pe-field-badge.warn { background: #fef3c7; color: #b45309; }
+    .pe-missing { margin-top: 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px; font-size: 12px; color: #92400e; }
+    .pe-missing-item { display: block; margin-top: 3px; }
+    .pe-result-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    .pe-result-actions .pe-btn-primary { flex: 1 1 160px; }
+    .pe-result-actions .pe-btn-ghost { flex: 1 1 120px; justify-content: center; }
+
+    /* AI-populated field highlight on the Manual Form itself, + the small
+       "✓ AI" badge injected next to its label. Both clear the moment the
+       admin edits the field (see JS), since at that point it's their value. */
+    .ai-filled { background: #eef2ff !important; border-color: #3b32b3 !important; }
+    .ai-badge {
+        display: inline-flex; align-items: center; gap: 3px; font-size: 9.5px; font-weight: 700;
+        color: #3b32b3; background: #eef2ff; padding: 2px 7px; border-radius: 999px; margin-left: 6px;
+        vertical-align: middle;
+    }
 </style>
 
 <?php
@@ -1149,6 +1298,80 @@ include 'includes/top_app_bar.php';
     <?php endif; ?>
     <?php if($error): ?><div class="alert alert-danger mx-3 mt-3 py-2" style="font-size:12px;"><?= $error ?></div><?php endif; ?>
 
+    <?php if (!$is_client_role && !$edit_mode): ?>
+    <!-- 🌟 Manual Form | Paste Email — input-method toggle. Default is
+         Manual Form (existing workflow, unaffected); Paste Email is a second,
+         optional input method that only ever pre-fills this same form below —
+         it never saves/assigns anything by itself. Not shown while editing an
+         existing assignment (AI extraction is for creating a new one), and
+         not shown to the Client role (their simplified "Request Survey" form
+         has no AI step). -->
+    <div class="vessel-input-tabs mx-3 mt-3" data-testid="vessel-input-method-tabs">
+        <button type="button" class="vit-tab active" id="tabBtnManual" data-testid="tab-manual-form-btn">
+            <i class="fa-solid fa-pen-to-square"></i> Manual Form
+        </button>
+        <button type="button" class="vit-tab" id="tabBtnPasteEmail" data-testid="tab-paste-email-btn">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Paste Email
+        </button>
+    </div>
+
+    <div class="paste-email-card mx-3 mt-3" id="pasteEmailPanel" style="display:none;" data-testid="paste-email-panel">
+        <div class="pe-head">
+            <div class="pe-head-icon"><i class="fa-solid fa-envelope-open-text"></i></div>
+            <div>
+                <div class="pe-head-title">Paste Client Email</div>
+                <div class="pe-head-sub">Paste the complete client email — AI will extract the vessel assignment details for you to review.</div>
+            </div>
+        </div>
+
+        <textarea id="pasteEmailTextarea" rows="9" placeholder="Paste the complete client email here..." data-testid="paste-email-textarea"></textarea>
+
+        <div class="pe-actions">
+            <button type="button" class="pe-btn pe-btn-primary" id="extractEmailBtn" data-testid="extract-email-btn">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Extract Vessel Details with AI
+            </button>
+            <button type="button" class="pe-btn pe-btn-ghost" id="clearPasteEmailBtn" data-testid="clear-paste-email-btn">
+                <i class="fa-solid fa-eraser"></i> Clear
+            </button>
+        </div>
+
+        <div class="pe-loading" id="pasteEmailLoading" style="display:none;" data-testid="paste-email-loading">
+            <span class="pe-spinner"></span> Reading email and extracting vessel details...
+        </div>
+
+        <div class="pe-error" id="pasteEmailError" style="display:none;" data-testid="paste-email-error"></div>
+
+        <!-- Multiple-vessel picker — shown only when extraction finds >1 vessel -->
+        <div class="pe-multi" id="pasteEmailMultiPicker" style="display:none;" data-testid="paste-email-multi-picker">
+            <div class="pe-multi-title"><i class="fa-solid fa-triangle-exclamation"></i> Multiple vessels detected</div>
+            <div class="pe-multi-list" id="pasteEmailMultiList"></div>
+        </div>
+
+        <!-- Single-vessel extraction result / review summary -->
+        <div class="pe-result" id="pasteEmailResult" style="display:none;" data-testid="paste-email-result">
+            <div class="pe-result-head">
+                <i class="fa-solid fa-circle-check"></i> AI Extraction Completed
+                <span class="pe-confidence" id="pasteEmailConfidence"></span>
+            </div>
+            <div class="pe-result-sub">We extracted the following information from the email. Please review it before assigning the vessel.</div>
+            <div class="pe-fields" id="pasteEmailFieldsList"></div>
+            <div class="pe-missing" id="pasteEmailMissing" style="display:none;"></div>
+            <div class="pe-result-actions">
+                <button type="button" class="pe-btn pe-btn-primary" id="reviewAssignBtn" data-testid="review-assign-btn">
+                    <i class="fa-solid fa-arrow-right"></i> Review &amp; Assign Vessel
+                </button>
+                <button type="button" class="pe-btn pe-btn-ghost" id="reExtractBtn" data-testid="re-extract-btn">
+                    <i class="fa-solid fa-rotate"></i> Re-extract
+                </button>
+                <button type="button" class="pe-btn pe-btn-ghost" id="backPasteAnotherBtn" data-testid="back-paste-another-btn">
+                    <i class="fa-solid fa-arrow-left"></i> Paste Another Email
+                </button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <div id="manualFormPanel">
     <?php
     // 🌟 Edit-mode pre-fill values — computed once here, used throughout the
     // form below so every field (including the client/port searchable
@@ -1173,6 +1396,12 @@ include 'includes/top_app_bar.php';
     <!-- Assignment Form -->
     <form action="assign_vessel.php<?= $edit_mode ? '?edit_id=' . (int)$edit_id : '' ?>" method="POST" id="assignVesselForm" enctype="multipart/form-data"><?= csrf_field() ?>
         <?php if ($edit_mode): ?><input type="hidden" name="edit_id" value="<?= (int)$edit_id ?>"><?php endif; ?>
+        <!-- 🌟 Set by the Paste Email flow when this submission's fields came from
+             an AI extraction — lets the backend link the audit log row
+             (email_extraction_log) to the survey it ends up creating. Safe to
+             leave blank; ignored entirely for a normal manual submission. -->
+        <input type="hidden" name="email_extraction_log_id" id="emailExtractionLogIdInput" value="">
+        <input type="hidden" name="source_type" id="sourceTypeInput" value="MANUAL">
         <div class="form-box-custom shadow-sm" style="padding-top:20px;">
             <div class="vdd-form-card-head">
                 <div class="vdd-form-card-head-icon"><i class="fa-solid <?= $edit_mode ? 'fa-pen' : 'fa-ship' ?>"></i></div>
@@ -1185,6 +1414,11 @@ include 'includes/top_app_bar.php';
             <div class="form-group-custom" id="vesselNameField">
                 <label for="vessel_name"><i class="fa-solid fa-ship vdd-field-icon"></i> Vessel Name *</label>
                 <input type="text" name="vessel_name" id="vessel_name" value="<?= $edit_mode ? sanitize($edit_survey['vessel_name']) : '' ?>" placeholder="e.g. MV Pacific Dawn" required autocomplete="off" inputmode="text" style="font-size:16px;min-height:48px;">
+            </div>
+
+            <div class="form-group-custom" id="imoNumberField">
+                <label for="imo_number"><i class="fa-solid fa-hashtag vdd-field-icon"></i> IMO Number <span class="text-muted fw-normal" style="font-size:10.5px;">(optional)</span></label>
+                <input type="text" name="imo_number" id="imo_number" value="<?= $edit_mode ? sanitize($edit_survey['imo_number'] ?? '') : '' ?>" placeholder="e.g. 9876543" maxlength="20" autocomplete="off">
             </div>
 
                         <?php if ($is_client_role): ?>
@@ -1374,6 +1608,7 @@ include 'includes/top_app_bar.php';
             </button>
         </div>
     </form>
+    </div><!-- /#manualFormPanel -->
 </div>
 
 <?php /* 🌟 Duplicate-vessel-name confirmation — shown only when the entered
@@ -1405,6 +1640,18 @@ include 'includes/top_app_bar.php';
 </div>
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+// 🌟 includes/footer.php (included at the bottom of this page) loads jQuery
+// a SECOND time — that second <script src> creates a brand new jQuery
+// instance and replaces window.$/jQuery, so any $.ajaxSetup() default set
+// here would be silently gone by the time a click handler actually fires
+// $.ajax() later (same proven bug/fix as bulk_assign_vessels.php). Belt and
+// suspenders: set ajaxSetup here AND pass the header explicitly on every
+// individual $.ajax call below.
+const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
+$.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
+</script>
 <script>
     $(document).ready(function() {
         var EDIT_MODE = <?= $edit_mode ? 'true' : 'false' ?>; // editing an existing assignment, not creating a new one
@@ -1822,7 +2069,288 @@ include 'includes/top_app_bar.php';
     });
 </script>
 
-<?php 
+<?php if (!$is_client_role && !$edit_mode): ?>
+<script>
+// 🌟 Paste Email (AI Email -> Vessel Assignment). Separate ready block from
+// the one above — purely additive, never touches the existing manual-form
+// JS. Only rendered for Admin, and only when creating a new assignment
+// (not editing one).
+$(document).ready(function() {
+    if (!$('#pasteEmailPanel').length) return;
+
+    var lastLogId = 0;
+    var lastExtractionMeta = null;
+    var currentVessel = null;
+
+    function resetResultUI() {
+        $('#pasteEmailError').hide().text('');
+        $('#pasteEmailMultiPicker').hide();
+        $('#pasteEmailMultiList').empty();
+        $('#pasteEmailResult').hide();
+        $('#pasteEmailFieldsList').empty();
+        $('#pasteEmailMissing').hide().empty();
+        currentVessel = null;
+    }
+
+    // ---- Tabs ----
+    $('#tabBtnManual').on('click', function() {
+        $(this).addClass('active');
+        $('#tabBtnPasteEmail').removeClass('active');
+        $('#manualFormPanel').show();
+        $('#pasteEmailPanel').hide();
+    });
+    $('#tabBtnPasteEmail').on('click', function() {
+        $(this).addClass('active');
+        $('#tabBtnManual').removeClass('active');
+        $('#pasteEmailPanel').show();
+        $('#manualFormPanel').hide();
+    });
+
+    $('#clearPasteEmailBtn').on('click', function() {
+        $('#pasteEmailTextarea').val('');
+        resetResultUI();
+    });
+
+    function showExtractError(resp) {
+        var msg = (resp && resp.message) ? resp.message : 'Unable to extract vessel details from this email. Please try again or use Manual Form.';
+        $('#pasteEmailError').text(msg).show();
+    }
+
+    function runExtraction() {
+        var text = $.trim($('#pasteEmailTextarea').val());
+        if (!text) {
+            Swal.fire({ icon: 'warning', title: 'Please paste the client email first.', confirmButtonColor: '#3b32b3' });
+            return;
+        }
+        resetResultUI();
+        $('#pasteEmailLoading').show();
+        $('#extractEmailBtn').prop('disabled', true).css('opacity', '0.7');
+
+        $.ajax({
+            url: 'ajax/email_vessel_extract.php',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ email_text: text }),
+            dataType: 'json',
+            headers: { 'X-CSRF-Token': CSRF_TOKEN }
+        }).done(function(resp) {
+            $('#pasteEmailLoading').hide();
+            $('#extractEmailBtn').prop('disabled', false).css('opacity', '1');
+            if (!resp || !resp.success) { showExtractError(resp); return; }
+
+            lastLogId = resp.log_id || 0;
+            lastExtractionMeta = resp;
+            var vessels = resp.vessels || [];
+            if (!vessels.length) {
+                $('#pasteEmailError').text('No vessel information could be found in this email. Please check the content, or use Manual Form.').show();
+                return;
+            }
+            if (vessels.length > 1) {
+                renderMultiPicker(vessels);
+            } else {
+                renderResult(vessels[0]);
+            }
+        }).fail(function(xhr) {
+            $('#pasteEmailLoading').hide();
+            $('#extractEmailBtn').prop('disabled', false).css('opacity', '1');
+            showExtractError(xhr.responseJSON);
+        });
+    }
+
+    $('#extractEmailBtn').on('click', runExtraction);
+    $('#reExtractBtn').on('click', runExtraction);
+
+    function renderMultiPicker(vessels) {
+        $('#pasteEmailMultiPicker').show();
+        var $list = $('#pasteEmailMultiList').empty();
+        vessels.forEach(function(v, idx) {
+            var $item = $('<div class="pe-multi-item"></div>');
+            $item.append($('<span></span>').text((idx + 1) + '. ' + (v.vessel_name || 'Unnamed vessel')));
+            var $btn = $('<button type="button">Review</button>');
+            $btn.on('click', function() { renderResult(v); });
+            $item.append($btn);
+            $list.append($item);
+        });
+    }
+
+    var FIELD_LABELS = {
+        vessel_name: 'Vessel Name', imo_number: 'IMO Number', client_name: 'Client',
+        port_name: 'Port', agent_name: 'Agent', survey_type: 'Survey Type',
+        cargo_name: 'Cargo', cargo_quantity: 'Quantity', eta: 'ETA', etd: 'ETD',
+        berth: 'Berth', voyage_number: 'Voyage No.', bill_of_lading: 'Bill of Lading',
+        terminal_name: 'Terminal', master_name: 'Master', agent_email: 'Agent Email',
+        agent_phone: 'Agent Phone', client_email: 'Client Email'
+    };
+    var DISPLAY_ORDER = ['vessel_name', 'imo_number', 'client_name', 'port_name', 'agent_name', 'survey_type',
+        'cargo_name', 'cargo_quantity', 'eta', 'etd', 'berth', 'voyage_number', 'bill_of_lading',
+        'terminal_name', 'master_name', 'agent_email', 'agent_phone', 'client_email'];
+
+    function renderResult(vessel) {
+        currentVessel = vessel;
+        $('#pasteEmailMultiPicker').hide();
+        $('#pasteEmailResult').show();
+
+        var conf = lastExtractionMeta && lastExtractionMeta.extraction_confidence !== null && lastExtractionMeta.extraction_confidence !== undefined
+            ? lastExtractionMeta.extraction_confidence : null;
+        $('#pasteEmailConfidence').text(conf !== null ? ('AI Confidence: ' + conf + '%') : '');
+
+        var $fields = $('#pasteEmailFieldsList').empty();
+        var uncertainSet = vessel.uncertain_fields || [];
+        // Fields backed by a searchable-select dropdown — show what will
+        // actually get SELECTED (the fuzzy-matched real row), not just the
+        // raw text the AI read, so a wrong match is visible before the
+        // admin clicks "Review & Assign Vessel" rather than hidden behind a
+        // plain "✓ AI" badge. matched_*_score is 0-100; a match on a
+        // different-looking name than what was extracted gets a "Check"
+        // badge even when the AI itself was confident about the text.
+        var MATCH_FIELDS = {
+            client_name: { idKey: 'matched_client_id', labelKey: 'matched_client_label', scoreKey: 'matched_client_score' },
+            port_name: { idKey: 'matched_port_id', labelKey: 'matched_port_label', scoreKey: 'matched_port_score' }
+        };
+        DISPLAY_ORDER.forEach(function(key) {
+            var val = vessel[key] || '';
+            var uncertain = uncertainSet.indexOf(key) !== -1;
+            var $row = $('<div class="pe-field-row"></div>');
+            $row.append($('<span class="pe-field-label"></span>').text(FIELD_LABELS[key] || key));
+
+            var match = MATCH_FIELDS[key];
+            var valueText = val || 'Not found';
+            var badgeWarn = uncertain;
+            if (match && val) {
+                var matchedId = vessel[match.idKey];
+                var matchedLabel = vessel[match.labelKey];
+                var matchedScore = vessel[match.scoreKey];
+                if (matchedId && matchedLabel) {
+                    var differs = matchedLabel.toLowerCase().trim() !== val.toLowerCase().trim();
+                    valueText = val + (differs ? ('  →  will select: ' + matchedLabel + ' (' + matchedScore + '%)') : '');
+                    if (differs) badgeWarn = true;
+                } else {
+                    valueText = val + '  —  not found in existing list, select manually';
+                    badgeWarn = true;
+                }
+            }
+
+            $row.append($('<span></span>').addClass('pe-field-value' + (val ? '' : ' empty')).text(valueText));
+            if (val) {
+                $row.append($('<span></span>').addClass('pe-field-badge ' + (badgeWarn ? 'warn' : 'ok')).text(badgeWarn ? '⚠ Check' : '✓ AI'));
+            }
+            $fields.append($row);
+        });
+
+        var missing = vessel.missing_fields || [];
+        var $m = $('#pasteEmailMissing');
+        if (missing.length) {
+            $m.empty().show().append('<strong>Missing information:</strong>');
+            missing.forEach(function(f) {
+                $m.append($('<span class="pe-missing-item"></span>').text('⚠ ' + (FIELD_LABELS[f] || f)));
+            });
+        } else {
+            $m.hide().empty();
+        }
+    }
+
+    $('#backPasteAnotherBtn').on('click', function() {
+        $('#pasteEmailTextarea').val('');
+        resetResultUI();
+    });
+
+    function markAiFilled($input) {
+        if (!$input || !$input.length) return;
+        $input.addClass('ai-filled');
+        var $label = $input.closest('.form-group-custom').find('label').first();
+        $label.find('.ai-badge').remove();
+        $label.append('<span class="ai-badge">✓ AI</span>');
+        $input.one('input change', function() {
+            $(this).removeClass('ai-filled');
+            $(this).closest('.form-group-custom').find('.ai-badge').remove();
+        });
+    }
+
+    // Reuses the existing searchable-select widgets exactly as a real click
+    // would (no duplicate selection logic) — finds the matching <li
+    // data-value="..."> inside that widget's own option list and triggers
+    // a real click on it, which runs the widget's own selectOption()/
+    // toggleOption() and keeps the hidden select/input perfectly in sync.
+    function clickOption($root, value) {
+        if (!$root.length || value === null || value === undefined || value === '') return false;
+        var $opt = $root.find('.ss-options .ss-option[data-value="' + value + '"]');
+        if ($opt.length) { $opt.trigger('click'); return true; }
+        return false;
+    }
+
+    function applyAiVesselToForm(v) {
+        if (v.vessel_name) { $('#vessel_name').val(v.vessel_name); markAiFilled($('#vessel_name')); }
+        if (v.imo_number) { $('#imo_number').val(v.imo_number); markAiFilled($('#imo_number')); }
+        if (v.agent_name) { $('input[name="agent_name"]').val(v.agent_name); markAiFilled($('input[name="agent_name"]')); }
+
+        if (v.matched_client_id) {
+            var $clientRoot = $('[data-ss-root="client"]');
+            if (clickOption($clientRoot, v.matched_client_id)) markAiFilled($clientRoot.find('.ss-trigger'));
+        }
+
+        if (v.matched_port_id) {
+            var $portRoot = $('[data-ss-root="port"]');
+            if (clickOption($portRoot, v.matched_port_id)) markAiFilled($portRoot.find('.ss-trigger'));
+        }
+
+        if (v.matched_survey_type_ids && v.matched_survey_type_ids.length) {
+            var $stRoot = $('[data-ss-root="surveyType"]');
+            // Clear anything already selected first (e.g. from reviewing a
+            // different vessel a moment ago) so only THIS vessel's matched
+            // types end up checked.
+            $stRoot.find('.ss-options .ss-option.ss-selected').each(function() { $(this).trigger('click'); });
+            var anyApplied = false;
+            v.matched_survey_type_ids.forEach(function(id) { if (clickOption($stRoot, id)) anyApplied = true; });
+            if (anyApplied) markAiFilled($stRoot.find('.ss-trigger'));
+        }
+
+        // Everything with no real form field (per the request's own "don't
+        // duplicate existing DB fields" instruction) is folded into Remarks
+        // so none of it is lost, clearly labeled as coming from the email.
+        var extraMap = {
+            'Terminal': v.terminal_name, 'Cargo': v.cargo_name,
+            'Cargo Quantity': [v.cargo_quantity, v.cargo_unit].filter(Boolean).join(' '),
+            'ETA': v.eta, 'ETD': v.etd, 'Survey Date': v.survey_date, 'Survey Time': v.survey_time,
+            'Berth': v.berth, 'Voyage No.': v.voyage_number, 'Bill of Lading': v.bill_of_lading,
+            'Master': v.master_name, 'Agent Email': v.agent_email, 'Agent Phone': v.agent_phone,
+            'Client Email': v.client_email
+        };
+        var extraLines = [];
+        Object.keys(extraMap).forEach(function(label) {
+            if (extraMap[label]) extraLines.push(label + ': ' + extraMap[label]);
+        });
+        if (v.remarks) extraLines.push(v.remarks);
+        if (extraLines.length) {
+            var $remarks = $('textarea[name="remarks"]');
+            var existing = $.trim($remarks.val());
+            var block = '[From client email — AI extracted]\n' + extraLines.join('\n');
+            $remarks.val(existing ? (existing + '\n\n' + block) : block);
+            markAiFilled($remarks);
+        }
+
+        if (v.client_name && !v.matched_client_id) {
+            Swal.fire({ icon: 'info', title: 'Client "' + v.client_name + '" was not found in the existing client list — please select it manually.', confirmButtonColor: '#3b32b3' });
+        } else if (v.port_name && !v.matched_port_id) {
+            Swal.fire({ icon: 'info', title: 'Port "' + v.port_name + '" was not found in the existing port list — please select it manually.', confirmButtonColor: '#3b32b3' });
+        }
+    }
+
+    $('#reviewAssignBtn').on('click', function() {
+        if (!currentVessel) return;
+        applyAiVesselToForm(currentVessel);
+        $('#sourceTypeInput').val('EMAIL_AI');
+        $('#emailExtractionLogIdInput').val(String(lastLogId || ''));
+        $('#tabBtnManual').trigger('click');
+        Swal.fire({ icon: 'success', title: 'Form filled from email — please review before assigning.', confirmButtonColor: '#3b32b3', timer: 2000, showConfirmButton: false });
+        setTimeout(function() {
+            try { document.getElementById('manualFormPanel').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+        }, 150);
+    });
+});
+</script>
+<?php endif; ?>
+
+<?php
 include 'includes/nav.php';
 include 'includes/footer.php';
 ?>
