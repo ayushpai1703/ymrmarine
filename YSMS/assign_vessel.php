@@ -55,40 +55,6 @@ try {
     error_log('assign_vessel.php attachment_path column: ' . $e->getMessage());
 }
 
-// 🌟 SAFETY NET: imo_number column — already added by database/migration_imo_number.sql
-// for vessels.php/reports.php/completed.php's "Search by IMO Number" filter, but this
-// form never had an input for it. Re-used here (not duplicated) now that the Paste
-// Email AI extraction also has an IMO Number to save.
-try {
-    $imo_exists = $db->query("SHOW COLUMNS FROM surveys LIKE 'imo_number'")->fetchAll();
-    if (empty($imo_exists)) {
-        $db->exec("ALTER TABLE surveys ADD COLUMN imo_number VARCHAR(20) NULL DEFAULT NULL AFTER vessel_name");
-        try {
-            $db->exec("ALTER TABLE surveys ADD INDEX idx_surveys_imo_number (imo_number)");
-        } catch (Exception $ie) {
-            error_log('assign_vessel.php imo_number index: ' . $ie->getMessage());
-        }
-    }
-} catch (Exception $e) {
-    error_log('assign_vessel.php imo_number column check/add error: ' . $e->getMessage());
-}
-
-// 🌟 SAFETY NET: source_type column — tracks whether an assignment was
-// entered through the plain Manual Form or built from an AI Paste Email
-// extraction (ajax/email_vessel_extract.php), same lightweight provenance-flag
-// pattern already used for client_submitted below. The full original email +
-// extracted JSON live in email_extraction_log (includes/email_ai_helpers.php);
-// this column is just a quick "how did this assignment originate" marker on
-// the survey itself, e.g. for vessels.php/reports filtering later.
-try {
-    $src_exists = $db->query("SHOW COLUMNS FROM surveys LIKE 'source_type'")->fetchAll();
-    if (empty($src_exists)) {
-        $db->exec("ALTER TABLE surveys ADD COLUMN source_type VARCHAR(20) NOT NULL DEFAULT 'MANUAL'");
-    }
-} catch (Exception $e) {
-    error_log('assign_vessel.php source_type column check/add error: ' . $e->getMessage());
-}
-
 // 🌟 SAFETY NET: live status columns (used by vessels.php / vessel_detail / export)
 try {
     $cols = $db->query("SHOW COLUMNS FROM surveys LIKE 'custom_live_status'")->fetchAll();
@@ -317,8 +283,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $client_id = (int)$_POST['client_id'];
     $agent_name = mb_strtoupper(trim($_POST['agent_name']), 'UTF-8');
     $port_id = (int)$_POST['port_id'];
-    // 🌟 Optional — capped length matches the imo_number column (VARCHAR(20)).
-    $imo_number = mb_substr(trim($_POST['imo_number'] ?? ''), 0, 20, 'UTF-8');
 
     // 🌟 బహుళ Survey Types (checkbox multi-select) — CSV గా వస్తుంది, ఉదా. "3,5,7"
     $survey_type_ids_csv = trim($_POST['survey_type_ids'] ?? '');
@@ -361,13 +325,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ఇక్కడ ఔట్‌సోర్సింగ్ కోసం ఒక డమ్మీ వాల్యూ (उदा. 1 లేదా అడ్మిన్ ఐడి) లేదా ప్రత్యేక లాజిక్ ఇవ్వచ్చు.
     $final_surveyor_id = ($surveyor_id === 'outsourcing' || $surveyor_id === 'unassigned') ? 1 : (int)$surveyor_id;
 
-    // 🌟 Paste Email (AI) provenance — both inputs are plain hidden fields the
-    // Paste Email JS sets only after the admin reaches "Review & Assign
-    // Vessel"; a normal manual submission leaves source_type as 'MANUAL' and
-    // email_extraction_log_id blank, so this never affects the existing flow.
-    $source_type = (trim((string)($_POST['source_type'] ?? 'MANUAL')) === 'EMAIL_AI') ? 'EMAIL_AI' : 'MANUAL';
-    $email_extraction_log_id = (int)($_POST['email_extraction_log_id'] ?? 0);
-
     if($surveyor_id === 'outsourcing' && $remarks == '') {
         $remarks = "Outsourced Survey.";
     }
@@ -389,11 +346,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $upd = $db->prepare("
                     UPDATE surveys SET
-                        vessel_name = ?, imo_number = ?, client_id = ?, agent_name = ?, surveyor_id = ?,
+                        vessel_name = ?, client_id = ?, agent_name = ?, surveyor_id = ?,
                         survey_type_id = ?, survey_type_ids = ?, port_id = ?, remarks = ?
                     WHERE id = ?
                 ");
-                $upd->execute([$vessel_name, $imo_number !== '' ? $imo_number : null, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $post_edit_id]);
+                $upd->execute([$vessel_name, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $post_edit_id]);
 
                 // Replace the surveyor assignment set entirely with whatever
                 // is selected now (full replace, matching "save this form's
@@ -541,11 +498,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $report_number = generateNextReportNumberForClient($db, (int)$client_id);
                 $stmt = $db->prepare("
                     INSERT INTO surveys
-                    (vessel_name, imo_number, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks, client_submitted, source_type)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?, ?, ?)
+                    (vessel_name, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks, client_submitted)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?, ?)
                 ");
 
-                if ($stmt->execute([$vessel_name, $imo_number !== '' ? $imo_number : null, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $is_client_role ? 1 : 0, $source_type])) {
+                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $is_client_role ? 1 : 0])) {
                     // Capture id immediately after INSERT (before any other query)
                     $new_survey_id = (int)$db->lastInsertId();
                     if ($new_survey_id <= 0) {
@@ -555,19 +512,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $new_survey_id = (int)($idStmt->fetchColumn() ?: 0);
                         } catch (Throwable $ie) {
                             $new_survey_id = 0;
-                        }
-                    }
-
-                    // 🌟 Link this new survey back to the Paste Email audit row (if
-                    // this assignment came from an AI extraction) — scoped to the
-                    // same admin so a stale/foreign log_id can never attach to
-                    // someone else's extraction. Never blocks assignment on failure.
-                    if ($source_type === 'EMAIL_AI' && $email_extraction_log_id > 0 && $new_survey_id > 0) {
-                        try {
-                            $db->prepare("UPDATE email_extraction_log SET survey_id = ? WHERE id = ? AND admin_user_id = ?")
-                               ->execute([$new_survey_id, $email_extraction_log_id, (int)($_SESSION['user_id'] ?? 0)]);
-                        } catch (Throwable $le) {
-                            error_log('assign_vessel.php email_extraction_log link: ' . $le->getMessage());
                         }
                     }
 
@@ -1396,12 +1340,6 @@ include 'includes/top_app_bar.php';
     <!-- Assignment Form -->
     <form action="assign_vessel.php<?= $edit_mode ? '?edit_id=' . (int)$edit_id : '' ?>" method="POST" id="assignVesselForm" enctype="multipart/form-data"><?= csrf_field() ?>
         <?php if ($edit_mode): ?><input type="hidden" name="edit_id" value="<?= (int)$edit_id ?>"><?php endif; ?>
-        <!-- 🌟 Set by the Paste Email flow when this submission's fields came from
-             an AI extraction — lets the backend link the audit log row
-             (email_extraction_log) to the survey it ends up creating. Safe to
-             leave blank; ignored entirely for a normal manual submission. -->
-        <input type="hidden" name="email_extraction_log_id" id="emailExtractionLogIdInput" value="">
-        <input type="hidden" name="source_type" id="sourceTypeInput" value="MANUAL">
         <div class="form-box-custom shadow-sm" style="padding-top:20px;">
             <div class="vdd-form-card-head">
                 <div class="vdd-form-card-head-icon"><i class="fa-solid <?= $edit_mode ? 'fa-pen' : 'fa-ship' ?>"></i></div>
@@ -1414,11 +1352,6 @@ include 'includes/top_app_bar.php';
             <div class="form-group-custom" id="vesselNameField">
                 <label for="vessel_name"><i class="fa-solid fa-ship vdd-field-icon"></i> Vessel Name *</label>
                 <input type="text" name="vessel_name" id="vessel_name" value="<?= $edit_mode ? sanitize($edit_survey['vessel_name']) : '' ?>" placeholder="e.g. MV Pacific Dawn" required autocomplete="off" inputmode="text" style="font-size:16px;min-height:48px;">
-            </div>
-
-            <div class="form-group-custom" id="imoNumberField">
-                <label for="imo_number"><i class="fa-solid fa-hashtag vdd-field-icon"></i> IMO Number <span class="text-muted fw-normal" style="font-size:10.5px;">(optional)</span></label>
-                <input type="text" name="imo_number" id="imo_number" value="<?= $edit_mode ? sanitize($edit_survey['imo_number'] ?? '') : '' ?>" placeholder="e.g. 9876543" maxlength="20" autocomplete="off">
             </div>
 
                         <?php if ($is_client_role): ?>
@@ -2078,7 +2011,6 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
 $(document).ready(function() {
     if (!$('#pasteEmailPanel').length) return;
 
-    var lastLogId = 0;
     var lastExtractionMeta = null;
     var currentVessel = null;
 
@@ -2138,7 +2070,6 @@ $(document).ready(function() {
             $('#extractEmailBtn').prop('disabled', false).css('opacity', '1');
             if (!resp || !resp.success) { showExtractError(resp); return; }
 
-            lastLogId = resp.log_id || 0;
             lastExtractionMeta = resp;
             var vessels = resp.vessels || [];
             if (!vessels.length) {
@@ -2279,8 +2210,15 @@ $(document).ready(function() {
     }
 
     function applyAiVesselToForm(v) {
+        // 🌟 IMPORTANT: assign_vessel.php's existing form is reused exactly
+        // as-is — no new fields. Only vessel_name / client / agent_name /
+        // port / survey type / remarks are real existing fields, so those
+        // are the only ones this function ever writes into. Everything else
+        // the AI found (imo_number, cargo, ETA, berth, voyage number, bill
+        // of lading, master name, agent/client email/phone) has no existing
+        // field to go into, so it's folded into the existing Remarks
+        // textarea below instead — never dropped, never given a new input.
         if (v.vessel_name) { $('#vessel_name').val(v.vessel_name); markAiFilled($('#vessel_name')); }
-        if (v.imo_number) { $('#imo_number').val(v.imo_number); markAiFilled($('#imo_number')); }
         if (v.agent_name) { $('input[name="agent_name"]').val(v.agent_name); markAiFilled($('input[name="agent_name"]')); }
 
         if (v.matched_client_id) {
@@ -2308,6 +2246,7 @@ $(document).ready(function() {
         // duplicate existing DB fields" instruction) is folded into Remarks
         // so none of it is lost, clearly labeled as coming from the email.
         var extraMap = {
+            'IMO Number': v.imo_number,
             'Terminal': v.terminal_name, 'Cargo': v.cargo_name,
             'Cargo Quantity': [v.cargo_quantity, v.cargo_unit].filter(Boolean).join(' '),
             'ETA': v.eta, 'ETD': v.etd, 'Survey Date': v.survey_date, 'Survey Time': v.survey_time,
@@ -2338,8 +2277,6 @@ $(document).ready(function() {
     $('#reviewAssignBtn').on('click', function() {
         if (!currentVessel) return;
         applyAiVesselToForm(currentVessel);
-        $('#sourceTypeInput').val('EMAIL_AI');
-        $('#emailExtractionLogIdInput').val(String(lastLogId || ''));
         $('#tabBtnManual').trigger('click');
         Swal.fire({ icon: 'success', title: 'Form filled from email — please review before assigning.', confirmButtonColor: '#3b32b3', timer: 2000, showConfirmButton: false });
         setTimeout(function() {

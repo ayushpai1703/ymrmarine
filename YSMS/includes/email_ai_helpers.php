@@ -41,12 +41,10 @@ function ensureEmailExtractionLogTable(PDO $db): void
             `extraction_status` varchar(30) NOT NULL DEFAULT 'SUCCESS',
             `vessel_count` int NOT NULL DEFAULT 0,
             `extraction_confidence` int DEFAULT NULL,
-            `survey_id` int DEFAULT NULL,
             `ip_address` varchar(45) DEFAULT NULL,
             `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
             KEY `idx_email_log_admin` (`admin_user_id`),
-            KEY `idx_email_log_survey` (`survey_id`),
             KEY `idx_email_log_status` (`extraction_status`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch (Throwable $e) {

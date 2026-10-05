@@ -28,18 +28,20 @@
  *     } ] }
  *   { "success": false, "message": "...", "retry_after": 5 }
  *
- * This JSON schema is adapted from the feature request's suggested schema
- * to this project's REAL fields (inspected first — see assign_vessel.php /
- * surveys table): vessel_name, imo_number, client_id, agent_name, port_id,
- * survey_type_ids, remarks are real columns/form fields. terminal_name,
- * cargo_*, eta/etd, survey_date/time, berth, voyage_number,
- * bill_of_lading, master_name, agent_email, agent_phone have NO existing
- * column — per the request's own "do not blindly add duplicate database
- * fields" instruction, these are surfaced to the admin for review and
- * folded into the existing free-text "Remarks" field rather than growing
- * the surveys table. "vessels" is an array (the request's own example
- * schema was a single flat object) so multiple vessels in one email are
- * naturally represented without combining their information.
+ * assign_vessel.php's existing form is reused EXACTLY as-is — no new
+ * fields, no renamed fields, no new database columns. Its only real,
+ * existing fields are vessel_name, client_id (dropdown), agent_name,
+ * port_id (dropdown), survey_type_ids (dropdown) and remarks; the Surveyor
+ * field is deliberately never touched by this endpoint or by the frontend
+ * fill logic — surveyor selection stays 100% manual, always. Everything
+ * this endpoint extracts beyond those real fields (imo_number, terminal,
+ * cargo, eta/etd, berth, voyage_number, bill_of_lading, master_name, agent/
+ * client email/phone) has no existing form field to go into — it is still
+ * returned here for the admin to see in the Paste Email review panel, but
+ * the frontend only ever folds it into the existing free-text Remarks
+ * field, never into a new input. "vessels" is an array so multiple vessels
+ * mentioned in one email stay separate — assign_vessel.php's auto-fill
+ * always applies exactly one vessel's data at a time, picked by the admin.
  */
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
