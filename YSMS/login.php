@@ -1,5 +1,6 @@
 <?php
 require_once 'config/config.php';
+require_once 'includes/login_activity_helpers.php';
 
 // 🌟 Safety-net: ensure the Super Admin role exists (see database/migration_super_admin_role.sql)
 try {
@@ -28,6 +29,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['full_name'] = $user['full_name'];
         $_SESSION['avatar'] = !empty($user['avatar']) ? $user['avatar'] : (!empty($user['profile_pic']) ? $user['profile_pic'] : null);
 
+        // 🌟 Login Activity audit log — records IP/country/device/browser/OS
+        // for this successful login. Never blocks login on failure (see
+        // includes/login_activity_helpers.php — every error is swallowed).
+        recordLoginAttempt($db, $user, $username, true);
+
         // 🌟 New-format popup: if Admin uploaded/replaced a format in the last 7 days,
         // show a one-time "please use these formats" popup to the surveyor on this login.
         if ($user['role_name'] === 'Surveyor') {
@@ -47,6 +53,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     } else {
         $error = "Invalid credential parameters. Please check username/password.";
+        // 🌟 Login Activity audit log — failed attempt. $user is the matched
+        // account row (if the username exists but the password was wrong) or
+        // null (no such active account); failure_reason is for the admin
+        // audit view only, never reflected back in $error above.
+        recordLoginAttempt($db, $user ?: null, $username, false, $user ? 'Incorrect password' : 'Invalid username or inactive account');
     }
 }
 ?>
