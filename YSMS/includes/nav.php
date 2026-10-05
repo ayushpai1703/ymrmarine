@@ -121,6 +121,11 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         <span>Manage Templates</span>
     </a>
 
+        <a href="login_activity.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'login_activity.php') ? 'active' : '' ?>" data-testid="sidebar-login-activity-link">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Login Activity</span>
+        </a>
+
         <?php elseif ($user_role === 'Client'): ?>
         <!-- Desktop sidebar + mobile drawer: Client-only section. Request
              Survey mirrors the mobile FAB's "Request Survey" option so it's
@@ -147,6 +152,10 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         <a href="super_admin_clients.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'super_admin_clients.php') ? 'active' : '' ?>" data-testid="sidebar-manage-clients-link">
             <i class="fa-solid fa-building"></i>
             <span>Manage Clients</span>
+        </a>
+        <a href="login_activity.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'login_activity.php') ? 'active' : '' ?>" data-testid="sidebar-login-activity-link">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Login Activity</span>
         </a>
         <!-- 🌟 TEMPORARY — remove this link (and super_admin_controls.php) once
              go-live test-data cleanup is done. -->
