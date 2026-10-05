@@ -3,6 +3,7 @@ require_once 'config/config.php';
 require_once 'includes/notifications.php';
 require_once 'includes/agents_mail.php';
 require_once 'includes/mailer.php';
+require_once 'includes/document_replace_helpers.php';
 checkAuth();
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -237,6 +238,26 @@ function pvAvatarGradient(string $name): string {
 // attachment list below (same array, iterated twice — no extra query).
 $assign_attachments = getSurveyAttachments($db, $survey['id'], $survey['attachment_path'] ?? '');
 
+// 🌟 Documents the Surveyor has uploaded via the "Upload Required Reports"
+// form below (ajax/upload_handler.php writes these into `uploads`) — this
+// page never listed them before (only report_detail.php/completed_detail.php
+// did), even though a Pending Vessel can already hold some (e.g. one of
+// the two required files, or an extra Field Report, before the required
+// pair completes and moves it to Pending Report). Same query/row shape as
+// those two pages, so Document Replace works identically everywhere.
+$surveyor_uploaded_docs = [];
+try {
+    $udStmt = $db->prepare("SELECT * FROM uploads WHERE survey_id = ? ORDER BY id ASC");
+    $udStmt->execute([$survey['id']]);
+    $surveyor_uploaded_docs = $udStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) { error_log('vessel_detail.php uploads fetch: ' . $e->getMessage()); }
+
+// 🌟 Single source of truth for the Replace button — Admin always,
+// Surveyor only if actually assigned to this survey (page access above
+// already guarantees that for any Surveyor who got this far, but this is
+// re-derived independently rather than assumed).
+$can_replace_docs = canReplaceDocument($db, $role, $current_user_id, (int)$survey['id']);
+
 include 'includes/header.php';
 ?>
 
@@ -246,6 +267,21 @@ include 'includes/header.php';
     .status-input { width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; font-size: 13px; background: #f8fafc; outline: none; resize: none; }
     .vessel-edit-btn { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: #00a3df; border: 1px solid #00a3df; border-radius: 8px; padding: 5px 12px; font-size: 11px; font-weight: 700; text-decoration: none; }
     .vessel-edit-btn:hover { background: #00a3df; color: #fff; }
+    /* 🌟 Document Replace — View/Download/Replace row actions (unconditional:
+       this page's uploads list is Admin/Surveyor-only already, but these
+       three classes are also used identically on report_detail.php /
+       completed_detail.php where Client/Super Admin see View/Download too). */
+    .doc-replace-btn {
+        display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border-color);
+        background: #fff; color: #3b32b3; border-radius: 8px; padding: 0 10px; height: 32px; font-size: 11.5px; font-weight: 650;
+    }
+    .doc-replace-btn:hover { border-color: #3b32b3; background: #eef2ff; }
+    .doc-view-btn {
+        display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color);
+        background: #fff; color: var(--text-muted); border-radius: 8px; width: 32px; height: 32px; font-size: 13px;
+    }
+    .doc-view-btn:hover { color: #3b32b3; border-color: #3b32b3; }
+    .doc-actions-row { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
     /* WhatsApp brand green */
     .btn-whatsapp {
         display: inline-flex; align-items: center; gap: 6px;
@@ -457,6 +493,23 @@ include 'includes/header.php';
             background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
         }
         .vdd-attachment-icon { width: 34px; height: 34px; border-radius: 10px; background: #EEF2FF; color: #4F46E5; display: flex; align-items: center; justify-content: center; flex: none; }
+
+        /* 🌟 Surveyor Uploaded Documents (desktop) — same row style as
+           report_detail.php / completed_detail.php's "Dossier Archive",
+           not previously needed on this page since it had no uploads-table
+           listing until Document Replace added one. */
+        .vdd-file-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 14px;
+        }
+        .vdd-file-row + .vdd-file-row { margin-top: 10px; }
+        .vdd-file-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex: none; font-size: 15px; }
+        .vdd-file-name { font-size: 12.5px; font-weight: 700; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vdd-file-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+        .vdd-badge-soft {
+            display: inline-flex; align-items: center; background: #F8FAFC; color: #334155;
+            font-size: 11.5px; font-weight: 700; padding: 4px 11px; border-radius: 999px; border: 1px solid #e2e8f0;
+        }
     }
 </style>
 
@@ -546,6 +599,46 @@ include 'includes/header.php';
         </div>
     </div>
     <?php endif; endforeach; ?>
+
+    <?php if (!empty($surveyor_uploaded_docs)): ?>
+    <div class="px-3 mb-3">
+        <div class="fw-bold text-dark mb-2" style="font-size: 12.5px;"><i class="fa-solid fa-folder-open text-warning me-1"></i> Surveyor Uploaded Documents</div>
+        <?php foreach ($surveyor_uploaded_docs as $doc):
+            $doc_clean = preg_replace('/^[0-9]+_/', '', $doc['file_name'] ?? '');
+            if ($doc_clean === '' || $doc_clean === null) $doc_clean = $doc['file_name'];
+            $doc_icon = 'fa-file-lines text-secondary';
+            if (str_contains((string)$doc['file_type'], 'PDF')) $doc_icon = 'fa-file-pdf text-danger';
+            elseif (str_contains((string)$doc['file_type'], 'Excel')) $doc_icon = 'fa-file-excel text-success';
+            elseif (str_contains((string)$doc['file_type'], 'Word')) $doc_icon = 'fa-file-word text-primary';
+            $doc_uploader = $doc['uploaded_by'] ? getUserFullNameById($db, (int)$doc['uploaded_by']) : '—';
+        ?>
+        <div class="bg-white p-2 rounded-3 border d-flex align-items-center justify-content-between mb-2 shadow-sm" style="font-size:12px;" data-doc-row data-doc-id="<?= (int)$doc['id'] ?>">
+            <div class="d-flex align-items-center gap-2" style="max-width:62%;">
+                <i class="fa-regular <?= $doc_icon ?>"></i>
+                <div style="overflow:hidden;">
+                    <div class="text-dark fw-semibold text-truncate" data-doc-name-display title="<?= sanitize($doc_clean) ?>"><?= sanitize($doc_clean) ?></div>
+                    <div class="text-muted" style="font-size:10.5px;"><?= sanitize($doc['file_type']) ?> · <span data-doc-size-display><?= sanitize($doc['file_size']) ?></span></div>
+                </div>
+            </div>
+            <div class="doc-actions-row">
+                <a href="download.php?upload_id=<?= (int)$doc['id'] ?>&inline=1" target="_blank" rel="noopener" class="doc-view-btn" title="View"><i class="fa-solid fa-eye"></i></a>
+                <a href="download.php?upload_id=<?= (int)$doc['id'] ?>" data-doc-download-link class="doc-view-btn" title="Download"><i class="fa-solid fa-download"></i></a>
+                <?php if ($can_replace_docs): ?>
+                <button type="button" class="doc-replace-btn" title="Replace / Re-upload"
+                        data-doc-id="<?= (int)$doc['id'] ?>"
+                        data-doc-name="<?= sanitize($doc_clean) ?>"
+                        data-doc-type="<?= sanitize($doc['file_type']) ?>"
+                        data-doc-size="<?= sanitize($doc['file_size']) ?>"
+                        data-doc-uploaded-at="<?= sanitize(fmtDocumentDateTime($doc['uploaded_at'] ?? '')) ?>"
+                        data-doc-uploaded-by="<?= sanitize($doc_uploader) ?>">
+                    <i class="fa-solid fa-rotate"></i> Replace
+                </button>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
 
 <form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data">
                     <?= csrf_field() ?>
@@ -728,6 +821,47 @@ include 'includes/header.php';
                                 <a href="<?= sanitize($vdd_att_url) ?>" download="<?= sanitize($vdd_att_label_clean) ?>" style="flex:none;width:32px;height:32px;border-radius:9px;background:#F8FAFC;border:1px solid #e2e8f0;color:#5B2DEE;display:flex;align-items:center;justify-content:center;"><i class="fa-solid fa-download"></i></a>
                             </div>
                             <?php endif; endforeach; ?>
+
+                            <?php if (!empty($surveyor_uploaded_docs)): ?>
+                            <div style="font-size:12px;font-weight:700;color:#0f172a;margin:14px 0 8px;"><i class="fa-solid fa-folder-open text-warning me-1"></i> Surveyor Uploaded Documents</div>
+                            <?php foreach ($surveyor_uploaded_docs as $doc):
+                                $doc_clean = preg_replace('/^[0-9]+_/', '', $doc['file_name'] ?? '');
+                                if ($doc_clean === '' || $doc_clean === null) $doc_clean = $doc['file_name'];
+                                $doc_icon = 'fa-file-lines'; $doc_icon_bg = '#F1F5F9'; $doc_icon_fg = '#475569';
+                                if (str_contains((string)$doc['file_type'], 'PDF')) { $doc_icon = 'fa-file-pdf'; $doc_icon_bg = '#FEE2E2'; $doc_icon_fg = '#B91C1C'; }
+                                elseif (str_contains((string)$doc['file_type'], 'Excel')) { $doc_icon = 'fa-file-excel'; $doc_icon_bg = '#D1FAE5'; $doc_icon_fg = '#047857'; }
+                                elseif (str_contains((string)$doc['file_type'], 'Word')) { $doc_icon = 'fa-file-word'; $doc_icon_bg = '#EEF2FF'; $doc_icon_fg = '#4F46E5'; }
+                                $doc_uploader = $doc['uploaded_by'] ? getUserFullNameById($db, (int)$doc['uploaded_by']) : '—';
+                            ?>
+                            <div class="vdd-file-row" data-doc-row data-doc-id="<?= (int)$doc['id'] ?>">
+                                <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                                    <div class="vdd-file-icon" style="background:<?= $doc_icon_bg ?>;color:<?= $doc_icon_fg ?>;"><i class="fa-solid <?= $doc_icon ?>"></i></div>
+                                    <div style="min-width:0;">
+                                        <div class="vdd-file-name" data-doc-name-display title="<?= sanitize($doc_clean) ?>"><?= sanitize($doc_clean) ?></div>
+                                        <div class="vdd-file-meta">
+                                            <span class="vdd-badge-soft" style="font-size:10px;padding:2px 8px;"><?= sanitize($doc['file_type']) ?></span>
+                                            <span style="font-size:11px;color:#94a3b8;" data-doc-size-display><?= sanitize($doc['file_size']) ?></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="doc-actions-row">
+                                    <a href="download.php?upload_id=<?= (int)$doc['id'] ?>&inline=1" target="_blank" rel="noopener" class="doc-view-btn" title="View"><i class="fa-solid fa-eye"></i></a>
+                                    <a href="download.php?upload_id=<?= (int)$doc['id'] ?>" data-doc-download-link class="doc-view-btn" title="Download"><i class="fa-solid fa-download"></i></a>
+                                    <?php if ($can_replace_docs): ?>
+                                    <button type="button" class="doc-replace-btn" title="Replace / Re-upload"
+                                            data-doc-id="<?= (int)$doc['id'] ?>"
+                                            data-doc-name="<?= sanitize($doc_clean) ?>"
+                                            data-doc-type="<?= sanitize($doc['file_type']) ?>"
+                                            data-doc-size="<?= sanitize($doc['file_size']) ?>"
+                                            data-doc-uploaded-at="<?= sanitize(fmtDocumentDateTime($doc['uploaded_at'] ?? '')) ?>"
+                                            data-doc-uploaded-by="<?= sanitize($doc_uploader) ?>">
+                                        <i class="fa-solid fa-rotate"></i> Replace
+                                    </button>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                            <?php endif; ?>
 
                             <form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data">
                                 <?= csrf_field() ?>
@@ -1077,4 +1211,22 @@ document.addEventListener('click', function (ev) {
 <?php
 include 'includes/nav.php';
 include 'includes/footer.php';
+
+// 🌟 Document Replace / Re-upload — modal + behavior, Admin/Surveyor only
+// (page access above already guarantees any Surveyor here is the assigned
+// one). Included after footer.php's own jQuery/Bootstrap <script> tags —
+// same "last jQuery load wins" fix already used elsewhere in this app
+// (see assign_vessel.php) — so $.ajaxSetup here and document_replace.js's
+// own jQuery reference both bind to the SAME final jQuery instance.
+if (in_array($role, ['Admin', 'Surveyor'], true)) {
+    include 'includes/document_replace_modal.php';
+    ?>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
+        $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
+    </script>
+    <script src="assets/js/document_replace.js"></script>
+    <?php
+}
 ?>

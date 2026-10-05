@@ -2,6 +2,7 @@
 require_once 'config/config.php';
 require_once __DIR__ . '/../includes/upload_validation.php';
 require_once 'includes/completed_remarks_helpers.php';
+require_once 'includes/document_replace_helpers.php';
 checkAuth();
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -156,6 +157,11 @@ $uploads_stmt = $db->prepare("SELECT * FROM uploads WHERE survey_id = ? ORDER BY
 $uploads_stmt->execute([$id]);
 $all_files = $uploads_stmt->fetchAll();
 
+// 🌟 Single source of truth for the Replace button — Admin always,
+// Surveyor only if actually assigned to this survey; Super Admin/Client
+// never (re-checked independently in ajax/document_replace.php too).
+$can_replace_docs = canReplaceDocument($db, $role, $current_user_id, (int)$survey['id']);
+
 
 function fmtDateTime($val) {
     if (empty($val) || $val === '0000-00-00' || $val === '0000-00-00 00:00:00') return '—';
@@ -169,6 +175,21 @@ include 'includes/header.php';
 ?>
 
 <style>
+/* 🌟 Document Replace — View/Download/Replace row actions. Unconditional
+   (not inside the @media blocks below): View/Download render for every
+   role that can reach this page, including Client — only the Replace
+   button itself is PHP-gated to Admin/assigned-Surveyor. */
+.doc-replace-btn {
+    display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border-color);
+    background: #fff; color: #3b32b3; border-radius: 8px; padding: 0 10px; height: 32px; font-size: 11.5px; font-weight: 650;
+}
+.doc-replace-btn:hover { border-color: #3b32b3; background: #eef2ff; }
+.doc-view-btn {
+    display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color);
+    background: #fff; color: var(--text-muted); border-radius: 8px; width: 32px; height: 32px; font-size: 13px;
+}
+.doc-view-btn:hover { color: #3b32b3; border-color: #3b32b3; }
+.doc-actions-row { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 @media (min-width: 992px) {
     .scroll-content .detail-header-card {
         max-width: none;
@@ -514,22 +535,34 @@ include 'includes/header.php';
                         $icon = 'fa-file-word text-primary';
                     }
                 ?>
-                <div class="bg-white p-3 rounded-3 border d-flex align-items-center justify-content-between mb-2 shadow-sm">
-                    <div class="d-flex align-items-center gap-3" style="max-width: 80%;">
+                <div class="bg-white p-3 rounded-3 border d-flex align-items-center justify-content-between mb-2 shadow-sm" data-doc-row data-doc-id="<?= (int)$file['id'] ?>">
+                    <div class="d-flex align-items-center gap-3" style="max-width: 58%;">
                         <i class="fa-regular <?= $icon ?> fs-3"></i>
                         <div style="overflow: hidden;">
-                            <div class="fw-bold text-dark text-truncate" style="font-size:13px; max-width: 100%;" title="<?= sanitize(preg_replace('/^[0-9]+_/', '', $file['file_name'])) ?>">
+                            <div class="fw-bold text-dark text-truncate" style="font-size:13px; max-width: 100%;" data-doc-name-display title="<?= sanitize(preg_replace('/^[0-9]+_/', '', $file['file_name'])) ?>">
                                 <?= sanitize(preg_replace('/^[0-9]+_/', '', $file['file_name'])) ?>
                             </div>
                             <div class="text-muted d-flex gap-2 align-items-center" style="font-size:11px; margin-top:2px;">
                                 <span class="badge bg-light text-secondary border py-0.5"><?= sanitize($file['file_type']) ?></span>
-                                <span><?= sanitize($file['file_size']) ?></span>
+                                <span data-doc-size-display><?= sanitize($file['file_size']) ?></span>
                             </div>
                         </div>
                     </div>
-                    <a href="download.php?upload_id=<?= (int)$file['id'] ?>" class="btn btn-sm btn-light border py-1.5 text-primary">
-                        <i class="fa-solid fa-download"></i>
-                    </a>
+                    <div class="doc-actions-row">
+                        <a href="download.php?upload_id=<?= (int)$file['id'] ?>&inline=1" target="_blank" rel="noopener" class="doc-view-btn" title="View"><i class="fa-solid fa-eye"></i></a>
+                        <a href="download.php?upload_id=<?= (int)$file['id'] ?>" data-doc-download-link class="doc-view-btn" title="Download"><i class="fa-solid fa-download"></i></a>
+                        <?php if ($can_replace_docs): ?>
+                        <button type="button" class="doc-replace-btn" title="Replace / Re-upload"
+                                data-doc-id="<?= (int)$file['id'] ?>"
+                                data-doc-name="<?= sanitize(preg_replace('/^[0-9]+_/', '', $file['file_name'])) ?>"
+                                data-doc-type="<?= sanitize($file['file_type']) ?>"
+                                data-doc-size="<?= sanitize($file['file_size']) ?>"
+                                data-doc-uploaded-at="<?= sanitize(fmtDateTime($file['uploaded_at'] ?? '')) ?>"
+                                data-doc-uploaded-by="<?= sanitize($file['uploaded_by'] ? getUserFullNameById($db, (int)$file['uploaded_by']) : '—') ?>">
+                            <i class="fa-solid fa-rotate"></i> Replace
+                        </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
             <?php endforeach; ?>
         <?php else: ?>
@@ -724,18 +757,32 @@ include 'includes/header.php';
                                 elseif (str_contains($file['file_type'], 'Excel')) { $vdd_icon = 'fa-file-excel'; $vdd_icon_bg = '#D1FAE5'; $vdd_icon_fg = '#047857'; }
                                 elseif (str_contains($file['file_type'], 'Word')) { $vdd_icon = 'fa-file-word'; $vdd_icon_bg = '#EEF2FF'; $vdd_icon_fg = '#4F46E5'; }
                             ?>
-                            <div class="vdd-file-row">
+                            <div class="vdd-file-row" data-doc-row data-doc-id="<?= (int)$file['id'] ?>">
                                 <div style="display:flex;align-items:center;gap:12px;min-width:0;">
                                     <div class="vdd-file-icon" style="background:<?= $vdd_icon_bg ?>;color:<?= $vdd_icon_fg ?>;"><i class="fa-solid <?= $vdd_icon ?>"></i></div>
                                     <div style="min-width:0;">
-                                        <div class="vdd-file-name" title="<?= sanitize(preg_replace('/^[0-9]+_/', '', $file['file_name'])) ?>"><?= sanitize(preg_replace('/^[0-9]+_/', '', $file['file_name'])) ?></div>
+                                        <div class="vdd-file-name" data-doc-name-display title="<?= sanitize(preg_replace('/^[0-9]+_/', '', $file['file_name'])) ?>"><?= sanitize(preg_replace('/^[0-9]+_/', '', $file['file_name'])) ?></div>
                                         <div class="vdd-file-meta">
                                             <span class="vdd-badge-soft" style="font-size:10px;padding:2px 8px;"><?= sanitize($file['file_type']) ?></span>
-                                            <span style="font-size:11px;color:#94a3b8;"><?= sanitize($file['file_size']) ?></span>
+                                            <span style="font-size:11px;color:#94a3b8;" data-doc-size-display><?= sanitize($file['file_size']) ?></span>
                                         </div>
                                     </div>
                                 </div>
-                                <a href="download.php?upload_id=<?= (int)$file['id'] ?>" class="vdd-file-dl"><i class="fa-solid fa-download"></i></a>
+                                <div class="doc-actions-row">
+                                    <a href="download.php?upload_id=<?= (int)$file['id'] ?>&inline=1" target="_blank" rel="noopener" class="doc-view-btn" title="View"><i class="fa-solid fa-eye"></i></a>
+                                    <a href="download.php?upload_id=<?= (int)$file['id'] ?>" data-doc-download-link class="doc-view-btn" title="Download"><i class="fa-solid fa-download"></i></a>
+                                    <?php if ($can_replace_docs): ?>
+                                    <button type="button" class="doc-replace-btn" title="Replace / Re-upload"
+                                            data-doc-id="<?= (int)$file['id'] ?>"
+                                            data-doc-name="<?= sanitize(preg_replace('/^[0-9]+_/', '', $file['file_name'])) ?>"
+                                            data-doc-type="<?= sanitize($file['file_type']) ?>"
+                                            data-doc-size="<?= sanitize($file['file_size']) ?>"
+                                            data-doc-uploaded-at="<?= sanitize(fmtDateTime($file['uploaded_at'] ?? '')) ?>"
+                                            data-doc-uploaded-by="<?= sanitize($file['uploaded_by'] ? getUserFullNameById($db, (int)$file['uploaded_by']) : '—') ?>">
+                                        <i class="fa-solid fa-rotate"></i> Replace
+                                    </button>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                             <?php endforeach; else: ?>
                             <div class="vdd-file-empty"><i class="fa-solid fa-folder-open d-block mb-2" style="font-size:22px;opacity:.5;"></i>No files archived for this vessel.</div>
@@ -938,4 +985,21 @@ include 'includes/header.php';
 <?php
 include 'includes/nav.php';
 include 'includes/footer.php';
+
+// 🌟 Document Replace / Re-upload — modal + behavior, Admin/Surveyor only.
+// Included after footer.php's own jQuery/Bootstrap <script> tags — same
+// "last jQuery load wins" fix already used elsewhere in this app (see
+// assign_vessel.php) — so $.ajaxSetup here and document_replace.js's own
+// jQuery reference both bind to the SAME final jQuery instance.
+if (in_array($role, ['Admin', 'Surveyor'], true)) {
+    include 'includes/document_replace_modal.php';
+    ?>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
+        $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
+    </script>
+    <script src="assets/js/document_replace.js"></script>
+    <?php
+}
 ?>
