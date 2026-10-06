@@ -47,6 +47,30 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
 
     // అడ్మిన్ కి N20 (HSFO) రికవరీ సమ్
     $total_hsfo = $db->query("SELECT SUM(hsfo_recovery) FROM surveys WHERE hsfo_recovery IS NOT NULL")->fetchColumn();
+
+    // 🌟 ప్రతి సర్వేయర్ కి పూర్తి రిపోర్ట్ (dashboard bottom table): Ships
+    // Attended (as of now / this month) + Total Recovery (as of now / this
+    // month) — role_id = 2 (Surveyor) ఉన్న ప్రతి యూజర్ కి, రికార్డులు లేని
+    // వారికి కూడా (LEFT JOIN) 0గా చూపించడానికి.
+    $surveyor_full_report = $db->query("
+        SELECT
+            u.full_name,
+            COUNT(DISTINCT CASE WHEN s.status = 'Completed' THEN s.id END) AS ships_total,
+            COUNT(DISTINCT CASE WHEN s.status = 'Completed'
+                AND MONTH(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = MONTH(CURDATE())
+                AND YEAR(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = YEAR(CURDATE())
+                THEN s.id END) AS ships_month,
+            COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL THEN s.recovery_amount END), 0) AS recovery_total,
+            COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL
+                AND MONTH(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = MONTH(CURDATE())
+                AND YEAR(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = YEAR(CURDATE())
+                THEN s.recovery_amount END), 0) AS recovery_month
+        FROM users u
+        LEFT JOIN surveys s ON s.surveyor_id = u.id
+        WHERE u.role_id = 2
+        GROUP BY u.id, u.full_name
+        ORDER BY u.full_name ASC
+    ")->fetchAll(PDO::FETCH_ASSOC);
 } elseif ($role === 'Client') {
     // క్లయింట్ కి కేవలం తన కంపెనీ వెసెల్స్ మాత్రమే
     $stmt_v = $db->prepare("SELECT COUNT(*) FROM surveys WHERE status = 'Pending Vessel' AND client_id = ?");
@@ -527,6 +551,44 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             <?php else: ?>
                 <div class="text-muted text-center py-2" style="font-size:12.5px;">No completed vessels yet.</div>
             <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if (in_array($role, ['Admin', 'Super Admin'], true)): ?>
+    <div class="overview-section mt-4">
+        <div class="section-title-row">
+            <span class="section-title">Surveyor Performance — Full Report</span>
+        </div>
+        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="surveyor-full-report-card">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Surveyor</th>
+                            <th class="text-end">Ships Attended<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">As of Now</span></th>
+                            <th class="text-end">Ships Attended<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">This Month</span></th>
+                            <th class="text-end">Total Recovery<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">As of Now</span></th>
+                            <th class="text-end">Total Recovery<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">This Month</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (!empty($surveyor_full_report)): ?>
+                            <?php foreach ($surveyor_full_report as $row): ?>
+                            <tr>
+                                <td class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['full_name']) ?></td>
+                                <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_total'] ?></td>
+                                <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_month'] ?></td>
+                                <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_total'], 3) ?> MT</td>
+                                <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_month'], 3) ?> MT</td>
+                            </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <tr><td colspan="5" class="text-muted text-center py-3" style="font-size:12.5px;">No surveyors found.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     <?php endif; ?>
