@@ -52,6 +52,11 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     // Attended (as of now / this month) + Total Recovery (as of now / this
     // month) — role_id = 2 (Surveyor) ఉన్న ప్రతి యూజర్ కి, రికార్డులు లేని
     // వారికి కూడా (LEFT JOIN) 0గా చూపించడానికి.
+    // 🌟 BUG FIX: a survey assigned to more than one surveyor (survey_surveyors
+    // junction table) was only credited to the PRIMARY surveyor_id, so a
+    // co-surveyor's ships/recovery here read lower than their own
+    // completed.php/vessels.php view (which already matches surveyor_id OR
+    // survey_surveyors membership) — join the same way those pages do.
     $surveyor_full_report = $db->query("
         SELECT
             u.full_name,
@@ -66,7 +71,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
                 AND YEAR(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = YEAR(CURDATE())
                 THEN s.recovery_amount END), 0) AS recovery_month
         FROM users u
-        LEFT JOIN surveys s ON s.surveyor_id = u.id
+        LEFT JOIN surveys s ON (s.surveyor_id = u.id OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = u.id))
         WHERE u.role_id = 2
         GROUP BY u.id, u.full_name
         ORDER BY u.full_name ASC
