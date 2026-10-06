@@ -1,5 +1,6 @@
 <?php
 require_once 'config/config.php';
+require_once 'includes/document_replace_helpers.php';
 checkAuth();
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -106,6 +107,11 @@ $uploads_stmt = $db->prepare("SELECT * FROM uploads WHERE survey_id = ?");
 $uploads_stmt->execute([$id]);
 $uploaded_files = $uploads_stmt->fetchAll();
 
+// 🌟 Single source of truth for the Replace button — Admin always,
+// Surveyor only if actually assigned to this survey; Super Admin/Client
+// never (re-checked independently in ajax/document_replace.php too).
+$can_replace_docs = canReplaceDocument($db, $role, (int)$current_user_id, (int)$survey['id']);
+
 // 🌟 "Send Email to Master for Redelivery" — always opens Gmail's own
 // compose window (mail.google.com), not mailto:, since mailto: opens
 // whatever the OS/browser has set as its default mail handler (Outlook,
@@ -144,6 +150,21 @@ include 'includes/header.php';
 ?>
 
 <style>
+/* 🌟 Document Replace — View/Download/Replace row actions. Unconditional
+   (not inside the @media blocks below): View/Download render for every
+   role that can reach this page, including Client — only the Replace
+   button itself is PHP-gated to Admin/assigned-Surveyor. */
+.doc-replace-btn {
+    display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border-color);
+    background: #fff; color: #3b32b3; border-radius: 8px; padding: 0 10px; height: 32px; font-size: 11.5px; font-weight: 650;
+}
+.doc-replace-btn:hover { border-color: #3b32b3; background: #eef2ff; }
+.doc-view-btn {
+    display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color);
+    background: #fff; color: var(--text-muted); border-radius: 8px; width: 32px; height: 32px; font-size: 13px;
+}
+.doc-view-btn:hover { color: #3b32b3; border-color: #3b32b3; }
+.doc-actions-row { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 @media (min-width: 992px) {
     .detail-bottom-row {
         display: grid;
@@ -314,12 +335,26 @@ include 'includes/header.php';
                     if (str_contains($lower, 'xlsx') || str_contains($lower, 'xls') || str_contains($lower, 'excel')) $icon = 'fa-file-excel text-success';
                     elseif (str_contains($lower, 'doc') || str_contains($lower, 'word')) $icon = 'fa-file-word text-primary';
                 ?>
-                <div class="bg-white p-2 rounded-3 border d-flex align-items-center justify-content-between mb-2 shadow-sm" style="font-size: 12px;">
-                    <div class="d-flex align-items-center gap-2" style="max-width:80%;">
+                <div class="bg-white p-2 rounded-3 border d-flex align-items-center justify-content-between mb-2 shadow-sm" style="font-size: 12px;" data-doc-row data-doc-id="<?= (int)$file['id'] ?>">
+                    <div class="d-flex align-items-center gap-2" style="max-width:62%;">
                         <i class="fa-regular <?= $icon ?> fs-5"></i>
-                        <span class="text-dark fw-semibold text-truncate" title="<?= sanitize($clean_name) ?>"><?= sanitize($clean_name) ?></span>
+                        <span class="text-dark fw-semibold text-truncate" data-doc-name-display title="<?= sanitize($clean_name) ?>"><?= sanitize($clean_name) ?></span>
                     </div>
-                    <a href="download.php?upload_id=<?= (int)$file['id'] ?>" class="btn btn-sm btn-light py-1 border text-primary"><i class="fa-solid fa-download"></i></a>
+                    <div class="doc-actions-row">
+                        <a href="download.php?upload_id=<?= (int)$file['id'] ?>&inline=1" target="_blank" rel="noopener" class="doc-view-btn" title="View"><i class="fa-solid fa-eye"></i></a>
+                        <a href="download.php?upload_id=<?= (int)$file['id'] ?>" data-doc-download-link class="doc-view-btn" title="Download"><i class="fa-solid fa-download"></i></a>
+                        <?php if ($can_replace_docs): ?>
+                        <button type="button" class="doc-replace-btn" title="Replace / Re-upload"
+                                data-doc-id="<?= (int)$file['id'] ?>"
+                                data-doc-name="<?= sanitize($clean_name) ?>"
+                                data-doc-type="<?= sanitize($file['file_type']) ?>"
+                                data-doc-size="<?= sanitize($file['file_size']) ?>"
+                                data-doc-uploaded-at="<?= sanitize(fmtDocumentDateTime($file['uploaded_at'] ?? '')) ?>"
+                                data-doc-uploaded-by="<?= sanitize($file['uploaded_by'] ? getUserFullNameById($db, (int)$file['uploaded_by']) : '—') ?>">
+                            <i class="fa-solid fa-rotate"></i> Replace
+                        </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
             <?php endforeach; ?>
         <?php else: ?>
@@ -482,4 +517,21 @@ document.addEventListener('click', function (ev) {
 <?php
 include 'includes/nav.php';
 include 'includes/footer.php';
+
+// 🌟 Document Replace / Re-upload — modal + behavior, Admin/Surveyor only.
+// Included after footer.php's own jQuery/Bootstrap <script> tags — same
+// "last jQuery load wins" fix already used elsewhere in this app (see
+// assign_vessel.php) — so $.ajaxSetup here and document_replace.js's own
+// jQuery reference both bind to the SAME final jQuery instance.
+if (in_array($role, ['Admin', 'Surveyor'], true)) {
+    include 'includes/document_replace_modal.php';
+    ?>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
+        $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
+    </script>
+    <script src="assets/js/document_replace.js"></script>
+    <?php
+}
 ?>

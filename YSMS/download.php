@@ -90,8 +90,14 @@ $mimeByExt = [
 ];
 $mime = $mimeByExt[$ext] ?? 'application/octet-stream';
 
+// 🌟 "View" (open inline, e.g. in a new tab) vs "Download" (force a Save
+// dialog) — same authenticated/authorized file, same everything else
+// below; only the disposition differs. Defaults to the original
+// attachment behavior so every existing download.php link is unaffected.
+$inline = isset($_GET['inline']) && $_GET['inline'] === '1';
+
 header('Content-Type: ' . $mime);
-header('Content-Disposition: attachment; filename="' . str_replace('"', '', $cleanName) . '"');
+header('Content-Disposition: ' . ($inline ? 'inline' : 'attachment') . '; filename="' . str_replace('"', '', $cleanName) . '"');
 header('Content-Length: ' . filesize($realFile));
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: private, no-store');
