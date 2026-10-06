@@ -49,27 +49,22 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $total_hsfo = $db->query("SELECT SUM(hsfo_recovery) FROM surveys WHERE hsfo_recovery IS NOT NULL")->fetchColumn();
 
     // 🌟 ప్రతి సర్వేయర్ కి పూర్తి రిపోర్ట్ (dashboard bottom table): Ships
-    // Attended (as of now / this month) + Ships Completed + Total Recovery
-    // (as of now / this month) — role_id = 2 (Surveyor) ఉన్న ప్రతి యూజర్ కి,
-    // రికార్డులు లేని వారికి కూడా (LEFT JOIN) 0గా చూపించడానికి.
+    // Attended (as of now / this month) + Total Recovery (as of now / this
+    // month) — role_id = 2 (Surveyor) ఉన్న ప్రతి యూజర్ కి, రికార్డులు లేని
+    // వారికి కూడా (LEFT JOIN) 0గా చూపించడానికి.
     // 🌟 BUG FIX: a survey assigned to more than one surveyor (survey_surveyors
     // junction table) was only credited to the PRIMARY surveyor_id, so a
     // co-surveyor's ships/recovery here read lower than their own
     // completed.php/vessels.php view (which already matches surveyor_id OR
     // survey_surveyors membership) — join the same way those pages do.
-    // 🌟 Ships Attended now counts a vessel the moment it's uploaded
-    // (assign_date, any status — Pending Vessel included), instead of
-    // waiting for it to reach status = 'Completed'. A separate Ships
-    // Completed column keeps the "fully completed only" count that
-    // Ships Attended used to represent.
     $surveyor_full_report = $db->query("
         SELECT
             u.full_name,
-            COUNT(DISTINCT s.id) AS ships_total,
-            COUNT(DISTINCT CASE WHEN MONTH(s.assign_date) = MONTH(CURDATE())
-                AND YEAR(s.assign_date) = YEAR(CURDATE())
+            COUNT(DISTINCT CASE WHEN s.status = 'Completed' THEN s.id END) AS ships_total,
+            COUNT(DISTINCT CASE WHEN s.status = 'Completed'
+                AND MONTH(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = MONTH(CURDATE())
+                AND YEAR(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = YEAR(CURDATE())
                 THEN s.id END) AS ships_month,
-            COUNT(DISTINCT CASE WHEN s.status = 'Completed' THEN s.id END) AS ships_completed,
             COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL THEN s.recovery_amount END), 0) AS recovery_total,
             COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL
                 AND MONTH(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = MONTH(CURDATE())
@@ -600,7 +595,6 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                                 <th>Surveyor</th>
                                 <th class="text-end">Ships Attended<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">As of Now</span></th>
                                 <th class="text-end">Ships Attended<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">This Month</span></th>
-                                <th class="text-end">Ships Completed</th>
                                 <th class="text-end">Total Recovery<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">As of Now</span></th>
                                 <th class="text-end">Total Recovery<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">This Month</span></th>
                             </tr>
@@ -612,13 +606,12 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                                     <td class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['full_name']) ?></td>
                                     <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_total'] ?></td>
                                     <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_month'] ?></td>
-                                    <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_completed'] ?></td>
                                     <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_total'], 3) ?> MT</td>
                                     <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_month'], 3) ?> MT</td>
                                 </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>
-                                <tr><td colspan="6" class="text-muted text-center py-3" style="font-size:12.5px;">No surveyors found.</td></tr>
+                                <tr><td colspan="5" class="text-muted text-center py-3" style="font-size:12.5px;">No surveyors found.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
