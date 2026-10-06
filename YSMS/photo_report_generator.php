@@ -96,34 +96,37 @@ include 'includes/header.php';
 }
 .prg-classify-info.empty { display: none; }
 .prg-classify-info i { color: #94a3b8; margin-right: 3px; }
-/* Structure picker — always-visible button group (no dropdown/popover):
-   every main option is its own small pill button; tapping one that has
-   sub-options reveals them right below as another pill row (simple
-   accordion, one section open at a time); the actually-picked pill is
-   highlighted. All levels still use the exact existing dropdown values —
-   this only changes the PRESENTATION from a menu/dropdown to buttons. */
-.hold-pill-group { display: flex; flex-direction: column; gap: 4px; }
-.hold-pill-block { border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; overflow: hidden; }
-.hold-pill-row { display: none; flex-wrap: wrap; gap: 6px; padding: 8px; background: #fff; }
-.hold-pill-block.open > .hold-pill-row { display: flex; }
-.hold-pill-mid-block { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-.hold-pill-mid-row { display: flex; }
-.hold-pill-leaf-row { display: none; flex-wrap: wrap; gap: 6px; padding: 8px; background: #f1f5f9; }
-.hold-pill-mid-block.open > .hold-pill-leaf-row { display: flex; }
-.hold-pill {
-  display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 600;
-  padding: 7px 12px; border-radius: 999px; border: 1px solid #cbd5e1;
-  background: #fff; color: #1e293b; cursor: pointer; line-height: 1.2;
+/* Structure picker — horizontal multi-level cascading button-group nav
+   (same visual language as the Side button row above): Level 1 is an
+   always-visible row of main-category buttons; picking one that has
+   children reveals its own Level 2 (sub category) row directly below,
+   and picking a Level 2 item that has its own children reveals a
+   Level 3 (sub-sub category) row below that. Only the active branch's
+   row is shown at each level — the hierarchy never expands as one long
+   vertical list. All levels still use the exact existing dropdown
+   values; this only changes the PRESENTATION from a vertical accordion
+   to horizontal cascading buttons. The actual pick is only committed
+   once a final (leaf) button is clicked, via onHoldNestPick. */
+.prg-cat-picker { display: flex; flex-direction: column; gap: 2px; margin-top: .35rem; }
+.prg-cat-level { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; }
+.prg-cat-label { font-size: 10.5px; font-weight: 650; color: #64748b; padding-top: 8px; white-space: nowrap; }
+.prg-cat-scroll { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.prg-cat-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: 10px;
+  border: 1.5px solid #2563eb; background: #fff; color: #1e3a8a;
+  cursor: pointer; line-height: 1.2; white-space: nowrap;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
-.hold-pill:hover { background: #f1f5f9; }
-.hold-pill.active { background: #1e40af; border-color: #1e40af; color: #fff; }
-.hold-pill-main {
-  width: 100%; border: 0; border-radius: 0; text-align: left;
-  padding: 10px 12px; background: transparent;
+.prg-cat-btn:hover { background: #eff4ff; }
+.prg-cat-btn.active { background: #1e3a8a; border-color: #1e3a8a; color: #fff; }
+.prg-cat-btn.active:hover { background: #1e3a8a; }
+.prg-cat-panel { display: none; }
+.prg-cat-panel.show { display: flex; }
+@media (max-width: 575.98px) {
+  .prg-cat-scroll { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  .prg-cat-scroll::-webkit-scrollbar { height: 4px; }
 }
-.hold-pill-main:hover { background: #eef2f6; }
-.hold-pill-main.active { background: #1e40af; color: #fff; }
-.hold-pill-mid { border-radius: 0; font-weight: 650; }
 
 .prg-photo-thumb {
     width: 90px;
@@ -1968,79 +1971,96 @@ function structureInfoHtml(p, idx) {
   '</div>';
 }
 
-/** Always-visible button-group version of the structure picker (replaces
- *  the old click-to-open dropdown/flyout menu) — same exact existing
- *  dropdown values (structCfg), same commit semantics as before (a pick
- *  only takes effect when a leaf-level button is clicked; clicking a
- *  main/mid that has sub-options just expands/collapses its row, same as
- *  the old accordion toggle did), just laid out as plain pill buttons
- *  that are always on screen instead of hidden behind a toggle. */
+/** Horizontal multi-level cascading button-group version of the structure
+ *  picker (replaces the old vertical accordion/nested-pill layout) — same
+ *  exact existing dropdown values (structCfg), same commit semantics as
+ *  before (a pick only takes effect when a leaf-level button is clicked;
+ *  clicking a main/mid that has children just reveals its row below,
+ *  same as the old accordion toggle did), just laid out as Level 1/2/3
+ *  sibling rows so only one row per level is ever visible at a time. */
 function holdPillGroupHtml(p, idx) {
   var cat = p.category || '';
   var cfg = structCfg(cat);
   var mainList = cfg.main;
-  var blocks = '';
+  var level1 = '';
+  var panels = '';
   for (var i = 0; i < mainList.length; i++) {
     var main = mainList[i];
     var mainActive = (p.holdMain === main);
 
     if (holdSubIsNested(main, cat)) {
       // 3-level: e.g. Hull → Port Side → At Bow Section / Hoppers → Lower → Port
+      level1 +=
+        '<button type="button" class="prg-cat-btn' + (mainActive ? ' active' : '') + '" data-main="' + esc(main) + '" ' +
+        'onclick="onCatMainPick(' + idx + ', this)">' + esc(main) + '</button>';
+
       var mids = holdMidKeys(main, cat);
-      var midBlocks = '';
+      var midHtml = '';
       for (var m = 0; m < mids.length; m++) {
         var mid = mids[m];
-        var midOpen = mainActive && p.holdSub && p.holdSub.indexOf(mid + ' ›') === 0;
-        var leaves = holdLeafSubs(main, mid, cat);
+        var midActive = mainActive && p.holdSub && p.holdSub.indexOf(mid + ' ›') === 0;
+        midHtml +=
+          '<button type="button" class="prg-cat-btn' + (midActive ? ' active' : '') + '" data-main="' + esc(main) + '" data-mid="' + esc(mid) + '" ' +
+          'onclick="onCatMidPick(' + idx + ', this)">' + esc(mid) + '</button>';
+      }
+      panels +=
+        '<div class="prg-cat-level prg-cat-panel' + (mainActive ? ' show' : '') + '" data-main="' + esc(main) + '">' +
+          '<span class="prg-cat-label">Sub Category:</span>' +
+          '<div class="prg-cat-scroll">' + midHtml + '</div>' +
+        '</div>';
+
+      for (var m2 = 0; m2 < mids.length; m2++) {
+        var mid2 = mids[m2];
+        var midActive2 = mainActive && p.holdSub && p.holdSub.indexOf(mid2 + ' ›') === 0;
+        var leaves = holdLeafSubs(main, mid2, cat);
         var leafHtml = '';
         for (var L = 0; L < leaves.length; L++) {
           var leaf = leaves[L];
-          var full = mid + ' › ' + leaf;
+          var full = mid2 + ' › ' + leaf;
           var lAct = (mainActive && p.holdSub === full) ? ' active' : '';
           leafHtml +=
-            '<button type="button" class="hold-pill hold-pill-leaf' + lAct + '" data-main="' + esc(main) + '" data-sub="' + esc(full) + '" ' +
+            '<button type="button" class="prg-cat-btn' + lAct + '" data-main="' + esc(main) + '" data-sub="' + esc(full) + '" ' +
             'onclick="onHoldNestPick(' + idx + ', this)">' + esc(leaf) + '</button>';
         }
-        midBlocks +=
-          '<div class="hold-pill-mid-block' + (midOpen ? ' open' : '') + '">' +
-            '<button type="button" class="hold-pill hold-pill-mid' + (midOpen ? ' active' : '') + '" ' +
-            'onclick="onHoldPillMid(' + idx + ', this)">' + esc(mid) + '</button>' +
-            '<div class="hold-pill-leaf-row">' + leafHtml + '</div>' +
+        panels +=
+          '<div class="prg-cat-level prg-cat-panel' + (midActive2 ? ' show' : '') + '" data-main="' + esc(main) + '" data-mid="' + esc(mid2) + '">' +
+            '<span class="prg-cat-label">Sub-Sub Category:</span>' +
+            '<div class="prg-cat-scroll">' + leafHtml + '</div>' +
           '</div>';
       }
-      blocks +=
-        '<div class="hold-pill-block' + (mainActive ? ' open' : '') + '">' +
-          '<button type="button" class="hold-pill hold-pill-main' + (mainActive ? ' active' : '') + '" data-main="' + esc(main) + '" ' +
-          'onclick="onHoldPillToggle(' + idx + ', this)">' + esc(main) + '</button>' +
-          '<div class="hold-pill-row hold-pill-mid-row">' + midBlocks + '</div>' +
-        '</div>';
     } else {
       var subs = cfg.sub[main] || [];
       if (!subs || subs.length === 0) {
-        blocks +=
-          '<div class="hold-pill-block">' +
-            '<button type="button" class="hold-pill hold-pill-main' + (mainActive ? ' active' : '') + '" data-main="' + esc(main) + '" data-sub="" ' +
-            'onclick="onHoldNestPick(' + idx + ', this)">' + esc(main) + '</button>' +
-          '</div>';
+        level1 +=
+          '<button type="button" class="prg-cat-btn' + (mainActive ? ' active' : '') + '" data-main="' + esc(main) + '" data-sub="" ' +
+          'onclick="onHoldNestPick(' + idx + ', this)">' + esc(main) + '</button>';
       } else {
+        level1 +=
+          '<button type="button" class="prg-cat-btn' + (mainActive ? ' active' : '') + '" data-main="' + esc(main) + '" ' +
+          'onclick="onCatMainPick(' + idx + ', this)">' + esc(main) + '</button>';
+
         var subHtml = '';
         for (var j = 0; j < subs.length; j++) {
           var sub = subs[j];
           var sAct = (mainActive && p.holdSub === sub) ? ' active' : '';
           subHtml +=
-            '<button type="button" class="hold-pill hold-pill-sub' + sAct + '" data-main="' + esc(main) + '" data-sub="' + esc(sub) + '" ' +
+            '<button type="button" class="prg-cat-btn' + sAct + '" data-main="' + esc(main) + '" data-sub="' + esc(sub) + '" ' +
             'onclick="onHoldNestPick(' + idx + ', this)">' + esc(sub) + '</button>';
         }
-        blocks +=
-          '<div class="hold-pill-block' + (mainActive ? ' open' : '') + '">' +
-            '<button type="button" class="hold-pill hold-pill-main' + (mainActive ? ' active' : '') + '" data-main="' + esc(main) + '" ' +
-            'onclick="onHoldPillToggle(' + idx + ', this)">' + esc(main) + '</button>' +
-            '<div class="hold-pill-row">' + subHtml + '</div>' +
+        panels +=
+          '<div class="prg-cat-level prg-cat-panel' + (mainActive ? ' show' : '') + '" data-main="' + esc(main) + '">' +
+            '<span class="prg-cat-label">Sub Category:</span>' +
+            '<div class="prg-cat-scroll">' + subHtml + '</div>' +
           '</div>';
       }
     }
   }
-  return '<div class="hold-pill-group" id="holdPillGroup_' + idx + '">' + blocks + '</div>';
+  return (
+    '<div class="prg-cat-picker" id="holdPillGroup_' + idx + '">' +
+      '<div class="prg-cat-level"><span class="prg-cat-label">Category:</span><div class="prg-cat-scroll">' + level1 + '</div></div>' +
+      panels +
+    '</div>'
+  );
 }
 
 function holdDescControlsHtml(p, idx) {
@@ -2052,37 +2072,42 @@ function holdDescControlsHtml(p, idx) {
   );
 }
 
-/** Expands/collapses one main option's sub-button row — pure display
- *  toggle, never touches the photo's actual holdMain/holdSub (the pick
- *  only commits when a leaf-level pill is clicked, via onHoldNestPick).
- *  Collapses any other open main in the same group (one section open at
- *  a time, keeping the button group tidy). */
-function onHoldPillToggle(idx, btn) {
-  var block = btn.closest('.hold-pill-block');
-  if (!block) return;
-  var group = block.parentNode;
-  var wasOpen = block.classList.contains('open');
-  if (group) {
-    group.querySelectorAll(':scope > .hold-pill-block.open').forEach(function (b) {
-      if (b !== block) b.classList.remove('open');
+/** Shows the Level 2 (sub category) row for the clicked Level 1 main
+ *  button — pure display nav, never touches the photo's actual
+ *  holdMain/holdSub (the pick only commits when a leaf-level button is
+ *  clicked, via onHoldNestPick). Switching main also hides any Level 3
+ *  (sub-sub category) row until a new sub category is picked. */
+function onCatMainPick(idx, btn) {
+  var group = btn.closest('.prg-cat-picker');
+  if (!group) return;
+  var main = btn.getAttribute('data-main') || '';
+  var level1Row = group.querySelector(':scope > .prg-cat-level:not(.prg-cat-panel)');
+  if (level1Row) {
+    level1Row.querySelectorAll('.prg-cat-btn').forEach(function (b) {
+      b.classList.toggle('active', b === btn);
     });
   }
-  block.classList.toggle('open', !wasOpen);
+  group.querySelectorAll(':scope > .prg-cat-panel').forEach(function (panel) {
+    var show = panel.getAttribute('data-main') === main && !panel.hasAttribute('data-mid');
+    panel.classList.toggle('show', show);
+  });
 }
 
-/** Same idea as onHoldPillToggle, one level down — expands/collapses a
- *  single mid option's leaf row within a 3-level nested main. */
-function onHoldPillMid(idx, btn) {
-  var block = btn.closest('.hold-pill-mid-block');
-  if (!block) return;
-  var panel = block.parentNode;
-  var wasOpen = block.classList.contains('open');
-  if (panel) {
-    panel.querySelectorAll(':scope > .hold-pill-mid-block.open').forEach(function (b) {
-      if (b !== block) b.classList.remove('open');
-    });
-  }
-  block.classList.toggle('open', !wasOpen);
+/** Same idea as onCatMainPick, one level down — shows the Level 3
+ *  (sub-sub category) row for the clicked Level 2 sub category button. */
+function onCatMidPick(idx, btn) {
+  var subPanel = btn.closest('.prg-cat-panel');
+  var group = btn.closest('.prg-cat-picker');
+  if (!subPanel || !group) return;
+  var main = btn.getAttribute('data-main') || '';
+  var mid = btn.getAttribute('data-mid') || '';
+  subPanel.querySelectorAll('.prg-cat-btn').forEach(function (b) {
+    b.classList.toggle('active', b === btn);
+  });
+  group.querySelectorAll(':scope > .prg-cat-panel[data-mid]').forEach(function (panel) {
+    var show = panel.getAttribute('data-main') === main && panel.getAttribute('data-mid') === mid;
+    panel.classList.toggle('show', show);
+  });
 }
 
 function onHoldNestPick(idx, btn) {
