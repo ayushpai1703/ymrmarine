@@ -512,7 +512,7 @@ include 'includes/header.php';
                 </div>
             </div>
             <div class="vd-export-row">
-                <a href="export_reports.php" class="btn-export"><i class="fa-solid fa-file-excel"></i> Export Excel</a>
+                <a href="export_reports.php" class="btn-export" id="vdExportLink" data-desk-export><i class="fa-solid fa-file-excel"></i> Export Excel</a>
             </div>
             <div class="vd-meta" data-desk-meta></div>
             <div class="vd-table-card">
@@ -604,6 +604,7 @@ include 'includes/header.php';
   var clientSel = root.querySelector('[data-desk-client]');
   var surveyorSel = root.querySelector('[data-desk-surveyor]');
   var clearBtn = root.querySelector('[data-desk-clear]');
+  var exportLink = root.querySelector('[data-desk-export]');
   var tbody = root.querySelector('.vd-table tbody');
   var meta = root.querySelector('[data-desk-meta]');
   var pager = root.querySelector('[data-desk-pager]');
@@ -703,7 +704,27 @@ include 'includes/header.php';
     }
   }
 
-  function onChange() { page = 1; render(); }
+  // 🌟 Keep the Export Excel link in sync with the currently applied
+  // filters — no filters applied → full export_reports.php (unfiltered,
+  // same as before); any filter active → append it as a query param so
+  // export_reports.php narrows the export to match what's on screen.
+  function updateExportLink() {
+    if (!exportLink) return;
+    var params = [];
+    var q = search ? search.value.trim() : '';
+    if (q) params.push('q=' + encodeURIComponent(q));
+    var type = val(typeSel);
+    if (type) params.push('type=' + encodeURIComponent(type));
+    var place = val(placeSel);
+    if (place) params.push('place=' + encodeURIComponent(place));
+    var client = val(clientSel);
+    if (client) params.push('client=' + encodeURIComponent(client));
+    var surveyor = val(surveyorSel);
+    if (surveyor) params.push('surveyor=' + encodeURIComponent(surveyor));
+    exportLink.href = 'export_reports.php' + (params.length ? '?' + params.join('&') : '');
+  }
+
+  function onChange() { page = 1; render(); updateExportLink(); }
 
   if (search) search.addEventListener('input', onChange);
   [sortSel, typeSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
@@ -719,9 +740,11 @@ include 'includes/header.php';
     });
     page = 1;
     render();
+    updateExportLink();
   });
 
   render();
+  updateExportLink();
 })();
 </script>
 
