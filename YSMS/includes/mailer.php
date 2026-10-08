@@ -270,12 +270,12 @@ function sendJobAssignmentEmail(string $toEmail, string $toName, array $job): bo
 
     $alt = buildJobAssignmentMessage($job, $toName);
     $cc = ['survey@ymrmarine.com'];
-    // From: fixed relay mailbox (ops@ymrmarine.com); Reply-To: assigning
-    // admin's own profile email so replies still reach them.
+    // From: assigning admin's own @ymrmarine.com address (via SMTP relay);
+    // falls back to the default mailbox if admin has no profile email.
     $adminEmail = (string)($job['assigned_by_email'] ?? '');
     $options = [
         'from_name'      => (string)($job['assigned_by_name'] ?? SMTP_FROM_NAME),
-        'from_email'     => defined('SMTP_RELAY_USERNAME') ? SMTP_RELAY_USERNAME : '',
+        'from_email'     => $adminEmail,
         'reply_to_email' => $adminEmail,
         'reply_to_name'  => (string)($job['assigned_by_name'] ?? ''),
     ];
@@ -582,12 +582,12 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
         if ($to === '') {
             continue;
         }
-        // From: fixed relay mailbox (ops@ymrmarine.com); Reply-To:
-        // uploading surveyor's own profile email so replies reach them.
+        // From: surveyor's own @ymrmarine.com address (via SMTP relay);
+        // falls back to the default mailbox if surveyor has no profile email.
         $surveyorEmail = (string)($info['surveyor_email'] ?? '');
         $options = [
             'from_name'      => (string)($info['surveyor_name'] ?? SMTP_FROM_NAME),
-            'from_email'     => defined('SMTP_RELAY_USERNAME') ? SMTP_RELAY_USERNAME : '',
+            'from_email'     => $surveyorEmail,
             'reply_to_email' => $surveyorEmail,
             'reply_to_name'  => (string)($info['surveyor_name'] ?? ''),
         ];
