@@ -10,11 +10,12 @@ use PHPMailer\PHPMailer\Exception as PHPMailerException;
  *
  * $options (optional):
  *   - from_name       : display name in From (Admin / Surveyor name)
+ *   - from_email      : send as this address via the Workspace SMTP relay
+ *                        (the acting user's own profile email). Falls back
+ *                        to SMTP_FROM_EMAIL when empty, invalid, or the
+ *                        relay isn't configured.
  *   - reply_to_email  : Reply-To = admin or surveyor profile email
  *   - reply_to_name   : Reply-To display name
- *
- * SMTP still uses config mailbox for auth. Reply-To ensures replies go to the
- * right person's profile email.
  */
 function sendHtmlEmail(string $toEmail, string $toName, string $subject, string $htmlBody, string $altBody = '', array $ccEmails = [], array $attachments = [], array $options = []): bool {
     $GLOBALS['ysms_last_mail_error'] = '';
@@ -22,20 +23,42 @@ function sendHtmlEmail(string $toEmail, string $toName, string $subject, string 
         $GLOBALS['ysms_last_mail_error'] = 'Invalid or empty recipient email.';
         return false;
     }
-    if (SMTP_PASSWORD === '' || SMTP_PASSWORD === false) {
+
+    $relayReady = defined('SMTP_RELAY_ENABLED') && SMTP_RELAY_ENABLED
+        && SMTP_RELAY_USERNAME !== '' && SMTP_RELAY_PASSWORD !== '';
+    $fromEmailOverride = trim((string)($options['from_email'] ?? ''));
+    $useRelay = $relayReady && $fromEmailOverride !== '' && filter_var($fromEmailOverride, FILTER_VALIDATE_EMAIL);
+
+    if ($useRelay) {
+        if (SMTP_RELAY_PASSWORD === '' || SMTP_RELAY_PASSWORD === false) {
+            $GLOBALS['ysms_last_mail_error'] = 'SMTP relay password is empty — set YSMS_SMTP_RELAY_PASSWORD.';
+            error_log($GLOBALS['ysms_last_mail_error']);
+            return false;
+        }
+    } elseif (SMTP_PASSWORD === '' || SMTP_PASSWORD === false) {
         $GLOBALS['ysms_last_mail_error'] = 'SMTP password is empty in config/mail_config.php — set SMTP_PASSWORD (or env YSMS_SMTP_PASSWORD).';
         error_log($GLOBALS['ysms_last_mail_error']);
         return false;
     }
+
     $mail = new PHPMailer(true);
     try {
         $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = SMTP_USERNAME;
-        $mail->Password   = SMTP_PASSWORD;
-        $mail->SMTPSecure = SMTP_SECURE === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
+        if ($useRelay) {
+            $mail->Host       = SMTP_RELAY_HOST;
+            $mail->SMTPAuth   = true;
+            $mail->Username   = SMTP_RELAY_USERNAME;
+            $mail->Password   = SMTP_RELAY_PASSWORD;
+            $mail->SMTPSecure = SMTP_RELAY_SECURE === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = SMTP_RELAY_PORT;
+        } else {
+            $mail->Host       = SMTP_HOST;
+            $mail->SMTPAuth   = true;
+            $mail->Username   = SMTP_USERNAME;
+            $mail->Password   = SMTP_PASSWORD;
+            $mail->SMTPSecure = SMTP_SECURE === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = SMTP_PORT;
+        }
         $mail->CharSet    = 'UTF-8';
         $mail->Timeout    = 30;
 
@@ -43,7 +66,7 @@ function sendHtmlEmail(string $toEmail, string $toName, string $subject, string 
         if ($fromName === '') {
             $fromName = SMTP_FROM_NAME;
         }
-        $mail->setFrom(SMTP_FROM_EMAIL, $fromName);
+        $mail->setFrom($useRelay ? $fromEmailOverride : SMTP_FROM_EMAIL, $fromName);
         $mail->addAddress($toEmail, $toName);
 
         $replyEmail = trim((string)($options['reply_to_email'] ?? ''));
@@ -247,10 +270,13 @@ function sendJobAssignmentEmail(string $toEmail, string $toName, array $job): bo
 
     $alt = buildJobAssignmentMessage($job, $toName);
     $cc = ['Ashok.j123456789@gmail.com'];
-    // From/Reply-To: assigning admin (profile email) so surveyor can reply to admin
+    // From: assigning admin's own @ymrmarine.com address (via SMTP relay);
+    // falls back to the default mailbox if admin has no profile email.
+    $adminEmail = (string)($job['assigned_by_email'] ?? '');
     $options = [
         'from_name'      => (string)($job['assigned_by_name'] ?? SMTP_FROM_NAME),
-        'reply_to_email' => (string)($job['assigned_by_email'] ?? ''),
+        'from_email'     => $adminEmail,
+        'reply_to_email' => $adminEmail,
         'reply_to_name'  => (string)($job['assigned_by_name'] ?? ''),
     ];
     return sendHtmlEmail($toEmail, $toName, $subject, $html, $alt, $cc, [], $options);
@@ -556,10 +582,13 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
         if ($to === '') {
             continue;
         }
-        // From/Reply-To: surveyor who uploaded (profile email) so admin can reply to surveyor
+        // From: surveyor's own @ymrmarine.com address (via SMTP relay);
+        // falls back to the default mailbox if surveyor has no profile email.
+        $surveyorEmail = (string)($info['surveyor_email'] ?? '');
         $options = [
             'from_name'      => (string)($info['surveyor_name'] ?? SMTP_FROM_NAME),
-            'reply_to_email' => (string)($info['surveyor_email'] ?? ''),
+            'from_email'     => $surveyorEmail,
+            'reply_to_email' => $surveyorEmail,
             'reply_to_name'  => (string)($info['surveyor_name'] ?? ''),
         ];
         if (sendHtmlEmail($to, (string)($admin['full_name'] ?? 'Admin'), $subject, $html, $alt, $cc, $attachments, $options)) {

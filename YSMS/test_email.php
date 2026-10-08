@@ -47,6 +47,12 @@ $cfg = [
     'SMTP_FROM_EMAIL' => defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : '?',
     'SMTP_PASSWORD' => (defined('SMTP_PASSWORD') && SMTP_PASSWORD !== '') ? ('(set, ' . strlen(SMTP_PASSWORD) . ' chars)') : '(EMPTY — this is why mail fails)',
 ];
+$relayCfg = [
+    'SMTP_RELAY_ENABLED' => defined('SMTP_RELAY_ENABLED') ? (SMTP_RELAY_ENABLED ? 'true' : 'false') : '?',
+    'SMTP_RELAY_HOST' => defined('SMTP_RELAY_HOST') ? SMTP_RELAY_HOST : '?',
+    'SMTP_RELAY_USERNAME' => defined('SMTP_RELAY_USERNAME') ? (SMTP_RELAY_USERNAME !== '' ? SMTP_RELAY_USERNAME : '(EMPTY)') : '?',
+    'SMTP_RELAY_PASSWORD' => (defined('SMTP_RELAY_PASSWORD') && SMTP_RELAY_PASSWORD !== '') ? ('(set, ' . strlen(SMTP_RELAY_PASSWORD) . ' chars)') : '(EMPTY — dynamic From/relay won\'t work)',
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -61,8 +67,16 @@ $cfg = [
   <h1 class="h5 mb-3">YSMS SMTP Test</h1>
   <div class="card mb-3">
     <div class="card-body small">
-      <div class="fw-semibold mb-2">Current config</div>
+      <div class="fw-semibold mb-2">Current config (default SMTP)</div>
       <?php foreach ($cfg as $k => $v): ?>
+        <div><code><?= htmlspecialchars($k) ?></code> = <?= htmlspecialchars((string)$v) ?></div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <div class="card mb-3">
+    <div class="card-body small">
+      <div class="fw-semibold mb-2">Workspace SMTP relay (dynamic From — assign/upload emails)</div>
+      <?php foreach ($relayCfg as $k => $v): ?>
         <div><code><?= htmlspecialchars($k) ?></code> = <?= htmlspecialchars((string)$v) ?></div>
       <?php endforeach; ?>
     </div>
