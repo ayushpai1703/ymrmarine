@@ -345,9 +345,16 @@ function notifySurveyorOfAssignment(PDO $db, int $surveyorId, array $job): strin
     if ($surveyorId <= 0) {
         return '';
     }
-    // Outsourcing placeholder uses admin id 1 — skip auto notify
+    // Outsourcing placeholder (surveyor id 1) has no real profile/email —
+    // route the assignment email to Operations instead of a surveyor.
     if ($surveyorId === 1 && empty($job['force_notify'])) {
-        return 'Outsourced job — no surveyor notification sent.';
+        $opsEmail = defined('SMTP_RELAY_USERNAME') && SMTP_RELAY_USERNAME !== '' ? SMTP_RELAY_USERNAME : 'ops@ymrmarine.com';
+        $ok = sendJobAssignmentEmail($opsEmail, 'Operations', $job);
+        if ($ok) {
+            return 'Outsourced job — email sent to ' . $opsEmail . '.';
+        }
+        $err = !empty($GLOBALS['ysms_last_mail_error']) ? $GLOBALS['ysms_last_mail_error'] : 'check SMTP settings';
+        return 'Outsourced job — EMAIL FAILED: ' . $err;
     }
 
     $notes = [];
@@ -500,7 +507,14 @@ function getAdminRecipients(PDO $db): array {
  *   app_url, stage_label
  */
 function notifyAdminsOfReportUpload(PDO $db, array $info): string {
-    $admins = getAdminRecipients($db);
+    // Outsourced survey (surveyor id 1 = placeholder, no real profile) —
+    // route to Operations instead of the admin list.
+    if ((int)($info['surveyor_id'] ?? 0) === 1) {
+        $opsEmail = defined('SMTP_RELAY_USERNAME') && SMTP_RELAY_USERNAME !== '' ? SMTP_RELAY_USERNAME : 'ops@ymrmarine.com';
+        $admins = [['full_name' => 'Operations', 'email' => $opsEmail]];
+    } else {
+        $admins = getAdminRecipients($db);
+    }
     if (empty($admins)) {
         return 'No admin email on file.';
     }
@@ -693,7 +707,7 @@ function loadSurveyNotifyContext(PDO $db, int $surveyId): array {
     try {
         $stmt = $db->prepare("
             SELECT s.vessel_name, s.report_number, s.agent_name, s.recovery_amount, s.survey_type_ids,
-                   c.company_name, p.port_name, t.type_name, u.full_name AS surveyor_name, u.email AS surveyor_email
+                   s.surveyor_id, c.company_name, p.port_name, t.type_name, u.full_name AS surveyor_name, u.email AS surveyor_email
             FROM surveys s
             LEFT JOIN clients c ON s.client_id = c.id
             LEFT JOIN ports p ON s.port_id = p.id
@@ -717,6 +731,7 @@ function loadSurveyNotifyContext(PDO $db, int $surveyId): array {
             'client_name'     => $row['company_name'] ?? '',
             'port_name'       => $row['port_name'] ?? '',
             'survey_types'    => $types,
+            'surveyor_id'     => (int)($row['surveyor_id'] ?? 0),
             'surveyor_name'   => $row['surveyor_name'] ?? '',
             'surveyor_email'  => $row['surveyor_email'] ?? '',
             'agent_name'      => $row['agent_name'] ?? '',
