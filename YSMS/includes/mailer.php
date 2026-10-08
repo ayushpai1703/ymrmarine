@@ -269,13 +269,13 @@ function sendJobAssignmentEmail(string $toEmail, string $toName, array $job): bo
         </div>';
 
     $alt = buildJobAssignmentMessage($job, $toName);
-    $cc = ['Ashok.j123456789@gmail.com'];
-    // From: assigning admin's own @ymrmarine.com address (via SMTP relay);
-    // falls back to the default mailbox if admin has no profile email.
+    $cc = ['survey@ymrmarine.com'];
+    // From: fixed relay mailbox (ops@ymrmarine.com); Reply-To: assigning
+    // admin's own profile email so replies still reach them.
     $adminEmail = (string)($job['assigned_by_email'] ?? '');
     $options = [
         'from_name'      => (string)($job['assigned_by_name'] ?? SMTP_FROM_NAME),
-        'from_email'     => $adminEmail,
+        'from_email'     => defined('SMTP_RELAY_USERNAME') ? SMTP_RELAY_USERNAME : '',
         'reply_to_email' => $adminEmail,
         'reply_to_name'  => (string)($job['assigned_by_name'] ?? ''),
     ];
@@ -574,7 +574,7 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
     }
     $alt = implode("\n", $altLines);
 
-    $cc = ['Ashok.j123456789@gmail.com'];
+    $cc = ['survey@ymrmarine.com'];
     $sent = 0;
     $failed = 0;
     foreach ($admins as $admin) {
@@ -582,12 +582,12 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
         if ($to === '') {
             continue;
         }
-        // From: surveyor's own @ymrmarine.com address (via SMTP relay);
-        // falls back to the default mailbox if surveyor has no profile email.
+        // From: fixed relay mailbox (ops@ymrmarine.com); Reply-To:
+        // uploading surveyor's own profile email so replies reach them.
         $surveyorEmail = (string)($info['surveyor_email'] ?? '');
         $options = [
             'from_name'      => (string)($info['surveyor_name'] ?? SMTP_FROM_NAME),
-            'from_email'     => $surveyorEmail,
+            'from_email'     => defined('SMTP_RELAY_USERNAME') ? SMTP_RELAY_USERNAME : '',
             'reply_to_email' => $surveyorEmail,
             'reply_to_name'  => (string)($info['surveyor_name'] ?? ''),
         ];
