@@ -803,7 +803,7 @@ include 'includes/header.php';
                     <?php endif; ?>
                     <button type="button" class="vd-clear-btn" data-desk-clear><i class="fa-solid fa-rotate-left"></i> Clear</button>
                 </div>
-                <a href="export_vessels.php" class="btn-export"><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Download</a>
+                <a href="export_vessels.php" class="btn-export" id="vdExportLink" data-desk-export><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Download</a>
             </div>
             <div class="vd-meta" data-desk-meta></div>
             <div class="vd-table-card">
@@ -932,6 +932,7 @@ include 'includes/header.php';
   var clientSel = root.querySelector('[data-desk-client]');
   var surveyorSel = root.querySelector('[data-desk-surveyor]');
   var clearBtn = root.querySelector('[data-desk-clear]');
+  var exportLink = root.querySelector('[data-desk-export]');
   var tbody = root.querySelector('.vd-table tbody');
   var meta = root.querySelector('[data-desk-meta]');
   var pager = root.querySelector('[data-desk-pager]');
@@ -1095,7 +1096,25 @@ include 'includes/header.php';
     }
   }
 
-  function onChange() { page = 1; render(); }
+  // 🌟 Keep the Download/Export link in sync with the currently applied
+  // filters — no filters applied → full export_vessels.php (unfiltered,
+  // same as before); any filter active → append it as a query param so
+  // export_vessels.php narrows the export to match what's on screen.
+  function updateExportLink() {
+    if (!exportLink) return;
+    var params = [];
+    var q = search ? search.value.trim() : '';
+    if (q) params.push('q=' + encodeURIComponent(q));
+    var place = val(placeSel);
+    if (place) params.push('place=' + encodeURIComponent(place));
+    var client = val(clientSel);
+    if (client) params.push('client=' + encodeURIComponent(client));
+    var surveyor = val(surveyorSel);
+    if (surveyor) params.push('surveyor=' + encodeURIComponent(surveyor));
+    exportLink.href = 'export_vessels.php' + (params.length ? '?' + params.join('&') : '');
+  }
+
+  function onChange() { page = 1; render(); updateExportLink(); }
 
   if (search) search.addEventListener('input', onChange);
   [sortSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
@@ -1112,9 +1131,11 @@ include 'includes/header.php';
     enhancedDropdowns.forEach(syncDropdownLabel);
     page = 1;
     render();
+    updateExportLink();
   });
 
   render();
+  updateExportLink();
 })();
 </script>
 

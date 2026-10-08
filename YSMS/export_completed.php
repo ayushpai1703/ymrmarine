@@ -46,6 +46,45 @@ try {
     @set_time_limit(120);
     @ini_set('memory_limit', '256M');
 
+    // 🌟 Mirror completed.php's own filter UI (search/place/client/surveyor/
+    // month) so the export matches whatever's currently on screen: no filter
+    // applied → every param below is empty → identical to the old
+    // always-full export. Month uses the exact same "Y-m" key + date-source
+    // priority (report_uploaded_date > survey_completed_date > assign_date)
+    // that builds completed.php's own month dropdown and data-month rows.
+    $q = trim((string)($_GET['q'] ?? ''));
+    $filter_place = trim((string)($_GET['place'] ?? ''));
+    $filter_client = trim((string)($_GET['client'] ?? ''));
+    $filter_surveyor = trim((string)($_GET['surveyor'] ?? ''));
+    $filter_month = trim((string)($_GET['month'] ?? ''));
+
+    $where = ["s.status = 'Completed'"];
+    $params = [];
+    if ($role === 'Client') {
+        $where[] = 's.client_id = ?';
+        $params[] = $client_row_id;
+    } elseif (!$is_full_access) {
+        $where[] = '(s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))';
+        $params[] = $user_id;
+        $params[] = $user_id;
+    }
+    if ($q !== '') {
+        $where[] = '(s.vessel_name LIKE ? OR c.company_name LIKE ? OR s.agent_name LIKE ? OR t.type_name LIKE ? OR p.port_name LIKE ? OR u.full_name LIKE ?)';
+        $like = '%' . $q . '%';
+        array_push($params, $like, $like, $like, $like, $like, $like);
+    }
+    if ($filter_place !== '') { $where[] = 'p.port_name = ?'; $params[] = $filter_place; }
+    if ($filter_client !== '') { $where[] = 'c.company_name = ?'; $params[] = $filter_client; }
+    if ($is_full_access && $filter_surveyor !== '') {
+        $where[] = "COALESCE((SELECT GROUP_CONCAT(u2.full_name ORDER BY ss2.id SEPARATOR ' + ') FROM survey_surveyors ss2 JOIN users u2 ON ss2.surveyor_id = u2.id WHERE ss2.survey_id = s.id), u.full_name) = ?";
+        $params[] = $filter_surveyor;
+    }
+    if ($filter_month !== '') {
+        $where[] = "DATE_FORMAT(COALESCE(s.report_uploaded_date, s.survey_completed_date, s.assign_date), '%Y-%m') = ?";
+        $params[] = $filter_month;
+    }
+    $whereSql = implode(' AND ', $where);
+
     $baseSql = "
         SELECT s.id, s.vessel_name, s.agent_name, c.company_name, t.type_name, s.survey_type_ids, u.full_name as surveyor_name, s.recovery_amount, s.report_uploaded_date,
                p.port_name, p.country
@@ -54,20 +93,11 @@ try {
         LEFT JOIN survey_types t ON s.survey_type_id = t.id
         LEFT JOIN users u ON s.surveyor_id = u.id
         LEFT JOIN ports p ON s.port_id = p.id
-        WHERE s.status = 'Completed'
+        WHERE $whereSql
+        ORDER BY s.report_uploaded_date DESC
     ";
-    if ($is_full_access) {
-        $stmt = $db->prepare($baseSql . " ORDER BY s.report_uploaded_date DESC");
-        $stmt->execute();
-    } elseif ($role === 'Client') {
-        $stmt = $db->prepare($baseSql . " AND s.client_id = ? ORDER BY s.report_uploaded_date DESC");
-        $stmt->execute([$client_row_id]);
-    } else {
-        // Include completed surveys assigned via survey_surveyors (multi-surveyor),
-        // not just the primary surveys.surveyor_id.
-        $stmt = $db->prepare($baseSql . " AND (s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?)) ORDER BY s.report_uploaded_date DESC");
-        $stmt->execute([$user_id, $user_id]);
-    }
+    $stmt = $db->prepare($baseSql);
+    $stmt->execute($params);
     $surveys = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $spreadsheet = new Spreadsheet();

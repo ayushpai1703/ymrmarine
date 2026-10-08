@@ -46,6 +46,37 @@ try {
         } catch (Throwable $e) { error_log('export_reports.php client lookup: ' . $e->getMessage()); }
     }
 
+    // 🌟 Mirror reports.php's own filter UI (search/place/client/surveyor) so
+    // the export matches whatever's currently on screen: no filter applied →
+    // every param below is empty → identical to the old always-full export.
+    $q = trim((string)($_GET['q'] ?? ''));
+    $filter_place = trim((string)($_GET['place'] ?? ''));
+    $filter_client = trim((string)($_GET['client'] ?? ''));
+    $filter_surveyor = trim((string)($_GET['surveyor'] ?? ''));
+
+    $where = ["s.status = 'Pending Report'"];
+    $params = [];
+    if ($role === 'Client') {
+        $where[] = 's.client_id = ?';
+        $params[] = $client_row_id;
+    } elseif (!$is_full_access) {
+        $where[] = '(s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))';
+        $params[] = $user_id;
+        $params[] = $user_id;
+    }
+    if ($q !== '') {
+        $where[] = '(s.vessel_name LIKE ? OR c.company_name LIKE ? OR s.agent_name LIKE ? OR st.type_name LIKE ? OR p.port_name LIKE ? OR u.full_name LIKE ?)';
+        $like = '%' . $q . '%';
+        array_push($params, $like, $like, $like, $like, $like, $like);
+    }
+    if ($filter_place !== '') { $where[] = 'p.port_name = ?'; $params[] = $filter_place; }
+    if ($filter_client !== '') { $where[] = 'c.company_name = ?'; $params[] = $filter_client; }
+    if ($is_full_access && $filter_surveyor !== '') {
+        $where[] = "COALESCE((SELECT GROUP_CONCAT(u2.full_name ORDER BY ss2.id SEPARATOR ' + ') FROM survey_surveyors ss2 JOIN users u2 ON ss2.surveyor_id = u2.id WHERE ss2.survey_id = s.id), u.full_name) = ?";
+        $params[] = $filter_surveyor;
+    }
+    $whereSql = implode(' AND ', $where);
+
     $baseSql = "SELECT s.id, s.vessel_name, s.agent_name, c.company_name, st.type_name, s.survey_type_ids, u.full_name as surveyor_name, s.survey_completed_date,
                        p.port_name, p.country
                         FROM surveys s
@@ -53,19 +84,10 @@ try {
                         LEFT JOIN survey_types st ON s.survey_type_id = st.id
                         LEFT JOIN users u ON s.surveyor_id = u.id
                         LEFT JOIN ports p ON s.port_id = p.id
-                        WHERE s.status = 'Pending Report'";
-    if ($is_full_access) {
-        $stmt = $db->prepare($baseSql . " ORDER BY s.id DESC");
-        $stmt->execute();
-    } elseif ($role === 'Client') {
-        $stmt = $db->prepare($baseSql . " AND s.client_id = ? ORDER BY s.id DESC");
-        $stmt->execute([$client_row_id]);
-    } else {
-        // Include reports assigned via survey_surveyors (multi-surveyor), not
-        // just the primary surveys.surveyor_id.
-        $stmt = $db->prepare($baseSql . " AND (s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?)) ORDER BY s.id DESC");
-        $stmt->execute([$user_id, $user_id]);
-    }
+                        WHERE $whereSql
+                        ORDER BY s.id DESC";
+    $stmt = $db->prepare($baseSql);
+    $stmt->execute($params);
     $surveys = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $spreadsheet = new Spreadsheet();
