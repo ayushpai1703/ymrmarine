@@ -1,19 +1,25 @@
 <?php
 require_once __DIR__ . '/../config/mail_config.php';
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/gmail_service.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
 /**
- * Low-level HTML email sender (SMTP via PHPMailer).
+ * Low-level HTML email sender.
  *
  * $options (optional):
  *   - from_name       : display name in From (Admin / Surveyor name)
- *   - from_email      : send as this address via the Workspace SMTP relay
- *                        (the acting user's own profile email). Falls back
- *                        to SMTP_FROM_EMAIL when empty, invalid, or the
- *                        relay isn't configured.
+ *   - from_email      : send as this address (the acting user's own
+ *                        profile email). When it's a GMAIL_API_WORKSPACE_DOMAIN
+ *                        address and the Gmail API is enabled, sends via
+ *                        Gmail API domain-wide delegation so the message
+ *                        lands in that user's own Sent folder; otherwise
+ *                        (or on Gmail API failure) falls back to the
+ *                        Workspace SMTP relay. Falls back further to
+ *                        SMTP_FROM_EMAIL when empty, invalid, or neither
+ *                        is configured.
  *   - reply_to_email  : Reply-To = admin or surveyor profile email
  *   - reply_to_name   : Reply-To display name
  */
@@ -112,6 +118,16 @@ function sendHtmlEmail(string $toEmail, string $toName, string $subject, string 
         $mail->Subject = $subject;
         $mail->Body    = $htmlBody;
         $mail->AltBody = $altBody !== '' ? $altBody : strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $htmlBody));
+
+        $gmailDomain = '@' . ltrim((string)GMAIL_API_WORKSPACE_DOMAIN, '@');
+        $tryGmailApi = $useRelay && defined('GMAIL_API_ENABLED') && GMAIL_API_ENABLED
+            && stripos($fromEmailOverride, $gmailDomain) !== false;
+        if ($tryGmailApi && $mail->preSend() && gmailApiSendRaw($fromEmailOverride, $mail->getSentMIMEMessage())) {
+            return true;
+        }
+        if ($tryGmailApi) {
+            error_log('Gmail API send failed, falling back to SMTP relay: ' . ($GLOBALS['ysms_last_mail_error'] ?? ''));
+        }
 
         $mail->send();
         return true;

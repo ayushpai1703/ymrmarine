@@ -53,6 +53,11 @@ $relayCfg = [
     'SMTP_RELAY_USERNAME' => defined('SMTP_RELAY_USERNAME') ? (SMTP_RELAY_USERNAME !== '' ? SMTP_RELAY_USERNAME : '(EMPTY)') : '?',
     'SMTP_RELAY_PASSWORD' => (defined('SMTP_RELAY_PASSWORD') && SMTP_RELAY_PASSWORD !== '') ? ('(set, ' . strlen(SMTP_RELAY_PASSWORD) . ' chars)') : '(EMPTY — dynamic From/relay won\'t work)',
 ];
+$gmailCfg = [
+    'GMAIL_API_ENABLED' => defined('GMAIL_API_ENABLED') ? (GMAIL_API_ENABLED ? 'true' : 'false') : '?',
+    'GMAIL_SERVICE_ACCOUNT_EMAIL' => defined('GMAIL_SERVICE_ACCOUNT_EMAIL') ? GMAIL_SERVICE_ACCOUNT_EMAIL : '?',
+    'GMAIL_API_WORKSPACE_DOMAIN' => defined('GMAIL_API_WORKSPACE_DOMAIN') ? GMAIL_API_WORKSPACE_DOMAIN : '?',
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -75,8 +80,16 @@ $relayCfg = [
   </div>
   <div class="card mb-3">
     <div class="card-body small">
-      <div class="fw-semibold mb-2">Workspace SMTP relay (dynamic From — assign/upload emails)</div>
+      <div class="fw-semibold mb-2">Workspace SMTP relay (fallback — assign/upload emails)</div>
       <?php foreach ($relayCfg as $k => $v): ?>
+        <div><code><?= htmlspecialchars($k) ?></code> = <?= htmlspecialchars((string)$v) ?></div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <div class="card mb-3">
+    <div class="card-body small">
+      <div class="fw-semibold mb-2">Gmail API (Domain-Wide Delegation — preferred, lands in sender's own Sent)</div>
+      <?php foreach ($gmailCfg as $k => $v): ?>
         <div><code><?= htmlspecialchars($k) ?></code> = <?= htmlspecialchars((string)$v) ?></div>
       <?php endforeach; ?>
     </div>

@@ -24,6 +24,20 @@ if (!defined('SMTP_RELAY_SECURE'))   define('SMTP_RELAY_SECURE', getenv('YSMS_SM
 if (!defined('SMTP_RELAY_USERNAME')) define('SMTP_RELAY_USERNAME', getenv('YSMS_SMTP_RELAY_USERNAME') ?: '');
 if (!defined('SMTP_RELAY_PASSWORD')) define('SMTP_RELAY_PASSWORD', getenv('YSMS_SMTP_RELAY_PASSWORD') ?: '');
 
+// ── Gmail API (Domain-Wide Delegation) — sends as the acting user's own
+//    @ymrmarine.com mailbox via Gmail's users.messages.send, so the email
+//    lands in THAT user's own Sent folder (unlike the SMTP relay above,
+//    which cannot). Uses keyless impersonation: Cloud Run's own service
+//    account signs a short-lived JWT as GMAIL_SERVICE_ACCOUNT_EMAIL (which
+//    holds domain-wide delegation) with "sub" = the target user, exchanges
+//    it for that user's access token, then calls the Gmail API. No private
+//    key file is ever stored. Restricted to GMAIL_API_WORKSPACE_DOMAIN to
+//    stop impersonation of addresses outside our own domain. Falls back to
+//    the SMTP relay above on any failure.
+if (!defined('GMAIL_API_ENABLED'))          define('GMAIL_API_ENABLED', filter_var(getenv('YSMS_GMAIL_API_ENABLED') ?: 'true', FILTER_VALIDATE_BOOLEAN));
+if (!defined('GMAIL_SERVICE_ACCOUNT_EMAIL')) define('GMAIL_SERVICE_ACCOUNT_EMAIL', getenv('YSMS_GMAIL_SERVICE_ACCOUNT_EMAIL') ?: 'ysms-gmail-sender@ymr-sms.iam.gserviceaccount.com');
+if (!defined('GMAIL_API_WORKSPACE_DOMAIN')) define('GMAIL_API_WORKSPACE_DOMAIN', getenv('YSMS_GMAIL_API_WORKSPACE_DOMAIN') ?: 'ymrmarine.com');
+
 // ── Optional WhatsApp auto-notify (job assign) ──────────────────────────────
 if (!defined('WHATSAPP_CALLMEBOT_APIKEY')) {
     define('WHATSAPP_CALLMEBOT_APIKEY', getenv('YSMS_WHATSAPP_CALLMEBOT_APIKEY') ?: '');
