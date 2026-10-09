@@ -1,20 +1,27 @@
 <?php
 require_once __DIR__ . '/../config/mail_config.php';
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/gmail_service.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
 /**
- * Low-level HTML email sender (SMTP via PHPMailer).
+ * Low-level HTML email sender.
  *
  * $options (optional):
  *   - from_name       : display name in From (Admin / Surveyor name)
+ *   - from_email      : send as this address (the acting user's own
+ *                        profile email). When it's a GMAIL_API_WORKSPACE_DOMAIN
+ *                        address and the Gmail API is enabled, sends via
+ *                        Gmail API domain-wide delegation so the message
+ *                        lands in that user's own Sent folder; otherwise
+ *                        (or on Gmail API failure) falls back to the
+ *                        Workspace SMTP relay. Falls back further to
+ *                        SMTP_FROM_EMAIL when empty, invalid, or neither
+ *                        is configured.
  *   - reply_to_email  : Reply-To = admin or surveyor profile email
  *   - reply_to_name   : Reply-To display name
- *
- * SMTP still uses config mailbox for auth. Reply-To ensures replies go to the
- * right person's profile email.
  */
 function sendHtmlEmail(string $toEmail, string $toName, string $subject, string $htmlBody, string $altBody = '', array $ccEmails = [], array $attachments = [], array $options = []): bool {
     $GLOBALS['ysms_last_mail_error'] = '';
@@ -22,20 +29,42 @@ function sendHtmlEmail(string $toEmail, string $toName, string $subject, string 
         $GLOBALS['ysms_last_mail_error'] = 'Invalid or empty recipient email.';
         return false;
     }
-    if (SMTP_PASSWORD === '' || SMTP_PASSWORD === false) {
+
+    $relayReady = defined('SMTP_RELAY_ENABLED') && SMTP_RELAY_ENABLED
+        && SMTP_RELAY_USERNAME !== '' && SMTP_RELAY_PASSWORD !== '';
+    $fromEmailOverride = trim((string)($options['from_email'] ?? ''));
+    $useRelay = $relayReady && $fromEmailOverride !== '' && filter_var($fromEmailOverride, FILTER_VALIDATE_EMAIL);
+
+    if ($useRelay) {
+        if (SMTP_RELAY_PASSWORD === '' || SMTP_RELAY_PASSWORD === false) {
+            $GLOBALS['ysms_last_mail_error'] = 'SMTP relay password is empty — set YSMS_SMTP_RELAY_PASSWORD.';
+            error_log($GLOBALS['ysms_last_mail_error']);
+            return false;
+        }
+    } elseif (SMTP_PASSWORD === '' || SMTP_PASSWORD === false) {
         $GLOBALS['ysms_last_mail_error'] = 'SMTP password is empty in config/mail_config.php — set SMTP_PASSWORD (or env YSMS_SMTP_PASSWORD).';
         error_log($GLOBALS['ysms_last_mail_error']);
         return false;
     }
+
     $mail = new PHPMailer(true);
     try {
         $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = SMTP_USERNAME;
-        $mail->Password   = SMTP_PASSWORD;
-        $mail->SMTPSecure = SMTP_SECURE === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
+        if ($useRelay) {
+            $mail->Host       = SMTP_RELAY_HOST;
+            $mail->SMTPAuth   = true;
+            $mail->Username   = SMTP_RELAY_USERNAME;
+            $mail->Password   = SMTP_RELAY_PASSWORD;
+            $mail->SMTPSecure = SMTP_RELAY_SECURE === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = SMTP_RELAY_PORT;
+        } else {
+            $mail->Host       = SMTP_HOST;
+            $mail->SMTPAuth   = true;
+            $mail->Username   = SMTP_USERNAME;
+            $mail->Password   = SMTP_PASSWORD;
+            $mail->SMTPSecure = SMTP_SECURE === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = SMTP_PORT;
+        }
         $mail->CharSet    = 'UTF-8';
         $mail->Timeout    = 30;
 
@@ -43,7 +72,7 @@ function sendHtmlEmail(string $toEmail, string $toName, string $subject, string 
         if ($fromName === '') {
             $fromName = SMTP_FROM_NAME;
         }
-        $mail->setFrom(SMTP_FROM_EMAIL, $fromName);
+        $mail->setFrom($useRelay ? $fromEmailOverride : SMTP_FROM_EMAIL, $fromName);
         $mail->addAddress($toEmail, $toName);
 
         $replyEmail = trim((string)($options['reply_to_email'] ?? ''));
@@ -89,6 +118,16 @@ function sendHtmlEmail(string $toEmail, string $toName, string $subject, string 
         $mail->Subject = $subject;
         $mail->Body    = $htmlBody;
         $mail->AltBody = $altBody !== '' ? $altBody : strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $htmlBody));
+
+        $gmailDomain = '@' . ltrim((string)GMAIL_API_WORKSPACE_DOMAIN, '@');
+        $tryGmailApi = $useRelay && defined('GMAIL_API_ENABLED') && GMAIL_API_ENABLED
+            && stripos($fromEmailOverride, $gmailDomain) !== false;
+        if ($tryGmailApi && $mail->preSend() && gmailApiSendRaw($fromEmailOverride, $mail->getSentMIMEMessage())) {
+            return true;
+        }
+        if ($tryGmailApi) {
+            error_log('Gmail API send failed, falling back to SMTP relay: ' . ($GLOBALS['ysms_last_mail_error'] ?? ''));
+        }
 
         $mail->send();
         return true;
@@ -246,11 +285,14 @@ function sendJobAssignmentEmail(string $toEmail, string $toName, array $job): bo
         </div>';
 
     $alt = buildJobAssignmentMessage($job, $toName);
-    $cc = ['Ashok.j123456789@gmail.com'];
-    // From/Reply-To: assigning admin (profile email) so surveyor can reply to admin
+    $cc = ['survey@ymrmarine.com'];
+    // From: assigning admin's own @ymrmarine.com address (via SMTP relay);
+    // falls back to the default mailbox if admin has no profile email.
+    $adminEmail = (string)($job['assigned_by_email'] ?? '');
     $options = [
         'from_name'      => (string)($job['assigned_by_name'] ?? SMTP_FROM_NAME),
-        'reply_to_email' => (string)($job['assigned_by_email'] ?? ''),
+        'from_email'     => $adminEmail,
+        'reply_to_email' => $adminEmail,
         'reply_to_name'  => (string)($job['assigned_by_name'] ?? ''),
     ];
     return sendHtmlEmail($toEmail, $toName, $subject, $html, $alt, $cc, [], $options);
@@ -319,9 +361,16 @@ function notifySurveyorOfAssignment(PDO $db, int $surveyorId, array $job): strin
     if ($surveyorId <= 0) {
         return '';
     }
-    // Outsourcing placeholder uses admin id 1 — skip auto notify
+    // Outsourcing placeholder (surveyor id 1) has no real profile/email —
+    // route the assignment email to Operations instead of a surveyor.
     if ($surveyorId === 1 && empty($job['force_notify'])) {
-        return 'Outsourced job — no surveyor notification sent.';
+        $opsEmail = defined('SMTP_RELAY_USERNAME') && SMTP_RELAY_USERNAME !== '' ? SMTP_RELAY_USERNAME : 'ops@ymrmarine.com';
+        $ok = sendJobAssignmentEmail($opsEmail, 'Operations', $job);
+        if ($ok) {
+            return 'Outsourced job — email sent to ' . $opsEmail . '.';
+        }
+        $err = !empty($GLOBALS['ysms_last_mail_error']) ? $GLOBALS['ysms_last_mail_error'] : 'check SMTP settings';
+        return 'Outsourced job — EMAIL FAILED: ' . $err;
     }
 
     $notes = [];
@@ -474,7 +523,14 @@ function getAdminRecipients(PDO $db): array {
  *   app_url, stage_label
  */
 function notifyAdminsOfReportUpload(PDO $db, array $info): string {
-    $admins = getAdminRecipients($db);
+    // Outsourced survey (surveyor id 1 = placeholder, no real profile) —
+    // route to Operations instead of the admin list.
+    if ((int)($info['surveyor_id'] ?? 0) === 1) {
+        $opsEmail = defined('SMTP_RELAY_USERNAME') && SMTP_RELAY_USERNAME !== '' ? SMTP_RELAY_USERNAME : 'ops@ymrmarine.com';
+        $admins = [['full_name' => 'Operations', 'email' => $opsEmail]];
+    } else {
+        $admins = getAdminRecipients($db);
+    }
     if (empty($admins)) {
         return 'No admin email on file.';
     }
@@ -548,7 +604,7 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
     }
     $alt = implode("\n", $altLines);
 
-    $cc = ['Ashok.j123456789@gmail.com'];
+    $cc = ['survey@ymrmarine.com'];
     $sent = 0;
     $failed = 0;
     foreach ($admins as $admin) {
@@ -556,10 +612,13 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
         if ($to === '') {
             continue;
         }
-        // From/Reply-To: surveyor who uploaded (profile email) so admin can reply to surveyor
+        // From: surveyor's own @ymrmarine.com address (via SMTP relay);
+        // falls back to the default mailbox if surveyor has no profile email.
+        $surveyorEmail = (string)($info['surveyor_email'] ?? '');
         $options = [
             'from_name'      => (string)($info['surveyor_name'] ?? SMTP_FROM_NAME),
-            'reply_to_email' => (string)($info['surveyor_email'] ?? ''),
+            'from_email'     => $surveyorEmail,
+            'reply_to_email' => $surveyorEmail,
             'reply_to_name'  => (string)($info['surveyor_name'] ?? ''),
         ];
         if (sendHtmlEmail($to, (string)($admin['full_name'] ?? 'Admin'), $subject, $html, $alt, $cc, $attachments, $options)) {
@@ -664,7 +723,7 @@ function loadSurveyNotifyContext(PDO $db, int $surveyId): array {
     try {
         $stmt = $db->prepare("
             SELECT s.vessel_name, s.report_number, s.agent_name, s.recovery_amount, s.survey_type_ids,
-                   c.company_name, p.port_name, t.type_name, u.full_name AS surveyor_name, u.email AS surveyor_email
+                   s.surveyor_id, c.company_name, p.port_name, t.type_name, u.full_name AS surveyor_name, u.email AS surveyor_email
             FROM surveys s
             LEFT JOIN clients c ON s.client_id = c.id
             LEFT JOIN ports p ON s.port_id = p.id
@@ -688,6 +747,7 @@ function loadSurveyNotifyContext(PDO $db, int $surveyId): array {
             'client_name'     => $row['company_name'] ?? '',
             'port_name'       => $row['port_name'] ?? '',
             'survey_types'    => $types,
+            'surveyor_id'     => (int)($row['surveyor_id'] ?? 0),
             'surveyor_name'   => $row['surveyor_name'] ?? '',
             'surveyor_email'  => $row['surveyor_email'] ?? '',
             'agent_name'      => $row['agent_name'] ?? '',
