@@ -1716,7 +1716,13 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
             $btn.prop('disabled', true).text('Adding...');
             var payload = { module: module, action: 'add' };
             payload[nameField] = name;
-            $.post('ajax/admin_master.php', payload, null, 'json')
+            $.ajax({
+                url: 'ajax/admin_master.php',
+                method: 'POST',
+                data: payload,
+                dataType: 'json',
+                headers: { 'X-CSRF-Token': CSRF_TOKEN }
+            })
                 .done(function(resp) {
                     if (resp && resp.success && resp.id) {
                         var $root = $('[data-ss-root="' + ssRoot + '"]');
@@ -1728,8 +1734,9 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
                         $err.text((resp && resp.message) ? resp.message : 'Could not add — try again.').show();
                     }
                 })
-                .fail(function() {
-                    $err.text('Network error — try again.').show();
+                .fail(function(xhr) {
+                    console.error('Add New failed:', xhr.status, xhr.responseText);
+                    $err.text('Could not add (error ' + xhr.status + '). Open browser console for details.').show();
                 })
                 .always(function() {
                     $btn.prop('disabled', false).text('Add');
