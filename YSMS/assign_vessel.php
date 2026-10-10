@@ -28,6 +28,16 @@ try {
     error_log('assign_vessel.php survey_type_ids column check/add error: ' . $e->getMessage());
 }
 
+// 🌟 SAFETY NET: appointment_date column (database/migration_appointment_date.sql)
+try {
+    $ad_exists = $db->query("SHOW COLUMNS FROM surveys LIKE 'appointment_date'")->fetchAll();
+    if (empty($ad_exists)) {
+        $db->exec("ALTER TABLE surveys ADD COLUMN appointment_date DATE NULL DEFAULT NULL AFTER assign_date");
+    }
+} catch (Exception $e) {
+    error_log('assign_vessel.php appointment_date column check/add error: ' . $e->getMessage());
+}
+
 // 🌟 SAFETY NET: report_number column (unique YMR-YYYY-NNNNN)
 try {
     $rn_exists = $db->query("SHOW COLUMNS FROM surveys LIKE 'report_number'")->fetchAll();
@@ -284,6 +294,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $agent_name = mb_strtoupper(trim($_POST['agent_name']), 'UTF-8');
     $port_id = (int)$_POST['port_id'];
 
+    // 🌟 Appointment Date — mandatory, validated as a real calendar date.
+    $appointment_date_raw = trim($_POST['appointment_date'] ?? '');
+    $appointment_date = '';
+    if ($appointment_date_raw !== '') {
+        $ad_parts = explode('-', $appointment_date_raw);
+        if (count($ad_parts) === 3 && checkdate((int)$ad_parts[1], (int)$ad_parts[2], (int)$ad_parts[0])) {
+            $appointment_date = $appointment_date_raw;
+        }
+    }
+
     // 🌟 బహుళ Survey Types (checkbox multi-select) — CSV గా వస్తుంది, ఉదా. "3,5,7"
     $survey_type_ids_csv = trim($_POST['survey_type_ids'] ?? '');
     $survey_type_ids_arr = array_values(array_unique(array_filter(array_map('intval', explode(',', $survey_type_ids_csv)))));
@@ -342,15 +362,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // (surveyor_id = 1, no real surveyor) is now getting a real
         // surveyor for the first time — that surveyor must be notified,
         // since nothing notified them when the vessel was first created.
-        if (!empty($vessel_name) && $client_id > 0 && !empty($agent_name) && $port_id > 0 && !empty($survey_type_ids_arr) && !empty($surveyor_id)) {
+        if (!empty($vessel_name) && $client_id > 0 && !empty($agent_name) && $port_id > 0 && !empty($survey_type_ids_arr) && !empty($surveyor_id) && $appointment_date !== '') {
             try {
                 $upd = $db->prepare("
                     UPDATE surveys SET
                         vessel_name = ?, client_id = ?, agent_name = ?, surveyor_id = ?,
-                        survey_type_id = ?, survey_type_ids = ?, port_id = ?, remarks = ?
+                        survey_type_id = ?, survey_type_ids = ?, port_id = ?, remarks = ?, appointment_date = ?
                     WHERE id = ?
                 ");
-                $upd->execute([$vessel_name, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $post_edit_id]);
+                $upd->execute([$vessel_name, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $appointment_date, $post_edit_id]);
 
                 // Replace the surveyor assignment set entirely with whatever
                 // is selected now (full replace, matching "save this form's
@@ -486,7 +506,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $error = "Please fill all required fields.";
         }
-    } elseif (!empty($vessel_name) && $client_id > 0 && !empty($agent_name) && $port_id > 0 && !empty($survey_type_ids_arr) && ($is_client_role || !empty($surveyor_id))) {
+    } elseif (!empty($vessel_name) && $client_id > 0 && !empty($agent_name) && $port_id > 0 && !empty($survey_type_ids_arr) && ($is_client_role || !empty($surveyor_id)) && $appointment_date !== '') {
         // 🌟 DB ఇన్సర్ట్‌ను try/catch లో ఉంచడం — ఏదైనా DB ఎర్రర్ వస్తే (ఉదా. FK మిస్‌మ్యాచ్,
         // మిస్సింగ్ కాలమ్ మొదలైనవి) తెల్లతెరతో సైట్ క్రాష్ అవ్వకుండా, ఫారమ్ మీదే స్పష్టమైన
         // ఎర్రర్ మెసేజ్ చూపించడానికి (ఇతర పేజీల్లో — వెసెల్ డీటెయిల్ లాంటివి — ఇదే పద్ధతి వాడారు)
@@ -498,11 +518,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $report_number = generateNextReportNumberForClient($db, (int)$client_id);
                 $stmt = $db->prepare("
                     INSERT INTO surveys
-                    (vessel_name, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, status, remarks, client_submitted)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'Pending Vessel', ?, ?)
+                    (vessel_name, report_number, client_id, agent_name, surveyor_id, survey_type_id, survey_type_ids, port_id, assign_date, appointment_date, status, remarks, client_submitted)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 'Pending Vessel', ?, ?)
                 ");
 
-                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $remarks, $is_client_role ? 1 : 0])) {
+                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $appointment_date, $remarks, $is_client_role ? 1 : 0])) {
                     // Capture id immediately after INSERT (before any other query)
                     $new_survey_id = (int)$db->lastInsertId();
                     if ($new_survey_id <= 0) {
@@ -873,7 +893,25 @@ include 'includes/header.php';
     .searchable-select .ss-option:hover,
     .searchable-select .ss-option.ss-selected { background: #eef2ff; color: #3b32b3; }
     .searchable-select .ss-option-other { color: #3b32b3; font-weight: 700; border-top: 1px dashed var(--border-color); margin-top: 4px; padding-top: 12px; }
+    .searchable-select .ss-option-other i { width: 14px; text-align: center; margin-right: 2px; }
     .searchable-select .ss-option-empty { padding: 12px; color: #94a3b8; font-size: 12px; text-align: center; }
+    .ss-add-new-box {
+        margin-top: 8px; padding: 10px; border: 1px dashed #3b32b3; border-radius: 10px;
+        background: #f8f7ff;
+    }
+    .ss-add-new-box .ss-add-new-input {
+        width: 100%; border: 1px solid var(--border-color); border-radius: 8px;
+        padding: 8px 10px; font-size: 13px; background: #fff; outline: none;
+    }
+    .ss-add-new-box .ss-add-new-input:focus { border-color: #3b32b3; }
+    .ss-add-new-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .ss-add-new-confirm, .ss-add-new-cancel {
+        border: none; border-radius: 8px; padding: 7px 14px; font-size: 12.5px; font-weight: 650;
+    }
+    .ss-add-new-confirm { background: #3b32b3; color: #fff; }
+    .ss-add-new-confirm:disabled { opacity: .6; }
+    .ss-add-new-cancel { background: #f1f5f9; color: var(--text-muted); }
+    .ss-add-new-error { margin-top: 6px; font-size: 12px; color: #b91c1c; display: none; }
     /* Native select is only for form submit value — never show it */
     .ss-hidden-select,
     .form-group-custom select.ss-hidden-select,
@@ -1366,8 +1404,9 @@ include 'includes/top_app_bar.php';
             </div>
             <?php else: ?>
             <!-- 🌟 Client Name: searchable dropdown with search box inside.
-                 New clients/ports/survey types are added only from Admin Controls,
-                 not inline here. -->
+                 Admin can also add a brand new client right here via "+ Add
+                 New Client" — it is saved through the same endpoint Admin
+                 Controls uses, so it shows up there too. -->
             <div class="form-group-custom">
                 <label><i class="fa-solid fa-building vdd-field-icon"></i> Client Name *</label>
                 <div class="searchable-select" data-ss-root="client">
@@ -1384,6 +1423,7 @@ include 'includes/top_app_bar.php';
                             <?php foreach($clients as $client): ?>
                                 <li class="ss-option<?= ($edit_mode && (int)$client['id'] === $edit_client_id) ? ' ss-selected' : '' ?>" data-value="<?= $client['id'] ?>" data-name="<?= strtolower(sanitize($client['company_name'])) ?>" data-short="<?= sanitize(strtoupper(trim($client['short_code'] ?? ''))) ?>"><?= sanitize($client['company_name']) ?><?php if (!empty($client['short_code'])): ?> <span style="color:#64748b;font-weight:600;">(<?= sanitize(strtoupper($client['short_code'])) ?>)</span><?php endif; ?></li>
                             <?php endforeach; ?>
+                            <li class="ss-option ss-option-other" data-value="__add_new__"><i class="fa-solid fa-plus"></i> Add New Client</li>
                         </ul>
                     </div>
                 </div>
@@ -1393,6 +1433,14 @@ include 'includes/top_app_bar.php';
                         <option value="<?= $client['id'] ?>"<?= ($edit_mode && (int)$client['id'] === $edit_client_id) ? ' selected' : '' ?>><?= sanitize($client['company_name']) ?></option>
                     <?php endforeach; ?>
                 </select>
+                <div class="ss-add-new-box" id="addNewBox-client" data-add-module="clients" data-ss-root="client" style="display:none;">
+                    <input type="text" class="ss-add-new-input" placeholder="New client name">
+                    <div class="ss-add-new-actions">
+                        <button type="button" class="ss-add-new-confirm">Add</button>
+                        <button type="button" class="ss-add-new-cancel">Cancel</button>
+                    </div>
+                    <div class="ss-add-new-error"></div>
+                </div>
             </div>
             <?php endif; ?>
 
@@ -1415,6 +1463,11 @@ include 'includes/top_app_bar.php';
 <div class="form-group-custom">
                 <label><i class="fa-solid fa-people-group vdd-field-icon"></i> Agent Name *</label>
                 <input type="text" name="agent_name" value="<?= $edit_mode ? sanitize($edit_survey['agent_name']) : '' ?>" placeholder="e.g. Oceanus Agencies" required>
+            </div>
+
+            <div class="form-group-custom">
+                <label><i class="fa-solid fa-calendar-day vdd-field-icon"></i> Appointment Date *</label>
+                <input type="date" name="appointment_date" value="<?= $edit_mode ? sanitize($edit_survey['appointment_date'] ?? '') : '' ?>" required>
             </div>
 
             <!-- 🌟 Port Name: searchable dropdown with search box inside -->
@@ -1443,6 +1496,9 @@ include 'includes/top_app_bar.php';
                             <?php foreach($ports as $port): ?>
                                 <li class="ss-option<?= ($edit_mode && (int)$port['id'] === $edit_port_id) ? ' ss-selected' : '' ?>" data-value="<?= $port['id'] ?>" data-name="<?= strtolower(sanitize($port['port_name'])) ?>" data-country="<?= strtolower(sanitize($port['country'] ?? 'India')) ?>"><?= sanitize($port['port_name']) ?> <span class="ss-option-country"><?= sanitize($port['country'] ?? 'India') ?></span></li>
                             <?php endforeach; ?>
+                            <?php if (!$is_client_role): ?>
+                            <li class="ss-option ss-option-other" data-value="__add_new__"><i class="fa-solid fa-plus"></i> Add New Port</li>
+                            <?php endif; ?>
                         </ul>
                     </div>
                 </div>
@@ -1452,6 +1508,16 @@ include 'includes/top_app_bar.php';
                         <option value="<?= $port['id'] ?>"<?= ($edit_mode && (int)$port['id'] === $edit_port_id) ? ' selected' : '' ?>><?= sanitize($port['port_name']) ?></option>
                     <?php endforeach; ?>
                 </select>
+                <?php if (!$is_client_role): ?>
+                <div class="ss-add-new-box" id="addNewBox-port" data-add-module="ports" data-ss-root="port" style="display:none;">
+                    <input type="text" class="ss-add-new-input" placeholder="New port name">
+                    <div class="ss-add-new-actions">
+                        <button type="button" class="ss-add-new-confirm">Add</button>
+                        <button type="button" class="ss-add-new-cancel">Cancel</button>
+                    </div>
+                    <div class="ss-add-new-error"></div>
+                </div>
+                <?php endif; ?>
             </div>
 
             <!-- 🌟 Survey Type: searchable MULTI-select (checkboxes) with search box inside -->
@@ -1474,10 +1540,23 @@ include 'includes/top_app_bar.php';
                                     <span class="ss-option-label"><?= sanitize($type['type_name']) ?></span>
                                 </li>
                             <?php endforeach; ?>
+                            <?php if (!$is_client_role): ?>
+                            <li class="ss-option ss-option-other" data-value="__add_new__"><i class="fa-solid fa-plus"></i> Add New Survey Type</li>
+                            <?php endif; ?>
                         </ul>
                     </div>
                 </div>
                 <input type="hidden" name="survey_type_ids" id="surveyTypeIdsInput" value="">
+                <?php if (!$is_client_role): ?>
+                <div class="ss-add-new-box" id="addNewBox-surveyType" data-add-module="survey_types" data-ss-root="surveyType" style="display:none;">
+                    <input type="text" class="ss-add-new-input" placeholder="New survey type name">
+                    <div class="ss-add-new-actions">
+                        <button type="button" class="ss-add-new-confirm">Add</button>
+                        <button type="button" class="ss-add-new-cancel">Cancel</button>
+                    </div>
+                    <div class="ss-add-new-error"></div>
+                </div>
+                <?php endif; ?>
             </div>
 
             <?php if (!$is_client_role): ?>
@@ -1589,6 +1668,74 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
     $(document).ready(function() {
         var EDIT_MODE = <?= $edit_mode ? 'true' : 'false' ?>; // editing an existing assignment, not creating a new one
 
+        // ---- Inline "+ Add New" (Client / Port / Survey Type) ----
+        // Admin only (see PHP gating around these boxes). Saves through the
+        // same ajax/admin_master.php endpoint Admin Controls uses, so a
+        // client/port/survey type added here shows up there too.
+        var ADD_NEW_NAME_FIELD = { clients: 'company_name', ports: 'port_name', survey_types: 'type_name' };
+
+        function openAddNewBox($root) {
+            var $box = $root.find('.ss-add-new-box');
+            if (!$box.length) return;
+            $('.ss-add-new-box').not($box).hide();
+            $box.show();
+            $box.find('.ss-add-new-error').hide().text('');
+            var $input = $box.find('.ss-add-new-input').val('');
+            setTimeout(function() { try { $input[0].focus(); } catch (e) {} }, 50);
+        }
+
+        $(document).on('click', '.ss-add-new-cancel', function() {
+            var $box = $(this).closest('.ss-add-new-box');
+            $box.hide().find('.ss-add-new-input').val('');
+            $box.find('.ss-add-new-error').hide().text('');
+        });
+
+        $(document).on('keydown', '.ss-add-new-input', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                $(this).closest('.ss-add-new-box').find('.ss-add-new-confirm').trigger('click');
+            } else if (e.key === 'Escape') {
+                $(this).closest('.ss-add-new-box').find('.ss-add-new-cancel').trigger('click');
+            }
+        });
+
+        $(document).on('click', '.ss-add-new-confirm', function() {
+            var $btn = $(this);
+            var $box = $btn.closest('.ss-add-new-box');
+            var module = $box.data('add-module');
+            var ssRoot = $box.data('ss-root');
+            var nameField = ADD_NEW_NAME_FIELD[module];
+            var $input = $box.find('.ss-add-new-input');
+            var $err = $box.find('.ss-add-new-error');
+            var name = $.trim($input.val());
+            if (!name) {
+                $err.text('Please enter a name.').show();
+                return;
+            }
+            $err.hide().text('');
+            $btn.prop('disabled', true).text('Adding...');
+            var payload = { module: module, action: 'add' };
+            payload[nameField] = name;
+            $.post('ajax/admin_master.php', payload, null, 'json')
+                .done(function(resp) {
+                    if (resp && resp.success && resp.id) {
+                        var $root = $('[data-ss-root="' + ssRoot + '"]');
+                        var api = $root.data('ssApi');
+                        if (api && api.addAndSelect) { api.addAndSelect(resp.id, name); }
+                        $box.hide();
+                        $input.val('');
+                    } else {
+                        $err.text((resp && resp.message) ? resp.message : 'Could not add — try again.').show();
+                    }
+                })
+                .fail(function() {
+                    $err.text('Network error — try again.').show();
+                })
+                .always(function() {
+                    $btn.prop('disabled', false).text('Add');
+                });
+        });
+
         // ---- Single searchable select (Client / Port) ----
         function initSearchableSelect(rootEl) {
             const $root = $(rootEl);
@@ -1684,7 +1831,13 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
             $optionsList.on('click', '.ss-option', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                selectOption($(this));
+                const $opt = $(this);
+                if ($opt.hasClass('ss-option-other') && $opt.data('value') === '__add_new__') {
+                    closePanel();
+                    openAddNewBox($root);
+                    return;
+                }
+                selectOption($opt);
             });
 
             $root.data('ssApi', {
@@ -1724,8 +1877,6 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
             const $optionsList = $root.find('.ss-options');
             const hiddenInputId = $root.data('hidden-input') || 'surveyTypeIdsInput';
             const $hiddenInput = $('#' + hiddenInputId);
-            const otherContainerId = $root.data('other-container') || 'otherSurveyTypeContainer';
-            const otherInputId = $root.data('other-input') || 'newSurveyTypeInput';
 
             function closePanel() {
                 $root.removeClass('open');
@@ -1809,8 +1960,7 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
                 if ($opt.hasClass('ss-option-empty')) return;
                 if ($opt.hasClass('ss-option-other')) {
                     closePanel();
-                    $('#' + otherContainerId).show();
-                    try { $('#' + otherInputId)[0].focus(); } catch (err) {}
+                    openAddNewBox($root);
                     return;
                 }
                 toggleOption($opt);
