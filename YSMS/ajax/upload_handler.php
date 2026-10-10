@@ -36,6 +36,28 @@ try {
         $db->exec("ALTER TABLE surveys ADD COLUMN hsfo_recovery DECIMAL(12,3) DEFAULT NULL");
     }
 } catch (Exception $e) { error_log('upload_handler.php hsfo_recovery column: ' . $e->getMessage()); }
+
+    // 🌟 Recovery doesn't apply to some survey types (Draft Survey, BQS, etc.)
+    // — skip auto-extracting a number from the Excel report for those;
+    // recovery_amount/vlsfo/lsmgo/hsfo stay NULL ("N/A") instead.
+    $recoveryNA = false;
+    try {
+        $rtStmt = $db->prepare('SELECT survey_type_id, survey_type_ids FROM surveys WHERE id = ? LIMIT 1');
+        $rtStmt->execute([$survey_id]);
+        $rtRow = $rtStmt->fetch(PDO::FETCH_ASSOC);
+        if ($rtRow) {
+            $rtFallback = '';
+            if (!empty($rtRow['survey_type_id'])) {
+                $rtF = $db->prepare('SELECT type_name FROM survey_types WHERE id = ? LIMIT 1');
+                $rtF->execute([(int)$rtRow['survey_type_id']]);
+                $rtFallback = (string)($rtF->fetchColumn() ?: '');
+            }
+            $recoveryNA = isRecoveryNotApplicable($db, (string)($rtRow['survey_type_ids'] ?? ''), $rtFallback);
+        }
+    } catch (Throwable $e) {
+        error_log('upload_handler.php recoveryNA check: ' . $e->getMessage());
+    }
+
     require_once __DIR__ . '/../includes/mailer.php';
 require_once __DIR__ . '/../includes/notifications.php';
     $files_uploaded = 0;
@@ -169,8 +191,11 @@ require_once __DIR__ . '/../includes/notifications.php';
             $stmt->execute([$survey_id, $excel_orig, "uploads/" . $excel_name]);
             
             // surveys టేబుల్ లో recovery_amount, vlsfo_recovery, lsmgo_recovery, hsfo_recovery ని అప్‌డేట్ చేయడం
+            // (Recovery not applicable for this survey's type(s) — store NULL instead of the extracted number)
             $stmt_rec = $db->prepare("UPDATE surveys SET recovery_amount = ?, vlsfo_recovery = ?, lsmgo_recovery = ?, hsfo_recovery = ? WHERE id = ?");
-            $stmt_rec->execute([$recovery_val, $vlsfo_val, $lsmgo_val, $hsfo_val, $survey_id]);
+            $stmt_rec->execute($recoveryNA
+                ? [null, null, null, null, $survey_id]
+                : [$recovery_val, $vlsfo_val, $lsmgo_val, $hsfo_val, $survey_id]);
             
             $files_uploaded++;
             $uploaded_labels[] = 'Excel: ' . $excel_orig;

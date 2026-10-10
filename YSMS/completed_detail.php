@@ -78,9 +78,10 @@ if (!$has_full_access && !isSurveyorAssignedToSurvey($db, $survey['id'], $curren
 
 // 🌟 Recovery edit (Admin only): Total / VLSFO / LSMGO recovery for this
 // vessel. No redirect — re-renders the same request with the saved values.
+$recoveryNA = isRecoveryNotApplicable($db, (string)($survey['survey_type_ids'] ?? ''), (string)($survey['type_name'] ?? ''));
 $recovery_message = '';
 $recovery_error = '';
-if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_recovery'])) {
+if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_recovery']) && !$recoveryNA) {
     $parseRecovery = function ($v) {
         $v = trim((string)$v);
         if ($v === '') return null;
@@ -320,21 +321,27 @@ include 'includes/header.php';
     <div class="info-table-list shadow-sm recovery-block<?= $recovery_edit_open ? ' editing' : '' ?>" id="recoveryBlock" data-testid="recovery-block">
         <div class="recovery-block-head">
             <span><i class="fa-solid fa-droplet text-primary me-1"></i> Recovery</span>
-            <?php if ($is_admin): ?>
+            <?php if ($is_admin && !$recoveryNA): ?>
             <button type="button" class="recovery-edit-toggle" data-recovery-edit-toggle="recoveryBlock" title="Edit Recovery" data-testid="recovery-edit-toggle"><i class="fa-solid fa-pen"></i></button>
             <?php endif; ?>
         </div>
         <?php if ($recovery_message): ?><div class="alert alert-success py-2 mx-2 mt-2 mb-0" style="font-size:12px;" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
         <?php if ($recovery_error): ?><div class="alert alert-danger py-2 mx-2 mt-2 mb-0" style="font-size:12px;" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
 
+        <?php if ($recoveryNA): ?>
+        <div class="recovery-display">
+            <div class="info-row"><span class="info-label">Recovery</span><span class="info-value" data-testid="recovery-na">N/A (Not Applicable)</span></div>
+        </div>
+        <?php else: ?>
         <div class="recovery-display">
             <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
         </div>
+        <?php endif; ?>
 
-        <?php if ($is_admin): ?>
+        <?php if ($is_admin && !$recoveryNA): ?>
         <div class="recovery-edit-form">
             <form method="POST" class="p-3"><?= csrf_field() ?>
                 <div class="mb-2">

@@ -30,6 +30,10 @@ $survey = $stmt->fetch();
 
 if (!$survey) { die("Report asset not found."); }
 
+// 🌟 Recovery doesn't apply to some survey types (Draft Survey, BQS, etc.) —
+// see RECOVERY_NOT_APPLICABLE_TYPES in config/config.php.
+$recoveryNA = isRecoveryNotApplicable($db, (string)($survey['survey_type_ids'] ?? ''), (string)($survey['type_name'] ?? ''));
+
 $current_user_id = $_SESSION['user_id'];
 $role = $_SESSION['role'];
 $is_admin = ($role === 'Admin');
@@ -73,7 +77,7 @@ if (!$has_full_access && !isSurveyorAssignedToSurvey($db, $survey['id'], $curren
 // vessel. No redirect — re-renders the same request with the saved values.
 $recovery_message = '';
 $recovery_error = '';
-if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_recovery'])) {
+if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_recovery']) && !$recoveryNA) {
     $parseRecovery = function ($v) {
         $v = trim((string)$v);
         if ($v === '') return null;
@@ -287,13 +291,17 @@ include 'includes/header.php';
         <div class="info-row"><span class="info-label">Surveyor Name</span><span class="info-value"><?= sanitize(getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A')) ?></span></div>
         <div class="info-row"><span class="info-label">Survey Type</span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
         <div class="info-row"><span class="info-label">Survey Completed</span><span class="info-value text-success fw-bold"><?= date('d M Y', strtotime($survey['survey_completed_date'])) ?></span></div>
+        <?php if ($recoveryNA): ?>
+        <div class="info-row"><span class="info-label">Recovery</span><span class="info-value" data-testid="recovery-na">N/A (Not Applicable)</span></div>
+        <?php else: ?>
         <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
+        <?php endif; ?>
     </div>
 
-    <?php if ($is_admin): ?>
+    <?php if ($is_admin && !$recoveryNA): ?>
     <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm" data-testid="recovery-edit-box">
         <div class="fw-bold text-dark mb-2" style="font-size: 13px;"><i class="fa-solid fa-droplet text-primary me-1"></i> Edit Recovery</div>
         <?php if ($recovery_message): ?><div class="alert alert-success py-2 mb-2" style="font-size:12px;" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
@@ -317,6 +325,12 @@ include 'includes/header.php';
             </div>
             <button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
         </form>
+    </div>
+    <?php endif; ?>
+    <?php if ($is_admin && $recoveryNA): ?>
+    <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm" data-testid="recovery-edit-box">
+        <div class="fw-bold text-dark mb-1" style="font-size: 13px;"><i class="fa-solid fa-droplet text-primary me-1"></i> Recovery</div>
+        <div class="text-muted" style="font-size:12.5px;" data-testid="recovery-na-note">N/A (Not Applicable) — this survey type doesn't track Recovery.</div>
     </div>
     <?php endif; ?>
 
