@@ -151,6 +151,27 @@ $(document).ready(function() {
         });
         $scope.find('[data-list-empty]').toggle(visible === 0);
         $scope.find('[data-list-count]').text(visible);
+
+        // 🌟 Keep the mobile "Export to Excel" link in sync with whatever's
+        // currently filtered on screen — same idea as the desktop export
+        // link each of these pages already wires up separately (desktop and
+        // mobile filters are different DOM elements, so each needs its own
+        // sync). Unknown params are harmless: an export endpoint that
+        // doesn't read a given filter (e.g. "month" outside completed.php)
+        // just ignores it.
+        const $mobileExport = $scope.find('[data-mobile-export]');
+        if ($mobileExport.length) {
+            const base = $mobileExport.data('export-base') || String($mobileExport.attr('href') || '').split('?')[0];
+            const exportParams = [];
+            if (query) exportParams.push('q=' + encodeURIComponent(query));
+            if (type) exportParams.push('type=' + encodeURIComponent(type));
+            if (place) exportParams.push('place=' + encodeURIComponent(place));
+            if (client) exportParams.push('client=' + encodeURIComponent(client));
+            if (surveyor) exportParams.push('surveyor=' + encodeURIComponent(surveyor));
+            if (month) exportParams.push('month=' + encodeURIComponent(month));
+            if (appointment) exportParams.push('appointment=' + encodeURIComponent(appointment));
+            $mobileExport.attr('href', base + (exportParams.length ? '?' + exportParams.join('&') : ''));
+        }
     }
 
     $(document).on('input change', '[data-list-search], [data-filter-type], [data-filter-place], [data-filter-client], [data-filter-status], [data-filter-surveyor], [data-filter-month], [data-filter-appointment], [data-list-sort]', function() {

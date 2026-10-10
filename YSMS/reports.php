@@ -643,7 +643,7 @@ include 'includes/header.php';
         <button type="button" class="clear-filters-btn" data-clear-filters><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
     </div>
     <div class="pv-actions-row">
-        <a href="export_reports.php" class="pv-export-btn"><i class="fa-solid fa-file-excel"></i> Export to Excel</a>
+        <a href="export_reports.php" class="pv-export-btn" data-mobile-export data-export-base="export_reports.php"><i class="fa-solid fa-file-excel"></i> Export to Excel</a>
         <div class="pv-sort-wrap">
             <i class="fa-solid fa-arrow-down-wide-short"></i>
             <select class="pv-sort-select" data-list-sort>

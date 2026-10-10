@@ -86,3 +86,25 @@ function writeCountryGroupedSheet(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet 
         $sheet->getColumnDimension($col)->setAutoSize(true);
     }
 }
+
+/**
+ * Builds a filter-aware export file base name (no extension), e.g.
+ * "Pending Vessels at Chennai as on 10-10-2026" when a Port filter is
+ * active, or just "Pending Vessels as on 10-10-2026" with none. $filters
+ * is an ordered list of ['label' => 'at', 'value' => $filter_place] pairs;
+ * entries with an empty value are skipped. $value is sanitized for safe
+ * use in a filename (strips characters illegal on Windows/macOS/Linux).
+ */
+function buildExportFileBaseName(string $noun, array $filters): string {
+    $parts = [$noun];
+    foreach ($filters as $f) {
+        $value = trim((string)($f['value'] ?? ''));
+        if ($value === '') continue;
+        $clean = preg_replace('/[\\\\\/:*?"<>|]+/', '', $value);
+        $clean = trim((string)$clean);
+        if ($clean === '') continue;
+        $parts[] = trim((string)($f['label'] ?? '')) . ' ' . $clean;
+    }
+    $parts[] = 'as on ' . date('d-m-Y');
+    return str_replace(' ', '_', implode(' ', $parts));
+}

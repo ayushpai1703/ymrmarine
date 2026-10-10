@@ -24,6 +24,7 @@ register_shutdown_function(function () {
 });
 
 require_once __DIR__ . '/config/config.php';
+require_once __DIR__ . '/includes/excel_export_helpers.php';
 checkAuth();
 
 $db = getDB();
@@ -135,7 +136,13 @@ foreach ($surveys as $row) {
     ];
 }
 
-$baseName = 'Pending_Vessels_' . date('d_m_Y');
+$apptFilterDisp = $filter_appointment !== '' ? date('d-m-Y', strtotime($filter_appointment)) : '';
+$baseName = buildExportFileBaseName('Pending Vessels', [
+    ['label' => 'at',          'value' => $filter_place],
+    ['label' => 'for',         'value' => $filter_client],
+    ['label' => 'by',          'value' => $filter_surveyor],
+    ['label' => 'Appointment', 'value' => $apptFilterDisp],
+]);
 
 // Try PhpSpreadsheet xlsx
 $autoload = __DIR__ . '/vendor/autoload.php';

@@ -668,7 +668,7 @@ include 'includes/header.php';
         </div>
 
         <div class="pv-actions-row">
-            <a href="export_vessels.php" class="pv-export-btn" data-testid="pending-vessels-export-link">
+            <a href="export_vessels.php" class="pv-export-btn" data-mobile-export data-export-base="export_vessels.php" data-testid="pending-vessels-export-link">
                 <i class="fa-solid fa-file-excel"></i> Export to Excel
             </a>
             <div class="pv-sort-wrap">
