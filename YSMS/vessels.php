@@ -322,11 +322,13 @@ include 'includes/header.php';
             flex: 1 1 auto; min-width: 0;
         }
         .vd-toolbar input[type=search],
+        .vd-toolbar input[type=date],
         .vd-toolbar select {
             border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px 12px;
             font-size: 13px; background: #fff; color: #0f172a; height: 40px; box-sizing: border-box;
         }
         .vd-toolbar input[type=search] { min-width: 180px; width: 220px; flex: 0 0 auto; }
+        .vd-toolbar input[type=date] { flex: 0 0 auto; }
         .vd-toolbar select { max-width: 140px; flex: 0 0 auto; }
         .vd-toolbar .btn-clear {
             height: 40px; box-sizing: border-box; border-radius: 10px; padding: 0 14px;
@@ -419,6 +421,7 @@ include 'includes/header.php';
             <?php if ($is_full_access): ?>
             <select data-filter-surveyor data-testid="pending-vessels-surveyor-filter"><option value="">All surveyors</option><?php foreach ($survey_surveyors_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
             <?php endif; ?>
+            <input type="date" data-filter-appointment title="Appointment Date" data-testid="pending-vessels-appointment-filter">
             <button type="button" class="clear-filters-btn" data-clear-filters data-testid="pending-vessels-clear-filters"><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
         </div>
         <div class="px-3 mb-3">
@@ -436,7 +439,7 @@ include 'includes/header.php';
                         $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
                         $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                     ?>
-                    <div class="vessel-card vessel-card--stacked" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize($survey['type_name'] ?? '') ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= strtotime($survey['assign_date'] ?? '1970-01-01') ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
+                    <div class="vessel-card vessel-card--stacked" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize($survey['type_name'] ?? '') ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= strtotime($survey['assign_date'] ?? '1970-01-01') ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
                         <div class="vessel-card-top-content">
                             <div class="vessel-avatar-info">
                                 <span class="pv-row-num" data-row-num data-testid="pv-row-num"></span>
@@ -447,6 +450,7 @@ include 'includes/header.php';
                                     <?php if ($is_full_access): ?>
                                         <p class="vessel-client-sub">Surveyor: <?= sanitize($surveyorNames) ?></p>
                                     <?php endif; ?>
+                                    <p class="vessel-client-sub">Appointment: <?= !empty($survey['appointment_date']) ? sanitize(date('d M Y', strtotime($survey['appointment_date']))) : '—' ?></p>
                                     <?php if ($needsSurveyor): ?>
                                         <span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span>
                                     <?php endif; ?>
@@ -523,6 +527,7 @@ include 'includes/header.php';
                         <?php endforeach; ?>
                     </select>
                     <?php endif; ?>
+                    <input type="date" data-desk-appointment title="Appointment Date">
                     <button type="button" class="btn-clear" data-desk-clear><i class="fa-solid fa-rotate-left"></i> Clear</button>
                 </div>
             </div>
@@ -545,6 +550,7 @@ include 'includes/header.php';
                                 <th>Survey type</th>
                                 <th>Port</th>
                                 <?php if ($is_full_access): ?><th>Surveyor</th><?php endif; ?>
+                                <th>Appointment Date</th>
                                 <th>Date</th>
                                 <th>Actions</th>
                             </tr>
@@ -559,6 +565,8 @@ include 'includes/header.php';
                                 $date_disp = (!empty($date_src) && $date_src !== '0000-00-00' && $date_src !== '0000-00-00 00:00:00')
                                     ? date('d M Y H:i', strtotime($date_src)) : '—';
                                 $ts = strtotime($date_src ?: '1970-01-01') ?: 0;
+                                $appt_src = $survey['appointment_date'] ?? '';
+                                $appt_disp = (!empty($appt_src) && $appt_src !== '0000-00-00') ? date('d M Y', strtotime($appt_src)) : '—';
                             ?>
                             <tr class="vd-row"
                                 data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '', $surveyorNames, $survey['report_number'] ?? '']))) ?>"
@@ -567,7 +575,8 @@ include 'includes/header.php';
                                 data-place="<?= sanitize(strtolower($survey['port_name'] ?? '')) ?>"
                                 data-client="<?= sanitize(strtolower($survey['company_name'] ?? '')) ?>"
                                 data-surveyor="<?= sanitize(strtolower($surveyorNames)) ?>"
-                                data-date="<?= (int)$ts ?>">
+                                data-date="<?= (int)$ts ?>"
+                                data-appointment="<?= sanitize((string)$appt_src) ?>">
                                 <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
                                 <td>
                                     <a class="vd-vessel" href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><?= sanitize($vessel_name) ?></a>
@@ -606,6 +615,7 @@ include 'includes/header.php';
                                 <?php if ($is_full_access): ?>
                                 <td><?= sanitize($surveyorNames) ?></td>
                                 <?php endif; ?>
+                                <td style="white-space:nowrap;"><?= sanitize($appt_disp) ?></td>
                                 <td style="white-space:nowrap;"><?= sanitize($date_disp) ?></td>
                                 <td>
                                     <div class="vd-actions">
@@ -641,6 +651,7 @@ include 'includes/header.php';
   var placeSel = root.querySelector('[data-desk-place]');
   var clientSel = root.querySelector('[data-desk-client]');
   var surveyorSel = root.querySelector('[data-desk-surveyor]');
+  var appointmentSel = root.querySelector('[data-desk-appointment]');
   var clearBtn = root.querySelector('[data-desk-clear]');
   var exportLink = root.querySelector('[data-desk-export]');
   var tbody = root.querySelector('.vd-table tbody');
@@ -661,6 +672,7 @@ include 'includes/header.php';
     var place = val(placeSel);
     var client = val(clientSel);
     var surveyor = val(surveyorSel);
+    var appointment = appointmentSel ? (appointmentSel.value || '') : '';
     var sort = sortSel ? sortSel.value : 'newest';
 
     var rows = allRows.filter(function (row) {
@@ -670,6 +682,7 @@ include 'includes/header.php';
       if (place && (row.getAttribute('data-place') || '').toLowerCase() !== place) return false;
       if (client && (row.getAttribute('data-client') || '').toLowerCase() !== client) return false;
       if (surveyor && (row.getAttribute('data-surveyor') || '').toLowerCase() !== surveyor) return false;
+      if (appointment && (row.getAttribute('data-appointment') || '') !== appointment) return false;
       return true;
     });
 
@@ -759,19 +772,21 @@ include 'includes/header.php';
     if (client) params.push('client=' + encodeURIComponent(client));
     var surveyor = val(surveyorSel);
     if (surveyor) params.push('surveyor=' + encodeURIComponent(surveyor));
+    var appointment = appointmentSel ? (appointmentSel.value || '') : '';
+    if (appointment) params.push('appointment=' + encodeURIComponent(appointment));
     exportLink.href = 'export_vessels.php' + (params.length ? '?' + params.join('&') : '');
   }
 
   function onChange() { page = 1; render(); updateExportLink(); }
 
   if (search) search.addEventListener('input', onChange);
-  [sortSel, typeSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
+  [sortSel, typeSel, placeSel, clientSel, surveyorSel, appointmentSel].forEach(function (el) {
     if (el) el.addEventListener('change', onChange);
   });
   if (clearBtn) clearBtn.addEventListener('click', function (ev) {
     ev.preventDefault();
     if (search) search.value = '';
-    [sortSel, typeSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
+    [sortSel, typeSel, placeSel, clientSel, surveyorSel, appointmentSel].forEach(function (el) {
       if (!el) return;
       if (el === sortSel) el.value = 'newest';
       else el.value = '';
