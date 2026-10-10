@@ -24,12 +24,38 @@ use PHPMailer\PHPMailer\Exception as PHPMailerException;
  *   - reply_to_name   : Reply-To display name
  */
 function sendHtmlEmail(string $toEmail, string $toName, string $subject, string $htmlBody, string $altBody = '', array $ccEmails = [], array $attachments = [], array $options = []): bool {
+    return ysmsSendHtmlEmailCore([['email' => $toEmail, 'name' => $toName]], $subject, $htmlBody, $altBody, $ccEmails, $attachments, $options);
+}
+
+/**
+ * Same as sendHtmlEmail(), but addresses several recipients in ONE message
+ * instead of sending one fully separate copy per recipient. Use this
+ * whenever the exact same notification is going to a list of people (e.g.
+ * every Admin on file) — a separate sendHtmlEmail() call per recipient
+ * re-does the SMTP handshake (or Gmail API signJwt + token exchange) and
+ * re-encodes every attachment from scratch for each one, which is what
+ * made multi-admin notifications slow to submit.
+ *
+ * $recipients: list of ['email' => ..., 'name' => ...]
+ */
+function sendHtmlEmailMulti(array $recipients, string $subject, string $htmlBody, string $altBody = '', array $ccEmails = [], array $attachments = [], array $options = []): bool {
+    return ysmsSendHtmlEmailCore($recipients, $subject, $htmlBody, $altBody, $ccEmails, $attachments, $options);
+}
+
+function ysmsSendHtmlEmailCore(array $recipients, string $subject, string $htmlBody, string $altBody, array $ccEmails, array $attachments, array $options): bool {
     $GLOBALS['ysms_last_mail_error'] = '';
     if (defined('EMAIL_NOTIFICATIONS_ENABLED') && !EMAIL_NOTIFICATIONS_ENABLED) {
         $GLOBALS['ysms_last_mail_error'] = 'Email notifications are disabled on this environment.';
         return false;
     }
-    if ($toEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+    $validRecipients = [];
+    foreach ($recipients as $r) {
+        $email = trim((string)(is_array($r) ? ($r['email'] ?? '') : $r));
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $validRecipients[] = ['email' => $email, 'name' => is_array($r) ? (string)($r['name'] ?? '') : ''];
+        }
+    }
+    if (empty($validRecipients)) {
         $GLOBALS['ysms_last_mail_error'] = 'Invalid or empty recipient email.';
         return false;
     }
@@ -77,7 +103,9 @@ function sendHtmlEmail(string $toEmail, string $toName, string $subject, string 
             $fromName = SMTP_FROM_NAME;
         }
         $mail->setFrom($useRelay ? $fromEmailOverride : SMTP_FROM_EMAIL, $fromName);
-        $mail->addAddress($toEmail, $toName);
+        foreach ($validRecipients as $r) {
+            $mail->addAddress($r['email'], $r['name']);
+        }
 
         $replyEmail = trim((string)($options['reply_to_email'] ?? ''));
         $replyName  = trim((string)($options['reply_to_name'] ?? $fromName));
@@ -85,9 +113,12 @@ function sendHtmlEmail(string $toEmail, string $toName, string $subject, string 
             $mail->addReplyTo($replyEmail, $replyName !== '' ? $replyName : $fromName);
         }
 
+        // Skip CC'ing an address that's already one of the To recipients —
+        // otherwise that person gets the exact same message twice.
+        $toEmails = array_map(static function ($r) { return strtolower($r['email']); }, $validRecipients);
         foreach ($ccEmails as $cc) {
             $cc = trim((string)$cc);
-            if ($cc !== '' && filter_var($cc, FILTER_VALIDATE_EMAIL)) {
+            if ($cc !== '' && filter_var($cc, FILTER_VALIDATE_EMAIL) && !in_array(strtolower($cc), $toEmails, true)) {
                 $mail->addCC($cc);
             }
         }
@@ -634,52 +665,34 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
     }
     $alt = implode("\n", $altLines);
 
-    $ccTarget = 'survey@ymrmarine.com';
-    $ccDelivered = false;
-    $sent = 0;
-    $failed = 0;
-    foreach ($admins as $admin) {
-        $to = trim((string)($admin['email'] ?? ''));
-        if ($to === '') {
-            continue;
-        }
-        // From: surveyor's own @ymrmarine.com address (via SMTP relay);
-        // falls back to the default mailbox if surveyor has no profile email.
-        $surveyorEmail = (string)($info['surveyor_email'] ?? '');
-        $options = [
-            'from_name'      => (string)($info['surveyor_name'] ?? SMTP_FROM_NAME),
-            'from_email'     => $surveyorEmail,
-            'reply_to_email' => $surveyorEmail,
-            'reply_to_name'  => (string)($info['surveyor_name'] ?? ''),
-        ];
-        // 🌟 CC the shared ops inbox at most ONCE per upload, not once per
-        // admin notified — this loop can run for several distinct admins
-        // (e.g. 2-3 people who all also check survey@ymrmarine.com), and
-        // CC'ing every single one of those sends used to land that many
-        // duplicate copies in the one shared inbox. Also skip the CC
-        // entirely when it's this admin's own address — they already get
-        // a direct "To" copy.
-        $cc = (!$ccDelivered && strcasecmp($to, $ccTarget) !== 0) ? [$ccTarget] : [];
-        if (sendHtmlEmail($to, (string)($admin['full_name'] ?? 'Admin'), $subject, $html, $alt, $cc, $attachments, $options)) {
-            $sent++;
-            if ($cc) {
-                $ccDelivered = true;
-            }
-        } else {
-            $failed++;
-        }
-    }
+    // From: surveyor's own @ymrmarine.com address (via SMTP relay); falls
+    // back to the default mailbox if surveyor has no profile email.
+    $surveyorEmail = (string)($info['surveyor_email'] ?? '');
+    $options = [
+        'from_name'      => (string)($info['surveyor_name'] ?? SMTP_FROM_NAME),
+        'from_email'     => $surveyorEmail,
+        'reply_to_email' => $surveyorEmail,
+        'reply_to_name'  => (string)($info['surveyor_name'] ?? ''),
+    ];
+    // 🌟 ONE message addressed to every admin at once, instead of one fully
+    // separate sendHtmlEmail() per admin — the old per-admin loop re-did the
+    // SMTP/Gmail API handshake and re-encoded every attachment from scratch
+    // for each recipient, which is what made submitting the upload slow
+    // when there were several admins on file. The shared ops inbox is CC'd
+    // once (sendHtmlEmailMulti already skips it if it's also one of the To
+    // recipients, so it never gets a duplicate copy).
+    $recipients = array_map(static function ($admin) {
+        return ['email' => trim((string)($admin['email'] ?? '')), 'name' => (string)($admin['full_name'] ?? 'Admin')];
+    }, $admins);
+    $recipientCount = count(array_filter($recipients, static function ($r) { return $r['email'] !== ''; }));
 
-    if ($sent === 0) {
+    if (!sendHtmlEmailMulti($recipients, $subject, $html, $alt, ['survey@ymrmarine.com'], $attachments, $options)) {
         $err = !empty($GLOBALS['ysms_last_mail_error']) ? $GLOBALS['ysms_last_mail_error'] : 'check SMTP';
         return 'Admin email failed: ' . $err;
     }
-    $msg = 'Admin notified by email (' . $sent . ')';
+    $msg = 'Admin notified by email (' . $recipientCount . ')';
     if ($attCount > 0) {
         $msg .= ' with ' . $attCount . ' attachment(s)';
-    }
-    if ($failed) {
-        $msg .= ', ' . $failed . ' failed';
     }
     return $msg . '.';
 }

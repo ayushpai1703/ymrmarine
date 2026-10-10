@@ -640,7 +640,7 @@ include 'includes/header.php';
     </div>
     <?php endif; ?>
 
-<form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data">
+<form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data" data-report-upload-form>
                     <?= csrf_field() ?>
             <input type="hidden" name="survey_id" value="<?= $survey['id'] ?>">
             <input type="hidden" name="current_status" value="<?= $survey['status'] ?>">
@@ -657,7 +657,7 @@ include 'includes/header.php';
                 <input type="file" name="additional_files[]" class="form-control form-control-sm" accept=".xlsx,.xls,.docx,.doc,.pdf" multiple>
                 <div class="text-muted" style="font-size:11px;">Excel, Word or PDF. You can select multiple files.</div>
             </div>
-            <button type="submit" class="blue-action-btn w-100" style="background: #1e3a8a;">Submit & Send</button>
+            <button type="submit" class="blue-action-btn w-100" style="background: #1e3a8a;" data-report-upload-submit>Submit & Send</button>
         </form>
     </div>
     <?php endif; ?>
@@ -863,7 +863,7 @@ include 'includes/header.php';
                             <?php endforeach; ?>
                             <?php endif; ?>
 
-                            <form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data">
+                            <form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data" data-report-upload-form>
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="survey_id" value="<?= $survey['id'] ?>">
                                 <input type="hidden" name="current_status" value="<?= $survey['status'] ?>">
@@ -891,7 +891,7 @@ include 'includes/header.php';
                                     </div>
                                     <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose files<input type="file" class="vdd-file-input" name="additional_files[]" accept=".xlsx,.xls,.docx,.doc,.pdf" multiple></label>
                                 </div>
-                                <button type="submit" class="vdd-submit-btn"><i class="fa-solid fa-paper-plane"></i> Submit &amp; Send</button>
+                                <button type="submit" class="vdd-submit-btn" data-report-upload-submit><i class="fa-solid fa-paper-plane"></i> Submit &amp; Send</button>
                             </form>
                         </div>
                     </div>
@@ -1207,6 +1207,54 @@ document.addEventListener('click', function (ev) {
     window.open(webUrl, '_blank', 'noopener');
 });
 </script>
+
+<script>
+// Upload PDF/Excel form: show a "please wait" overlay and lock the submit
+// button the instant Submit is pressed — the actual upload+email can still
+// take several seconds (admin notification email, Excel recovery parsing),
+// and with no feedback the page looked frozen, tempting a second tap that
+// re-submitted the same files. The browser's own "required" validation
+// still runs first, so this only fires once the form is really submitting.
+document.addEventListener('submit', function (ev) {
+    var form = ev.target.closest('[data-report-upload-form]');
+    if (!form) return;
+    var btn = form.querySelector('[data-report-upload-submit]');
+    if (btn && btn.dataset.uploading === '1') {
+        ev.preventDefault();
+        return;
+    }
+    if (btn) {
+        btn.dataset.uploading = '1';
+        btn.disabled = true;
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading, please wait…';
+    }
+    var overlay = document.createElement('div');
+    overlay.className = 'ysms-upload-overlay';
+    overlay.innerHTML =
+        '<div class="ysms-upload-overlay-box">' +
+            '<i class="fa-solid fa-spinner fa-spin"></i>' +
+            '<div>Uploading files and sending notifications…<br>This can take a few seconds, please don\'t close this page.</div>' +
+        '</div>';
+    document.body.appendChild(overlay);
+}, true);
+</script>
+<style>
+.ysms-upload-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(15,23,42,.55);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+}
+.ysms-upload-overlay-box {
+    background: #fff; border-radius: 16px; padding: 28px 24px;
+    max-width: 320px; text-align: center; font-size: 14px; font-weight: 600;
+    color: #0b1e46; box-shadow: 0 20px 50px rgba(0,0,0,.25);
+}
+.ysms-upload-overlay-box i {
+    display: block; font-size: 28px; color: #1e3a8a; margin-bottom: 12px;
+}
+</style>
 
 <?php
 include 'includes/nav.php';
