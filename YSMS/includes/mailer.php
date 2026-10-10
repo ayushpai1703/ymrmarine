@@ -608,25 +608,44 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
     $stage = $info['stage_label'] ?? ($info['new_status'] ?? 'Updated');
     $subject = $stage . ': ' . ($info['vessel_name'] ?? 'Vessel') . ' (' . ($info['report_number'] ?? '') . ')';
 
-    // Signed-document cover letter format: vessel/survey/port/date line,
-    // then a VLSFO/HSFO/LSMGO recovery table, signed off with the
-    // uploading surveyor's own profile name.
+    // Signed-document cover letter format, vessel/survey/port/date line,
+    // signed off with the uploading surveyor's own profile name. The
+    // Pending Vessel stage (PDF + Excel upload) also gets a VLSFO/HSFO/
+    // LSMGO recovery table; the final Pending Report stage (Word report
+    // upload, survey -> Completed) already had recovery reported earlier,
+    // so it's just the cover line with no table.
+    $isFinalStage = (($info['new_status'] ?? '') === 'Completed');
+    $leadIn = $isFinalStage ? 'Final Formal Report' : 'signed documents &amp; Field Report';
+    $leadInPlain = $isFinalStage ? 'Final Formal Report' : 'signed documents & Field Report';
     $surveyDate = !empty($info['survey_completed_date']) ? date('d M Y', strtotime((string)$info['survey_completed_date'])) : '';
-    $recoveryNA = !empty($info['recovery_na']);
-    $fmtRec = static function ($v) {
-        return ($v !== null && $v !== '') ? number_format((float)$v, 3) : '0.000';
-    };
-    $vlsfoCell = $recoveryNA ? 'N/A' : $fmtRec($info['vlsfo_recovery'] ?? null);
-    $hsfoCell  = $recoveryNA ? 'N/A' : $fmtRec($info['hsfo_recovery'] ?? null);
-    $lsmgoCell = $recoveryNA ? 'N/A' : $fmtRec($info['lsmgo_recovery'] ?? null);
-    $totalCell = $recoveryNA ? 'N/A (Not Applicable)' : $fmtRec($info['recovery_amount'] ?? null);
 
     $html = '
         <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:auto;color:#1e293b;font-size:14px;line-height:1.6;">
             <p>Dear sir/Madam,</p>
             <p>Good day to you!!</p>
-            <p>Please find attached the signed documents &amp; Field Report, for the subject vessel<br>
-            <strong>' . $safe($info['vessel_name'] ?? '') . '</strong> - <strong>' . $safe($info['survey_types'] ?? '') . '</strong>, attended at <strong>' . $safe($info['port_name'] ?? '') . '</strong>, on <strong>' . $safe($surveyDate) . '</strong>.</p>
+            <p>Please find attached the ' . $leadIn . ', for the subject vessel<br>
+            <strong>' . $safe($info['vessel_name'] ?? '') . '</strong> - <strong>' . $safe($info['survey_types'] ?? '') . '</strong>, attended at <strong>' . $safe($info['port_name'] ?? '') . '</strong>, on <strong>' . $safe($surveyDate) . '</strong>.</p>';
+
+    $altLines = [
+        'Dear sir/Madam,',
+        '',
+        'Good day to you!!',
+        '',
+        'Please find attached the ' . $leadInPlain . ', for the subject vessel',
+        ($info['vessel_name'] ?? '') . ' - ' . ($info['survey_types'] ?? '') . ', attended at ' . ($info['port_name'] ?? '') . ', on ' . $surveyDate . '.',
+    ];
+
+    if (!$isFinalStage) {
+        $recoveryNA = !empty($info['recovery_na']);
+        $fmtRec = static function ($v) {
+            return ($v !== null && $v !== '') ? number_format((float)$v, 3) : '0.000';
+        };
+        $vlsfoCell = $recoveryNA ? 'N/A' : $fmtRec($info['vlsfo_recovery'] ?? null);
+        $hsfoCell  = $recoveryNA ? 'N/A' : $fmtRec($info['hsfo_recovery'] ?? null);
+        $lsmgoCell = $recoveryNA ? 'N/A' : $fmtRec($info['lsmgo_recovery'] ?? null);
+        $totalCell = $recoveryNA ? 'N/A (Not Applicable)' : $fmtRec($info['recovery_amount'] ?? null);
+
+        $html .= '
             <table style="border-collapse:collapse;width:100%;max-width:420px;margin:18px 0;font-size:14px;">
                 <tr>
                     <th style="border:1px solid #cbd5e1;padding:8px 12px;background:#f1f5f9;text-align:left;">VLSFO</th>
@@ -642,29 +661,25 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
                     <td colspan="2" style="border:1px solid #cbd5e1;padding:8px 12px;text-align:center;font-weight:700;">TOTAL</td>
                     <td style="border:1px solid #cbd5e1;padding:8px 12px;font-weight:700;">' . $safe($totalCell) . '</td>
                 </tr>
-            </table>
+            </table>';
+
+        $altLines[] = '';
+        $altLines[] = 'VLSFO: ' . $vlsfoCell;
+        $altLines[] = 'HSFO: ' . $hsfoCell;
+        $altLines[] = 'LSMGO: ' . $lsmgoCell;
+        $altLines[] = 'TOTAL: ' . $totalCell;
+    }
+
+    $html .= '
             <p>Thanks &amp; Regards,<br>
             ' . $safe($info['surveyor_name'] ?? '') . '<br>
             YMR MARINE SOLUTIONS LLP</p>
         </div>';
 
-    $altLines = [
-        'Dear sir/Madam,',
-        '',
-        'Good day to you!!',
-        '',
-        'Please find attached the signed documents & Field Report, for the subject vessel',
-        ($info['vessel_name'] ?? '') . ' - ' . ($info['survey_types'] ?? '') . ', attended at ' . ($info['port_name'] ?? '') . ', on ' . $surveyDate . '.',
-        '',
-        'VLSFO: ' . $vlsfoCell,
-        'HSFO: ' . $hsfoCell,
-        'LSMGO: ' . $lsmgoCell,
-        'TOTAL: ' . $totalCell,
-        '',
-        'Thanks & Regards,',
-        (string)($info['surveyor_name'] ?? ''),
-        'YMR MARINE SOLUTIONS LLP',
-    ];
+    $altLines[] = '';
+    $altLines[] = 'Thanks & Regards,';
+    $altLines[] = (string)($info['surveyor_name'] ?? '');
+    $altLines[] = 'YMR MARINE SOLUTIONS LLP';
     $alt = implode("\n", $altLines);
 
     // From: surveyor's own @ymrmarine.com address (via SMTP relay); falls
