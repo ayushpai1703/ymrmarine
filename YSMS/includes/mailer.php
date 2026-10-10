@@ -630,7 +630,8 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
     }
     $alt = implode("\n", $altLines);
 
-    $cc = ['survey@ymrmarine.com'];
+    $ccTarget = 'survey@ymrmarine.com';
+    $ccDelivered = false;
     $sent = 0;
     $failed = 0;
     foreach ($admins as $admin) {
@@ -647,8 +648,19 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
             'reply_to_email' => $surveyorEmail,
             'reply_to_name'  => (string)($info['surveyor_name'] ?? ''),
         ];
+        // 🌟 CC the shared ops inbox at most ONCE per upload, not once per
+        // admin notified — this loop can run for several distinct admins
+        // (e.g. 2-3 people who all also check survey@ymrmarine.com), and
+        // CC'ing every single one of those sends used to land that many
+        // duplicate copies in the one shared inbox. Also skip the CC
+        // entirely when it's this admin's own address — they already get
+        // a direct "To" copy.
+        $cc = (!$ccDelivered && strcasecmp($to, $ccTarget) !== 0) ? [$ccTarget] : [];
         if (sendHtmlEmail($to, (string)($admin['full_name'] ?? 'Admin'), $subject, $html, $alt, $cc, $attachments, $options)) {
             $sent++;
+            if ($cc) {
+                $ccDelivered = true;
+            }
         } else {
             $failed++;
         }
