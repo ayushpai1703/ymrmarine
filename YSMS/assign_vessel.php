@@ -1675,8 +1675,10 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
         var ADD_NEW_NAME_FIELD = { clients: 'company_name', ports: 'port_name', survey_types: 'type_name' };
 
         function openAddNewBox($root) {
-            var $box = $root.find('.ss-add-new-box');
-            if (!$box.length) return;
+            // .ss-add-new-box is a sibling of .searchable-select (both live
+            // inside the same .form-group-custom), not a descendant of it.
+            var $box = $root.closest('.form-group-custom').find('.ss-add-new-box');
+            if (!$box.length) { console.warn('[AddNew] no add-new box found for root', $root.data('ss-root')); return; }
             $('.ss-add-new-box').not($box).hide();
             $box.show();
             $box.find('.ss-add-new-error').hide().text('');
@@ -1700,47 +1702,61 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
         });
 
         $(document).on('click', '.ss-add-new-confirm', function() {
-            var $btn = $(this);
-            var $box = $btn.closest('.ss-add-new-box');
-            var module = $box.data('add-module');
-            var ssRoot = $box.data('ss-root');
-            var nameField = ADD_NEW_NAME_FIELD[module];
-            var $input = $box.find('.ss-add-new-input');
-            var $err = $box.find('.ss-add-new-error');
-            var name = $.trim($input.val());
-            if (!name) {
-                $err.text('Please enter a name.').show();
-                return;
+            console.log('[AddNew] confirm clicked');
+            try {
+                var $btn = $(this);
+                var $box = $btn.closest('.ss-add-new-box');
+                var module = $box.data('add-module');
+                var ssRoot = $box.data('ss-root');
+                var nameField = ADD_NEW_NAME_FIELD[module];
+                var $input = $box.find('.ss-add-new-input');
+                var $err = $box.find('.ss-add-new-error');
+                var name = $.trim($input.val());
+                console.log('[AddNew] module=', module, 'ssRoot=', ssRoot, 'nameField=', nameField, 'name=', name);
+                if (!name) {
+                    $err.text('Please enter a name.').show();
+                    return;
+                }
+                $err.hide().text('');
+                $btn.prop('disabled', true).text('Adding...');
+                var payload = { module: module, action: 'add' };
+                payload[nameField] = name;
+                $.ajax({
+                    url: 'ajax/admin_master.php',
+                    method: 'POST',
+                    data: payload,
+                    dataType: 'json',
+                    headers: { 'X-CSRF-Token': CSRF_TOKEN }
+                })
+                    .done(function(resp) {
+                        console.log('[AddNew] response:', resp);
+                        if (resp && resp.success && resp.id) {
+                            try {
+                                var $root = $('[data-ss-root="' + ssRoot + '"]');
+                                var api = $root.data('ssApi');
+                                console.log('[AddNew] root found=', $root.length, 'api=', !!api);
+                                if (api && api.addAndSelect) { api.addAndSelect(resp.id, name); }
+                                $box.hide();
+                                $input.val('');
+                            } catch (uiErr) {
+                                console.error('[AddNew] UI update error:', uiErr);
+                                $err.text('Added, but could not update the list — please refresh the page.').show();
+                            }
+                        } else {
+                            $err.text((resp && resp.message) ? resp.message : 'Could not add — try again.').show();
+                        }
+                    })
+                    .fail(function(xhr) {
+                        console.error('[AddNew] request failed:', xhr.status, xhr.responseText);
+                        $err.text('Could not add (error ' + xhr.status + '). Open browser console for details.').show();
+                    })
+                    .always(function() {
+                        $btn.prop('disabled', false).text('Add');
+                    });
+            } catch (outerErr) {
+                console.error('[AddNew] handler threw:', outerErr);
+                alert('Add New error: ' + outerErr.message);
             }
-            $err.hide().text('');
-            $btn.prop('disabled', true).text('Adding...');
-            var payload = { module: module, action: 'add' };
-            payload[nameField] = name;
-            $.ajax({
-                url: 'ajax/admin_master.php',
-                method: 'POST',
-                data: payload,
-                dataType: 'json',
-                headers: { 'X-CSRF-Token': CSRF_TOKEN }
-            })
-                .done(function(resp) {
-                    if (resp && resp.success && resp.id) {
-                        var $root = $('[data-ss-root="' + ssRoot + '"]');
-                        var api = $root.data('ssApi');
-                        if (api && api.addAndSelect) { api.addAndSelect(resp.id, name); }
-                        $box.hide();
-                        $input.val('');
-                    } else {
-                        $err.text((resp && resp.message) ? resp.message : 'Could not add — try again.').show();
-                    }
-                })
-                .fail(function(xhr) {
-                    console.error('Add New failed:', xhr.status, xhr.responseText);
-                    $err.text('Could not add (error ' + xhr.status + '). Open browser console for details.').show();
-                })
-                .always(function() {
-                    $btn.prop('disabled', false).text('Add');
-                });
         });
 
         // ---- Single searchable select (Client / Port) ----
