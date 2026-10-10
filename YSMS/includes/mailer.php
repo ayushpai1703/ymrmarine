@@ -407,13 +407,25 @@ function notifySurveyorOfAssignment(PDO $db, int $surveyorId, array $job): strin
     $phone = trim((string)($user['phone'] ?? ''));
 
     if ($email !== '') {
-        $ok = sendJobAssignmentEmail($email, $name, $job);
-        if ($ok) {
-            $notes[] = 'Email sent to ' . $email;
+        // Two surveyor accounts sharing one mailbox (same vessel assigned to
+        // both) must only get one email for it, not one per account — track
+        // which addresses were already emailed for THIS assignment job
+        // within this request (WhatsApp/in-app notification below still go
+        // out per account, since those are account-specific, not email-tied).
+        static $emailedThisRequest = [];
+        $dedupeKey = strtolower($email) . '|' . ($job['report_number'] ?? '') . '|' . ($job['vessel_name'] ?? '');
+        if (isset($emailedThisRequest[$dedupeKey])) {
+            $notes[] = 'Email already sent to ' . $email . ' for this vessel (shared with another assigned surveyor)';
         } else {
-            $err = !empty($GLOBALS['ysms_last_mail_error']) ? $GLOBALS['ysms_last_mail_error'] : 'check SMTP settings';
-            $notes[] = 'EMAIL FAILED: ' . $err;
-            $GLOBALS['ysms_mail_failed'] = true;
+            $ok = sendJobAssignmentEmail($email, $name, $job);
+            if ($ok) {
+                $emailedThisRequest[$dedupeKey] = true;
+                $notes[] = 'Email sent to ' . $email;
+            } else {
+                $err = !empty($GLOBALS['ysms_last_mail_error']) ? $GLOBALS['ysms_last_mail_error'] : 'check SMTP settings';
+                $notes[] = 'EMAIL FAILED: ' . $err;
+                $GLOBALS['ysms_mail_failed'] = true;
+            }
         }
     } else {
         $notes[] = 'EMAIL SKIPPED: No email on surveyor profile — open Profile and save email';
@@ -511,7 +523,21 @@ function getAdminRecipients(PDO $db): array {
             return [];
         }
         $sql = "SELECT id, full_name, email FROM users WHERE role_id = 1 AND status = 'Active' AND email IS NOT NULL AND email != ''";
-        return $db->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $rows = $db->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        // Two Admin accounts sharing one mailbox (e.g. a shared ops inbox)
+        // must only ever get one email each, not one per account row.
+        $seen = [];
+        $deduped = [];
+        foreach ($rows as $row) {
+            $key = strtolower(trim((string)($row['email'] ?? '')));
+            if ($key === '' || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $deduped[] = $row;
+        }
+        return $deduped;
     } catch (\Throwable $e) {
         error_log('getAdminRecipients: ' . $e->getMessage());
         return [];
