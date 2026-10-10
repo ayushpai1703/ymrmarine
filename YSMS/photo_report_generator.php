@@ -75,20 +75,6 @@ include 'includes/header.php';
     margin-bottom: .55rem;
 }
 .prg-photo-item.dragging { opacity: .45; border: 2px dashed #00b4d8; }
-/* Side (Forward/Aft/Port/Starboard) quick-select — always-visible button
-   row, site blue (--accent-blue / --btn-blue from header.php), rounded-
-   rect style. Click any side to set it; the current one shows solid/filled. */
-.prg-side-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: .35rem; }
-.prg-side-label { font-size: 10.5px; font-weight: 650; color: #64748b; margin-right: 2px; }
-.prg-side-btn {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: 10px;
-    border: 1.5px solid #2563eb; background: #fff; color: #1e3a8a;
-}
-.prg-side-btn:hover { background: #eff4ff; }
-.prg-side-btn i { font-size: 11px; }
-.prg-side-btn.active { background: #1e3a8a; border-color: #1e3a8a; color: #fff; }
-.prg-side-btn.active:hover { background: #1e3a8a; }
 /* Section · Hold N · Subsection · Position — surfaces which report
    section/category_code a photo (manually picked) will sort into. */
 .prg-classify-info {
@@ -96,24 +82,27 @@ include 'includes/header.php';
 }
 .prg-classify-info.empty { display: none; }
 .prg-classify-info i { color: #94a3b8; margin-right: 3px; }
-/* Structure picker — horizontal multi-level cascading button-group nav
-   (same visual language as the Side button row above): Level 1 is an
-   always-visible row of main-category buttons; picking one that has
-   children reveals its own Level 2 (sub category) row directly below,
-   and picking a Level 2 item that has its own children reveals a
-   Level 3 (sub-sub category) row below that. Only the active branch's
-   row is shown at each level — the hierarchy never expands as one long
-   vertical list. All levels still use the exact existing dropdown
-   values; this only changes the PRESENTATION from a vertical accordion
-   to horizontal cascading buttons. The actual pick is only committed
-   once a final (leaf) button is clicked, via onHoldNestPick. */
+/* Structure picker — horizontal multi-level cascading button-group nav:
+   Level 1 (Category) is an always-visible single-line row of pill
+   buttons; picking one that has children reveals its own Level 2 (Sub
+   Category) row directly below, and picking a Level 2 item that has its
+   own children reveals a Level 3 (Sub-Sub Category) row below that. Only
+   the active branch's row is shown at each level — the hierarchy never
+   expands as one long vertical list. Each row scrolls horizontally
+   instead of wrapping, so it always stays a single line regardless of
+   how many options or how narrow the screen is. The actual pick is only
+   committed once a final (leaf) button is clicked, via onHoldNestPick. */
 .prg-cat-picker { display: flex; flex-direction: column; gap: 2px; margin-top: .35rem; }
 .prg-cat-level { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; }
-.prg-cat-label { font-size: 10.5px; font-weight: 650; color: #64748b; padding-top: 8px; white-space: nowrap; }
-.prg-cat-scroll { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.prg-cat-label { font-size: 10.5px; font-weight: 650; color: #64748b; padding-top: 6px; white-space: nowrap; }
+.prg-cat-scroll {
+  display: flex; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  gap: 5px; flex: 1 1 auto; min-width: 0; padding-bottom: 3px;
+}
+.prg-cat-scroll::-webkit-scrollbar { height: 4px; }
 .prg-cat-btn {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: 10px;
+  display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+  font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 999px;
   border: 1.5px solid #2563eb; background: #fff; color: #1e3a8a;
   cursor: pointer; line-height: 1.2; white-space: nowrap;
   transition: background .15s ease, color .15s ease, border-color .15s ease;
@@ -123,10 +112,6 @@ include 'includes/header.php';
 .prg-cat-btn.active:hover { background: #1e3a8a; }
 .prg-cat-panel { display: none; }
 .prg-cat-panel.show { display: flex; }
-@media (max-width: 575.98px) {
-  .prg-cat-scroll { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
-  .prg-cat-scroll::-webkit-scrollbar { height: 4px; }
-}
 
 .prg-photo-thumb {
     width: 90px;
@@ -1777,120 +1762,13 @@ async function addPhotos(list) {
   updateSizeEstimate();
 }
 
-/** ---- Directional "side" quick-select ----
- *  Works purely on the already-typed description text. If a side word is
- *  already present (e.g. after an earlier click, or a manual structure-
- *  dropdown pick), clicking a
- *  different side SWAPS only that whole word, case-preserving, leaving
- *  everything else in the sentence — object, condition, equipment, etc. —
- *  exactly as it was. If no side is present yet, the chosen side is
- *  inserted right after "View of ", matching the report's own existing
- *  phrasing convention (side before object, e.g. "View of Port Side
- *  Bulkhead"). All four sides are always offered as one-click options,
- *  since the report's own structure picker treats them as siblings of the
- *  same "side" selection. */
-var PRG_DIRECTIONS = ['forward', 'aft', 'port', 'starboard'];
-var PRG_SIDE_CANONICAL = { forward: 'Forward', aft: 'Aft', port: 'Port Side', starboard: 'Starboard Side' };
 
-function prgDetectDirectionWord(text) {
-  if (!text) return null;
-  var t = String(text);
-  if (/\bforward\b/i.test(t)) return 'forward';
-  if (/\baft\b/i.test(t)) return 'aft';
-  if (/\bstarboard\b/i.test(t)) return 'starboard';
-  // "port" alone is ambiguous (port-of-call vs. port side) — the survey
-  // domain means it's the ship side in practice, but skip the "port of ..."
-  // phrasing just in case it ever appears in free-text descriptions.
-  if (/\bport\b/i.test(t) && !/\bport\s+of\b/i.test(t)) return 'port';
-  return null;
-}
-
-/** Case-adapts a (possibly multi-word) replacement to match the matched
- *  original text's case style: ALL CAPS stays ALL CAPS, all lowercase
- *  stays all lowercase, anything else (e.g. "Port Side") becomes Title
- *  Case on each word. */
-function prgMatchWordCase(sample, word) {
-  if (sample === sample.toUpperCase() && sample !== sample.toLowerCase()) return word.toUpperCase();
-  if (sample === sample.toLowerCase()) return word.toLowerCase();
-  return word.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
-}
-
-/** Case-preserving swap of the whole side phrase — never touches any other
- *  word, so "port side bulkhead and coaming" -> "starboard side bulkhead
- *  and coaming" (not "starboard bulkhead" or "starboard side"). Matches
- *  the direction word TOGETHER with any existing "side"/"-side" suffix as
- *  one unit and replaces it with the target's own canonical form (Port/
- *  Starboard always carry "Side", Forward/Aft never do) — so switching
- *  correctly adds or drops that suffix instead of keeping whatever
- *  suffix the original text happened to have. */
-function prgSwapDirectionWord(text, fromWord, toWord) {
-  if (!text) return text;
-  var toLabel = PRG_SIDE_CANONICAL[toWord] || toWord;
-  var re = new RegExp('\\b' + fromWord + '\\b(\\s*-?\\s*side)?', 'gi');
-  return String(text).replace(re, function (m) { return prgMatchWordCase(m, toLabel); });
-}
-
-/** Inserts a side right after the leading "View of " (matching the
- *  report's existing side-before-object phrasing), e.g.
- *  "View of bulkhead, showing rust." -> "View of Forward bulkhead, showing rust."
- *  Falls back to prepending "View of <side> " if the text doesn't already
- *  start with "View of" for some reason. */
-function prgInsertSideWord(text, toWord) {
-  var label = PRG_SIDE_CANONICAL[toWord] || toWord;
-  var t = String(text || '');
-  if (!t.trim()) return t;
-  var m = t.match(/^(View of\s+)(.*)$/i);
-  if (m) return m[1] + label + ' ' + m[2];
-  return 'View of ' + label + ' ' + t;
-}
-
-function onDirectionToggleClick(idx, toWord) {
-  var p = photos[idx];
-  if (!p || !p.desc) return;
-  var dirWord = prgDetectDirectionWord(p.desc);
-  if (dirWord === toWord) return;
-  if (dirWord) {
-    p.desc = prgSwapDirectionWord(p.desc, dirWord, toWord);
-    // Keep the structure dropdown's own side value in sync too, so its
-    // label and any future manual re-pick reflect the new side consistently.
-    if (p.holdSub) p.holdSub = prgSwapDirectionWord(p.holdSub, dirWord, toWord);
-  } else {
-    p.desc = prgInsertSideWord(p.desc, toWord);
-  }
-  p.descManual = true; // one-click correction
-  prgUpdateCategoryCode(p); // side changed -> category_code may change too (e.g. H04-06 -> H04-08)
-  updatePhotoCardUI(idx);
-  prgMarkDirty();
-}
-
-/** Side (Forward/Aft/Port Side/Starboard Side) quick-select — a plain
- *  always-visible button row, shown once there's a description to attach a
- *  side to. Single root element so a swap can replace it in place
- *  (updatePhotoCardUI) without re-rendering the whole photo list. */
-function directionButtonsHtml(p, idx) {
-  if (!p.desc || !String(p.desc).trim()) return '<div class="prg-side-row" id="sideRow_' + idx + '"></div>';
-  var dirWord = prgDetectDirectionWord(p.desc);
-  var btnHtml = '<span class="prg-side-label">Side:</span>';
-  PRG_DIRECTIONS.forEach(function (d) {
-    var isActive = d === dirWord;
-    var label = PRG_SIDE_CANONICAL[d];
-    btnHtml +=
-      '<button type="button" class="prg-side-btn' + (isActive ? ' active' : '') + '" id="dirBtn_' + idx + '_' + d + '"' + (isActive ? ' disabled' : '') +
-        ' onclick="onDirectionToggleClick(' + idx + ',\'' + d + '\')" title="' + (isActive ? 'Current side' : ('Set the side to ' + esc(label) + ' — everything else in the description stays the same')) + '" data-testid="direction-toggle-' + idx + '-' + d + '">' +
-        '<i class="fa-solid ' + (isActive ? 'fa-check' : 'fa-right-left') + '"></i> ' + esc(label) +
-      '</button>';
-  });
-  return '<div class="prg-side-row" id="sideRow_' + idx + '">' + btnHtml + '</div>';
-}
-
-/** In-place update of one photo's side-buttons row + description field —
+/** In-place update of one photo's category pills + description field —
  *  avoids re-rendering the whole (potentially 100+ photo) list on every
  *  edit, which is what keeps bulk editing from freezing the page. */
 function updatePhotoCardUI(idx) {
   var p = photos[idx];
   if (!p) return;
-  var row = document.getElementById('sideRow_' + idx);
-  if (row) row.outerHTML = directionButtonsHtml(p, idx);
   if (isStructureCategory(p.category)) {
     var pillGroupEl = document.getElementById('holdPillGroup_' + idx);
     if (pillGroupEl) pillGroupEl.outerHTML = holdPillGroupHtml(p, idx);
@@ -1942,26 +1820,14 @@ function onOthersDescInput(idx, val) {
 
 /** Hold No.1–9: main + optional sub button group + editable Description text */
 
-/** Compact "Section · Hold N · Main › Sub" caption, surfacing which report
- *  section/category_code a photo's current structure pick will sort into.
- *  The Main › Sub breadcrumb is always the photo's own exact p.holdMain /
- *  p.holdSub — the same existing dropdown values shown by the structure
- *  picker itself, never a renamed or shortened version of them.
+/** Compact "Main › Sub" caption — just the photo's own exact p.holdMain /
+ *  p.holdSub, in the same order as the Category/Sub Category/Sub-Sub
+ *  Category pills above (no section code or section-name clutter).
  *  Shown only once there's something to report; blank for a not-yet-
  *  picked photo rather than cluttering it with an empty line. */
 function structureInfoHtml(p, idx) {
   var bits = [];
   if (p.holdMain) {
-    if (p.categoryCode) bits.push(p.categoryCode);
-    if (isHoldCategory(p.category)) {
-      bits.push('Holds');
-      var hm = (String(p.category).match(/\d+/) || [])[0];
-      if (hm) bits.push('Hold ' + hm);
-    } else if (isShipSideCategory(p.category)) {
-      bits.push('Ship Side');
-    } else if (isDeckSideCategory(p.category)) {
-      bits.push('Deck Side');
-    }
     bits.push(p.holdMain + (p.holdSub ? (' › ' + p.holdSub) : ''));
   }
   // Always render the element (even empty) so updatePhotoCardUI can refresh it
@@ -2344,7 +2210,6 @@ function renderPhotos() {
           '<div class="flex-grow-1">' +
             '<label class="form-label small mb-0">Description</label>' +
             descControlsHtml(p, i) +
-            directionButtonsHtml(p, i) +
             '<div class="mt-1 d-flex gap-1 flex-wrap align-items-center">' +
               '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveP(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + ' title="Move up"><i class="fa-solid fa-arrow-up"></i></button>' +
               '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveP(' + i + ',1)"' + (i === photos.length - 1 ? ' disabled' : '') + ' title="Move down"><i class="fa-solid fa-arrow-down"></i></button>' +
