@@ -600,16 +600,6 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
         return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
     };
 
-    $filesHtml = '';
-    $files = $info['files'] ?? [];
-    if (!empty($files)) {
-        $filesHtml = '<ul style="margin:8px 0;padding-left:18px;">';
-        foreach ($files as $f) {
-            $filesHtml .= '<li>' . $safe($f) . '</li>';
-        }
-        $filesHtml .= '</ul>';
-    }
-
     $attachments = $info['attachments'] ?? [];
     $attCount = 0;
     foreach ($attachments as $att) {
@@ -622,47 +612,63 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
     $stage = $info['stage_label'] ?? ($info['new_status'] ?? 'Updated');
     $subject = $stage . ': ' . ($info['vessel_name'] ?? 'Vessel') . ' (' . ($info['report_number'] ?? '') . ')';
 
+    // Signed-document cover letter format: vessel/survey/port/date line,
+    // then a VLSFO/HSFO/LSMGO recovery table, signed off with the
+    // uploading surveyor's own profile name.
+    $surveyDate = !empty($info['survey_completed_date']) ? date('d M Y', strtotime((string)$info['survey_completed_date'])) : '';
+    $recoveryNA = !empty($info['recovery_na']);
+    $fmtRec = static function ($v) {
+        return ($v !== null && $v !== '') ? number_format((float)$v, 3) : '0.000';
+    };
+    $vlsfoCell = $recoveryNA ? 'N/A' : $fmtRec($info['vlsfo_recovery'] ?? null);
+    $hsfoCell  = $recoveryNA ? 'N/A' : $fmtRec($info['hsfo_recovery'] ?? null);
+    $lsmgoCell = $recoveryNA ? 'N/A' : $fmtRec($info['lsmgo_recovery'] ?? null);
+    $totalCell = $recoveryNA ? 'N/A (Not Applicable)' : $fmtRec($info['recovery_amount'] ?? null);
+
     $html = '
-        <div style="font-family:Lexend,Arial,sans-serif;max-width:520px;margin:auto;color:#1e293b;">
-            <h2 style="color:#0b1e46;margin-bottom:8px;">' . $safe($stage) . '</h2>
-            <p>A surveyor uploaded report files. Details below' . ($attCount > 0 ? ' — files are attached to this email' : '') . '.</p>
-            <table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;">
-                <tr><td style="padding:6px 0;color:#64748b;">Vessel</td><td style="padding:6px 0;font-weight:600;">' . $safe($info['vessel_name'] ?? '') . '</td></tr>
-                <tr><td style="padding:6px 0;color:#64748b;">Report No</td><td style="padding:6px 0;font-weight:600;">' . $safe($info['report_number'] ?? '') . '</td></tr>
-                <tr><td style="padding:6px 0;color:#64748b;">Client</td><td style="padding:6px 0;">' . $safe($info['client_name'] ?? '') . '</td></tr>
-                <tr><td style="padding:6px 0;color:#64748b;">Port</td><td style="padding:6px 0;">' . $safe($info['port_name'] ?? '') . '</td></tr>
-                <tr><td style="padding:6px 0;color:#64748b;">Survey type</td><td style="padding:6px 0;">' . $safe($info['survey_types'] ?? '') . '</td></tr>
-                <tr><td style="padding:6px 0;color:#64748b;">Surveyor</td><td style="padding:6px 0;">' . $safe($info['surveyor_name'] ?? '') . '</td></tr>
-                <tr><td style="padding:6px 0;color:#64748b;">New status</td><td style="padding:6px 0;font-weight:600;">' . $safe($info['new_status'] ?? '') . '</td></tr>';
-    if (isset($info['recovery_amount']) && $info['recovery_amount'] !== '' && $info['recovery_amount'] !== null) {
-        $html .= '<tr><td style="padding:6px 0;color:#64748b;">Recovery</td><td style="padding:6px 0;">' . $safe($info['recovery_amount']) . ' MT</td></tr>';
-    }
-    $html .= '</table>';
-    if ($filesHtml !== '') {
-        $html .= '<p style="margin:0 0 4px;font-weight:600;">Uploaded files</p>' . $filesHtml;
-    }
-    if (!empty($info['app_url'])) {
-        $html .= '<p style="text-align:center;margin:24px 0;">
-            <a href="' . $safe($info['app_url']) . '" style="background:#3b32b3;color:#fff;text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:600;display:inline-block;">Open in YSMS</a>
-        </p>';
-    }
-    $html .= '<p style="color:#64748b;font-size:12px;">YMR Survey Management System</p></div>';
+        <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:auto;color:#1e293b;font-size:14px;line-height:1.6;">
+            <p>Dear sir/Madam,</p>
+            <p>Good day to you!!</p>
+            <p>Please find attached the signed documents &amp; Field Report, for the subject vessel<br>
+            <strong>' . $safe($info['vessel_name'] ?? '') . '</strong> - <strong>' . $safe($info['survey_types'] ?? '') . '</strong>, attended at <strong>' . $safe($info['port_name'] ?? '') . '</strong>, on <strong>' . $safe($surveyDate) . '</strong>.</p>
+            <table style="border-collapse:collapse;width:100%;max-width:420px;margin:18px 0;font-size:14px;">
+                <tr>
+                    <th style="border:1px solid #cbd5e1;padding:8px 12px;background:#f1f5f9;text-align:left;">VLSFO</th>
+                    <th style="border:1px solid #cbd5e1;padding:8px 12px;background:#f1f5f9;text-align:left;">HSFO</th>
+                    <th style="border:1px solid #cbd5e1;padding:8px 12px;background:#f1f5f9;text-align:left;">LSMGO</th>
+                </tr>
+                <tr>
+                    <td style="border:1px solid #cbd5e1;padding:8px 12px;">' . $safe($vlsfoCell) . '</td>
+                    <td style="border:1px solid #cbd5e1;padding:8px 12px;">' . $safe($hsfoCell) . '</td>
+                    <td style="border:1px solid #cbd5e1;padding:8px 12px;">' . $safe($lsmgoCell) . '</td>
+                </tr>
+                <tr>
+                    <td colspan="2" style="border:1px solid #cbd5e1;padding:8px 12px;text-align:center;font-weight:700;">TOTAL</td>
+                    <td style="border:1px solid #cbd5e1;padding:8px 12px;font-weight:700;">' . $safe($totalCell) . '</td>
+                </tr>
+            </table>
+            <p>Thanks &amp; Regards,<br>
+            ' . $safe($info['surveyor_name'] ?? '') . '<br>
+            YMR MARINE SOLUTIONS LLP</p>
+        </div>';
 
     $altLines = [
-        $stage,
-        'Vessel: ' . ($info['vessel_name'] ?? ''),
-        'Report No: ' . ($info['report_number'] ?? ''),
-        'Client: ' . ($info['client_name'] ?? ''),
-        'Port: ' . ($info['port_name'] ?? ''),
-        'Surveyor: ' . ($info['surveyor_name'] ?? ''),
-        'Status: ' . ($info['new_status'] ?? ''),
+        'Dear sir/Madam,',
+        '',
+        'Good day to you!!',
+        '',
+        'Please find attached the signed documents & Field Report, for the subject vessel',
+        ($info['vessel_name'] ?? '') . ' - ' . ($info['survey_types'] ?? '') . ', attended at ' . ($info['port_name'] ?? '') . ', on ' . $surveyDate . '.',
+        '',
+        'VLSFO: ' . $vlsfoCell,
+        'HSFO: ' . $hsfoCell,
+        'LSMGO: ' . $lsmgoCell,
+        'TOTAL: ' . $totalCell,
+        '',
+        'Thanks & Regards,',
+        (string)($info['surveyor_name'] ?? ''),
+        'YMR MARINE SOLUTIONS LLP',
     ];
-    if (!empty($files)) {
-        $altLines[] = 'Files: ' . implode(', ', $files);
-    }
-    if (!empty($info['app_url'])) {
-        $altLines[] = 'Open: ' . $info['app_url'];
-    }
     $alt = implode("\n", $altLines);
 
     // From: surveyor's own @ymrmarine.com address (via SMTP relay); falls
@@ -777,7 +783,9 @@ function notifyAdminsOfClientVesselRequest(PDO $db, array $info): string {
 function loadSurveyNotifyContext(PDO $db, int $surveyId): array {
     try {
         $stmt = $db->prepare("
-            SELECT s.vessel_name, s.report_number, s.agent_name, s.recovery_amount, s.survey_type_ids,
+            SELECT s.vessel_name, s.report_number, s.agent_name, s.recovery_amount,
+                   s.vlsfo_recovery, s.hsfo_recovery, s.lsmgo_recovery, s.survey_completed_date,
+                   s.survey_type_id, s.survey_type_ids,
                    s.surveyor_id, c.company_name, p.port_name, t.type_name, u.full_name AS surveyor_name, u.email AS surveyor_email
             FROM surveys s
             LEFT JOIN clients c ON s.client_id = c.id
@@ -796,17 +804,25 @@ function loadSurveyNotifyContext(PDO $db, int $surveyId): array {
         if (function_exists('getCombinedSurveyTypeNames') && !empty($row['survey_type_ids'])) {
             $types = getCombinedSurveyTypeNames($db, $row['survey_type_ids'], $types);
         }
+        $recoveryNA = function_exists('isRecoveryNotApplicable')
+            ? isRecoveryNotApplicable($db, (string)($row['survey_type_ids'] ?? ''), (string)($row['type_name'] ?? ''))
+            : false;
         return [
-            'vessel_name'     => $row['vessel_name'] ?? '',
-            'report_number'   => $row['report_number'] ?? '',
-            'client_name'     => $row['company_name'] ?? '',
-            'port_name'       => $row['port_name'] ?? '',
-            'survey_types'    => $types,
-            'surveyor_id'     => (int)($row['surveyor_id'] ?? 0),
-            'surveyor_name'   => $row['surveyor_name'] ?? '',
-            'surveyor_email'  => $row['surveyor_email'] ?? '',
-            'agent_name'      => $row['agent_name'] ?? '',
-            'recovery_amount' => $row['recovery_amount'] ?? null,
+            'vessel_name'          => $row['vessel_name'] ?? '',
+            'report_number'        => $row['report_number'] ?? '',
+            'client_name'          => $row['company_name'] ?? '',
+            'port_name'            => $row['port_name'] ?? '',
+            'survey_types'         => $types,
+            'surveyor_id'          => (int)($row['surveyor_id'] ?? 0),
+            'surveyor_name'        => $row['surveyor_name'] ?? '',
+            'surveyor_email'       => $row['surveyor_email'] ?? '',
+            'agent_name'           => $row['agent_name'] ?? '',
+            'recovery_amount'      => $row['recovery_amount'] ?? null,
+            'vlsfo_recovery'       => $row['vlsfo_recovery'] ?? null,
+            'hsfo_recovery'        => $row['hsfo_recovery'] ?? null,
+            'lsmgo_recovery'       => $row['lsmgo_recovery'] ?? null,
+            'recovery_na'          => $recoveryNA,
+            'survey_completed_date' => $row['survey_completed_date'] ?? '',
         ];
     } catch (\Throwable $e) {
         error_log('loadSurveyNotifyContext: ' . $e->getMessage());
