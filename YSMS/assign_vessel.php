@@ -899,11 +899,14 @@ include 'includes/header.php';
         margin-top: 8px; padding: 10px; border: 1px dashed #3b32b3; border-radius: 10px;
         background: #f8f7ff;
     }
-    .ss-add-new-box .ss-add-new-input {
+    .ss-add-new-box .ss-add-new-input,
+    .ss-add-new-box .ss-add-new-input-extra {
         width: 100%; border: 1px solid var(--border-color); border-radius: 8px;
         padding: 8px 10px; font-size: 13px; background: #fff; outline: none;
     }
-    .ss-add-new-box .ss-add-new-input:focus { border-color: #3b32b3; }
+    .ss-add-new-box .ss-add-new-input-extra { margin-top: 6px; }
+    .ss-add-new-box .ss-add-new-input:focus,
+    .ss-add-new-box .ss-add-new-input-extra:focus { border-color: #3b32b3; }
     .ss-add-new-actions { display: flex; gap: 8px; margin-top: 8px; }
     .ss-add-new-confirm, .ss-add-new-cancel {
         border: none; border-radius: 8px; padding: 7px 14px; font-size: 12.5px; font-weight: 650;
@@ -1511,6 +1514,7 @@ include 'includes/top_app_bar.php';
                 <?php if (!$is_client_role): ?>
                 <div class="ss-add-new-box" id="addNewBox-port" data-add-module="ports" data-ss-root="port" style="display:none;">
                     <input type="text" class="ss-add-new-input" placeholder="New port name">
+                    <input type="text" class="ss-add-new-input-extra" data-field="country" placeholder="Country (leave blank for India)">
                     <div class="ss-add-new-actions">
                         <button type="button" class="ss-add-new-confirm">Add</button>
                         <button type="button" class="ss-add-new-cancel">Cancel</button>
@@ -1682,13 +1686,14 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
             $('.ss-add-new-box').not($box).hide();
             $box.show();
             $box.find('.ss-add-new-error').hide().text('');
+            $box.find('.ss-add-new-input-extra').val('');
             var $input = $box.find('.ss-add-new-input').val('');
             setTimeout(function() { try { $input[0].focus(); } catch (e) {} }, 50);
         }
 
         $(document).on('click', '.ss-add-new-cancel', function() {
             var $box = $(this).closest('.ss-add-new-box');
-            $box.hide().find('.ss-add-new-input').val('');
+            $box.hide().find('.ss-add-new-input, .ss-add-new-input-extra').val('');
             $box.find('.ss-add-new-error').hide().text('');
         });
 
@@ -1721,6 +1726,10 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
                 $btn.prop('disabled', true).text('Adding...');
                 var payload = { module: module, action: 'add' };
                 payload[nameField] = name;
+                $box.find('.ss-add-new-input-extra').each(function() {
+                    var field = $(this).data('field');
+                    if (field) { payload[field] = $.trim($(this).val()); }
+                });
                 $.ajax({
                     url: 'ajax/admin_master.php',
                     method: 'POST',
@@ -1738,6 +1747,7 @@ $.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
                                 if (api && api.addAndSelect) { api.addAndSelect(resp.id, name); }
                                 $box.hide();
                                 $input.val('');
+                                $box.find('.ss-add-new-input-extra').val('');
                             } catch (uiErr) {
                                 console.error('[AddNew] UI update error:', uiErr);
                                 $err.text('Added, but could not update the list — please refresh the page.').show();
