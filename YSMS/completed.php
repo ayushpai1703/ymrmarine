@@ -14,8 +14,13 @@ try {
     }
 } catch (Exception $e) { error_log('completed.php hsfo_recovery column: ' . $e->getMessage()); }
 
-/** Total/VLSFO/HSFO/LSMGO recovery, formatted "12.500 MT" (or "—" when not recorded yet). */
+/** Total/VLSFO/HSFO/LSMGO recovery, formatted "12.500 MT" (or "—" when not recorded yet,
+ *  or "N/A (Not Applicable)" for survey types that don't track Recovery). */
 function recoveryDisplayParts(array $survey): array {
+    global $db;
+    if (isRecoveryNotApplicable($db, (string)($survey['survey_type_ids'] ?? ''), (string)($survey['type_name'] ?? ''))) {
+        return ['total' => 'N/A (Not Applicable)', 'vlsfo' => 'N/A', 'hsfo' => 'N/A', 'lsmgo' => 'N/A'];
+    }
     $fmt = function ($v) { return $v !== null ? number_format((float)$v, 3) . ' MT' : '—'; };
     return [
         'total' => $fmt($survey['recovery_amount'] ?? null),

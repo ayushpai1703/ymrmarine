@@ -223,6 +223,62 @@ function getCombinedSurveyTypeNames($db, $ids_csv, $fallback_name = '') {
     return !empty($names) ? implode(' + ', $names) : $fallback_name;
 }
 
+// 🌟 Survey types for which Recovery does not apply at all (no fuel/cargo
+// quantity to recover) — Recovery shows/stores as "N/A (Not Applicable)"
+// instead of a number whenever EVERY type selected on a survey (single or
+// combination) is in this list. If even one selected type is outside this
+// list, Recovery behaves exactly as before (a normal numeric value).
+// Matched by exact type_name (case-insensitive, trimmed) — add/remove
+// names here only, nothing else needs to change.
+const RECOVERY_NOT_APPLICABLE_TYPES = [
+    'Draft Survey', 'Conversion Survey', 'Condition Survey', 'Reversion Survey',
+    'P&I Survey', 'Hold Cleanliness Survey', 'BQS', 'Ultrasonic Thickness Survey',
+    'Tally Survey', 'Discharge Supervision', 'Loading Supervision', 'Damage Survey',
+    'Pre-Purchase Inspection', 'Unsealing of Hatches', 'Grab Inspection', 'Crane Inspection',
+];
+
+// Same id-resolution as getCombinedSurveyTypeNames() above, but returns the
+// raw name list instead of a joined display string.
+function getSurveyTypeNamesArray($db, $ids_csv, $fallback_name = '') {
+    $ids_csv = trim((string)$ids_csv);
+    if ($ids_csv === '') {
+        return $fallback_name !== '' ? [$fallback_name] : [];
+    }
+    $ids = array_values(array_unique(array_filter(array_map('intval', explode(',', $ids_csv)))));
+    if (empty($ids)) {
+        return $fallback_name !== '' ? [$fallback_name] : [];
+    }
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $db->prepare("SELECT id, type_name FROM survey_types WHERE id IN ($placeholders)");
+    $stmt->execute($ids);
+    $name_by_id = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $name_by_id[(int)$row['id']] = $row['type_name'];
+    }
+    $names = [];
+    foreach ($ids as $tid) {
+        if (isset($name_by_id[$tid])) $names[] = $name_by_id[$tid];
+    }
+    return !empty($names) ? $names : ($fallback_name !== '' ? [$fallback_name] : []);
+}
+
+// True only when every selected survey type (single or combination) is in
+// RECOVERY_NOT_APPLICABLE_TYPES. An unresolved/empty type list is treated
+// as applicable (false) — i.e. the old numeric behavior, never silently N/A.
+function isRecoveryNotApplicable($db, $ids_csv, $fallback_name = '') {
+    $names = getSurveyTypeNamesArray($db, $ids_csv, $fallback_name);
+    if (empty($names)) {
+        return false;
+    }
+    $naList = array_map('strtolower', array_map('trim', RECOVERY_NOT_APPLICABLE_TYPES));
+    foreach ($names as $n) {
+        if (!in_array(strtolower(trim((string)$n)), $naList, true)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // 🌟 ఒక సర్వేకి బహుళ Surveyors అసైన్ చేసినప్పుడు (survey_surveyors జంక్షన్ టేబుల్), వాటన్నింటినీ
 // "+" తో కలిపి చూపించడానికి హెల్పర్ — ఏ surveyor రికార్డు లేకపోతే (పాత single-surveyor
 // అసైన్‌మెంట్లు) $fallback_name (సాధారణంగా surveys.surveyor_id నుండి వచ్చిన పేరు) ఇస్తుంది.
