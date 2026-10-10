@@ -55,12 +55,23 @@ function gmailBase64UrlEncode(string $data): string {
  * access token scoped to gmail.send. Returns null on any failure.
  */
 function gmailGetUserAccessToken(string $subjectEmail): ?string {
+    // Cache per subject for the life of this process — the delegated token
+    // is valid for an hour, so a request that sends as the same person more
+    // than once (e.g. one email addressed to several recipients, or several
+    // emails in the same request) reuses it instead of re-doing the signJwt
+    // + OAuth token-exchange round trip every single time.
+    static $cache = [];
+    $key = strtolower($subjectEmail);
+    $now = time();
+    if (isset($cache[$key]) && $cache[$key]['expires'] > $now + 60) {
+        return $cache[$key]['token'];
+    }
+
     $callerToken = gmailMetadataAccessToken();
     if ($callerToken === null) {
         return null;
     }
 
-    $now = time();
     $claim = [
         'iss'   => GMAIL_SERVICE_ACCOUNT_EMAIL,
         'sub'   => $subjectEmail,
@@ -97,7 +108,12 @@ function gmailGetUserAccessToken(string $subjectEmail): ?string {
     }
     $tokenData = json_decode($tokenResp['body'], true);
     $accessToken = $tokenData['access_token'] ?? null;
-    return is_string($accessToken) && $accessToken !== '' ? $accessToken : null;
+    if (!is_string($accessToken) || $accessToken === '') {
+        return null;
+    }
+    $expiresIn = is_numeric($tokenData['expires_in'] ?? null) ? (int)$tokenData['expires_in'] : 3600;
+    $cache[$key] = ['token' => $accessToken, 'expires' => $now + $expiresIn];
+    return $accessToken;
 }
 
 /**
