@@ -649,8 +649,8 @@ include 'includes/header.php';
                 <input type="file" name="pdf_report" class="form-control form-control-sm" accept=".pdf" required>
             </div>
             <div class="mb-3">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">2. Calculation Sheet (Excel) *</label>
-                <input type="file" name="excel_report" class="form-control form-control-sm" accept=".xlsx, .xls" required>
+                <label class="form-label fw-bold text-secondary" style="font-size:11px;">2. Calculation Sheet (Excel) <span class="text-muted fw-normal">(optional)</span></label>
+                <input type="file" name="excel_report" class="form-control form-control-sm" accept=".xlsx, .xls">
             </div>
             <div class="mt-3 mb-2">
                 <label class="form-label small fw-semibold text-muted">Additional Files (optional)</label>
@@ -878,10 +878,10 @@ include 'includes/header.php';
                                 <div class="vdd-upload-row">
                                     <div class="vdd-upload-icon" style="background:#D1FAE5;color:#047857;"><i class="fa-solid fa-file-excel"></i></div>
                                     <div style="flex:1 1 auto;min-width:0;">
-                                        <div class="vdd-upload-label">2. Calculation Sheet (Excel) <span class="req">*</span></div>
+                                        <div class="vdd-upload-label">2. Calculation Sheet (Excel) <span style="color:#94a3b8;font-weight:500;">(optional)</span></div>
                                         <div class="vdd-upload-hint" data-upload-hint data-default=".xlsx or .xls">.xlsx or .xls</div>
                                     </div>
-                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose file<input type="file" class="vdd-file-input" name="excel_report" accept=".xlsx, .xls" required></label>
+                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose file<input type="file" class="vdd-file-input" name="excel_report" accept=".xlsx, .xls"></label>
                                 </div>
                                 <div class="vdd-upload-row">
                                     <div class="vdd-upload-icon" style="background:#EEF2FF;color:#4F46E5;"><i class="fa-solid fa-paperclip"></i></div>
