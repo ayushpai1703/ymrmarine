@@ -2,6 +2,13 @@
 // 📧 SMTP configuration — Gmail (testing on InfinityFree)
 // For production later: switch back to Hostinger smtp.hostinger.com + mailbox password.
 
+// ── Master kill switch for all outgoing email (assign/upload notify, test
+//    emails, password reset, etc). Defaults to on; set
+//    YSMS_EMAIL_NOTIFICATIONS_ENABLED=false in an environment's deploy
+//    config (e.g. staging) to silence sending there without touching any
+//    other environment or this feature's code.
+if (!defined('EMAIL_NOTIFICATIONS_ENABLED')) define('EMAIL_NOTIFICATIONS_ENABLED', filter_var(getenv('YSMS_EMAIL_NOTIFICATIONS_ENABLED') ?: 'true', FILTER_VALIDATE_BOOLEAN));
+
 if (!defined('SMTP_HOST'))       define('SMTP_HOST', getenv('YSMS_SMTP_HOST') ?: 'smtp.gmail.com');
 if (!defined('SMTP_PORT'))       define('SMTP_PORT', (int)(getenv('YSMS_SMTP_PORT') ?: 587));
 if (!defined('SMTP_SECURE'))     define('SMTP_SECURE', getenv('YSMS_SMTP_SECURE') ?: 'tls'); // 'tls' or 'ssl'

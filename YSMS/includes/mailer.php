@@ -25,6 +25,10 @@ use PHPMailer\PHPMailer\Exception as PHPMailerException;
  */
 function sendHtmlEmail(string $toEmail, string $toName, string $subject, string $htmlBody, string $altBody = '', array $ccEmails = [], array $attachments = [], array $options = []): bool {
     $GLOBALS['ysms_last_mail_error'] = '';
+    if (defined('EMAIL_NOTIFICATIONS_ENABLED') && !EMAIL_NOTIFICATIONS_ENABLED) {
+        $GLOBALS['ysms_last_mail_error'] = 'Email notifications are disabled on this environment.';
+        return false;
+    }
     if ($toEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
         $GLOBALS['ysms_last_mail_error'] = 'Invalid or empty recipient email.';
         return false;
