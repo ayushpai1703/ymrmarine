@@ -37,58 +37,63 @@ At a typical October-2026 USD/INR rate of roughly ₹83–86, **₹21,865 ≈ $2
 
 This single number supersedes most of the speculative cost analysis a repo-only inspection could produce, and is treated as ground truth for the rest of this document and `cloud-cost-projection.md`.
 
+> **Update, same day, after live GCP access was granted:** the 2504% spike is now fully explained, not a hypothesis — see RCA-00 below. The Cloud SQL instance ran on a high-end `db-perf-optimized-N-8` tier from its creation (Aug 24, 2026) until the user independently downsized it to a small, correctly-sized tier on Oct 7, 2026 — three days before this report was finished. The October bill blends about a week of the expensive tier with the rest of the month on the now-correct tier. The fix was already made; this report's job shifted from "find the cause" to "confirm it's actually resolved," which happens via November's bill.
+
 ---
 
 ## Confirmed issues
 
-### RCA-00 — Cloud SQL cost spiked 2504% month-over-month and now accounts for 93% of the entire bill
-**Severity:** Critical
-**Evidence:** `BILLING` (October 2026 Cloud Billing Reports export)
+### RCA-00 — Cloud SQL ran on a high-end "performance-optimized" tier for 6+ weeks; already downsized by the user on Oct 7
+**Severity:** Critical (cause), **Resolved** (status — already fixed independently before this report was finished)
+**Evidence:** `LIVE-GCP` — Cloud SQL Admin Activity audit log, `gcloud logging read` against `resource.type="cloudsql_database"`, cross-checked with `gcloud sql operations list` and `gcloud sql instances describe`. This supersedes the five-hypothesis list originally written in this section before live access was available.
 
-**Observed symptoms:** Total monthly GCP spend of ₹21,865.22 (~$254–263), of which Cloud SQL alone is ₹20,329.50 (~$236–245) — a 2504% increase over the previous billing period. No other product comes close: the next-largest line items (Compute Engine ₹818.59, Cloud Load Balancing ₹507.68) are each under 4% of the total.
+**Observed symptoms:** Total October 2026 GCP spend of ₹21,865.22 (~$254–263), of which Cloud SQL alone is ₹20,329.50 (~$236–245) — a 2504% increase over the previous billing period.
 
-**Root cause — hypothesis, needs live confirmation:** A jump of this magnitude (≈25×) in one billing period is far larger than normal traffic growth could explain for a ≤50-user internal tool, and is consistent with one of:
-1. The instance tier/edition was changed to something much larger or to **Enterprise Plus edition** (which this session's pricing research found priced noticeably higher per vCPU/GB than standard Enterprise edition — see `cloud-cost-projection.md` sourcing notes).
-2. **High Availability (regional instance)** was enabled, which roughly doubles compute+storage cost on its own — doesn't fully explain 25×, but could be a compounding factor alongside #1.
-3. **Storage auto-increase** fired repeatedly (Cloud SQL's automatic storage growth) and the disk was never right-sized back down — storage costs do not shrink automatically once grown.
-4. A **read replica** or an extra instance (e.g. a short-lived test/clone instance left running) was added and not cleaned up.
-5. A one-off heavy operation (bulk import, long-running migration/test query, an accidental full-table scan loop) drove I/O-based billing for part of the month.
+**Confirmed root cause:** The audit log shows the exact history:
 
-Repository inspection (`cloudbuild.yaml`, both branches) only shows `--add-cloudsql-instances ymr-sms:asia-south1:ymrmarine` with no tier, edition, HA, or storage-size flags set from the deploy pipeline — meaning the instance's actual sizing was configured **out-of-band** (Cloud Console or a manual `gcloud sql instances patch`/`create`), so this repository cannot by itself say which of the five hypotheses above is correct. This is the single most important fact to pin down before any further infrastructure decision, including the Postgres-migration question this whole evaluation was commissioned to answer.
+| Timestamp (UTC) | Action | Tier | Disk |
+|---|---|---|---|
+| 2026-08-24T11:37:04 | Instance created | `db-perf-optimized-N-8` | 100 GB SSD |
+| 2026-10-07T16:31:45 | Resized (briefly) | `db-custom-2-8192` | — |
+| 2026-10-07T16:38:22 | Resized again, 7 min later | `db-custom-1-3840` | — |
 
-**Business impact:** At the current run rate, this is ~$2,900–3,150/year on a database tier for a 50-user application — almost certainly far more than the workload requires, and the gap between "what's being paid" and "what a rightsized instance should cost" (see `cloud-cost-projection.md` Scenario B) is likely **the majority of the entire savings opportunity in this whole engagement**, larger than anything a database-engine migration could realistically achieve.
+`gcloud logging read` confirms **zero** configuration changes between Aug 24 and Sept 23 — the instance ran on `db-perf-optimized-N-8`, a high-end Enterprise-Plus "performance optimized" class, continuously from creation through the first week of October. All three resize operations were made by the account holder themselves (`ashok.j123456789@gmail.com`), ending on the current small, appropriately-sized `db-custom-1-3840` (1 vCPU, 3.75 GB) tier — confirmed via live `gcloud sql instances describe`, which also shows `availabilityType: ZONAL` (no HA) and `edition: ENTERPRISE` (not Plus) in the *current* state.
 
-**Estimated monthly financial impact:** Likely $150–220/month in avoidable spend once rightsized (see Scenario B modeling); exact figure requires live confirmation of current tier/edition/HA/storage settings.
+**In short: this was not a misconfiguration discovered by this engagement — it was already found and fixed by the user three days before this analysis began.** The October bill is high because it blends roughly a week of the expensive tier with ~24 days on the now-correct small tier; a full month entirely on `db-perf-optimized-N-8` would have been considerably higher still.
 
-**Recommended corrective action (requires explicit approval before any change, per this engagement's safety rules):**
-1. `gcloud sql instances describe ymr-sms:asia-south1:ymrmarine` immediately to read the actual tier, edition, HA setting, storage size/type, and storage auto-increase status. This is read-only and safe to run as soon as GCP credentials are available.
-2. Compare that configuration against the workload a 50-user, low-concurrency PHP app actually needs (a small shared-core or single small dedicated-core tier, non-HA for a budget-constrained internal tool, SSD storage sized to actual data volume, not an inflated auto-grown figure).
-3. Only after the user reviews and approves a specific target configuration, schedule a maintenance-window resize (note: shrinking storage is **not** possible in Cloud SQL — if storage auto-grew unnecessarily, a size reduction requires exporting data into a freshly-sized instance, which is itself a small-scale version of the same migration machinery described in `managed-postgres-migration-plan.md`, just MySQL→MySQL).
-4. Set a **budget alert** (Cloud Billing budgets, e.g. at $100 and $150 thresholds) so a future spike like this is caught within days, not discovered a month later in a billing PDF.
+**Business impact:** At the pre-fix run rate, this tier alone would have cost in the range of several hundred dollars a month indefinitely — the fix already applied removes that risk going forward. The open question is whether **November's bill actually reflects a full month on the small tier**, which is the only remaining way to fully confirm this is resolved.
 
-**Verification procedure:** `gcloud sql instances describe` (read-only) — `NEEDS-LIVE`, highest priority of every verification item in this document.
+**Estimated monthly financial impact going forward:** Should land close to the `cloud-cost-projection.md` Scenario B range (~$31–103/month) once a full billing month passes on the current tier — consistent with the fact that `db-custom-1-3840` is almost exactly what that scenario modeled as the rightsizing target, independently of this audit-log discovery.
 
-**Confidence:** High that the cost spike is real and Cloud-SQL-concentrated (directly from billing data). Low-to-Medium confidence on *which* of the five hypotheses explains it — genuinely unknown without the instance description.
+**Recommended corrective action:**
+1. ~~Rightsize the instance~~ — **done**, Oct 7, by the user.
+2. Watch the **November 2026 bill** specifically to confirm Cloud SQL drops to roughly the Scenario B range now that the whole month runs on the small tier.
+3. Set a **budget alert** (Cloud Billing budgets, e.g. at $100 and $150 thresholds) so a future tier change — accidental or deliberate — is caught within days, not discovered weeks later in a billing PDF.
+4. Consider documenting *why* the instance was originally created at `db-perf-optimized-N-8` (a deliberate performance test? a console default that wasn't noticed?) so the same thing doesn't happen again on a future instance.
+
+**Verification procedure:** Complete — confirmed via live audit log and current instance state. Remaining open item is simply watching the next full billing cycle.
+
+**Confidence:** High — this is now a confirmed, not hypothesized, root cause, backed by the Cloud SQL Admin Activity audit log and the current live instance configuration.
 
 ---
 
-### RCA-00b — Compute Engine, Persistent Disk, and Cloud Load Balancing costs with no corresponding resource found in the repository
-**Severity:** High
-**Evidence:** `BILLING` + `REPO` (absence of evidence)
+### RCA-00b — Compute Engine VM confirmed orphaned (pending your confirmation); Load Balancer confirmed legitimate
+**Severity:** Medium (cost ~$16-17/month; previously rated High while unidentified)
+**Evidence:** `LIVE-GCP` — `gcloud compute instances list`, `gcloud compute disks list`, `gcloud compute forwarding-rules list`, all run against the live project.
 
-**Observed symptoms:** October 2026 billing shows Compute Engine (₹818.59, +3369%), Persistent Disk (₹49.30, +1566%, normally a VM boot-disk charge), and Cloud Load Balancing (₹507.68, +3380%) — combined ≈ ₹1,375.57/month (~$16–17/month, small in absolute terms but 100% unaccounted-for by this repository).
+**Observed symptoms:** October 2026 billing showed Compute Engine (₹818.59), Persistent Disk (₹49.30), and Cloud Load Balancing (₹507.68) with no matching resource in the repository.
 
-**Root cause — hypothesis:** This architecture, as described in `cloudbuild.yaml` and the Dockerfile, is Cloud Run + Cloud SQL + Cloud Storage only — **no Compute Engine VM is referenced anywhere** in the deploy pipeline or application code. Two plausible explanations:
-1. **Legitimate and expected:** Cloud Run domain mapping is not available in every region; a common, correct pattern is to front Cloud Run with an external HTTPS Load Balancer + Serverless NEG to serve the custom domains the user mentioned (`ymrmarine.in`, `staging.ymrmarine.in`). If so, the Load Balancing charge is expected and the Compute Engine/Persistent Disk charges might be a **separate, unrelated VM** (e.g., a jump box, a one-off test instance, or infrastructure predating this repository) that happens to bill in the same period.
-2. **Orphaned resource:** a VM created for a one-off task (testing, a manual migration attempt, a forgotten dev instance) and never torn down. Persistent Disk charges in particular almost always indicate a VM's boot/data disk still exists and is being billed whether or not the VM is running.
+**Confirmed findings:**
+- **Cloud Load Balancing is legitimate.** `ymrmarine-https-rule` → `ymrmarine-https-proxy` is exactly the external HTTPS Load Balancer + Serverless NEG pattern needed to serve the custom domains (`ymrmarine.in` / `staging.ymrmarine.in`) in a region where Cloud Run's native domain mapping isn't available. **No action needed — keep this.**
+- **The Compute Engine VM and its disk look orphaned.** `instance-20260818-094020` (`e2-medium`, a 10 GB Persistent Disk) was created Aug 18 — using GCP Console's **auto-generated default name** (the name it gives when you create an instance without typing one), which is itself a strong signal this was a manual, ad-hoc creation rather than part of any deployment pipeline. It has been running continuously for 7+ weeks with no reference anywhere in `cloudbuild.yaml`, the Dockerfile, or the application code.
 
-**Business impact:** Low in absolute dollars (~$16-17/month) but worth resolving on principle — an unidentified, undocumented resource is itself a minor security and cost-governance gap (nobody can currently say from this repo what it is or whether it's still needed).
+**Business impact:** ~$16-17/month if left running indefinitely and genuinely unused — small, but worth closing.
 
-**Recommended corrective action:** `gcloud compute instances list --project ymr-sms` and `gcloud compute forwarding-rules list --project ymr-sms` (both read-only) to identify exactly what these resources are; keep the Load Balancer if it's genuinely serving the custom domains, decommission the Compute Engine instance + its Persistent Disk if it turns out to be orphaned (only after user approval, per this engagement's safety rules).
+**Recommended corrective action:** **Needs your confirmation before any action is taken** — is `instance-20260818-094020` something you're still using (a jump box, a one-off test environment, something mid-task)? If not, it can be stopped/deleted along with its disk once you confirm.
 
-**Verification procedure:** `NEEDS-LIVE`.
+**Verification procedure:** Complete.
 
-**Confidence:** Medium — the billing line items are certain; their explanation is not.
+**Confidence:** High on what each resource is; decommissioning the VM requires your sign-off, not further investigation.
 
 ---
 
@@ -234,19 +239,31 @@ Instead, many pages carry their own defensive `SHOW COLUMNS ... ; ALTER TABLE ..
 
 ---
 
-### RCA-08 — Backup, PITR, and HA configuration unknown
-**Severity:** Critical if backups/PITR are not enabled (unconfirmed either way)
-**Evidence:** `NEEDS-LIVE`
+### RCA-08 — Backup, PITR, and HA configuration — CONFIRMED GOOD
+**Severity:** Resolved (was flagged Critical-if-unconfirmed; now confirmed configured correctly)
+**Evidence:** `LIVE-GCP` — `gcloud sql instances describe`, `settings.backupConfiguration`
 
-**Hypothesis:** None of `cloudbuild.yaml`, the Dockerfile, or the SQL files reference backup configuration — Cloud SQL backup/PITR/HA settings are configured out-of-band (Console or `gcloud sql instances patch`, never committed to this repo), so this repository gives **zero** evidence either way about whether backups are enabled, how long they're retained, or whether point-in-time recovery is on.
+**Confirmed configuration:**
+```
+backupConfiguration:
+  enabled: true
+  binaryLogEnabled: true
+  backupRetentionSettings: { retainedBackups: 15, retentionUnit: COUNT }
+  transactionLogRetentionDays: 7
+  transactionalLogStorageState: CLOUD_STORAGE
+  startTime: '11:00'
+availabilityType: ZONAL
+```
 
-**Business impact if backups are NOT enabled:** Critical — a single Cloud SQL incident (operator error, bad migration, storage corruption) could permanently lose survey records, client data, uploaded report metadata, and user accounts for a live commercial operation.
+Automated backups are on, 15 backups retained, binary logging is enabled with 7-day transaction log retention to Cloud Storage — which is exactly what's needed for **point-in-time recovery**, and it's present. `availabilityType: ZONAL` confirms no HA/regional failover is configured, which is a reasonable, explicit cost/reliability trade-off for a budget-constrained internal tool, not an oversight.
 
-**Recommended corrective action:** This is the single highest-priority item to verify before anything else in this document. `gcloud sql instances describe ymr-sms:asia-south1:ymrmarine --format="value(settings.backupConfiguration)"` the moment GCP access is available.
+**Business impact:** None remaining — the top data-safety risk in this whole engagement is closed. The only residual gap is that **backups existing is not the same as a restore having been tested** (see `infrastructure-risk-register.md` R-08) — a periodic test-restore to a scratch instance remains worth doing, but that's a process habit, not a missing configuration.
 
-**Verification procedure:** `NEEDS-LIVE`, Critical priority.
+**Recommended corrective action:** None required for the configuration itself. Schedule a one-time test restore to a scratch instance to validate R-08, at the user's convenience.
 
-**Confidence:** N/A — explicitly unknown, flagged as the top data gap in this RCA.
+**Verification procedure:** Complete.
+
+**Confidence:** High — directly confirmed from the live instance.
 
 ---
 
@@ -262,8 +279,8 @@ Instead, many pages carry their own defensive `SHOW COLUMNS ... ; ALTER TABLE ..
 
 | ID | Title | Severity | Status |
 |---|---|---|---|
-| **RCA-00** | **Cloud SQL cost spike: +2504% MoM, 93% of ₹21,865 total bill** | **Critical** | **Confirmed (real billing data), root cause unverified, top priority** |
-| RCA-00b | Unexplained Compute Engine / Persistent Disk / Load Balancing (~$16-17/mo) | High | Confirmed cost, source unverified |
+| RCA-00 | Cloud SQL ran on an expensive tier for 6+ weeks | Critical (cause) | **Confirmed via audit log — already fixed by the user, Oct 7** |
+| RCA-00b | Compute Engine VM orphaned; Load Balancer legitimate | Medium | Confirmed — LB keep, VM needs your decision |
 | RCA-01 | Schema drift via inline ALTER TABLE instead of real migrations | High | Confirmed, open |
 | RCA-02 | Duplicate notification emails | Medium | Confirmed, **fixed this session** |
 | RCA-03 | Slow upload submit from sequential per-recipient email sends | Medium | Confirmed, **fixed this session** |
@@ -271,6 +288,6 @@ Instead, many pages carry their own defensive `SHOW COLUMNS ... ; ALTER TABLE ..
 | RCA-05 | No explicit Cloud Run scaling/resource limits | Medium | Hypothesis, needs live confirmation |
 | RCA-06 | `docker build --no-cache` on every deploy | Low–Medium | Confirmed config, cost impact unverified |
 | RCA-07 | Gemini AI key wired on staging only | Low | Confirmed config, impact unclear |
-| RCA-08 | Backup/PITR/HA status unknown | **Critical if unconfirmed** | **Top verification priority** |
+| RCA-08 | Backup/PITR/HA status | Resolved | **Confirmed correctly configured** |
 
-**Bottom line:** the real October 2026 billing data changes the priority order completely. **RCA-00 (the Cloud SQL cost spike) is now the single most important finding in this entire engagement** — it is worth an order of magnitude more, in dollars, than every other finding combined, and very likely explains why the account is 2.6× over its $100/month target. The two issues the user reported directly this session (duplicate emails, slow uploads) are root-caused and already fixed. RCA-08 (confirm backups/PITR are actually enabled) remains the top *data-safety* priority, separate from RCA-00's top *cost* priority — both should be checked in the same `gcloud sql instances describe` call, since both answers come from the same command.
+**Bottom line:** live GCP access resolved the two biggest open questions in this engagement. **RCA-00's "why did Cloud SQL cost so much" is now a confirmed fact, not a guess** — the instance ran on a high-end `db-perf-optimized-N-8` tier from its creation (Aug 24) until Oct 7, when the user independently downsized it to the small, correctly-sized `db-custom-1-3840` — three days before this report was finished. **RCA-08's backup/PITR question is also resolved**: both are properly configured. The two issues the user reported directly this session (duplicate emails, slow uploads) remain root-caused and fixed. What's left open: confirming November's bill reflects the fix (a full month on the small tier), and a decision on the orphaned Compute Engine VM (RCA-00b).

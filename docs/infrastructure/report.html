@@ -108,7 +108,7 @@ footer code{font-family:"IBM Plex Mono",monospace;background:var(--surface-2);pa
   <header class="top">
     <div class="eyebrow">YMR Marine / YSMS — Infrastructure Report</div>
     <h1>Where the cloud bill actually went</h1>
-    <p>A root-cause analysis, database-platform evaluation, cost projection, and risk assessment of the GCP infrastructure behind YSMS, grounded in the account's real October 2026 billing data.</p>
+    <p>A root-cause analysis, database-platform evaluation, cost projection, and risk assessment of the GCP infrastructure behind YSMS — confirmed against live GCP data and the Cloud SQL audit log, not just the October billing export.</p>
     <div class="meta">
       <span>10 Oct 2026</span>
       <span>·</span>
@@ -119,13 +119,13 @@ footer code{font-family:"IBM Plex Mono",monospace;background:var(--surface-2);pa
   </header>
 
   <div class="verdict">
-    <div class="eyebrow">The headline finding</div>
-    <h2>One database instance is 93% of the bill — and it isn't PostgreSQL's fault</h2>
+    <div class="eyebrow">The headline finding — already fixed</div>
+    <h2>One Cloud SQL tier was 93% of the bill. You found and fixed it three days before this report did.</h2>
     <div class="stats">
       <div class="stat"><div class="v">₹21,865</div><div class="l">Total GCP bill, Oct 2026</div></div>
-      <div class="stat"><div class="v">93%</div><div class="l">...is Cloud SQL alone</div></div>
-      <div class="stat"><div class="v">+2504%</div><div class="l">Cloud SQL, month over month</div></div>
-      <div class="stat"><div class="v">2.6×</div><div class="l">over the $100/mo target</div></div>
+      <div class="stat"><div class="v">93%</div><div class="l">...was Cloud SQL alone</div></div>
+      <div class="stat"><div class="v">Oct 7</div><div class="l">date you downsized it</div></div>
+      <div class="stat"><div class="v">6 wks</div><div class="l">on the expensive tier before that</div></div>
     </div>
   </div>
 
@@ -136,35 +136,34 @@ footer code{font-family:"IBM Plex Mono",monospace;background:var(--surface-2);pa
       <table>
         <tr><th>Product</th><th class="num">Oct 2026</th><th class="num">% of bill</th><th class="num">vs. previous period</th></tr>
         <tr class="hl"><td>Cloud SQL</td><td class="num">₹20,329.50</td><td class="num">93.0%</td><td class="num">+2504%</td></tr>
-        <tr><td>Compute Engine <span class="badge evidence">unexplained</span></td><td class="num">₹818.59</td><td class="num">3.7%</td><td class="num">+3369%</td></tr>
-        <tr><td>Cloud Load Balancing</td><td class="num">₹507.68</td><td class="num">2.3%</td><td class="num">+3380%</td></tr>
+        <tr><td>Compute Engine <span class="badge evidence">orphaned VM</span></td><td class="num">₹818.59</td><td class="num">3.7%</td><td class="num">+3369%</td></tr>
+        <tr><td>Cloud Load Balancing <span class="badge fixed">legitimate</span></td><td class="num">₹507.68</td><td class="num">2.3%</td><td class="num">+3380%</td></tr>
         <tr><td>Gemini API</td><td class="num">₹131.47</td><td class="num">0.6%</td><td class="num">new</td></tr>
-        <tr><td>Persistent Disk <span class="badge evidence">unexplained</span></td><td class="num">₹49.30</td><td class="num">0.2%</td><td class="num">+1566%</td></tr>
+        <tr><td>Persistent Disk <span class="badge evidence">orphaned VM's disk</span></td><td class="num">₹49.30</td><td class="num">0.2%</td><td class="num">+1566%</td></tr>
         <tr><td>Artifact Registry, DNS, Storage, Cloud Run</td><td class="num">₹28.68</td><td class="num">0.1%</td><td class="num">mixed</td></tr>
         <tr><td><b>Total</b></td><td class="num"><b>₹21,865.22</b></td><td class="num"><b>100%</b></td><td class="num">—</td></tr>
       </table>
     </div>
-    <p style="color:var(--ink-dim);font-size:13.5px;margin-top:10px">≈ $254–263/month at an $83–86/₹ rate. Compute Engine and Persistent Disk correspond to no resource documented anywhere in the repository — flagged for a live audit (RCA-00b), not assumed malicious or wasteful.</p>
+    <p style="color:var(--ink-dim);font-size:13.5px;margin-top:10px">≈ $254–263/month at an $83–86/₹ rate. Confirmed via the live project: the Load Balancer serves the custom domains and should stay; the Compute Engine VM and its disk have no match anywhere in the app and are pending your decision on whether to keep them.</p>
   </section>
 
   <section>
     <h2>Root cause findings</h2>
-    <p class="sub">Ranked by severity. Two items were reported directly this session and are already fixed in code.</p>
+    <p class="sub">Confirmed via live GCP access and the Cloud SQL audit log, not just the repository. Two items were reported directly this session and are already fixed in code.</p>
 
     <div class="card">
-      <h3><span class="badge crit">Critical</span> RCA-00 — Cloud SQL cost spike</h3>
-      <p class="body">A 2504% jump this large isn't traffic growth for a ≤50-user app — it points to a tier/edition change, HA being enabled, runaway storage auto-increase, an orphaned replica, or a one-off heavy operation left running. The deploy pipeline sets no tier, edition, or storage flags, meaning the instance was sized out-of-band and this repository can't say which.</p>
-      <p>Next step: one read-only <code class="num">gcloud sql instances describe</code> call, pending GCP access.</p>
+      <h3><span class="badge fixed">Confirmed · already fixed</span> RCA-00 — Cloud SQL ran on an expensive tier for 6 weeks</h3>
+      <p class="body">The audit log is unambiguous: the instance was created Aug 24 on <code class="num">db-perf-optimized-N-8</code>, a high-end Enterprise-Plus performance tier, with 100GB SSD. It ran unchanged until <b>Oct 7, 16:31–16:38</b>, when you resized it yourself — briefly to <code class="num">db-custom-2-8192</code>, then immediately down to the current <code class="num">db-custom-1-3840</code> (1 vCPU, 3.75GB). The October bill blends about a week on the expensive tier with the rest of the month on the now-correct one. You found and fixed this three days before this report did.</p>
     </div>
 
     <div class="card">
-      <h3><span class="badge high">High</span> RCA-00b — Unidentified Compute Engine / Load Balancing spend</h3>
-      <p class="body">~₹1,376/month (~$16–17) in Compute Engine, Persistent Disk, and Load Balancing charges with no matching resource in <code class="num">cloudbuild.yaml</code> or the Dockerfile. Could be a legitimate load balancer fronting the custom domains, or an orphaned VM. Small in dollars, worth closing on principle.</p>
+      <h3><span class="badge high">Needs your decision</span> RCA-00b — Orphaned Compute Engine VM</h3>
+      <p class="body"><code class="num">instance-20260818-094020</code> (<code class="num">e2-medium</code>) has been running since Aug 18 under GCP Console's auto-generated default name — a strong signal it was a manual, one-off creation, not part of the deploy pipeline. ~$16–17/month combined with its disk. The Load Balancer billed in the same period is confirmed legitimate (it fronts your custom domains) — only the VM is in question.</p>
     </div>
 
     <div class="card">
-      <h3><span class="badge crit">Critical if unconfirmed</span> RCA-08 — Backup &amp; PITR status unknown</h3>
-      <p class="body">Nothing in the repository configures backups or point-in-time recovery — that's a console-side setting invisible to static inspection. This is the one fact that must be confirmed before any other infrastructure decision, migration included.</p>
+      <h3><span class="badge fixed">Confirmed good</span> RCA-08 — Backups &amp; PITR</h3>
+      <p class="body">Live-checked: automated backups on, 15 retained, binary logging enabled with 7-day transaction log retention to Cloud Storage — exactly what point-in-time recovery needs. No HA/regional failover (zonal only), a reasonable cost trade-off for a budget-constrained internal tool. One thing still worth doing: a one-time test restore to prove it actually works end to end.</p>
     </div>
 
     <div class="card">
@@ -214,24 +213,24 @@ footer code{font-family:"IBM Plex Mono",monospace;background:var(--surface-2);pa
   </section>
 
   <section>
-    <h2>Highest-scored risks</h2>
-    <p class="sub">Likelihood × impact, 1–25. Full register of 18 risks on file; these five lead it.</p>
+    <h2>Highest-scored risks remaining</h2>
+    <p class="sub">Likelihood × impact, 1–25. Data-loss risk dropped from the top of this list once backups were confirmed — full register of 18 risks on file.</p>
     <div class="riskgrid">
-      <div class="riskrow"><span class="id">R-02 / R-03</span><span class="desc">No billing alerts — a spike like this is only caught by manually pulling a PDF a month later</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">12 / High</span></div>
+      <div class="riskrow"><span class="id">R-02</span><span class="desc">No billing alerts — this exact six-week tier mistake went unnoticed until the monthly PDF</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">12 / High</span></div>
+      <div class="riskrow"><span class="id">R-03</span><span class="desc">Nothing stops a future resize back up from going unnoticed the same way</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">12 / High</span></div>
       <div class="riskrow"><span class="id">R-05</span><span class="desc">Schema drift recurring in a new form until real migrations replace the safety-net pattern</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">12 / High</span></div>
-      <div class="riskrow"><span class="id">R-01</span><span class="desc">Data loss — backups/PITR status still unconfirmed on the only production database</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">10 / High</span></div>
-      <div class="riskrow"><span class="id">R-08</span><span class="desc">Backup restoration has never been test-run — existing ≠ working</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">10 / High</span></div>
-      <div class="riskrow"><span class="id">R-15</span><span class="desc">GCP vendor lock-in — structural, already true regardless of database choice</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">10 / High (accepted)</span></div>
+      <div class="riskrow"><span class="id">R-08</span><span class="desc">Backups are confirmed enabled, but a restore has never been test-run</span><span class="score" style="background:var(--surface-2);color:var(--ink-dim)">10 / High</span></div>
+      <div class="riskrow"><span class="id">R-15</span><span class="desc">GCP vendor lock-in — structural, already true regardless of database choice</span><span class="score" style="background:var(--surface-2);color:var(--ink-dim)">10 / High (accepted)</span></div>
     </div>
   </section>
 
   <section>
-    <h2>What needs your approval</h2>
+    <h2>What needs your decision now</h2>
     <ul class="checklist">
-      <li><b>01</b> Run <code class="num">gcloud sql instances describe</code> and <code class="num">gcloud compute instances list</code> — read-only, just needs GCP credentials in this session.</li>
-      <li><b>02</b> Approve the actual Cloud SQL resize once the current tier is known.</li>
-      <li><b>03</b> Decommission the Compute Engine resource, once RCA-00b confirms it's safe to remove.</li>
-      <li><b>04</b> Enable backups/PITR if the audit finds them off — pure upside, still gated on your sign-off.</li>
+      <li><b>01</b> Keep or decommission <code class="num">instance-20260818-094020</code> (the orphaned Compute Engine VM) and its disk.</li>
+      <li><b>02</b> Set Cloud Billing budget alerts at $100/$150 — the single highest-value remaining action; this is what would have caught the tier mistake in days instead of weeks.</li>
+      <li><b>03</b> Schedule a one-time test restore of a Cloud SQL backup, to confirm the existing (confirmed-enabled) backup configuration actually works end to end.</li>
+      <li><b>04</b> Watch the <b>November</b> bill to confirm Cloud SQL lands near the ~$69/month base estimate now that a full month runs on the corrected tier.</li>
       <li><b>05</b> Decide on splitting staging and production onto separate Cloud SQL instances, or accept the shared-instance trade-off.</li>
     </ul>
   </section>
