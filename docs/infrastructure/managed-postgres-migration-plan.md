@@ -8,7 +8,7 @@ This document exists as a **complete, ready-to-execute contingency plan**, per t
 
 ## 1. Source and target identification
 
-- **Source:** Google Cloud SQL for MySQL 8.x (version not independently confirmed from this repo — `NEEDS-LIVE`: `gcloud sql instances describe` reports exact version), instance `ymr-sms:asia-south1:ymrmarine`, databases `ysms_db` (production) and `ysms_db_staging` (staging), both on the same instance.
+- **Source:** Google Cloud SQL for **MySQL 8.4** (confirmed `LIVE-GCP` via `gcloud sql instances list`), instance `ymr-sms:asia-south1:ymrmarine`, single instance holding four application databases: `ysms_db` / `ysms_db_staging` (YSMS, production/staging) and `ymrmarine` / `ymrmarine_staging` (marketing site, production/staging, out of scope for this plan — see note below).
 - **Target (if this plan is ever executed):** Google Cloud SQL for PostgreSQL, same region (`asia-south1`), to preserve the current near-zero-latency Unix-socket connection pattern and avoid the network-latency/cross-cloud-egress downsides identified for third-party providers in `database-platform-comparison.md`. A third-party provider (Neon/Aiven) is not recommended as a target even in this contingency plan, for the same latency/operational reasons documented there.
 
 ## 2. Schema and application compatibility assessment
