@@ -83,23 +83,22 @@ include 'includes/header.php';
 .prg-classify-info.empty { display: none; }
 .prg-classify-info i { color: #94a3b8; margin-right: 3px; }
 /* Structure picker — horizontal multi-level cascading button-group nav:
-   Level 1 (Category) is an always-visible single-line row of pill
-   buttons; picking one that has children reveals its own Level 2 (Sub
-   Category) row directly below, and picking a Level 2 item that has its
-   own children reveals a Level 3 (Sub-Sub Category) row below that. Only
-   the active branch's row is shown at each level — the hierarchy never
-   expands as one long vertical list. Each row scrolls horizontally
-   instead of wrapping, so it always stays a single line regardless of
-   how many options or how narrow the screen is. The actual pick is only
-   committed once a final (leaf) button is clicked, via onHoldNestPick. */
+   Level 1 (Category) is an always-visible row of pill buttons; picking
+   one that has children reveals its own Level 2 (Sub Category) row
+   directly below, and picking a Level 2 item that has its own children
+   reveals a Level 3 (Sub-Sub Category) row below that. Only the active
+   branch's row is shown at each level — the hierarchy never expands as
+   one long vertical list. Each row WRAPS onto as many lines as needed
+   (never horizontal scroll) so every option stays visible on screen at
+   once, just as small pills. The actual pick is only committed once a
+   final (leaf) button is clicked, via onHoldNestPick. */
 .prg-cat-picker { display: flex; flex-direction: column; gap: 2px; margin-top: .35rem; }
 .prg-cat-level { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; }
 .prg-cat-label { font-size: 10.5px; font-weight: 650; color: #64748b; padding-top: 6px; white-space: nowrap; }
 .prg-cat-scroll {
-  display: flex; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
-  gap: 5px; flex: 1 1 auto; min-width: 0; padding-bottom: 3px;
+  display: flex; flex-wrap: wrap;
+  gap: 5px; flex: 1 1 auto; min-width: 0;
 }
-.prg-cat-scroll::-webkit-scrollbar { height: 4px; }
 .prg-cat-btn {
   display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
   font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 999px;
@@ -1983,11 +1982,14 @@ function onHoldNestPick(idx, btn) {
   if (!p) return;
   p.holdMain = main;
   p.holdSub = sub;
-  var wasManual = p.descManual;
-  if (!wasManual) {
-    p.desc = buildHoldAutoDesc(main, sub, p.category);
-  }
-  p.descManual = true; // an explicit structure pick is a manual correction
+  // Every pill click (Category/Sub Category/Sub-Sub Category) regenerates
+  // the Description to match the new selection — even correcting an
+  // earlier pick refreshes it, instead of leaving stale text from the
+  // previous selection. The field stays freely editable afterward; typing
+  // directly into it (onHoldDescInput) is what actually "locks" it until
+  // the next pill click.
+  p.desc = buildHoldAutoDesc(main, sub, p.category);
+  p.descManual = false;
   prgUpdateCategoryCode(p); // category_code/sort_order must reflect the corrected value
   updatePhotoCardUI(idx);
   prgMarkDirty();
