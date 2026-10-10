@@ -231,7 +231,6 @@ function buildJobAssignmentMessage(array $job, string $surveyorName = ''): strin
         'Vessel details:',
         '',
         'Vessel      : ' . ($job['vessel_name'] ?? '—'),
-        'Report No   : ' . ($job['report_number'] ?? '—'),
         'Client      : ' . $client,
         'Port        : ' . $port,
         'Survey type : ' . $types,
@@ -246,7 +245,8 @@ function buildJobAssignmentMessage(array $job, string $surveyorName = ''): strin
     }
     $lines[] = '';
     $lines[] = 'Thanks & Regards,';
-    $lines[] = 'YMR Survey Coordination Team.';
+    $lines[] = (string)($job['assigned_by_name'] ?? 'YMR Survey Coordination Team');
+    $lines[] = 'YMR MARINE SOLUTIONS LLP';
     return implode("\n", $lines);
 }
 
@@ -286,10 +286,6 @@ function sendJobAssignmentEmail(string $toEmail, string $toName, array $job): bo
                     <td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:600;">' . $safe($vessel) . '</td>
                 </tr>
                 <tr>
-                    <td style="padding:6px 10px;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;">Report No</td>
-                    <td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:600;">' . $safe($report) . '</td>
-                </tr>
-                <tr>
                     <td style="padding:6px 10px;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;">Client</td>
                     <td style="padding:6px 10px;border:1px solid #e2e8f0;">' . $safe($client) . '</td>
                 </tr>
@@ -309,14 +305,10 @@ function sendJobAssignmentEmail(string $toEmail, string $toName, array $job): bo
     if (!empty($job['remarks'])) {
         $html .= '<p style="background:#f8fafc;border-radius:8px;padding:10px 12px;font-size:13px;"><strong>Remarks:</strong> ' . $safe($job['remarks']) . '</p>';
     }
-    if (!empty($job['app_url'])) {
-        $html .= '<p style="margin:18px 0;">
-            <a href="' . $safe($job['app_url']) . '" style="background:#3b32b3;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;display:inline-block;">Open in YSMS</a>
-        </p>';
-    }
     $html .= '
             <p style="margin-top:24px;">Thanks &amp; Regards,<br>
-            <strong>YMR Survey Coordination Team.</strong></p>
+            ' . $safe((string)($job['assigned_by_name'] ?? 'YMR Survey Coordination Team')) . '<br>
+            YMR MARINE SOLUTIONS LLP</p>
         </div>';
 
     $alt = buildJobAssignmentMessage($job, $toName);
