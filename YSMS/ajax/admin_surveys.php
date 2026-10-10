@@ -16,8 +16,9 @@ if (($_SESSION['role'] ?? '') !== 'Admin') {
 
 // రెండు వర్చువల్ మాడ్యూల్స్ మాత్రమే ఇక్కడ అనుమతించబడతాయి — surveys.status ఆధారంగా ఫిల్టర్
 $type_status_map = [
-    'assigned_vessels' => 'Pending Vessel',
-    'pending_reports'  => 'Pending Report',
+    'assigned_vessels'  => 'Pending Vessel',
+    'pending_reports'   => 'Pending Report',
+    'completed_surveys' => 'Completed',
 ];
 
 $type = isset($_REQUEST['type']) ? trim((string)$_REQUEST['type']) : '';
