@@ -1,0 +1,243 @@
+<title>Infrastructure Cost Audit</title>
+<style>
+/* Layout: single-column report — hero verdict stats, then stacked evidence
+   sections (RCA, cost scenarios, decision matrix, risks), numbers in mono. */
+:root{
+  --bg:#f6f4ee; --surface:#ffffff; --surface-2:#eeebe1; --border:#ded8c8;
+  --ink:#1c1a15; --ink-dim:#5c5848; --navy:#0b1e46; --navy-2:#1e3a8a;
+  --accent:#b5472a; --accent-soft:#f3e2da; --good:#2f6b4f; --good-soft:#e1efe6;
+  --warn:#8a5a0a; --warn-soft:#f6ecd6; --crit:#a3241f; --crit-soft:#f8e2df;
+  --rule:#d8d2c0;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15130f; --surface:#1d1b16; --surface-2:#242119; --border:#3a3527;
+    --ink:#ece7d9; --ink-dim:#b3ab93; --navy:#9db4e8; --navy-2:#c3d2f2;
+    --accent:#e2855f; --accent-soft:#3a241a; --good:#8fd1ac; --good-soft:#1c3327;
+    --warn:#e8c173; --warn-soft:#3a2f14; --crit:#f29b92; --crit-soft:#3a1c19;
+    --rule:#36311f; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15130f; --surface:#1d1b16; --surface-2:#242119; --border:#3a3527;
+  --ink:#ece7d9; --ink-dim:#b3ab93; --navy:#9db4e8; --navy-2:#c3d2f2;
+  --accent:#e2855f; --accent-soft:#3a241a; --good:#8fd1ac; --good-soft:#1c3327;
+  --warn:#e8c173; --warn-soft:#3a2f14; --crit:#f29b92; --crit-soft:#3a1c19;
+  --rule:#36311f; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans",system-ui,sans-serif;padding-inline:20px}
+.wrap{max-width:860px;margin:0 auto;padding-block:40px 80px}
+h1,h2,h3{font-family:"Spectral",Georgia,serif;font-weight:600;text-wrap:balance;color:var(--ink);margin:0}
+.eyebrow{font:700 11px/1 "IBM Plex Mono",monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+header.top{margin-bottom:34px}
+header.top h1{font-size:34px;margin-top:8px}
+header.top p{color:var(--ink-dim);margin:10px 0 0;max-width:62ch}
+.meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font:13px/1.4 "IBM Plex Mono",monospace;color:var(--ink-dim)}
+
+.verdict{
+  background:linear-gradient(155deg,var(--navy) 0%,var(--navy-2) 130%);
+  border-radius:18px;padding:30px 26px;margin:28px 0 36px;color:#fff;
+}
+.verdict .eyebrow{color:#ffd9c4}
+.verdict h2{color:#fff;font-size:22px;margin-top:8px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:22px}
+.stat{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:14px 16px;min-width:0}
+.stat .v{font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat .l{font-size:12px;color:#dfe6f7;margin-top:4px}
+
+section{margin-top:40px}
+section h2{font-size:22px;margin-bottom:6px}
+section > .sub{color:var(--ink-dim);font-size:14.5px;margin:4px 0 18px;max-width:64ch}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:14px}
+.card h3{font-size:16.5px;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.card p{margin:6px 0;color:var(--ink-dim);font-size:14.5px}
+.card p.body{color:var(--ink)}
+
+.badge{font:700 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;padding:4px 9px;border-radius:999px;white-space:nowrap}
+.badge.crit{background:var(--crit-soft);color:var(--crit)}
+.badge.high{background:var(--warn-soft);color:var(--warn)}
+.badge.med{background:var(--surface-2);color:var(--ink-dim)}
+.badge.fixed{background:var(--good-soft);color:var(--good)}
+.badge.evidence{background:var(--accent-soft);color:var(--accent)}
+
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--rule)}
+th{font:700 11px/1.2 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-dim);border-bottom:2px solid var(--border)}
+td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.tablewrap table{margin:0}
+.tablewrap td,.tablewrap th{padding:10px 14px}
+tr.hl td{background:var(--accent-soft);font-weight:600}
+tr.hl td:first-child{color:var(--accent)}
+
+.matrix td,.matrix th{text-align:center}
+.matrix td:first-child,.matrix th:first-child{text-align:left}
+.matrix td.win{background:var(--good-soft);color:var(--good);font-weight:700}
+
+.riskgrid{display:grid;gap:10px}
+.riskrow{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px}
+.riskrow .id{font:700 12px "IBM Plex Mono",monospace;color:var(--ink-dim)}
+.riskrow .desc{font-size:14px}
+.riskrow .score{font:700 13px "IBM Plex Mono",monospace;padding:4px 10px;border-radius:7px;white-space:nowrap}
+
+.recommend{background:var(--good-soft);border:1px solid var(--good);border-radius:14px;padding:20px 22px;margin-top:14px}
+.recommend h3{color:var(--good);font-size:16px;margin-bottom:6px}
+
+.checklist{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.checklist li{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px}
+.checklist li b{flex:0 0 auto;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--accent);padding-top:2px}
+
+footer{margin-top:50px;padding-top:20px;border-top:1px solid var(--border);color:var(--ink-dim);font-size:13px}
+footer code{font-family:"IBM Plex Mono",monospace;background:var(--surface-2);padding:1px 6px;border-radius:5px}
+
+@media (max-width:560px){
+  .verdict{padding:22px 18px}
+  header.top h1{font-size:27px}
+  .card{padding:16px}
+  .riskrow{grid-template-columns:auto 1fr;grid-template-areas:"id score" "desc desc"}
+  .riskrow .id{grid-area:id}.riskrow .score{grid-area:score;justify-self:end}.riskrow .desc{grid-area:desc}
+}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap">
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="eyebrow">YMR Marine / YSMS — Infrastructure Report</div>
+    <h1>Where the cloud bill actually went</h1>
+    <p>A root-cause analysis, database-platform evaluation, cost projection, and risk assessment of the GCP infrastructure behind YSMS, grounded in the account's real October 2026 billing data.</p>
+    <div class="meta">
+      <span>10 Oct 2026</span>
+      <span>·</span>
+      <span>Read-only analysis — no production changes made</span>
+      <span>·</span>
+      <span>Full artifacts in <code class="num">docs/infrastructure/</code></span>
+    </div>
+  </header>
+
+  <div class="verdict">
+    <div class="eyebrow">The headline finding</div>
+    <h2>One database instance is 93% of the bill — and it isn't PostgreSQL's fault</h2>
+    <div class="stats">
+      <div class="stat"><div class="v">₹21,865</div><div class="l">Total GCP bill, Oct 2026</div></div>
+      <div class="stat"><div class="v">93%</div><div class="l">...is Cloud SQL alone</div></div>
+      <div class="stat"><div class="v">+2504%</div><div class="l">Cloud SQL, month over month</div></div>
+      <div class="stat"><div class="v">2.6×</div><div class="l">over the $100/mo target</div></div>
+    </div>
+  </div>
+
+  <section>
+    <h2>What the real bill shows</h2>
+    <p class="sub">Every other product combined is 7% of the total. Cloud Run — the layer actually serving every user — cost two rupees short of nothing.</p>
+    <div class="tablewrap">
+      <table>
+        <tr><th>Product</th><th class="num">Oct 2026</th><th class="num">% of bill</th><th class="num">vs. previous period</th></tr>
+        <tr class="hl"><td>Cloud SQL</td><td class="num">₹20,329.50</td><td class="num">93.0%</td><td class="num">+2504%</td></tr>
+        <tr><td>Compute Engine <span class="badge evidence">unexplained</span></td><td class="num">₹818.59</td><td class="num">3.7%</td><td class="num">+3369%</td></tr>
+        <tr><td>Cloud Load Balancing</td><td class="num">₹507.68</td><td class="num">2.3%</td><td class="num">+3380%</td></tr>
+        <tr><td>Gemini API</td><td class="num">₹131.47</td><td class="num">0.6%</td><td class="num">new</td></tr>
+        <tr><td>Persistent Disk <span class="badge evidence">unexplained</span></td><td class="num">₹49.30</td><td class="num">0.2%</td><td class="num">+1566%</td></tr>
+        <tr><td>Artifact Registry, DNS, Storage, Cloud Run</td><td class="num">₹28.68</td><td class="num">0.1%</td><td class="num">mixed</td></tr>
+        <tr><td><b>Total</b></td><td class="num"><b>₹21,865.22</b></td><td class="num"><b>100%</b></td><td class="num">—</td></tr>
+      </table>
+    </div>
+    <p style="color:var(--ink-dim);font-size:13.5px;margin-top:10px">≈ $254–263/month at an $83–86/₹ rate. Compute Engine and Persistent Disk correspond to no resource documented anywhere in the repository — flagged for a live audit (RCA-00b), not assumed malicious or wasteful.</p>
+  </section>
+
+  <section>
+    <h2>Root cause findings</h2>
+    <p class="sub">Ranked by severity. Two items were reported directly this session and are already fixed in code.</p>
+
+    <div class="card">
+      <h3><span class="badge crit">Critical</span> RCA-00 — Cloud SQL cost spike</h3>
+      <p class="body">A 2504% jump this large isn't traffic growth for a ≤50-user app — it points to a tier/edition change, HA being enabled, runaway storage auto-increase, an orphaned replica, or a one-off heavy operation left running. The deploy pipeline sets no tier, edition, or storage flags, meaning the instance was sized out-of-band and this repository can't say which.</p>
+      <p>Next step: one read-only <code class="num">gcloud sql instances describe</code> call, pending GCP access.</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="badge high">High</span> RCA-00b — Unidentified Compute Engine / Load Balancing spend</h3>
+      <p class="body">~₹1,376/month (~$16–17) in Compute Engine, Persistent Disk, and Load Balancing charges with no matching resource in <code class="num">cloudbuild.yaml</code> or the Dockerfile. Could be a legitimate load balancer fronting the custom domains, or an orphaned VM. Small in dollars, worth closing on principle.</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="badge crit">Critical if unconfirmed</span> RCA-08 — Backup &amp; PITR status unknown</h3>
+      <p class="body">Nothing in the repository configures backups or point-in-time recovery — that's a console-side setting invisible to static inspection. This is the one fact that must be confirmed before any other infrastructure decision, migration included.</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="badge high">High</span> RCA-01 — Schema changes tracked nowhere</h3>
+      <p class="body">24+ loose migration files, no migration-tracking table, and 15+ pages that silently self-heal a missing column on load instead of a real schema being the source of truth. This exact pattern caused a production export failure, fixed this session — and will recur in a different shape until the pattern itself changes.</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="badge fixed">Fixed this session</span> RCA-02 / RCA-03 — Duplicate emails &amp; slow uploads</h3>
+      <p class="body">Both traced to the same cause: one fully separate email send — its own SMTP handshake or Gmail API token exchange — per admin recipient, repeated per upload. Collapsed into a single multi-recipient send; shipped to staging and production.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Keep Cloud SQL, or move to managed PostgreSQL?</h2>
+    <p class="sub">Weighted across cost, reliability, migration safety, latency, and five other criteria. The schema has zero triggers, views, or stored procedures — the easiest possible case for a cross-engine move — but the PHP code leans on MySQL-only syntax (<code class="num">GROUP_CONCAT</code>, <code class="num">SHOW COLUMNS</code>, <code class="num">ENUM</code>, <code class="num">ON UPDATE CURRENT_TIMESTAMP</code>) in 15+ files.</p>
+    <div class="tablewrap">
+      <table class="matrix">
+        <tr><th>Option</th><th>Cost</th><th>HA / backup</th><th>Migration risk</th><th>Latency</th><th class="num">Score /10</th></tr>
+        <tr><td style="text-align:left">Cloud SQL MySQL, rightsized</td><td>9</td><td>9</td><td>10</td><td>9</td><td class="num win">8.6</td></tr>
+        <tr><td style="text-align:left">Cloud SQL PostgreSQL</td><td>8</td><td>9</td><td>3</td><td>9</td><td class="num">6.8</td></tr>
+        <tr><td style="text-align:left">Neon / Aiven (3rd-party PG)</td><td>6</td><td>6</td><td>3</td><td>4</td><td class="num">5.4</td></tr>
+        <tr><td style="text-align:left">Self-managed PostgreSQL</td><td>7</td><td>2</td><td>2</td><td>9</td><td class="num">4.3</td></tr>
+        <tr><td style="text-align:left">Other-cloud managed PG</td><td>3</td><td>7</td><td>2</td><td>2</td><td class="num">3.7</td></tr>
+      </table>
+    </div>
+    <div class="recommend">
+      <h3>Recommendation: stay on Cloud SQL for MySQL</h3>
+      <p class="body" style="margin:0">No PostgreSQL-specific requirement exists anywhere in this codebase, and a migration wouldn't fix RCA-00 — the new engine would need rightsizing too, after paying for a 2–4 week rewrite first. A full contingency migration plan is kept on file for if that ever changes.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cost, once rightsized</h2>
+    <p class="sub">Modeled low / base / high, not a false-precise single figure. Cloud Run cost barely moves with user count at this traffic level — the real October bill proves that directly.</p>
+    <div class="tablewrap">
+      <table>
+        <tr><th>Scenario</th><th class="num">Low</th><th class="num">Base</th><th class="num">High</th></tr>
+        <tr class="hl"><td>A — Current (actual billing)</td><td class="num" colspan="3" style="text-align:center">₹21,865 / mo ≈ $254–263</td></tr>
+        <tr><td>B — Optimized Cloud SQL</td><td class="num">$31</td><td class="num">$69</td><td class="num">$103</td></tr>
+        <tr><td>C1 — Cloud SQL PostgreSQL</td><td class="num" colspan="3" style="text-align:center">≈ same as B, plus one-time migration cost</td></tr>
+        <tr><td>C2 — Neon (usage-based)</td><td class="num">$10</td><td class="num">$35</td><td class="num">$80</td></tr>
+        <tr><td>C2 — Aiven (flat tier)</td><td class="num">$75</td><td class="num">$75</td><td class="num">$200</td></tr>
+      </table>
+    </div>
+    <p style="color:var(--ink-dim);font-size:13.5px;margin-top:10px">10 / 25 / 50-user modeling lands between ~$46 and ~$103/month across the full range — base case comfortably under the $100 target once RCA-00 is resolved.</p>
+  </section>
+
+  <section>
+    <h2>Highest-scored risks</h2>
+    <p class="sub">Likelihood × impact, 1–25. Full register of 18 risks on file; these five lead it.</p>
+    <div class="riskgrid">
+      <div class="riskrow"><span class="id">R-02 / R-03</span><span class="desc">No billing alerts — a spike like this is only caught by manually pulling a PDF a month later</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">12 / High</span></div>
+      <div class="riskrow"><span class="id">R-05</span><span class="desc">Schema drift recurring in a new form until real migrations replace the safety-net pattern</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">12 / High</span></div>
+      <div class="riskrow"><span class="id">R-01</span><span class="desc">Data loss — backups/PITR status still unconfirmed on the only production database</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">10 / High</span></div>
+      <div class="riskrow"><span class="id">R-08</span><span class="desc">Backup restoration has never been test-run — existing ≠ working</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">10 / High</span></div>
+      <div class="riskrow"><span class="id">R-15</span><span class="desc">GCP vendor lock-in — structural, already true regardless of database choice</span><span class="score" style="background:var(--warn-soft);color:var(--warn)">10 / High (accepted)</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What needs your approval</h2>
+    <ul class="checklist">
+      <li><b>01</b> Run <code class="num">gcloud sql instances describe</code> and <code class="num">gcloud compute instances list</code> — read-only, just needs GCP credentials in this session.</li>
+      <li><b>02</b> Approve the actual Cloud SQL resize once the current tier is known.</li>
+      <li><b>03</b> Decommission the Compute Engine resource, once RCA-00b confirms it's safe to remove.</li>
+      <li><b>04</b> Enable backups/PITR if the audit finds them off — pure upside, still gated on your sign-off.</li>
+      <li><b>05</b> Decide on splitting staging and production onto separate Cloud SQL instances, or accept the shared-instance trade-off.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Full detail in six companion documents under <code>docs/infrastructure/</code> (root-cause-analysis, database-platform-comparison, managed-postgres-migration-plan, cloud-cost-projection, infrastructure-risk-register, decision-summary) and a reusable <code>cloud-cost-risk-evaluation</code> skill at <code>.claude/skills/</code> for future audits. No production resources were changed, resized, or deleted in producing this report.
+  </footer>
+
+</div>
