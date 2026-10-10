@@ -61,6 +61,7 @@ try {
     $filter_place = trim((string)($_GET['place'] ?? ''));
     $filter_client = trim((string)($_GET['client'] ?? ''));
     $filter_surveyor = trim((string)($_GET['surveyor'] ?? ''));
+    $filter_appointment = trim((string)($_GET['appointment'] ?? ''));
 
     $where = ["s.status = 'Pending Vessel'"];
     $params = [];
@@ -86,11 +87,12 @@ try {
         $where[] = "COALESCE((SELECT GROUP_CONCAT(u2.full_name ORDER BY ss2.id SEPARATOR ' + ') FROM survey_surveyors ss2 JOIN users u2 ON ss2.surveyor_id = u2.id WHERE ss2.survey_id = s.id), u.full_name) = ?";
         $params[] = $filter_surveyor;
     }
+    if ($filter_appointment !== '') { $where[] = 's.appointment_date = ?'; $params[] = $filter_appointment; }
     $whereSql = implode(' AND ', $where);
 
     $baseSql = "
         SELECT s.id, s.vessel_name, s.agent_name, c.company_name, st.type_name, s.survey_type_ids,
-               u.full_name AS surveyor_name, s.custom_live_status,
+               u.full_name AS surveyor_name, s.custom_live_status, s.appointment_date,
                p.port_name, p.country
         FROM surveys s
         LEFT JOIN clients c ON s.client_id = c.id
@@ -112,10 +114,11 @@ try {
     exit;
 }
 
-$headers = ['Vessel Name', 'Client', 'Agent', 'Port', 'Country', 'Survey Type', 'Surveyor', 'Latest Update'];
+$headers = ['Vessel Name', 'Client', 'Agent', 'Port', 'Country', 'Survey Type', 'Surveyor', 'Appointment Date', 'Latest Update'];
 $rows = [];
 foreach ($surveys as $row) {
     $country = $row['country'] ?? 'India';
+    $apptDate = !empty($row['appointment_date']) ? date('d M Y', strtotime($row['appointment_date'])) : '';
     $rows[] = [
         'country' => $country,
         'cells' => [
@@ -126,6 +129,7 @@ foreach ($surveys as $row) {
             $country,
             getCombinedSurveyTypeNames($db, $row['survey_type_ids'] ?? '', $row['type_name'] ?? 'N/A'),
             getCombinedSurveyorNames($db, $row['id'] ?? 0, $row['surveyor_name'] ?? 'N/A'),
+            $apptDate,
             $row['custom_live_status'] ?? '',
         ],
     ];
