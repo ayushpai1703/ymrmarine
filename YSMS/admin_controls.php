@@ -39,8 +39,9 @@ $default_module = $module_keys[0] ?? '';
 // ఇప్పటికే ఉన్న vessel_detail.php ఎడిట్ పేజీకి లింక్ చేసి, ఇక్కడ కేవలం లిస్ట్ + Delete
 // ఇస్తాయి (ajax/admin_surveys.php ద్వారా).
 $survey_modules = [
-    'assigned_vessels' => ['label' => 'Assigned Vessels', 'icon' => 'fa-ship'],
-    'pending_reports'  => ['label' => 'Pending Reports',  'icon' => 'fa-file-invoice'],
+    'assigned_vessels'  => ['label' => 'Assigned Vessels',  'icon' => 'fa-ship'],
+    'pending_reports'   => ['label' => 'Pending Reports',   'icon' => 'fa-file-invoice'],
+    'completed_surveys' => ['label' => 'Completed Surveys', 'icon' => 'fa-circle-check'],
 ];
 
 include 'includes/header.php';

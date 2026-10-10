@@ -497,7 +497,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $_SESSION['flash_msg'] = 'Vessel assignment updated successfully.';
-                header('Location: vessel_detail.php?id=' . $post_edit_id);
+                $redirect_page = (($edit_survey['status'] ?? '') === 'Completed') ? 'completed_detail.php' : 'vessel_detail.php';
+                header('Location: ' . $redirect_page . '?id=' . $post_edit_id);
                 exit;
             } catch (Throwable $e) {
                 error_log('assign_vessel.php edit update error: ' . $e->getMessage());
