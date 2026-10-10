@@ -87,7 +87,7 @@ require_once __DIR__ . '/../includes/notifications.php';
         }
     }
 
-    // 2. 📂 కంపల్సరీ EXCEL ప్రాసెసింగ్ మరియు TABLES 54 ట్యాబ్ లోని O21 (Recovery), M20 (VLSFO), O20 (LSMGO), N20 (HSFO) వాల్యూస్ రీడింగ్
+    // 2. 📂 ఆప్షనల్ EXCEL ప్రాసెసింగ్ మరియు TABLES 54 ట్యాబ్ లోని O21 (Recovery), M20 (VLSFO), O20 (LSMGO), N20 (HSFO) వాల్యూస్ రీడింగ్ — ఫైల్ ఎంచుకోకపోతే ఈ బ్లాక్ మొత్తం స్కిప్ అవుతుంది, రికవరీ కాలమ్స్ ఎప్పటిలాగే NULL గా ఉంటాయి (అడ్మిన్ తర్వాత మాన్యువల్‌గా Edit Recovery లో నింపుకోవచ్చు).
     $recovery_val = 0.00;
     $vlsfo_val = 0.00;
     $lsmgo_val = 0.00;
@@ -270,7 +270,10 @@ require_once __DIR__ . '/../includes/notifications.php';
     $pdf_failed_this_request = $pdf_selected && !$isAllowedExt($_FILES['pdf_report']['name'], ['pdf']) || ($pdf_selected && $_FILES['pdf_report']['error'] != 0);
     $excel_selected = isset($_FILES['excel_report']['name']) && $_FILES['excel_report']['name'] !== '';
     $excel_failed_this_request = $excel_selected && !$isAllowedExt($_FILES['excel_report']['name'], ['xlsx', 'xls', 'xlsm']) || ($excel_selected && $_FILES['excel_report']['error'] != 0);
-    if ($current_status === 'Pending Vessel' && ($pdf_failed_this_request || $excel_failed_this_request) && !($has_pdf_uploaded && $has_excel_uploaded)) {
+    // 🌟 PDF Report is mandatory; the Calculation Sheet (Excel) is optional —
+    // a Pending Vessel can move to Pending Report with just the PDF. Only a
+    // missing/failed PDF blocks the move; a failed Excel just gets a note.
+    if ($current_status === 'Pending Vessel' && ($pdf_failed_this_request || $excel_failed_this_request) && !$has_pdf_uploaded) {
         $problems = [];
         if ($pdf_failed_this_request) $problems[] = 'PDF Report (must be a .pdf file, check its size)';
         if ($excel_failed_this_request) $problems[] = 'Calculation Sheet (must be .xlsx/.xls, check its size)';
@@ -280,10 +283,13 @@ require_once __DIR__ . '/../includes/notifications.php';
     }
 
     // ⚙️ వర్క్‌ఫ్లో & సెషన్ అలర్ట్ మెసేజ్ లాజిక్
-    if ($current_status === 'Pending Vessel' && $has_pdf_uploaded && $has_excel_uploaded) {
+    if ($current_status === 'Pending Vessel' && $has_pdf_uploaded) {
         $update = $db->prepare("UPDATE surveys SET status = 'Pending Report', survey_completed_date = NOW(), status_updated_by = ? WHERE id = ?");
         $update->execute([$_SESSION['user_id'], $survey_id]);
         $_SESSION['flash_msg'] = "Pending vessel is uploaded and moved to pending report";
+        if ($excel_failed_this_request) {
+            $_SESSION['flash_msg'] .= ' (Calculation Sheet could not be saved — must be .xlsx/.xls; you can add it later.)';
+        }
         try {
             $ctx = loadSurveyNotifyContext($db, $survey_id);
             $ctx['new_status'] = 'Pending Report';
@@ -374,11 +380,11 @@ require_once __DIR__ . '/../includes/notifications.php';
     // back to the same vessel with an accurate status message instead.
     if ($files_uploaded > 0) {
         if ($current_status === 'Pending Vessel') {
-            $missing = [];
-            if (!$has_pdf_uploaded) $missing[] = 'PDF Report';
-            if (!$has_excel_uploaded) $missing[] = 'Calculation Sheet (Excel)';
-            $_SESSION['flash_msg'] = !empty($missing)
-                ? 'File saved. Still need: ' . implode(' and ', $missing) . ' before this moves to Pending Report.'
+            // Reaching here while still 'Pending Vessel' means the PDF (the
+            // only mandatory file) hasn't been saved yet — the Excel sheet is
+            // optional, so it's never listed as something still needed.
+            $_SESSION['flash_msg'] = !$has_pdf_uploaded
+                ? 'File saved. Still need: PDF Report before this moves to Pending Report.'
                 : 'File saved.';
         } else {
             $_SESSION['flash_msg'] = 'File(s) uploaded successfully.';

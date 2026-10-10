@@ -447,8 +447,8 @@ include 'includes/header.php';
                 <input type="file" name="pdf_report" class="form-control form-control-sm" accept=".pdf" required>
             </div>
             <div class="mb-3">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">2. Calculation Sheet (Excel) *</label>
-                <input type="file" name="excel_report" class="form-control form-control-sm" accept=".xlsx, .xls" required>
+                <label class="form-label fw-bold text-secondary" style="font-size:11px;">2. Calculation Sheet (Excel) <span class="text-muted fw-normal">(optional)</span></label>
+                <input type="file" name="excel_report" class="form-control form-control-sm" accept=".xlsx, .xls">
             </div>
             <div class="mt-3 mb-2">
                 <label class="form-label small fw-semibold text-muted">Additional Files (optional)</label>
