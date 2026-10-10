@@ -53,6 +53,21 @@ try {
     error_log('export_vessels.php live-status column check: ' . $e->getMessage());
 }
 
+// 🌟 SAFETY NET: appointment_date column (database/migration_appointment_date.sql).
+// assign_vessel.php adds this column on its own first load, but this export's
+// SELECT names the column explicitly — if nobody has opened assign_vessel.php
+// on this environment yet, the column is still missing and the query below
+// fails outright ("Unknown column") instead of just showing blank dates like
+// vessels.php's SELECT s.* does.
+try {
+    $ad_exists = $db->query("SHOW COLUMNS FROM surveys LIKE 'appointment_date'")->fetchAll();
+    if (empty($ad_exists)) {
+        $db->exec("ALTER TABLE surveys ADD COLUMN appointment_date DATE NULL DEFAULT NULL AFTER assign_date");
+    }
+} catch (Exception $e) {
+    error_log('export_vessels.php appointment_date column check: ' . $e->getMessage());
+}
+
 try {
     // 🌟 Mirror vessels.php's own filter UI (search/type/place/client/
     // surveyor) so the export matches whatever's currently on screen: no
