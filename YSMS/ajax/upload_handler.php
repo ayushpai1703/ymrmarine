@@ -59,6 +59,7 @@ try {
     }
 
     require_once __DIR__ . '/../includes/mailer.php';
+    require_once __DIR__ . '/../includes/recovery_excel.php';
 require_once __DIR__ . '/../includes/notifications.php';
     $files_uploaded = 0;
     $uploaded_labels = [];
@@ -99,91 +100,12 @@ require_once __DIR__ . '/../includes/notifications.php';
         
         if (move_uploaded_file($_FILES['excel_report']['tmp_name'], $full_target_path)) {
             
-            // --- ఆప్షన్ ఎ: PhpSpreadsheet ద్వారా అఫీషియల్ రీడింగ్ ప్రయత్నం ---
-            $found_via_phpspreadsheet = false;
-            if (class_exists('\PhpOffice\PhpSpreadsheet\IOFactory')) {
-                try {
-                    $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($full_target_path);
-                    
-                    // ట్యాబ్ పేరు "TABLES 54" తో మొదలయ్యే ఏ షీట్ అయినా (TABLES 54, TABLES 54B, స్పేస్‌లతో సహా) మ్యాచ్ చేసేలా
-                    $worksheet = null;
-                    
-                    foreach ($spreadsheet->getSheetNames() as $name) {
-                        if (strpos(trim(strtoupper($name)), 'TABLES 54') === 0) {
-                            $worksheet = $spreadsheet->getSheetByName($name);
-                            break;
-                        }
-                    }
-                    
-                    if (!$worksheet) {
-                        $worksheet = $spreadsheet->getActiveSheet();
-                    }
-                    
-                    // ఫార్ములా లేదా మ్యాన్యువల్ ఎంట్రీ ఏదైనా ఫైనల్ క్యాలిక్యులేటెడ్ వాల్యూ తీసుకోవడం
-                    $raw_recovery = $worksheet->getCell('O21')->getCalculatedValue();
-                    $raw_vlsfo = $worksheet->getCell('M20')->getCalculatedValue();
-                    $raw_lsmgo = $worksheet->getCell('O20')->getCalculatedValue();
-                    $raw_hsfo = $worksheet->getCell('N20')->getCalculatedValue();
-
-                    // ఒకవేళ వాల్యూ లో స్ట్రింగ్స్ లేదా కరెన్సీ సింబల్స్ ఉంటే క్లీన్ చేసి, నెగటివ్ అయితే ABS() తో పాజిటివ్ చేయడం
-                    $recovery_val = abs((float)preg_replace('/[^0-9.\-]/', '', (string)$raw_recovery));
-                    $vlsfo_val = abs((float)preg_replace('/[^0-9.\-]/', '', (string)$raw_vlsfo));
-                    $lsmgo_val = abs((float)preg_replace('/[^0-9.\-]/', '', (string)$raw_lsmgo));
-                    $hsfo_val = abs((float)preg_replace('/[^0-9.\-]/', '', (string)$raw_hsfo));
-                    $found_via_phpspreadsheet = true;
-                } catch (Exception $e) {
-                    $recovery_val = 0.00;
-                    $vlsfo_val = 0.00;
-                    $lsmgo_val = 0.00;
-                    $hsfo_val = 0.00;
-                }
-            }
-
-            // --- ఆప్షన్ బి: ఒకవేళ PhpSpreadsheet లేకపోయినా/అన్ని విలువలు 0 వచ్చినా ఫైల్ డేటా నుండి నేరుగా స్కాన్ చేసే ఫాల్‌బ్యాక్ ---
-            if (!$found_via_phpspreadsheet || ($recovery_val == 0.00 && $vlsfo_val == 0.00 && $lsmgo_val == 0.00 && $hsfo_val == 0.00)) {
-                try {
-                    // ఎక్సెల్ ఫైల్ జిప్ కంటెంట్‌ను రీడ్ చేసి అందులోని షీట్స్ డేటాను రా గా స్కాన్ చేయడం
-                    $zip = new ZipArchive();
-                    if ($zip->open($full_target_path) === TRUE) {
-                        // సెల్ రిఫరెన్స్ ని ఎక్సెల్ షీట్ XML నుండి రా గా చదివే హెల్పర్ (ఫార్ములా/మ్యాన్యువల్ రెండూ కవర్ చేస్తుంది)
-                        $readCellRaw = function ($content, $cellRef) {
-                            if (strpos($content, 'r="' . $cellRef . '"') === false) return null;
-                            if (preg_match('/r="' . preg_quote($cellRef, '/') . '"[^>]*><v>([^<]+)<\/v>/', $content, $m)) {
-                                return (float)$m[1];
-                            }
-                            if (preg_match('/r="' . preg_quote($cellRef, '/') . '"[^>]*>.*?<v>([^<]+)<\/v>/s', $content, $m)) {
-                                return (float)$m[1];
-                            }
-                            return null;
-                        };
-                        
-                        for ($i = 0; $i < $zip->numFiles; $i++) {
-                            $filename = $zip->getNameIndex($i);
-                            if (strpos($filename, 'xl/worksheets/sheet') !== false) {
-                                $fp = $zip->getStream($filename);
-                                $content = stream_get_contents($fp);
-                                fclose($fp);
-                                
-                                $found_o21 = $readCellRaw($content, 'O21');
-                                $found_m20 = $readCellRaw($content, 'M20');
-                                $found_o20 = $readCellRaw($content, 'O20');
-                                $found_n20 = $readCellRaw($content, 'N20');
-
-                                if ($found_o21 !== null || $found_m20 !== null || $found_o20 !== null || $found_n20 !== null) {
-                                    if ($found_o21 !== null) $recovery_val = abs($found_o21);
-                                    if ($found_m20 !== null) $vlsfo_val = abs($found_m20);
-                                    if ($found_o20 !== null) $lsmgo_val = abs($found_o20);
-                                    if ($found_n20 !== null) $hsfo_val = abs($found_n20);
-                                    break;
-                                }
-                            }
-                        }
-                        $zip->close();
-                    }
-                } catch (Exception $e) {
-                    // నో యాక్షన్, జీరో అలాగే ఉంటుంది
-                }
-            }
+            // TABLES 54B tab: O21 total, M20 VLSFO, N20 HSFO, O20 LSMGO (see includes/recovery_excel.php).
+            $rec = extractRecoveryFromExcel($full_target_path);
+            $recovery_val = $rec['recovery'] ?? 0.00;
+            $vlsfo_val = $rec['vlsfo'] ?? 0.00;
+            $lsmgo_val = $rec['lsmgo'] ?? 0.00;
+            $hsfo_val = $rec['hsfo'] ?? 0.00;
 
             // అప్‌లోడ్స్ టేబుల్ లో ఎంట్రీ (re-upload replaces, doesn't duplicate — see PDF note above)
             $db->prepare("DELETE FROM uploads WHERE survey_id = ? AND file_type = 'Formal Report Excel'")->execute([$survey_id]);
