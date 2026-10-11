@@ -122,37 +122,6 @@ require_once __DIR__ . '/../config/config.php';
             gap: 8px;
         }
 
-        /* ── Dismissible top alert banner (replaces the old bell/panel) ──
-           One banner at a time: "New vessel assigned" for a Surveyor, or
-           "Report uploaded by X" for an Admin. Clicking the link or the X
-           marks the underlying notification read, so it never reappears. */
-        .top-alert-banner {
-            position: absolute;
-            top: 14px; left: 14px; right: 14px;
-            z-index: 9998;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: #1d3a8a;
-            color: #fff;
-            padding: 12px 14px;
-            border-radius: 14px;
-            box-shadow: 0 10px 25px -5px rgba(15,23,42,.35);
-            animation: slideDownToast .3s ease-out;
-        }
-        .top-alert-banner-icon { font-size: 16px; flex-shrink: 0; opacity: .9; }
-        .top-alert-banner-link { flex: 1; min-width: 0; color: #fff; text-decoration: none; font-size: 12.5px; font-weight: 600; line-height: 1.35; }
-        .top-alert-banner-link:hover { text-decoration: underline; }
-        .top-alert-banner-close {
-            border: 0; background: rgba(255,255,255,.15); color: #fff;
-            width: 26px; height: 26px; border-radius: 50%;
-            display: inline-flex; align-items: center; justify-content: center;
-            font-size: 13px; cursor: pointer; flex-shrink: 0;
-        }
-        .top-alert-banner-close:hover { background: rgba(255,255,255,.28); }
-        @media (min-width: 992px) {
-            .top-alert-banner { left: 268px; }
-        }
         @keyframes slideDownToast {
             from { transform: translateY(-50px); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
@@ -1370,76 +1339,4 @@ input, select, textarea, .form-control { font-size: 16px; } /* prevents iOS auto
         <?php unset($_SESSION['flash_msg']); // చూపించిన తర్వాత క్లియర్ చేయడం ?>
     <?php endif; ?>
 
-    <?php
-    // 🌟 Dismissible top alert banner — replaces the old bell/notification
-    // panel entirely. Shows on every page (this include is shared), so it's
-    // what makes a fresh notification visible on the dashboard too. Three
-    // alerts show here: "New vessel assigned" to a Surveyor, "Report
-    // uploaded by X" to an Admin, and "New vessel from client — needs a
-    // surveyor" to an Admin. Opening the link or tapping X marks the
-    // notification read, so it never shows again (a fresh
-    // assignment/upload/client-submission creates a new one).
-    if (!empty($_SESSION['user_id'])) {
-        $__bannerNotif = null;
-        try {
-            if (!function_exists('getTopBannerNotification')) {
-                require_once __DIR__ . '/notifications.php';
-            }
-            $__bannerRole = $_SESSION['role'] ?? '';
-            $__bannerTypes = $__bannerRole === 'Admin' ? ['upload', 'report', 'assign'] : ($__bannerRole === 'Surveyor' ? ['assign'] : []);
-            if (!empty($__bannerTypes) && function_exists('getDB')) {
-                $__bannerDb = getDB();
-                $__bannerNotif = getTopBannerNotification($__bannerDb, (int)$_SESSION['user_id'], $__bannerTypes);
-            }
-        } catch (Throwable $e) {
-            $__bannerNotif = null;
-        }
-        if ($__bannerNotif) {
-            $__bannerIsUpload = in_array($__bannerNotif['type'], ['upload', 'report'], true);
-            if ($__bannerIsUpload) {
-                $__bannerText = 'Uploaded by ' . ($__bannerNotif['creator_name'] ?: 'Surveyor') . ' — ' . $__bannerNotif['title'];
-            } else {
-                $__bannerText = $__bannerNotif['title'] . ($__bannerNotif['message'] !== '' ? ' — ' . $__bannerNotif['message'] : '');
-            }
-            $__bannerLink = !empty($__bannerNotif['link']) ? $__bannerNotif['link'] : 'index.php';
-            $__bannerIcon = $__bannerIsUpload ? 'fa-file-arrow-up' : 'fa-ship';
-            ?>
-            <div class="top-alert-banner" id="topAlertBanner" data-notif-id="<?= (int)$__bannerNotif['id'] ?>" data-testid="top-alert-banner">
-                <i class="fa-solid <?= $__bannerIcon ?> top-alert-banner-icon"></i>
-                <a href="<?= sanitize($__bannerLink) ?>" class="top-alert-banner-link" id="topAlertBannerLink" data-testid="top-alert-banner-link"><?= sanitize($__bannerText) ?></a>
-                <button type="button" class="top-alert-banner-close" id="topAlertBannerClose" aria-label="Dismiss" data-testid="top-alert-banner-close">&times;</button>
-            </div>
-            <script>
-            (function() {
-                var wrap = document.getElementById('topAlertBanner');
-                if (!wrap) return;
-                var id = wrap.getAttribute('data-notif-id');
-                function dismiss() {
-                    try {
-                        var body = 'action=read&id=' + encodeURIComponent(id);
-                        if (navigator.sendBeacon) {
-                            navigator.sendBeacon('ajax/notifications.php', new Blob([body], {type: 'application/x-www-form-urlencoded'}));
-                        } else {
-                            fetch('ajax/notifications.php', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: body, keepalive: true }).catch(function(){});
-                        }
-                    } catch (e) {}
-                }
-                var closeBtn = document.getElementById('topAlertBannerClose');
-                if (closeBtn) {
-                    closeBtn.addEventListener('click', function() {
-                        dismiss();
-                        wrap.style.transition = 'opacity .25s ease';
-                        wrap.style.opacity = '0';
-                        setTimeout(function() { wrap.remove(); }, 250);
-                    });
-                }
-                var link = document.getElementById('topAlertBannerLink');
-                if (link) {
-                    link.addEventListener('click', function() { dismiss(); });
-                }
-            })();
-            </script>
-            <?php
-        }
-    }
-    ?>
+    <?php // Notifications are listed in inbox.php (sidebar → Inbox), not as a pop-up banner. ?>

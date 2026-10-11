@@ -54,8 +54,16 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
 
     <div class="desktop-sidebar-nav-scroll">
         <?php
+        // Inbox (Admin, Surveyor): every in-app notification, with an unread badge.
         // Team Chat: members see it with an unread badge; Admin/Super Admin
         // always see it so they can set up membership. Never shown to Clients.
+        $inbox_unread = null;
+        if (!empty($_SESSION['user_id']) && in_array($user_role, ['Admin', 'Surveyor'], true)) {
+            if (!function_exists('getUnreadNotificationCount')) {
+                require_once __DIR__ . '/notifications.php';
+            }
+            $inbox_unread = getUnreadNotificationCount(isset($db_nav) ? $db_nav : getDB(), (int)$_SESSION['user_id']);
+        }
         $team_chat_nav = null;
         if (!empty($_SESSION['user_id']) && in_array($user_role, ['Admin', 'Super Admin', 'Surveyor'], true)) {
             require_once __DIR__ . '/chat_helpers.php';
@@ -64,9 +72,21 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
                 $team_chat_nav = null;
             }
         }
-        if ($team_chat_nav !== null):
+        $nav_unread_dot = ($inbox_unread > 0 && $current_page !== 'inbox.php')
+            || ($team_chat_nav !== null && $team_chat_nav['unread'] > 0 && $current_page !== 'team_chat.php');
+        if ($inbox_unread !== null || $team_chat_nav !== null):
         ?>
-        <div class="desktop-sidebar-section-label desktop-only-nav drawer-reveal">Team</div>
+        <div class="desktop-sidebar-section-label desktop-only-nav drawer-reveal">Messages</div>
+        <?php if ($inbox_unread !== null): ?>
+        <a href="inbox.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'inbox.php') ? 'active' : '' ?>" data-testid="sidebar-inbox-link">
+            <i class="fa-solid fa-inbox"></i>
+            <span>Inbox</span>
+            <?php if ($inbox_unread > 0): ?>
+                <span id="inboxNavBadge" class="badge rounded-pill bg-danger ms-auto" aria-label="<?= (int)$inbox_unread ?> unread notifications"><?= $inbox_unread > 99 ? '99+' : (int)$inbox_unread ?></span>
+            <?php endif; ?>
+        </a>
+        <?php endif; ?>
+        <?php if ($team_chat_nav !== null): ?>
         <a href="team_chat.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'team_chat.php') ? 'active' : '' ?>" data-testid="sidebar-team-chat-link">
             <i class="fa-solid fa-comments"></i>
             <span>Team Chat</span>
@@ -74,7 +94,8 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
                 <span id="tcNavBadge" class="badge rounded-pill bg-danger ms-auto" aria-label="<?= (int)$team_chat_nav['unread'] ?> unread messages"><?= $team_chat_nav['unread'] > 99 ? '99+' : (int)$team_chat_nav['unread'] ?></span>
             <?php endif; ?>
         </a>
-        <?php if ($team_chat_nav['unread'] > 0 && $current_page !== 'team_chat.php'): ?>
+        <?php endif; ?>
+        <?php if ($nav_unread_dot): ?>
         <script>
         (function () {
             var b = document.querySelector('.hamburger-menu-btn');
@@ -85,7 +106,7 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             d.style.cssText = 'position:absolute;top:4px;right:4px;width:9px;height:9px;border-radius:50%;background:#dc2626;border:2px solid #fff;';
             if (getComputedStyle(b).position === 'static') b.style.position = 'relative';
             b.appendChild(d);
-            b.setAttribute('aria-label', 'Open navigation menu (unread team chat messages)');
+            b.setAttribute('aria-label', 'Open navigation menu (unread messages)');
         })();
         </script>
         <?php endif; ?>
