@@ -82,8 +82,8 @@ require_once __DIR__ . '/../includes/notifications.php';
             $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Formal Report PDF', ?, '1.2 MB')");
             $stmt->execute([$survey_id, $pdf_orig, "uploads/" . $pdf_name]);
             $files_uploaded++;
-            $uploaded_labels[] = 'PDF: ' . $pdf_name;
-            $uploaded_attachments[] = ['path' => $target_dir . $pdf_name, 'name' => $pdf_name];
+            $uploaded_labels[] = 'PDF: ' . $pdf_orig;
+            $uploaded_attachments[] = ['path' => $target_dir . $pdf_name, 'name' => $pdf_orig];
         }
     }
 
@@ -212,8 +212,8 @@ require_once __DIR__ . '/../includes/notifications.php';
             $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Formal Report Word', ?, '512 KB')");
             $stmt->execute([$survey_id, $word_orig, "uploads/" . $word_name]);
             $files_uploaded = 3; // Word అప్‌లోడ్ అయిందని గుర్తుగా 3 ఇస్తున్నాం
-            $uploaded_labels[] = 'Word: ' . $word_name;
-            $uploaded_attachments[] = ['path' => $target_dir . $word_name, 'name' => $word_name];
+            $uploaded_labels[] = 'Word: ' . $word_orig;
+            $uploaded_attachments[] = ['path' => $target_dir . $word_name, 'name' => $word_orig];
         }
     }
 
@@ -226,8 +226,8 @@ require_once __DIR__ . '/../includes/notifications.php';
                 if (move_uploaded_file($_FILES['extra_files']['tmp_name'][$key], $target_dir . $extra_name)) {
                     $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Field Report', ?, '512 KB')");
                     $stmt->execute([$survey_id, $extra_orig, "uploads/" . $extra_name]);
-                    $uploaded_labels[] = 'Extra: ' . $extra_name;
-                    $uploaded_attachments[] = ['path' => $target_dir . $extra_name, 'name' => $extra_name];
+                    $uploaded_labels[] = 'Extra: ' . $extra_orig;
+                    $uploaded_attachments[] = ['path' => $target_dir . $extra_name, 'name' => $extra_orig];
                 }
             }
         }
