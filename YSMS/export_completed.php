@@ -132,7 +132,13 @@ try {
 
     while (ob_get_level() > 0) { ob_end_clean(); }
 
-    $fileName = 'Completed_Surveys_' . date('d_m_Y') . '.xlsx';
+    $monthFilterDisp = ($filter_month !== '' && strtotime($filter_month . '-01') !== false) ? date('F Y', strtotime($filter_month . '-01')) : '';
+    $fileName = buildExportFileBaseName('Completed Surveys', [
+        ['label' => 'at', 'value' => $filter_place],
+        ['label' => 'for', 'value' => $filter_client],
+        ['label' => 'by', 'value' => $filter_surveyor],
+        ['label' => 'in', 'value' => $monthFilterDisp],
+    ]) . '.xlsx';
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     header('Content-Disposition: attachment; filename="' . $fileName . '"');
     header('Content-Transfer-Encoding: binary');

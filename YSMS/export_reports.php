@@ -119,7 +119,11 @@ try {
 
     while (ob_get_level() > 0) { ob_end_clean(); }
 
-    $fileName = 'Reports_' . date('d_m_Y') . '.xlsx';
+    $fileName = buildExportFileBaseName('Pending Reports', [
+        ['label' => 'at', 'value' => $filter_place],
+        ['label' => 'for', 'value' => $filter_client],
+        ['label' => 'by', 'value' => $filter_surveyor],
+    ]) . '.xlsx';
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     header('Content-Disposition: attachment; filename="' . $fileName . '"');
     header('Content-Transfer-Encoding: binary');
