@@ -167,6 +167,44 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         </a>
         <?php endif; ?>
 
+        <?php
+        // Team Chat: members see it with an unread badge; Admin/Super Admin
+        // always see it so they can set up membership. Never shown to Clients.
+        $team_chat_nav = null;
+        if (!empty($_SESSION['user_id']) && in_array($user_role, ['Admin', 'Super Admin', 'Surveyor'], true)) {
+            require_once __DIR__ . '/chat_helpers.php';
+            $team_chat_nav = getTeamChatNavState(isset($db_nav) ? $db_nav : getDB(), (int)$_SESSION['user_id']);
+            if (!$team_chat_nav['member'] && !in_array($user_role, ['Admin', 'Super Admin'], true)) {
+                $team_chat_nav = null;
+            }
+        }
+        if ($team_chat_nav !== null):
+        ?>
+        <div class="desktop-sidebar-section-label desktop-only-nav drawer-reveal">Team</div>
+        <a href="team_chat.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'team_chat.php') ? 'active' : '' ?>" data-testid="sidebar-team-chat-link">
+            <i class="fa-solid fa-comments"></i>
+            <span>Team Chat</span>
+            <?php if ($team_chat_nav['unread'] > 0): ?>
+                <span id="tcNavBadge" class="badge rounded-pill bg-danger ms-auto" aria-label="<?= (int)$team_chat_nav['unread'] ?> unread messages"><?= $team_chat_nav['unread'] > 99 ? '99+' : (int)$team_chat_nav['unread'] ?></span>
+            <?php endif; ?>
+        </a>
+        <?php if ($team_chat_nav['unread'] > 0 && $current_page !== 'team_chat.php'): ?>
+        <script>
+        (function () {
+            var b = document.querySelector('.hamburger-menu-btn');
+            if (!b || b.querySelector('.tc-hb-dot')) return;
+            var d = document.createElement('span');
+            d.className = 'tc-hb-dot';
+            d.setAttribute('aria-hidden', 'true');
+            d.style.cssText = 'position:absolute;top:4px;right:4px;width:9px;height:9px;border-radius:50%;background:#dc2626;border:2px solid #fff;';
+            if (getComputedStyle(b).position === 'static') b.style.position = 'relative';
+            b.appendChild(d);
+            b.setAttribute('aria-label', 'Open navigation menu (unread team chat messages)');
+        })();
+        </script>
+        <?php endif; ?>
+        <?php endif; ?>
+
         <?php if ($user_role === 'Admin'): ?>
         <!-- Admin: sidebar "My Profile" is replaced with a shortcut to Formats
              (upload/manage the format files Surveyors see on formats_download.php). -->
