@@ -425,7 +425,7 @@ include 'includes/header.php';
             <button type="button" class="clear-filters-btn" data-clear-filters data-testid="pending-vessels-clear-filters"><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
         </div>
         <div class="px-3 mb-3">
-            <a href="export_vessels.php" class="btn btn-success w-100" style="background-color: #28a745; border: none; font-weight: 600; padding: 8px;">
+            <a href="export_vessels.php" data-mobile-export data-export-base="export_vessels.php" class="btn btn-success w-100" style="background-color: #28a745; border: none; font-weight: 600; padding: 8px;">
                 <i class="fa-solid fa-file-excel me-2"></i> Export to Excel
             </a>
         </div>
