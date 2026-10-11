@@ -123,6 +123,7 @@ if ($can_add_remark && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ad
     $result = saveCompletedRemark($db, $id, $current_user_id, (string)($_POST['remarks'] ?? ''), $_FILES['remark_attachments'] ?? []);
     if ($result['ok']) {
         $_SESSION['flash_msg'] = $result['error'] !== '' ? $result['error'] : 'Remark saved.';
+        if ($result['error'] !== '') $_SESSION['flash_type'] = 'error';
         header('Location: completed_detail.php?id=' . $id . '#remarks-section');
         exit;
     }
