@@ -252,6 +252,19 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             <p><?= getGreeting() ?>! Have a productive day.</p>
         </div>
         <div class="dash-header-right" style="display:flex;align-items:center;gap:8px;">
+            <?php if (in_array($_SESSION['role'] ?? '', ['Admin', 'Surveyor'], true)):
+                if (!function_exists('getUnreadNotificationCount')) require_once 'includes/notifications.php';
+                $dash_inbox_unread = getUnreadNotificationCount($db, (int)$_SESSION['user_id']);
+            ?>
+            <a href="inbox.php" class="dash-inbox-btn" data-testid="dashboard-inbox-link"
+               aria-label="Inbox<?= $dash_inbox_unread > 0 ? ' (' . (int)$dash_inbox_unread . ' unread)' : '' ?>" title="Inbox"
+               style="position:relative;width:42px;height:42px;border-radius:50%;background:#fff;border:1px solid var(--border-color);display:inline-flex;align-items:center;justify-content:center;color:#1e3a8a;font-size:17px;text-decoration:none;box-shadow:0 2px 6px rgba(15,23,42,.06);">
+                <i class="fa-solid fa-inbox" aria-hidden="true"></i>
+                <?php if ($dash_inbox_unread > 0): ?>
+                <span style="position:absolute;top:-4px;right:-4px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;line-height:19px;text-align:center;border:2px solid #fff;"><?= $dash_inbox_unread > 99 ? '99+' : (int)$dash_inbox_unread ?></span>
+                <?php endif; ?>
+            </a>
+            <?php endif; ?>
             <?php include 'includes/profile_dropdown.php'; ?>
         </div>
     </div>

@@ -172,6 +172,45 @@ function getTopBannerNotification(PDO $db, int $userId, array $types): ?array {
     }
 }
 
+/** One page of a user's notifications for inbox.php, newest first, with the sender's name. */
+function getInboxNotifications(PDO $db, int $userId, int $limit, int $offset, bool $unreadOnly): array {
+    try {
+        ensureNotificationsTable($db);
+        $limit = max(1, min(100, $limit));
+        $offset = max(0, $offset);
+        $stmt = $db->prepare("
+            SELECT n.id, n.type, n.title, n.message, n.link, n.is_read, n.created_at, u.full_name AS creator_name
+            FROM notifications n
+            LEFT JOIN users u ON n.created_by = u.id
+            WHERE n.user_id = ?" . ($unreadOnly ? " AND n.is_read = 0" : "") . "
+            ORDER BY n.created_at DESC, n.id DESC
+            LIMIT $limit OFFSET $offset
+        ");
+        $stmt->execute([$userId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        error_log('getInboxNotifications: ' . $e->getMessage());
+        return [];
+    }
+}
+
+function getNotificationCount(PDO $db, int $userId): int {
+    try {
+        ensureNotificationsTable($db);
+        $stmt = $db->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        return (int)$stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+/** Only same-app relative links (e.g. "vessel_detail.php?id=5") are followed from the inbox. */
+function safeNotificationLink(?string $link): ?string {
+    $link = trim((string)$link);
+    return preg_match('~^[A-Za-z0-9_\-]+\.php(\?[^\s<>"\'#]*)?(#[A-Za-z0-9_\-]*)?$~', $link) ? $link : null;
+}
+
 function notificationIcon(string $type): string {
     $map = [
         'assign'   => 'fa-ship',
