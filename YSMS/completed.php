@@ -285,6 +285,11 @@ include 'includes/header.php';
             border-radius: 14px; padding: 12px 14px;
             box-shadow: 0 8px 18px rgba(16,163,74,.25);
         }
+        .pv-import-btn {
+            flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            background: #fff; color: #4B2FD6; border: 1.5px solid #C4B5FD; text-decoration: none;
+            font-weight: 700; font-size: 13px; border-radius: 14px; padding: 0 12px;
+        }
         .pv-sort-wrap {
             flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
             background: #fff; border: 1px solid var(--border-color); border-radius: 14px;
@@ -445,6 +450,13 @@ include 'includes/header.php';
             transition: box-shadow .18s ease, transform .18s ease;
         }
         .btn-export:hover { box-shadow: 0 10px 22px rgba(13,148,136,.4); transform: translateY(-1px); color: #fff; }
+        .btn-import-completed {
+            display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; margin-left: 8px;
+            background: #fff; color: #4B2FD6; border: 1.5px solid #C4B5FD;
+            padding: 0 14px; border-radius: 999px; font-weight: 700; font-size: 12.5px; height: 34px; box-sizing: border-box;
+            text-decoration: none; white-space: nowrap;
+        }
+        .btn-import-completed:hover { background: #F5F3FF; color: #4B2FD6; }
         .vd-export-icon {
             width: 18px; height: 18px; border-radius: 50%; background: rgba(255,255,255,.22);
             display: inline-flex; align-items: center; justify-content: center; font-size: 9px;
@@ -550,6 +562,9 @@ include 'includes/header.php';
     </div>
     <div class="pv-actions-row">
         <a href="export_completed.php" class="pv-export-btn" data-mobile-export data-export-base="export_completed.php"><i class="fa-solid fa-file-excel"></i> Export to Excel</a>
+        <?php if ($is_full_access): ?>
+        <a href="completed_import.php" class="pv-import-btn" title="Bulk import completed vessels from Excel" data-testid="completed-import-mobile"><i class="fa-solid fa-file-import"></i> Import</a>
+        <?php endif; ?>
         <div class="pv-sort-wrap">
             <i class="fa-solid fa-arrow-down-wide-short"></i>
             <select class="pv-sort-select" data-list-sort>
@@ -691,6 +706,9 @@ include 'includes/header.php';
                     <button type="button" class="vd-clear-btn" data-desk-clear><i class="fa-solid fa-rotate-left"></i> Clear</button>
                 </div>
                 <a href="export_completed.php" class="btn-export" id="vdExportLink" data-desk-export><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Download</a>
+                <?php if ($is_full_access): ?>
+                <a href="completed_import.php" class="btn-import-completed" title="Bulk import completed vessels from Excel" data-testid="completed-import-desktop"><i class="fa-solid fa-file-import"></i> Import Excel</a>
+                <?php endif; ?>
             </div>
             <div class="vd-meta" data-desk-meta></div>
             <div class="vd-table-card">
