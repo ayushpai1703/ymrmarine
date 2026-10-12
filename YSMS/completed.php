@@ -225,9 +225,22 @@ include 'includes/header.php';
     .recovery-row .pv-info-val { white-space: normal; overflow: visible; text-overflow: clip; }
     .recovery-cell { position: relative; display: inline-block; cursor: pointer; -webkit-tap-highlight-color: transparent; }
     .recovery-cell.no-tooltip { cursor: default; }
-    .recovery-total { display: block; font-size: 12.5px; font-weight: 700; color: #0f172a; }
+    /* Total recovery as a pill (same shape as the survey-type pill), bigger
+       font; the VLSFO/HSFO/LSMGO line below keeps its small size. */
+    .recovery-total {
+        display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+        font-size: 13px; font-weight: 700; line-height: 1.2; color: #fff;
+        padding: 6px 12px; border-radius: 999px;
+        background: linear-gradient(120deg, #4B2FD6 0%, #7C3AED 55%, #DB2777 100%);
+        box-shadow: 0 4px 12px rgba(91,45,238,.28);
+    }
+    .recovery-total i { font-size: 11px; opacity: .9; }
     .recovery-total b { font-weight: 800; }
-    .recovery-parts { display: block; font-size: 10.5px; color: #64748b; font-weight: 500; margin-top: 2px; }
+    .recovery-total.na {
+        background: #F1F5F9; color: #475569; box-shadow: 0 0 0 1px #e2e8f0;
+        font-size: 12px; letter-spacing: .03em;
+    }
+    .recovery-parts { display: block; font-size: 10.5px; color: #64748b; font-weight: 500; margin-top: 5px; }
     .recovery-cell .recovery-tooltip {
         position: absolute; left: 0; top: calc(100% + 6px); z-index: 60;
         background: #0f172a; color: #fff; font-size: 11px; font-weight: 600;
@@ -477,10 +490,10 @@ include 'includes/header.php';
         .vd-table thead th {
             background: #F8FAFC; color: #64748b; font-weight: 700; font-size: 10.5px;
             letter-spacing: .06em; text-transform: uppercase;
-            padding: 13px 16px; text-align: left; white-space: nowrap; border-bottom: 1px solid #e2e8f0;
+            padding: 13px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid #e2e8f0;
         }
         .vd-table tbody td {
-            padding: 13px 16px; border-bottom: 1px solid #f1f5f9;
+            padding: 13px 12px; border-bottom: 1px solid #f1f5f9;
             vertical-align: middle; color: #334155;
         }
         .vd-table tbody tr:hover { background: #FAF8FF; }
@@ -617,9 +630,9 @@ include 'includes/header.php';
                         <span class="pv-info-val">
                             <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-mobile">
                                 <?php if ($rp['na']): ?>
-                                <span class="recovery-total"><b><?= sanitize($rp['total']) ?></b></span>
+                                <span class="recovery-total na" data-testid="recovery-pill"><b><?= sanitize($rp['total']) ?></b></span>
                                 <?php else: ?>
-                                <span class="recovery-total">Total: <b><?= sanitize($rp['total']) ?></b></span>
+                                <span class="recovery-total" data-testid="recovery-pill"><i class="fa-solid fa-droplet"></i> Total: <b><?= sanitize($rp['total']) ?></b></span>
                                 <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
                                 <?php endif; ?>
                                 <?php if ($is_full_access): ?>
@@ -786,9 +799,9 @@ include 'includes/header.php';
                                 <td>
                                     <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-desktop">
                                         <?php if ($rp['na']): ?>
-                                        <span class="recovery-total"><b><?= sanitize($rp['total']) ?></b></span>
+                                        <span class="recovery-total na" data-testid="recovery-pill"><b><?= sanitize($rp['total']) ?></b></span>
                                         <?php else: ?>
-                                        <span class="recovery-total">Total: <b><?= sanitize($rp['total']) ?></b></span>
+                                        <span class="recovery-total" data-testid="recovery-pill"><i class="fa-solid fa-droplet"></i> Total: <b><?= sanitize($rp['total']) ?></b></span>
                                         <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
                                         <?php endif; ?>
                                         <?php if ($is_full_access): ?>
@@ -796,7 +809,7 @@ include 'includes/header.php';
                                         <?php endif; ?>
                                     </span>
                                 </td>
-                                <td style="white-space:nowrap;color:#64748b;font-size:12.5px;"><?= sanitize($date_disp) ?></td>
+                                <td style="white-space:nowrap;color:#64748b;font-size:12.5px;"><?php if ($date_disp !== '—'): ?><?= sanitize(date('d M Y', strtotime($date_src))) ?><span style="display:block;font-size:11px;color:#94a3b8;"><?= sanitize(date('H:i', strtotime($date_src))) ?></span><?php else: ?>—<?php endif; ?></td>
                                 <td>
                                     <div class="vd-actions">
                                         <a href="completed_detail.php?id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-eye"></i> View</a>
