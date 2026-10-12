@@ -482,9 +482,7 @@ include 'includes/header.php';
         <div class="info-row"><span class="info-label">Surveyor Name</span><span class="info-value"><?= sanitize(getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A')) ?></span></div>
         <div class="info-row"><span class="info-label">Survey Type</span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
         <div class="info-row"><span class="info-label">Survey Completed</span><span class="info-value text-success fw-bold"><?= date('d M Y', strtotime($survey['survey_completed_date'])) ?></span></div>
-        <?php if ($recoveryNA): ?>
-        <div class="info-row"><span class="info-label">Recovery</span><span class="info-value" data-testid="recovery-na">N/A (Not Applicable)</span></div>
-        <?php else: ?>
+        <?php if (!$recoveryNA): // Recovery rows are left out entirely for N/A survey types ?>
         <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
@@ -516,12 +514,6 @@ include 'includes/header.php';
             </div>
             <button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
         </form>
-    </div>
-    <?php endif; ?>
-    <?php if ($is_admin && $recoveryNA): ?>
-    <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm" data-testid="recovery-edit-box">
-        <div class="fw-bold text-dark mb-1" style="font-size: 13px;"><i class="fa-solid fa-droplet text-primary me-1"></i> Recovery</div>
-        <div class="text-muted" style="font-size:12.5px;" data-testid="recovery-na-note">N/A (Not Applicable) — this survey type doesn't track Recovery.</div>
     </div>
     <?php endif; ?>
 
@@ -654,12 +646,14 @@ include 'includes/header.php';
                         </div>
                     </div>
                 </div>
+                <?php if (!$recoveryNA): ?>
                 <div class="vdd-hero-stats">
                     <div class="vdd-hero-stat">
-                        <div class="n"><?= $recoveryNA ? 'N/A' : ($survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 2)) : '—') ?></div>
+                        <div class="n"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 2)) : '—' ?></div>
                         <div class="l">Total MT</div>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
 
             <div class="vdd-grid">
@@ -703,22 +697,12 @@ include 'includes/header.php';
                         </div>
                     </div>
 
+                    <?php if (!$recoveryNA): ?>
                     <div class="vdd-card">
                         <div class="vdd-card-head">
                             <div class="vdd-card-head-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-droplet"></i></div>
                             <div class="vdd-card-head-title">Recovery Summary</div>
                         </div>
-                        <?php if ($recoveryNA): ?>
-                        <div class="vdd-recovery-grid">
-                            <div class="vdd-recovery-tile" style="grid-column:1/-1;">
-                                <div class="vdd-recovery-icon" style="background:#F1F5F9;color:#64748B;"><i class="fa-solid fa-ban"></i></div>
-                                <div>
-                                    <div class="vdd-recovery-value" data-testid="recovery-na-desktop">N/A (Not Applicable)</div>
-                                    <div class="vdd-recovery-label">This survey type doesn't track Recovery</div>
-                                </div>
-                            </div>
-                        </div>
-                        <?php else: ?>
                         <div class="vdd-recovery-grid">
                             <div class="vdd-recovery-tile">
                                 <div class="vdd-recovery-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-droplet"></i></div>
@@ -749,8 +733,8 @@ include 'includes/header.php';
                                 </div>
                             </div>
                         </div>
-                        <?php endif; ?>
                     </div>
+                    <?php endif; ?>
 
                     <div class="vdd-card">
                         <div class="vdd-card-head">
@@ -826,17 +810,6 @@ include 'includes/header.php';
                                 </div>
                                 <button type="submit" name="update_recovery" class="vdd-save-btn" data-testid="save-recovery-button-desktop">Save Recovery</button>
                             </form>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                    <?php if ($is_admin && $recoveryNA): ?>
-                    <div class="vdd-card">
-                        <div class="vdd-card-head">
-                            <div class="vdd-card-head-icon" style="background:#F1F5F9;color:#64748B;"><i class="fa-solid fa-ban"></i></div>
-                            <div class="vdd-card-head-title">Recovery</div>
-                        </div>
-                        <div class="vdd-card-body" data-testid="recovery-na-box-desktop">
-                            <span class="text-muted">N/A (Not Applicable) — this survey type doesn't track Recovery.</span>
                         </div>
                     </div>
                     <?php endif; ?>

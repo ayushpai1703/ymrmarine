@@ -472,6 +472,7 @@ include 'includes/header.php';
     <!-- Recovery — single card; Admin gets an inline edit-pencil that swaps
          the display rows for the same Save form in place, instead of a
          separate "Edit Recovery" box further down the page. -->
+    <?php if (!$recoveryNA): // no Recovery card at all for N/A survey types ?>
     <div class="info-table-list shadow-sm recovery-block<?= $recovery_edit_open ? ' editing' : '' ?>" id="recoveryBlockMobile" data-testid="recovery-block-mobile">
         <div class="recovery-block-head">
             <span><i class="fa-solid fa-droplet text-primary me-1"></i> Recovery</span>
@@ -482,18 +483,12 @@ include 'includes/header.php';
         <?php if ($recovery_message): ?><div class="alert alert-success py-2 mx-2 mt-2 mb-0" style="font-size:12px;" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
         <?php if ($recovery_error): ?><div class="alert alert-danger py-2 mx-2 mt-2 mb-0" style="font-size:12px;" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
 
-        <?php if ($recoveryNA): ?>
-        <div class="recovery-display">
-            <div class="info-row"><span class="info-label">Recovery</span><span class="info-value" data-testid="recovery-na">N/A (Not Applicable)</span></div>
-        </div>
-        <?php else: ?>
         <div class="recovery-display">
             <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
         </div>
-        <?php endif; ?>
 
         <?php if ($is_admin && !$recoveryNA): ?>
         <div class="recovery-edit-form">
@@ -522,6 +517,7 @@ include 'includes/header.php';
         </div>
         <?php endif; ?>
     </div>
+    <?php endif; ?>
     </div><!-- /.detail-top-grid -->
 
 <?php
@@ -710,6 +706,7 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                         </div>
                     </div>
 
+                    <?php if (!$recoveryNA): // no Recovery card at all for N/A survey types ?>
                     <div class="vdd-card recovery-block<?= $recovery_edit_open ? ' editing' : '' ?>" id="recoveryBlockDesktop" data-testid="recovery-block-desktop">
                         <div class="vdd-card-head">
                             <div class="vdd-card-head-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-droplet"></i></div>
@@ -721,13 +718,6 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                         <?php if ($recovery_message): ?><div class="vdd-alert vdd-alert-success mx-3 mt-3" data-testid="recovery-success-desktop"><?= sanitize($recovery_message) ?></div><?php endif; ?>
                         <?php if ($recovery_error): ?><div class="vdd-alert vdd-alert-danger mx-3 mt-3" data-testid="recovery-error-desktop"><?= sanitize($recovery_error) ?></div><?php endif; ?>
 
-                        <?php if ($recoveryNA): ?>
-                        <div class="recovery-display">
-                        <div class="vdd-card-body" data-testid="recovery-na-desktop">
-                            <span class="text-muted">N/A (Not Applicable) — this survey type doesn't track Recovery.</span>
-                        </div>
-                        </div>
-                        <?php else: ?>
                         <div class="recovery-display">
                         <div class="vdd-recovery-grid">
                             <div class="vdd-recovery-tile">
@@ -760,7 +750,6 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                             </div>
                         </div>
                         </div>
-                        <?php endif; ?>
 
                         <?php if ($is_admin && !$recoveryNA): ?>
                         <div class="recovery-edit-form">
@@ -792,6 +781,7 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                         </div>
                         <?php endif; ?>
                     </div>
+                    <?php endif; ?>
 
                     <div class="vdd-card">
                         <div class="vdd-card-head">
