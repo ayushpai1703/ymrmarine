@@ -348,6 +348,7 @@ include 'includes/header.php';
                     $lower = strtolower($raw_name . ' ' . ($file['file_type'] ?? ''));
                     if (str_contains($lower, 'xlsx') || str_contains($lower, 'xls') || str_contains($lower, 'excel')) $icon = 'fa-file-excel text-success';
                     elseif (str_contains($lower, 'doc') || str_contains($lower, 'word')) $icon = 'fa-file-word text-primary';
+                    if (str_ends_with(strtolower($raw_name), '.zip')) $icon = 'fa-file-zipper text-warning';
                 ?>
                 <div class="bg-white p-2 rounded-3 border d-flex align-items-center justify-content-between mb-2 shadow-sm" style="font-size: 12px;" data-doc-row data-doc-id="<?= (int)$file['id'] ?>">
                     <div class="d-flex align-items-center gap-2" style="max-width:62%;">
@@ -389,6 +390,11 @@ include 'includes/header.php';
             <div class="mb-3">
                 <label class="form-label fw-bold text-secondary" style="font-size:12px;">1. Formal Final Report (Word Document / .docx)</label>
                 <input type="file" name="word_report" id="wordReportInput" class="form-control form-control-sm" accept=".docx, .doc">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold text-secondary" style="font-size:12px;" for="zipFolderInput">2. ZIP Folder (optional) — photos / supporting documents, max 30 MB</label>
+                <input type="file" name="zip_folder" id="zipFolderInput" class="form-control form-control-sm zip-folder-input" accept=".zip,application/zip,application/x-zip-compressed" data-testid="zip-folder-input">
             </div>
 
             <div id="additionalFilesContainer"></div>
@@ -526,6 +532,46 @@ document.addEventListener('click', function (ev) {
     }
     window.open(webUrl, '_blank', 'noopener');
 });
+</script>
+
+<script>
+// ZIP folder + upload size guard. Cloud Run refuses any request over 32 MB
+// before it reaches PHP (the user would just see a generic error page), so
+// oversized selections are stopped here with a clear message instead.
+(function () {
+    var ZIP_MAX = 30 * 1024 * 1024, TOTAL_MAX = 31 * 1024 * 1024;
+    function warn(title, text) {
+        if (window.Swal) Swal.fire({ icon: 'warning', title: title, text: text, confirmButtonColor: '#1e3a8a' });
+        else alert(title + '\n\n' + text);
+    }
+    function mb(b) { return (b / 1048576).toFixed(1) + ' MB'; }
+    document.addEventListener('change', function (e) {
+        var input = e.target;
+        if (!input.classList || !input.classList.contains('zip-folder-input') || !input.files || !input.files[0]) return;
+        var f = input.files[0];
+        if (!/\.zip$/i.test(f.name)) {
+            warn('Only .zip files', 'Please choose a .zip file for the ZIP Folder.');
+            input.value = '';
+        } else if (f.size > ZIP_MAX) {
+            warn('ZIP folder too large', f.name + ' is ' + mb(f.size) + '. The maximum is 30 MB — please split it into smaller ZIP files or reduce photo sizes.');
+            input.value = '';
+        }
+        if (!input.value) input.dispatchEvent(new Event('ysms:cleared', { bubbles: true }));
+    });
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form.matches || !form.matches('#reportUploadForm, .report-upload-form')) return;
+        var total = 0;
+        form.querySelectorAll('input[type=file]').forEach(function (i) {
+            for (var k = 0; i.files && k < i.files.length; k++) total += i.files[k].size;
+        });
+        if (total > TOTAL_MAX) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            warn('Files too large to upload together', 'The selected files add up to ' + mb(total) + ' (limit 31 MB per upload). Please upload them in smaller batches.');
+        }
+    }, true);
+})();
 </script>
 
 <?php

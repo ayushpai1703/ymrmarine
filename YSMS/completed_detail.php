@@ -388,6 +388,8 @@ include 'includes/header.php';
                         $icon = 'fa-file-excel text-success';
                     } elseif (str_contains($file['file_type'], 'Word')) {
                         $icon = 'fa-file-word text-primary';
+                    } elseif (str_contains($file['file_type'], 'ZIP') || str_ends_with(strtolower((string)$file['file_name']), '.zip')) {
+                        $icon = 'fa-file-zipper text-warning';
                     }
                 ?>
                 <div class="bg-white p-3 rounded-3 border d-flex align-items-center justify-content-between mb-2 shadow-sm" data-doc-row data-doc-id="<?= (int)$file['id'] ?>">
