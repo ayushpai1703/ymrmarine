@@ -371,8 +371,37 @@ include 'includes/header.php';
     </div>
     </div><!-- /.detail-top-grid -->
 
+<?php
+// "Add Files" box under the Dossier Archive — same people who may replace
+// documents here (Admin / assigned Surveyor). Posts to the shared upload
+// handler, which keeps a Completed vessel Completed and returns here.
+$renderCompletedAddFiles = function (string $variant) use ($survey) {
+    $id = (int)$survey['id'];
+    ob_start(); ?>
+    <form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data" class="completed-add-files-form caf-<?= $variant ?>" data-testid="completed-add-files-form-<?= $variant ?>">
+        <?= csrf_field() ?>
+        <input type="hidden" name="survey_id" value="<?= $id ?>">
+        <input type="hidden" name="current_status" value="Completed">
+        <div class="caf-title"><i class="fa-solid fa-folder-plus"></i> Add Files</div>
+        <label class="caf-label" for="cafFiles-<?= $variant ?>">Documents / photos <span>(PDF, Word, Excel, JPG, PNG — you can pick several)</span></label>
+        <input type="file" name="extra_files[]" id="cafFiles-<?= $variant ?>" class="form-control form-control-sm caf-files" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.jpg,.jpeg,.png,.zip">
+        <label class="caf-label mt-2" for="cafZip-<?= $variant ?>">ZIP Folder <span>(optional, max 30 MB)</span></label>
+        <input type="file" name="zip_folder" id="cafZip-<?= $variant ?>" class="form-control form-control-sm zip-folder-input" accept=".zip,application/zip,application/x-zip-compressed">
+        <button type="submit" class="caf-submit" data-testid="completed-add-files-submit-<?= $variant ?>"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Files</button>
+    </form>
+    <?php return ob_get_clean();
+};
+?>
+<style>
+    .completed-add-files-form { margin-top: 12px; background: #F8FAFF; border: 1px dashed #C7D2FE; border-radius: 14px; padding: 14px; }
+    .caf-title { font-weight: 700; font-size: 14px; color: #1e3a8a; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .caf-label { display: block; font-size: 12px; font-weight: 600; color: #334155; margin-bottom: 4px; }
+    .caf-label span { font-weight: 500; color: #64748b; }
+    .caf-submit { margin-top: 12px; width: 100%; border: 0; border-radius: 10px; padding: 10px 14px; background: #1e3a8a; color: #fff; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .caf-submit:hover { background: #0b1e46; }
+</style>
     <!-- Files -->
-    <div class="px-3 mt-3 detail-files-wrap">
+    <div class="px-3 mt-3 detail-files-wrap" id="dossier-files">
         <div class="fw-bold text-dark mb-2" style="font-size: 14px;">
             <i class="fa-solid fa-cloud-arrow-down text-primary me-1"></i> Dossier Archive (All Uploaded Files)
         </div>
@@ -428,6 +457,7 @@ include 'includes/header.php';
             </div>
         <?php endif; ?>
         </div><!-- /.detail-files-grid -->
+        <?php if ($can_replace_docs) echo $renderCompletedAddFiles('mobile'); ?>
     </div>
 
        <!-- Generate Invoice: Admin only. Generate Expenses: Surveyor only (Coming Soon for now).
@@ -608,6 +638,46 @@ include 'includes/header.php';
         var block = document.getElementById(btn.getAttribute('data-recovery-edit-toggle'));
         if (block) block.classList.toggle('editing');
     });
+})();
+</script>
+
+<script>
+// Add Files box: needs at least one file, and stays under Cloud Run's 32 MB
+// request limit (anything bigger is refused before it reaches the app).
+(function () {
+    var ZIP_MAX = 30 * 1024 * 1024, TOTAL_MAX = 31 * 1024 * 1024;
+    function warn(title, text) {
+        if (window.Swal) Swal.fire({ icon: 'warning', title: title, text: text, confirmButtonColor: '#1e3a8a' });
+        else alert(title + '\n\n' + text);
+    }
+    function mb(b) { return (b / 1048576).toFixed(1) + ' MB'; }
+    document.addEventListener('change', function (e) {
+        var input = e.target;
+        if (!input.classList || !input.classList.contains('zip-folder-input') || !input.files || !input.files[0]) return;
+        var f = input.files[0];
+        if (!/\.zip$/i.test(f.name)) {
+            warn('Only .zip files', 'Please choose a .zip file for the ZIP Folder.');
+            input.value = '';
+        } else if (f.size > ZIP_MAX) {
+            warn('ZIP folder too large', f.name + ' is ' + mb(f.size) + '. The maximum is 30 MB — please split it into smaller ZIP files or reduce photo sizes.');
+            input.value = '';
+        }
+    });
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form.classList || !form.classList.contains('completed-add-files-form')) return;
+        var total = 0, count = 0;
+        form.querySelectorAll('input[type=file]').forEach(function (i) {
+            for (var k = 0; i.files && k < i.files.length; k++) { total += i.files[k].size; count++; }
+        });
+        if (count === 0) {
+            e.preventDefault(); e.stopImmediatePropagation();
+            warn('No files selected', 'Choose at least one file or a ZIP folder to upload.');
+        } else if (total > TOTAL_MAX) {
+            e.preventDefault(); e.stopImmediatePropagation();
+            warn('Files too large to upload together', 'The selected files add up to ' + mb(total) + ' (limit 31 MB per upload). Please upload them in smaller batches.');
+        }
+    }, true);
 })();
 </script>
 

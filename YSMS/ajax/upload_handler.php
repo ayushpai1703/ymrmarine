@@ -21,6 +21,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $db = getDB();
 
+    // The survey's real status and access come from the database — never from
+    // the posted form, which a user could edit. Surveyors may only upload to
+    // vessels assigned to them.
+    $svStmt = $db->prepare('SELECT status FROM surveys WHERE id = ? LIMIT 1');
+    $svStmt->execute([$survey_id]);
+    $svStatus = $svStmt->fetchColumn();
+    if ($svStatus === false) {
+        $_SESSION['flash_msg'] = 'That vessel could not be found.';
+        $_SESSION['flash_type'] = 'error';
+        header('Location: ../index.php');
+        exit;
+    }
+    if (($_SESSION['role'] ?? '') === 'Surveyor' && !isSurveyorAssignedToSurvey($db, $survey_id, (int)$_SESSION['user_id'])) {
+        $_SESSION['flash_msg'] = 'You can only upload files to vessels assigned to you.';
+        $_SESSION['flash_type'] = 'error';
+        header('Location: ../index.php');
+        exit;
+    }
+    $current_status = (string)$svStatus;
+
 // Ensure date columns hold time (DATETIME)
 try {
     $db->exec("ALTER TABLE surveys MODIFY COLUMN assign_date DATETIME NULL");
@@ -141,9 +161,14 @@ require_once __DIR__ . '/../includes/notifications.php';
     }
 
     $extra_saved = 0;
+    $extra_rejected = [];
     // 4. ఎక్స్‌ట్రా ఫైల్స్
     if (isset($_FILES['extra_files'])) {
         foreach ($_FILES['extra_files']['name'] as $key => $name) {
+            if ($_FILES['extra_files']['error'][$key] == 0 && !$isAllowedExt($name, ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'xlsm', 'jpg', 'jpeg', 'png', 'zip'])) {
+                $extra_rejected[] = basename($name);
+                continue;
+            }
             if ($_FILES['extra_files']['error'][$key] == 0 && $isAllowedExt($name, ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'xlsm', 'jpg', 'jpeg', 'png', 'zip'])) {
                 $extra_orig = basename($name);
                 $extra_name = time() . "_" . preg_replace('/[^A-Za-z0-9._-]/', '_', $extra_orig);
@@ -369,15 +394,19 @@ require_once __DIR__ . '/../includes/notifications.php';
     }
 
     // Only extra files / a ZIP folder were sent (no status change): say what happened instead of dropping to the dashboard.
-    if ($extra_saved > 0 || $zip_error !== '') {
-        $_SESSION['flash_msg'] = $extra_saved > 0 ? 'File(s) uploaded successfully.' : $zip_error;
-        if ($extra_saved > 0 && $zip_error !== '') {
-            $_SESSION['flash_msg'] .= ' · ' . $zip_error;
+    if ($extra_saved > 0 || $zip_error !== '' || $extra_rejected) {
+        $problems = [];
+        if ($extra_rejected) $problems[] = 'Not allowed (use PDF, Word, Excel, JPG, PNG or ZIP): ' . implode(', ', $extra_rejected) . '.';
+        if ($zip_error !== '') $problems[] = $zip_error;
+        if ($extra_saved > 0) {
+            $_SESSION['flash_msg'] = $extra_saved . ' file' . ($extra_saved === 1 ? '' : 's') . ' uploaded successfully.' . ($problems ? ' · ' . implode(' · ', $problems) : '');
+            if ($problems) $_SESSION['flash_type'] = 'warning';
+        } else {
+            $_SESSION['flash_msg'] = implode(' · ', $problems);
+            $_SESSION['flash_type'] = 'error';
         }
-        if ($zip_error !== '') {
-            $_SESSION['flash_type'] = $extra_saved > 0 ? 'warning' : 'error';
-        }
-        header('Location: ../' . ($current_status === 'Pending Report' ? 'report_detail.php' : 'vessel_detail.php') . '?id=' . $survey_id);
+        $back = ['Pending Report' => 'report_detail.php', 'Completed' => 'completed_detail.php'][$current_status] ?? 'vessel_detail.php';
+        header('Location: ../' . $back . '?id=' . $survey_id . ($current_status === 'Completed' ? '#dossier-files' : ''));
         exit;
     }
 }
