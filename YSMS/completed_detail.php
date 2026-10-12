@@ -113,6 +113,11 @@ if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_r
 // (so the user sees their input + the error right where they were editing);
 // a successful save goes back to the plain display view.
 $recovery_edit_open = ($recovery_error !== '');
+// No recovery recorded at all on a completed vessel -> show only NOT APPLICABLE
+// (Admin can still open the edit pencil and enter values; computed after the
+// save above so a fresh save shows its values straight away).
+$recoveryEmpty = !$recoveryNA && $survey['recovery_amount'] === null && $survey['vlsfo_recovery'] === null
+    && $survey['lsmgo_recovery'] === null && ($survey['hsfo_recovery'] ?? null) === null;
 
 // 🌟 Add Remarks (+ optional attachments) — Admin or the assigned surveyor(s)
 // only (Client stays read-only, same boundary the rest of this page already
@@ -314,6 +319,9 @@ include 'includes/header.php';
         <div class="info-row"><span class="info-label">Survey Operation Type</span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
         <div class="info-row"><span class="info-label">Port of Operation</span><span class="info-value"><?= sanitize($survey['port_name']) ?></span></div>
         <div class="info-row"><span class="info-label">Agent Handle</span><span class="info-value"><?= sanitize($survey['agent_name']) ?></span></div>
+        <?php if ($recoveryNA): ?>
+        <div class="info-row" data-testid="recovery-na-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
+        <?php endif; ?>
     </div>
 
     <!-- Recovery — single card; Admin gets an inline edit-pencil that swaps
@@ -331,10 +339,14 @@ include 'includes/header.php';
         <?php if ($recovery_error): ?><div class="alert alert-danger py-2 mx-2 mt-2 mb-0" style="font-size:12px;" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
 
         <div class="recovery-display">
+            <?php if ($recoveryEmpty): ?>
+            <div class="info-row" data-testid="recovery-empty-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
+            <?php else: ?>
             <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
+            <?php endif; ?>
         </div>
 
         <?php if ($is_admin && !$recoveryNA): ?>

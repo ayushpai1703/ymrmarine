@@ -155,17 +155,21 @@ function vd_qs(array $extra = []): string {
     return http_build_query($merged);
 }
 
-// 🌟 Recovery: Total/VLSFO/HSFO/LSMGO, formatted "12.500 MT" or "—" when unset,
-// or "N/A (Not Applicable)" for survey types that don't track Recovery.
+// 🌟 Recovery: Total/VLSFO/HSFO/LSMGO, formatted "12.500 MT" or "—" when unset.
+// 'na' => true (shown as NOT APPLICABLE only) for survey types that don't track
+// Recovery, and for completed vessels with no recovery recorded at all.
 function recoveryDisplayParts(array $survey): array {
     global $db;
-    if (isRecoveryNotApplicable($db, (string)($survey['survey_type_ids'] ?? ''), (string)($survey['type_name'] ?? ''))) {
-        return ['total' => 'N/A (Not Applicable)', 'vlsfo' => 'N/A', 'hsfo' => 'N/A', 'lsmgo' => 'N/A'];
+    if (isRecoveryNotApplicable($db, (string)($survey['survey_type_ids'] ?? ''), (string)($survey['type_name'] ?? ''))
+        || (($survey['recovery_amount'] ?? null) === null && ($survey['vlsfo_recovery'] ?? null) === null
+            && ($survey['hsfo_recovery'] ?? null) === null && ($survey['lsmgo_recovery'] ?? null) === null)) {
+        return ['na' => true, 'total' => RECOVERY_NA_LABEL, 'vlsfo' => '', 'hsfo' => '', 'lsmgo' => ''];
     }
     $fmt = function ($v) {
         return $v !== null ? number_format((float)$v, 3) . ' MT' : '—';
     };
     return [
+        'na' => false,
         'total' => $fmt($survey['recovery_amount'] ?? null),
         'vlsfo' => $fmt($survey['vlsfo_recovery'] ?? null),
         'hsfo' => $fmt($survey['hsfo_recovery'] ?? null),
@@ -281,9 +285,19 @@ include 'includes/header.php';
    .tooltip-open class toggled by JS (mobile/touch, no real :hover there). */
 .recovery-cell { position: relative; display: inline-block; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .recovery-cell.no-tooltip { cursor: default; }
-.recovery-total { display: block; font-size: 12.5px; font-weight: 700; color: #0f172a; }
+.recovery-total {
+    /* Total recovery as a pill (same shape as the survey-type pill), bigger
+       font; the VLSFO/HSFO/LSMGO line below keeps its small size. */
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    font-size: 13px; font-weight: 700; line-height: 1.2; color: #fff;
+    padding: 6px 12px; border-radius: 999px;
+    background: linear-gradient(120deg, #4B2FD6 0%, #7C3AED 55%, #DB2777 100%);
+    box-shadow: 0 4px 12px rgba(91,45,238,.28);
+}
+.recovery-total i { font-size: 11px; opacity: .9; }
 .recovery-total b { font-weight: 800; }
-.recovery-parts { display: block; font-size: 10.5px; color: #64748b; font-weight: 500; margin-top: 2px; }
+.recovery-total.na { background: #F1F5F9; color: #475569; box-shadow: 0 0 0 1px #e2e8f0; font-size: 12px; letter-spacing: .03em; }
+.recovery-parts { display: block; font-size: 10.5px; color: #64748b; font-weight: 500; margin-top: 5px; }
 .recovery-cell .recovery-tooltip {
     position: absolute; left: 0; top: calc(100% + 6px); z-index: 60;
     background: #0f172a; color: #fff; font-size: 11px; font-weight: 600;
@@ -325,6 +339,11 @@ include 'includes/header.php';
         <a href="export_completed.php" data-mobile-export data-export-base="export_completed.php" class="btn btn-success w-100" style="background-color:#28a745;border:none;font-weight:600;padding:8px;">
             <i class="fa-solid fa-file-excel me-2"></i> Export to Excel
         </a>
+        <?php if ($is_full_access): ?>
+        <a href="completed_import.php" class="btn w-100 mt-2" style="background:#fff;color:#4B2FD6;border:1.5px solid #C4B5FD;font-weight:600;padding:8px;" data-testid="completed-import-mobile">
+            <i class="fa-solid fa-file-import me-2"></i> Import Excel
+        </a>
+        <?php endif; ?>
     </div>
     <div class="vessel-list-container" data-list-container>
         <?php if (count($surveys) > 0): foreach ($surveys as $survey):
@@ -357,8 +376,12 @@ include 'includes/header.php';
                     <?php $rp = recoveryDisplayParts($survey); ?>
                     <p style="margin:4px 0 0;font-size:11px;">
                         <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-mobile">
-                            <span class="recovery-total">Recovery: <b><?= sanitize($rp['total']) ?></b></span>
+                            <?php if ($rp['na']): ?>
+                            <span class="recovery-total na" data-testid="recovery-pill"><b><?= sanitize($rp['total']) ?></b></span>
+                            <?php else: ?>
+                            <span class="recovery-total" data-testid="recovery-pill"><i class="fa-solid fa-droplet"></i> Total: <b><?= sanitize($rp['total']) ?></b></span>
                             <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
+                            <?php endif; ?>
                             <?php if ($is_full_access): ?>
                             <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
                             <?php endif; ?>
@@ -430,6 +453,9 @@ include 'includes/header.php';
             </div>
             <div class="vd-export-row">
                 <a href="export_completed.php" class="btn-export" id="vdExportLink" data-desk-export><i class="fa-solid fa-file-excel"></i> Export Excel</a>
+                <?php if ($is_full_access): ?>
+                <a href="completed_import.php" class="btn-export" style="background:#fff;color:#4B2FD6;border:1.5px solid #C4B5FD;margin-left:8px;" title="Bulk import completed vessels from Excel" data-testid="completed-import-desktop"><i class="fa-solid fa-file-import"></i> Import Excel</a>
+                <?php endif; ?>
             </div>
             <div class="vd-meta" data-desk-meta></div>
             <div class="vd-table-card">
@@ -486,8 +512,12 @@ include 'includes/header.php';
                                 <?php $rp = recoveryDisplayParts($survey); ?>
                                 <td>
                                     <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-desktop">
-                                        <span class="recovery-total">Total: <b><?= sanitize($rp['total']) ?></b></span>
+                                        <?php if ($rp['na']): ?>
+                                        <span class="recovery-total na" data-testid="recovery-pill"><b><?= sanitize($rp['total']) ?></b></span>
+                                        <?php else: ?>
+                                        <span class="recovery-total" data-testid="recovery-pill"><i class="fa-solid fa-droplet"></i> Total: <b><?= sanitize($rp['total']) ?></b></span>
                                         <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
+                                        <?php endif; ?>
                                         <?php if ($is_full_access): ?>
                                         <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
                                         <?php endif; ?>
