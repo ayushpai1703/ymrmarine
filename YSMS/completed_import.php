@@ -246,7 +246,7 @@ include 'includes/top_app_bar.php';
                         <td><?= sanitize($r['survey_type_names'] ? implode(' + ', $r['survey_type_names']) : $r['survey_type_raw']) ?></td>
                         <td><?= sanitize($r['surveyor_names'] ? implode(' + ', $r['surveyor_names']) : $r['surveyor_raw']) ?></td>
                         <td class="nw"><?php
-                            if ($r['recovery_na']) echo 'N/A';
+                            if ($r['recovery_na']) echo sanitize(RECOVERY_NA_LABEL);
                             else {
                                 echo sanitize($fmtQty($r['recovery_amount']));
                                 $parts = [];

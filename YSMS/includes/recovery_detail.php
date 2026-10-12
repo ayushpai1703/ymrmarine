@@ -69,10 +69,11 @@ function openRecoveryModal(period) {
                 tr.innerHTML =
                     '<td>' + escapeHtml(row.vessel_name) + '</td>' +
                     '<td>' + escapeHtml(row.survey_type) + '</td>' +
+                    (row.recovery_na ? '<td colspan="4" class="text-end fw-bold">' + escapeHtml(row.total_recovery) + '</td>' :
                     '<td class="text-end">' + escapeHtml(row.vlsfo_recovery) + '</td>' +
                     '<td class="text-end">' + escapeHtml(row.lsmgo_recovery) + '</td>' +
                     '<td class="text-end">' + escapeHtml(row.hsfo_recovery) + '</td>' +
-                    '<td class="text-end fw-bold">' + escapeHtml(row.total_recovery) + '</td>';
+                    '<td class="text-end fw-bold">' + escapeHtml(row.total_recovery) + '</td>');
                 tbody.appendChild(tr);
             });
             tableWrap.style.display = 'block';

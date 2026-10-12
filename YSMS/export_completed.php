@@ -119,8 +119,9 @@ try {
                 getCombinedSurveyTypeNames($db, $row['survey_type_ids'] ?? '', $row['type_name'] ?? 'N/A'),
                 getCombinedSurveyorNames($db, $row['id'] ?? 0, $row['surveyor_name'] ?? 'N/A'),
                 isRecoveryNotApplicable($db, (string)($row['survey_type_ids'] ?? ''), (string)($row['type_name'] ?? ''))
-                    ? 'N/A (Not Applicable)'
-                    : (!empty($row['recovery_amount']) ? (float)$row['recovery_amount'] : 0),
+                  || $row['recovery_amount'] === null // nothing recorded for this completed vessel
+                    ? RECOVERY_NA_LABEL
+                    : (float)$row['recovery_amount'],
                 !empty($row['report_uploaded_date']) ? date('d-m-Y', strtotime($row['report_uploaded_date'])) : '',
             ],
         ];

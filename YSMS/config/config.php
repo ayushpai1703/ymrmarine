@@ -224,7 +224,7 @@ function getCombinedSurveyTypeNames($db, $ids_csv, $fallback_name = '') {
 }
 
 // 🌟 Survey types for which Recovery does not apply at all (no fuel/cargo
-// quantity to recover) — Recovery shows/stores as "N/A (Not Applicable)"
+// quantity to recover) — Recovery shows as RECOVERY_NA_LABEL ("NOT APPLICABLE")
 // instead of a number whenever EVERY type selected on a survey (single or
 // combination) is in this list. If even one selected type is outside this
 // list, Recovery behaves exactly as before (a normal numeric value).
@@ -261,6 +261,10 @@ function getSurveyTypeNamesArray($db, $ids_csv, $fallback_name = '') {
     }
     return !empty($names) ? $names : ($fallback_name !== '' ? [$fallback_name] : []);
 }
+
+// The one label shown wherever Recovery would appear for those survey types
+// (lists, detail pages, exports, emails).
+const RECOVERY_NA_LABEL = 'NOT APPLICABLE';
 
 // True only when every selected survey type (single or combination) is in
 // RECOVERY_NOT_APPLICABLE_TYPES. An unresolved/empty type list is treated

@@ -93,6 +93,13 @@ try {
         if (function_exists('getCombinedSurveyTypeNames')) {
             $typeLabel = getCombinedSurveyTypeNames($db, $row['survey_type_ids'] ?? '', $row['type_name'] ?? 'N/A');
         }
+        if (isRecoveryNotApplicable($db, (string)($row['survey_type_ids'] ?? ''), (string)($row['type_name'] ?? ''))) {
+            $rows[] = [
+                'country' => $row['country'] ?? 'India',
+                'cells' => [$row['vessel_name'] ?? '', $typeLabel, '', '', '', RECOVERY_NA_LABEL],
+            ];
+            continue;
+        }
         $rows[] = [
             'country' => $row['country'] ?? 'India',
             'cells' => [

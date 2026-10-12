@@ -14,15 +14,21 @@ try {
     }
 } catch (Exception $e) { error_log('completed.php hsfo_recovery column: ' . $e->getMessage()); }
 
-/** Total/VLSFO/HSFO/LSMGO recovery, formatted "12.500 MT" (or "—" when not recorded yet,
- *  or "N/A (Not Applicable)" for survey types that don't track Recovery). */
+/** Total/VLSFO/HSFO/LSMGO recovery, formatted "12.500 MT" (or "—" when not recorded yet).
+ *  'na' => true for survey types that don't track Recovery — shown as NOT APPLICABLE only. */
 function recoveryDisplayParts(array $survey): array {
     global $db;
     if (isRecoveryNotApplicable($db, (string)($survey['survey_type_ids'] ?? ''), (string)($survey['type_name'] ?? ''))) {
-        return ['total' => 'N/A (Not Applicable)', 'vlsfo' => 'N/A', 'hsfo' => 'N/A', 'lsmgo' => 'N/A'];
+        return ['na' => true, 'total' => RECOVERY_NA_LABEL, 'vlsfo' => '', 'hsfo' => '', 'lsmgo' => ''];
+    }
+    // Completed with no recovery recorded at all -> also just NOT APPLICABLE
+    if (($survey['recovery_amount'] ?? null) === null && ($survey['vlsfo_recovery'] ?? null) === null
+        && ($survey['hsfo_recovery'] ?? null) === null && ($survey['lsmgo_recovery'] ?? null) === null) {
+        return ['na' => true, 'total' => RECOVERY_NA_LABEL, 'vlsfo' => '', 'hsfo' => '', 'lsmgo' => ''];
     }
     $fmt = function ($v) { return $v !== null ? number_format((float)$v, 3) . ' MT' : '—'; };
     return [
+        'na'    => false,
         'total' => $fmt($survey['recovery_amount'] ?? null),
         'vlsfo' => $fmt($survey['vlsfo_recovery'] ?? null),
         'hsfo'  => $fmt($survey['hsfo_recovery'] ?? null),
@@ -610,8 +616,12 @@ include 'includes/header.php';
                         <i class="fa-solid fa-droplet"></i><span class="pv-info-label">Recovery</span><span>:</span>
                         <span class="pv-info-val">
                             <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-mobile">
+                                <?php if ($rp['na']): ?>
+                                <span class="recovery-total"><b><?= sanitize($rp['total']) ?></b></span>
+                                <?php else: ?>
                                 <span class="recovery-total">Total: <b><?= sanitize($rp['total']) ?></b></span>
                                 <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
+                                <?php endif; ?>
                                 <?php if ($is_full_access): ?>
                                 <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
                                 <?php endif; ?>
@@ -775,8 +785,12 @@ include 'includes/header.php';
                                 <?php $rp = recoveryDisplayParts($survey); ?>
                                 <td>
                                     <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-desktop">
+                                        <?php if ($rp['na']): ?>
+                                        <span class="recovery-total"><b><?= sanitize($rp['total']) ?></b></span>
+                                        <?php else: ?>
                                         <span class="recovery-total">Total: <b><?= sanitize($rp['total']) ?></b></span>
                                         <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
+                                        <?php endif; ?>
                                         <?php if ($is_full_access): ?>
                                         <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
                                         <?php endif; ?>

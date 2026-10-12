@@ -487,6 +487,8 @@ include 'includes/header.php';
         <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
+        <?php else: ?>
+        <div class="info-row" data-testid="recovery-na-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
         <?php endif; ?>
     </div>
 
@@ -694,6 +696,13 @@ include 'includes/header.php';
                                 <div class="vdd-info-label">Survey Completed</div>
                                 <div class="vdd-info-value" style="color:#047857;"><?= sanitize(date('d M Y', strtotime($survey['survey_completed_date']))) ?></div>
                             </div>
+                            <?php if ($recoveryNA): ?>
+                            <div class="vdd-info-row" data-testid="recovery-na-desktop">
+                                <div class="vdd-info-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-droplet"></i></div>
+                                <div class="vdd-info-label">Recovery</div>
+                                <div class="vdd-info-value"><?= sanitize(RECOVERY_NA_LABEL) ?></div>
+                            </div>
+                            <?php endif; ?>
                         </div>
                     </div>
 

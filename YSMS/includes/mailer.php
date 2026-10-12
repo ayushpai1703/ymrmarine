@@ -636,11 +636,23 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
         $fmtRec = static function ($v) {
             return ($v !== null && $v !== '') ? number_format((float)$v, 3) : '0.000';
         };
-        $vlsfoCell = $recoveryNA ? 'N/A' : $fmtRec($info['vlsfo_recovery'] ?? null);
-        $hsfoCell  = $recoveryNA ? 'N/A' : $fmtRec($info['hsfo_recovery'] ?? null);
-        $lsmgoCell = $recoveryNA ? 'N/A' : $fmtRec($info['lsmgo_recovery'] ?? null);
-        $totalCell = $recoveryNA ? 'N/A (Not Applicable)' : $fmtRec($info['recovery_amount'] ?? null);
+        $vlsfoCell = $fmtRec($info['vlsfo_recovery'] ?? null);
+        $hsfoCell  = $fmtRec($info['hsfo_recovery'] ?? null);
+        $lsmgoCell = $fmtRec($info['lsmgo_recovery'] ?? null);
+        $totalCell = $fmtRec($info['recovery_amount'] ?? null);
+        $naLabel   = defined('RECOVERY_NA_LABEL') ? RECOVERY_NA_LABEL : 'NOT APPLICABLE';
 
+        if ($recoveryNA) {
+            $html .= '
+            <table style="border-collapse:collapse;width:100%;max-width:420px;margin:18px 0;font-size:14px;">
+                <tr>
+                    <th style="border:1px solid #cbd5e1;padding:8px 12px;background:#f1f5f9;text-align:left;">RECOVERY</th>
+                    <td style="border:1px solid #cbd5e1;padding:8px 12px;font-weight:700;">' . $safe($naLabel) . '</td>
+                </tr>
+            </table>';
+            $altLines[] = '';
+            $altLines[] = 'RECOVERY: ' . $naLabel;
+        } else {
         $html .= '
             <table style="border-collapse:collapse;width:100%;max-width:420px;margin:18px 0;font-size:14px;">
                 <tr>
@@ -664,6 +676,7 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
         $altLines[] = 'HSFO: ' . $hsfoCell;
         $altLines[] = 'LSMGO: ' . $lsmgoCell;
         $altLines[] = 'TOTAL: ' . $totalCell;
+        }
     }
 
     $html .= '
