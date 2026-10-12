@@ -60,6 +60,7 @@ try {
 
     require_once __DIR__ . '/../includes/mailer.php';
     require_once __DIR__ . '/../includes/recovery_excel.php';
+    require_once __DIR__ . '/../../includes/upload_validation.php';
 require_once __DIR__ . '/../includes/notifications.php';
     $files_uploaded = 0;
     $uploaded_labels = [];
@@ -139,6 +140,7 @@ require_once __DIR__ . '/../includes/notifications.php';
         }
     }
 
+    $extra_saved = 0;
     // 4. ఎక్స్‌ట్రా ఫైల్స్
     if (isset($_FILES['extra_files'])) {
         foreach ($_FILES['extra_files']['name'] as $key => $name) {
@@ -149,9 +151,50 @@ require_once __DIR__ . '/../includes/notifications.php';
                     $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Field Report', ?, '512 KB')");
                     $stmt->execute([$survey_id, $extra_orig, "uploads/" . $extra_name]);
                     $uploaded_labels[] = 'Extra: ' . $extra_orig;
+                    $extra_saved++;
                     $uploaded_attachments[] = ['path' => $target_dir . $extra_name, 'name' => $extra_orig];
                 }
             }
+        }
+    }
+
+    // 5. Optional ZIP folder (photos / supporting documents). Capped at 30 MB:
+    // Cloud Run rejects request bodies over 32 MB before PHP ever sees them.
+    $zip_error = '';
+    if (isset($_FILES['zip_folder']) && (int)($_FILES['zip_folder']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $zip_orig = basename((string)$_FILES['zip_folder']['name']);
+        $zip_upload_err = (int)$_FILES['zip_folder']['error'];
+        if ($zip_upload_err === UPLOAD_ERR_INI_SIZE || $zip_upload_err === UPLOAD_ERR_FORM_SIZE) {
+            $zip_error = 'it is larger than 30 MB';
+        } elseif (!$isAllowedExt($zip_orig, ['zip'])) {
+            $zip_error = 'only .zip files are allowed';
+        } else {
+            $zip_error = upload_validate($_FILES['zip_folder'], UPLOAD_MIMES_ZIP, 30 * 1024 * 1024);
+            if ($zip_error === '' && class_exists('ZipArchive')) {
+                $zip_check = new ZipArchive();
+                if ($zip_check->open($_FILES['zip_folder']['tmp_name'], ZipArchive::RDONLY) !== true) {
+                    $zip_error = 'it is not a valid ZIP file';
+                } else {
+                    $zip_check->close();
+                }
+            }
+        }
+        if ($zip_error === '') {
+            $zip_name = time() . "_" . preg_replace('/[^A-Za-z0-9._-]/', '_', $zip_orig);
+            $zip_bytes = (int)$_FILES['zip_folder']['size'];
+            if (move_uploaded_file($_FILES['zip_folder']['tmp_name'], $target_dir . $zip_name)) {
+                $zip_size_label = $zip_bytes >= 1048576 ? round($zip_bytes / 1048576, 1) . ' MB' : max(1, (int)round($zip_bytes / 1024)) . ' KB';
+                $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Field Report', ?, ?)");
+                $stmt->execute([$survey_id, $zip_orig, "uploads/" . $zip_name, $zip_size_label]);
+                $uploaded_labels[] = 'ZIP: ' . $zip_orig;
+                $uploaded_attachments[] = ['path' => $target_dir . $zip_name, 'name' => $zip_orig];
+                $extra_saved++;
+            } else {
+                $zip_error = 'it could not be stored, please try again';
+            }
+        }
+        if ($zip_error !== '') {
+            $zip_error = 'ZIP folder "' . $zip_orig . '" was not saved: ' . rtrim($zip_error, '.') . '.';
         }
     }
 
@@ -258,6 +301,10 @@ require_once __DIR__ . '/../includes/notifications.php';
         $update = $db->prepare("UPDATE surveys SET status = 'Completed', report_uploaded_date = NOW(), notes = 'All surveys and reports are verified and uploaded successfully.', status_updated_by = ? WHERE id = ?");
         $update->execute([$_SESSION['user_id'], $survey_id]);
         $_SESSION['flash_msg'] = "Pending report is completed";
+        if ($zip_error !== '') {
+            $_SESSION['flash_msg'] .= ' · ' . $zip_error;
+            $_SESSION['flash_type'] = 'warning';
+        }
         try {
             $ctx = loadSurveyNotifyContext($db, $survey_id);
             $ctx['new_status'] = 'Completed';
@@ -313,7 +360,24 @@ require_once __DIR__ . '/../includes/notifications.php';
         } else {
             $_SESSION['flash_msg'] = 'File(s) uploaded successfully.';
         }
+        if ($zip_error !== '') {
+            $_SESSION['flash_msg'] .= ' · ' . $zip_error;
+            $_SESSION['flash_type'] = 'warning';
+        }
         header('Location: ../vessel_detail.php?id=' . $survey_id);
+        exit;
+    }
+
+    // Only extra files / a ZIP folder were sent (no status change): say what happened instead of dropping to the dashboard.
+    if ($extra_saved > 0 || $zip_error !== '') {
+        $_SESSION['flash_msg'] = $extra_saved > 0 ? 'File(s) uploaded successfully.' : $zip_error;
+        if ($extra_saved > 0 && $zip_error !== '') {
+            $_SESSION['flash_msg'] .= ' · ' . $zip_error;
+        }
+        if ($zip_error !== '') {
+            $_SESSION['flash_type'] = $extra_saved > 0 ? 'warning' : 'error';
+        }
+        header('Location: ../' . ($current_status === 'Pending Report' ? 'report_detail.php' : 'vessel_detail.php') . '?id=' . $survey_id);
         exit;
     }
 }

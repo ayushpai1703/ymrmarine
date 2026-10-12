@@ -539,6 +539,7 @@ include 'includes/header.php';
                     $lower = strtolower($raw_name . ' ' . ($file['file_type'] ?? ''));
                     if (str_contains($lower, 'xlsx') || str_contains($lower, 'xls') || str_contains($lower, 'excel')) $icon = 'fa-file-excel text-success';
                     elseif (str_contains($lower, 'doc') || str_contains($lower, 'word')) $icon = 'fa-file-word text-primary';
+                    if (str_ends_with(strtolower($raw_name), '.zip')) $icon = 'fa-file-zipper text-warning';
                 ?>
                 <div class="bg-white p-2 rounded-3 border d-flex align-items-center justify-content-between mb-2 shadow-sm" style="font-size: 12px;" data-doc-row data-doc-id="<?= (int)$file['id'] ?>">
                     <div class="d-flex align-items-center gap-2" style="max-width:62%;">
@@ -580,6 +581,11 @@ include 'includes/header.php';
             <div class="mb-3">
                 <label class="form-label fw-bold text-secondary" style="font-size:12px;">1. Formal Final Report (Word Document / .docx)</label>
                 <input type="file" name="word_report" id="wordReportInput" class="form-control form-control-sm word-report-input" accept=".docx, .doc">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold text-secondary" style="font-size:12px;" for="zipFolderInput">2. ZIP Folder (optional) — photos / supporting documents, max 30 MB</label>
+                <input type="file" name="zip_folder" id="zipFolderInput" class="form-control form-control-sm zip-folder-input" accept=".zip,application/zip,application/x-zip-compressed" data-testid="zip-folder-input">
             </div>
 
             <div id="additionalFilesContainer"></div>
@@ -760,6 +766,7 @@ include 'includes/header.php';
                                 $vdd_lower = strtolower($vdd_raw_name . ' ' . ($file['file_type'] ?? ''));
                                 if (str_contains($vdd_lower, 'xlsx') || str_contains($vdd_lower, 'xls') || str_contains($vdd_lower, 'excel')) { $vdd_icon = 'fa-file-excel'; $vdd_icon_bg = '#D1FAE5'; $vdd_icon_fg = '#047857'; }
                                 elseif (str_contains($vdd_lower, 'doc') || str_contains($vdd_lower, 'word')) { $vdd_icon = 'fa-file-word'; $vdd_icon_bg = '#EEF2FF'; $vdd_icon_fg = '#4F46E5'; }
+                                if (str_ends_with(strtolower($vdd_raw_name), '.zip')) { $vdd_icon = 'fa-file-zipper'; $vdd_icon_bg = '#FEF3C7'; $vdd_icon_fg = '#B45309'; }
                             ?>
                             <div class="vdd-file-row" data-doc-row data-doc-id="<?= (int)$file['id'] ?>">
                                 <div style="display:flex;align-items:center;gap:12px;min-width:0;">
@@ -854,6 +861,15 @@ include 'includes/header.php';
                                         <div class="vdd-upload-hint" data-upload-hint data-default="Word document (.docx)">Word document (.docx)</div>
                                     </div>
                                     <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose file<input type="file" name="word_report" class="word-report-input vdd-file-input" accept=".docx, .doc"></label>
+                                </div>
+
+                                <div class="vdd-upload-row">
+                                    <div class="vdd-upload-icon" style="background:#FEF3C7;color:#B45309;"><i class="fa-solid fa-file-zipper"></i></div>
+                                    <div style="flex:1 1 auto;min-width:0;">
+                                        <div class="vdd-upload-label">2. ZIP Folder <span style="font-weight:500;color:#64748b;">(optional)</span></div>
+                                        <div class="vdd-upload-hint" data-upload-hint data-default="Photos / supporting documents (.zip, max 30 MB)">Photos / supporting documents (.zip, max 30 MB)</div>
+                                    </div>
+                                    <label class="vdd-upload-choose"><i class="fa-solid fa-arrow-up-from-bracket"></i> Choose file<input type="file" name="zip_folder" class="zip-folder-input vdd-file-input" accept=".zip,application/zip,application/x-zip-compressed" data-testid="zip-folder-input-desktop"></label>
                                 </div>
 
                                 <div class="vdd-additional-files-desktop" data-additional-files-container></div>
@@ -1052,6 +1068,46 @@ document.addEventListener('click', function (ev) {
     }
     window.open(webUrl, '_blank', 'noopener');
 });
+</script>
+
+<script>
+// ZIP folder + upload size guard. Cloud Run refuses any request over 32 MB
+// before it reaches PHP (the user would just see a generic error page), so
+// oversized selections are stopped here with a clear message instead.
+(function () {
+    var ZIP_MAX = 30 * 1024 * 1024, TOTAL_MAX = 31 * 1024 * 1024;
+    function warn(title, text) {
+        if (window.Swal) Swal.fire({ icon: 'warning', title: title, text: text, confirmButtonColor: '#1e3a8a' });
+        else alert(title + '\n\n' + text);
+    }
+    function mb(b) { return (b / 1048576).toFixed(1) + ' MB'; }
+    document.addEventListener('change', function (e) {
+        var input = e.target;
+        if (!input.classList || !input.classList.contains('zip-folder-input') || !input.files || !input.files[0]) return;
+        var f = input.files[0];
+        if (!/\.zip$/i.test(f.name)) {
+            warn('Only .zip files', 'Please choose a .zip file for the ZIP Folder.');
+            input.value = '';
+        } else if (f.size > ZIP_MAX) {
+            warn('ZIP folder too large', f.name + ' is ' + mb(f.size) + '. The maximum is 30 MB — please split it into smaller ZIP files or reduce photo sizes.');
+            input.value = '';
+        }
+        if (!input.value) input.dispatchEvent(new Event('ysms:cleared', { bubbles: true }));
+    });
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form.classList || !form.classList.contains('report-upload-form')) return;
+        var total = 0;
+        form.querySelectorAll('input[type=file]').forEach(function (i) {
+            for (var k = 0; i.files && k < i.files.length; k++) total += i.files[k].size;
+        });
+        if (total > TOTAL_MAX) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            warn('Files too large to upload together', 'The selected files add up to ' + mb(total) + ' (limit 31 MB per upload). Please upload them in smaller batches.');
+        }
+    }, true);
+})();
 </script>
 
 <?php

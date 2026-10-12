@@ -541,6 +541,8 @@ include 'includes/header.php';
                         $icon = 'fa-file-excel text-success';
                     } elseif (str_contains($file['file_type'], 'Word')) {
                         $icon = 'fa-file-word text-primary';
+                    } elseif (str_contains($file['file_type'], 'ZIP') || str_ends_with(strtolower((string)$file['file_name']), '.zip')) {
+                        $icon = 'fa-file-zipper text-warning';
                     }
                 ?>
                 <div class="bg-white p-3 rounded-3 border d-flex align-items-center justify-content-between mb-2 shadow-sm" data-doc-row data-doc-id="<?= (int)$file['id'] ?>">
@@ -772,6 +774,7 @@ include 'includes/header.php';
                                 if (str_contains($file['file_type'], 'PDF')) { $vdd_icon = 'fa-file-pdf'; $vdd_icon_bg = '#FEE2E2'; $vdd_icon_fg = '#B91C1C'; }
                                 elseif (str_contains($file['file_type'], 'Excel')) { $vdd_icon = 'fa-file-excel'; $vdd_icon_bg = '#D1FAE5'; $vdd_icon_fg = '#047857'; }
                                 elseif (str_contains($file['file_type'], 'Word')) { $vdd_icon = 'fa-file-word'; $vdd_icon_bg = '#EEF2FF'; $vdd_icon_fg = '#4F46E5'; }
+                                elseif (str_contains($file['file_type'], 'ZIP') || str_ends_with(strtolower((string)$file['file_name']), '.zip')) { $vdd_icon = 'fa-file-zipper'; $vdd_icon_bg = '#FEF3C7'; $vdd_icon_fg = '#B45309'; }
                             ?>
                             <div class="vdd-file-row" data-doc-row data-doc-id="<?= (int)$file['id'] ?>">
                                 <div style="display:flex;align-items:center;gap:12px;min-width:0;">
