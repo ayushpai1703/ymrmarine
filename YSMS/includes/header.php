@@ -920,29 +920,45 @@ input, select, textarea, .form-control { font-size: 16px; } /* prevents iOS auto
 <body>
 <div class="mobile-container">
     <!-- 🌟 ఆండ్రాయిడ్ నేటివ్ స్టైల్ టోస్ట్ అలర్ట్ ఇంజన్ -->
-    <?php if (isset($_SESSION['flash_msg'])): ?>
-        <div id="nativeAppToast" style="position: absolute; top: 20px; left: 20px; right: 20px; background: #1e293b; color: #ffffff; padding: 12px 16px; border-radius: 12px; font-size: 13px; font-weight: 600; text-align: center; z-index: 9999; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; gap: 8px; animation: slideDownToast 0.3s ease-out;">
-            <i class="fa-solid fa-circle-check text-success fs-5"></i>
-            <span><?= $_SESSION['flash_msg']; ?></span>
+    <?php if (isset($_SESSION['flash_msg'])):
+        // flash_type: 'success' (default), 'error' or 'warning'.
+        $__flashType = in_array($_SESSION['flash_type'] ?? '', ['error', 'warning'], true) ? $_SESSION['flash_type'] : 'success';
+        $__flashIcon = ['success' => 'fa-circle-check', 'error' => 'fa-circle-exclamation', 'warning' => 'fa-triangle-exclamation'][$__flashType];
+    ?>
+        <div id="nativeAppToast" class="ysms-toast ysms-toast-<?= $__flashType ?>" role="<?= $__flashType === 'success' ? 'status' : 'alert' ?>" aria-live="<?= $__flashType === 'success' ? 'polite' : 'assertive' ?>" data-testid="flash-toast">
+            <i class="fa-solid <?= $__flashIcon ?> ysms-toast-icon" aria-hidden="true"></i>
+            <span class="ysms-toast-text"><?= htmlspecialchars((string)$_SESSION['flash_msg'], ENT_QUOTES, 'UTF-8') ?></span>
+            <button type="button" class="ysms-toast-close" aria-label="Dismiss">&times;</button>
         </div>
         <style>
+            .ysms-toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); z-index: 100001; display: flex; align-items: center; gap: 10px; padding: 13px 14px 13px 16px; border-radius: 14px; color: #fff; font-size: 14px; font-weight: 600; line-height: 1.4; box-shadow: 0 14px 30px -6px rgba(15,23,42,.45); animation: slideDownToast .3s ease-out; }
+            .ysms-toast-success { background: #166534; }
+            .ysms-toast-error { background: #b91c1c; }
+            .ysms-toast-warning { background: #b45309; }
+            .ysms-toast-icon { font-size: 20px; flex-shrink: 0; }
+            .ysms-toast-text { flex: 1; min-width: 0; }
+            .ysms-toast-close { border: 0; background: rgba(255,255,255,.18); color: #fff; width: 28px; height: 28px; min-height: 28px !important; border-radius: 50%; font-size: 18px; line-height: 1; flex-shrink: 0; cursor: pointer; }
+            .ysms-toast-close:hover { background: rgba(255,255,255,.3); }
+            @media (min-width: 992px) { .ysms-toast { left: calc(50% + 126px); } }
             @keyframes slideDownToast {
-                from { transform: translateY(-50px); opacity: 0; }
-                to { transform: translateY(0); opacity: 1; }
+                from { transform: translate(-50%, -50px); opacity: 0; }
+                to { transform: translate(-50%, 0); opacity: 1; }
             }
         </style>
         <script>
-            // 3 సెకన్ల తర్వాత అలర్ట్ ఆటోమేటిక్‌గా మాయమవ్వడం
-            setTimeout(function() {
+            (function () {
                 var toast = document.getElementById('nativeAppToast');
-                if(toast) {
-                    toast.style.transition = 'opacity 0.5s ease';
+                if (!toast) return;
+                function hide() {
+                    toast.style.transition = 'opacity .4s ease';
                     toast.style.opacity = '0';
-                    setTimeout(function() { toast.remove(); }, 500);
+                    setTimeout(function () { toast.remove(); }, 400);
                 }
-            }, 3000);
+                toast.querySelector('.ysms-toast-close').addEventListener('click', hide);
+                setTimeout(hide, <?= $__flashType === 'success' ? 5000 : 9000 ?>);
+            })();
         </script>
-        <?php unset($_SESSION['flash_msg']); // చూపించిన తర్వాత క్లియర్ చేయడం ?>
+        <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
     <?php endif; ?>
 
     <?php // Notifications are listed in inbox.php (sidebar → Inbox), not as a pop-up banner. ?>

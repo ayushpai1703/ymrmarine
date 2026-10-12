@@ -200,6 +200,7 @@ require_once __DIR__ . '/../includes/notifications.php';
         if ($pdf_failed_this_request) $problems[] = 'PDF Report (must be a .pdf file, check its size)';
         if ($excel_failed_this_request) $problems[] = 'Calculation Sheet (must be .xlsx/.xls, check its size)';
         $_SESSION['flash_msg'] = 'Could not save: ' . implode(' and ', $problems) . '. Please try uploading it again.';
+        $_SESSION['flash_type'] = 'error';
         header('Location: ../vessel_detail.php?id=' . $survey_id);
         exit;
     }
@@ -308,6 +309,7 @@ require_once __DIR__ . '/../includes/notifications.php';
             $_SESSION['flash_msg'] = !$has_pdf_uploaded
                 ? 'File saved. Still need: PDF Report before this moves to Pending Report.'
                 : 'File saved.';
+            if (!$has_pdf_uploaded) $_SESSION['flash_type'] = 'warning';
         } else {
             $_SESSION['flash_msg'] = 'File(s) uploaded successfully.';
         }
