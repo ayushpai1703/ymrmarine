@@ -1242,29 +1242,29 @@ include 'includes/header.php';
         vertical-align: middle;
     }
 
-    /* ═══════════ Ultra-modern Assign Vessel form (single card + progress).
+    /* ═══════════ Ultra-modern Assign Vessel form (single card).
        Only appearance changes: every field keeps its name/id/class, so the
        existing searchable-select JS, validation and submit flow are untouched. */
     #assignVesselForm .avm-form {
         display: block !important; background: transparent !important; border: none !important;
         box-shadow: none !important; padding: 0 !important; margin: 14px 12px 24px !important; max-width: 1000px;
     }
-    @media (min-width: 992px) { #assignVesselForm .avm-form { margin: 18px auto 32px !important; } }
-
-    .avm-progress {
-        position: sticky; top: 8px; z-index: 30;
-        background: rgba(255,255,255,.86); -webkit-backdrop-filter: saturate(160%) blur(12px); backdrop-filter: saturate(160%) blur(12px);
-        border: 1px solid #E9ECF5; border-radius: 18px; padding: 12px 16px; margin-bottom: 14px;
-        box-shadow: 0 10px 30px rgba(30,27,107,.08);
+    @media (min-width: 992px) {
+        /* The page's older desktop rule (max-width + margin:auto, padding 20px)
+           centred a narrow column on the whole window and ignored the 252px
+           sidebar. Use the app's standard sidebar offset instead and centre
+           one 960px column (hero, alerts, form) inside the remaining space. */
+        .scroll-content {
+            max-width: none !important; width: 100% !important; margin: 0 !important;
+            padding: 20px 32px 40px 284px !important; box-sizing: border-box;
+        }
+        .scroll-content > .vdd-hero,
+        .scroll-content > .alert,
+        .scroll-content > div.mx-3,
+        #manualFormPanel { max-width: 960px; margin-left: auto !important; margin-right: auto !important; }
+        .scroll-content > .vdd-hero { margin-bottom: 18px !important; }
+        #assignVesselForm .avm-form { margin: 0 0 32px !important; max-width: none; }
     }
-    .avm-progress-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
-    .avm-progress-label { font-size: 12.5px; font-weight: 700; color: #334155; display: inline-flex; align-items: center; gap: 7px; }
-    .avm-progress-label i { color: #7C3AED; }
-    .avm-progress-pct { font-size: 12px; font-weight: 800; color: #4B2FD6; background: #F3EEFE; border-radius: 999px; padding: 3px 10px; }
-    .avm-progress.done .avm-progress-pct { color: #047857; background: #D1FAE5; }
-    .avm-progress-track { height: 8px; border-radius: 999px; background: #EEF0F6; overflow: hidden; }
-    .avm-progress-bar { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #4B2FD6, #7C3AED 55%, #DB2777); transition: width .35s cubic-bezier(.2,.8,.2,1); }
-    .avm-progress.done .avm-progress-bar { background: linear-gradient(90deg, #059669, #10B981); }
 
     .avm-card {
         background: #fff; border: 1px solid #E9ECF5; border-radius: 22px; padding: 20px 16px 6px; margin-bottom: 14px;
@@ -1370,12 +1370,7 @@ include 'includes/header.php';
         #assignVesselForm .blue-action-btn.avm-submit { max-width: none; width: 100% !important; }
     }
 
-    /* Manual / Paste Email toggle as a segmented control */
-    .vessel-input-tabs { background: #EEF0F6; padding: 5px; border-radius: 16px; gap: 4px !important; max-width: 1000px; }
-    @media (min-width: 992px) { .vessel-input-tabs { margin-left: auto !important; margin-right: auto !important; } }
-    .vessel-input-tabs .vit-tab { border: none !important; border-radius: 12px !important; background: transparent !important; color: #475569 !important; font-weight: 700 !important; box-shadow: none !important; }
-    .vessel-input-tabs .vit-tab.active { background: #fff !important; color: #4B2FD6 !important; box-shadow: 0 4px 12px rgba(15,23,42,.08) !important; }
-    @media (prefers-reduced-motion: reduce) { .avm-progress-bar, #assignVesselForm .blue-action-btn.avm-submit { transition: none; } }
+    @media (prefers-reduced-motion: reduce) { #assignVesselForm .blue-action-btn.avm-submit { transition: none; } }
 </style>
 
 <?php
@@ -1419,79 +1414,6 @@ include 'includes/top_app_bar.php';
     <?php endif; ?>
     <?php if($error): ?><div class="alert alert-danger mx-3 mt-3 py-2" style="font-size:12px;"><?= $error ?></div><?php endif; ?>
 
-    <?php if (!$is_client_role && !$edit_mode): ?>
-    <!-- 🌟 Manual Form | Paste Email — input-method toggle. Default is
-         Manual Form (existing workflow, unaffected); Paste Email is a second,
-         optional input method that only ever pre-fills this same form below —
-         it never saves/assigns anything by itself. Not shown while editing an
-         existing assignment (AI extraction is for creating a new one), and
-         not shown to the Client role (their simplified "Request Survey" form
-         has no AI step). -->
-    <div class="vessel-input-tabs mx-3 mt-3" data-testid="vessel-input-method-tabs">
-        <button type="button" class="vit-tab active" id="tabBtnManual" data-testid="tab-manual-form-btn">
-            <i class="fa-solid fa-pen-to-square"></i> Manual Form
-        </button>
-        <button type="button" class="vit-tab" id="tabBtnPasteEmail" data-testid="tab-paste-email-btn">
-            <i class="fa-solid fa-wand-magic-sparkles"></i> Paste Email
-        </button>
-    </div>
-
-    <div class="paste-email-card mx-3 mt-3" id="pasteEmailPanel" style="display:none;" data-testid="paste-email-panel">
-        <div class="pe-head">
-            <div class="pe-head-icon"><i class="fa-solid fa-envelope-open-text"></i></div>
-            <div>
-                <div class="pe-head-title">Paste Client Email</div>
-                <div class="pe-head-sub">Paste the complete client email — AI will extract the vessel assignment details for you to review.</div>
-            </div>
-        </div>
-
-        <textarea id="pasteEmailTextarea" rows="9" placeholder="Paste the complete client email here..." data-testid="paste-email-textarea"></textarea>
-
-        <div class="pe-actions">
-            <button type="button" class="pe-btn pe-btn-primary" id="extractEmailBtn" data-testid="extract-email-btn">
-                <i class="fa-solid fa-wand-magic-sparkles"></i> Extract Vessel Details with AI
-            </button>
-            <button type="button" class="pe-btn pe-btn-ghost" id="clearPasteEmailBtn" data-testid="clear-paste-email-btn">
-                <i class="fa-solid fa-eraser"></i> Clear
-            </button>
-        </div>
-
-        <div class="pe-loading" id="pasteEmailLoading" style="display:none;" data-testid="paste-email-loading">
-            <span class="pe-spinner"></span> Reading email and extracting vessel details...
-        </div>
-
-        <div class="pe-error" id="pasteEmailError" style="display:none;" data-testid="paste-email-error"></div>
-
-        <!-- Multiple-vessel picker — shown only when extraction finds >1 vessel -->
-        <div class="pe-multi" id="pasteEmailMultiPicker" style="display:none;" data-testid="paste-email-multi-picker">
-            <div class="pe-multi-title"><i class="fa-solid fa-triangle-exclamation"></i> Multiple vessels detected</div>
-            <div class="pe-multi-list" id="pasteEmailMultiList"></div>
-        </div>
-
-        <!-- Single-vessel extraction result / review summary -->
-        <div class="pe-result" id="pasteEmailResult" style="display:none;" data-testid="paste-email-result">
-            <div class="pe-result-head">
-                <i class="fa-solid fa-circle-check"></i> AI Extraction Completed
-                <span class="pe-confidence" id="pasteEmailConfidence"></span>
-            </div>
-            <div class="pe-result-sub">We extracted the following information from the email. Please review it before assigning the vessel.</div>
-            <div class="pe-fields" id="pasteEmailFieldsList"></div>
-            <div class="pe-missing" id="pasteEmailMissing" style="display:none;"></div>
-            <div class="pe-result-actions">
-                <button type="button" class="pe-btn pe-btn-primary" id="reviewAssignBtn" data-testid="review-assign-btn">
-                    <i class="fa-solid fa-arrow-right"></i> Review &amp; Assign Vessel
-                </button>
-                <button type="button" class="pe-btn pe-btn-ghost" id="reExtractBtn" data-testid="re-extract-btn">
-                    <i class="fa-solid fa-rotate"></i> Re-extract
-                </button>
-                <button type="button" class="pe-btn pe-btn-ghost" id="backPasteAnotherBtn" data-testid="back-paste-another-btn">
-                    <i class="fa-solid fa-arrow-left"></i> Paste Another Email
-                </button>
-            </div>
-        </div>
-    </div>
-    <?php endif; ?>
-
     <div id="manualFormPanel">
     <?php
     // 🌟 Edit-mode pre-fill values — computed once here, used throughout the
@@ -1518,14 +1440,6 @@ include 'includes/top_app_bar.php';
     <form action="assign_vessel.php<?= $edit_mode ? '?edit_id=' . (int)$edit_id : '' ?>" method="POST" id="assignVesselForm" enctype="multipart/form-data"><?= csrf_field() ?>
         <?php if ($edit_mode): ?><input type="hidden" name="edit_id" value="<?= (int)$edit_id ?>"><?php endif; ?>
         <div class="form-box-custom avm-form" style="padding-top:20px;">
-            <div class="avm-progress" data-testid="assign-form-progress">
-                <div class="avm-progress-top">
-                    <span class="avm-progress-label"><i class="fa-solid fa-list-check"></i> <span id="avmProgressText">Required details</span></span>
-                    <span class="avm-progress-pct" id="avmProgressPct">0%</span>
-                </div>
-                <div class="avm-progress-track"><div class="avm-progress-bar" id="avmProgressBar"></div></div>
-            </div>
-
             <div class="avm-card">
                 <div class="avm-grid">
             <div class="form-group-custom" id="vesselNameField">
@@ -2616,38 +2530,6 @@ $(document).ready(function() {
 </script>
 <?php endif; ?>
 
-
-<script>
-// Assign Vessel: required-field progress bar.
-(function () {
-    var form = document.getElementById('assignVesselForm');
-    if (!form) return;
-    var REQUIRED = ['input[name="vessel_name"]', '#clientSelect', 'input[name="agent_name"]', 'input[name="appointment_date"]',
-        '#portSelect', '#surveyTypeIdsInput', '#surveyorIdsInput'].filter(function (sel) { return form.querySelector(sel); });
-    var box = document.querySelector('.avm-progress'), bar = document.getElementById('avmProgressBar'),
-        pct = document.getElementById('avmProgressPct'), txt = document.getElementById('avmProgressText');
-    var last = '';
-    function update() {
-        var done = 0;
-        REQUIRED.forEach(function (sel) {
-            var el = form.querySelector(sel);
-            if (el && String(el.value || '').trim() !== '') done++;
-        });
-        var key = done + '/' + REQUIRED.length;
-        if (key === last) return;
-        last = key;
-        var p = REQUIRED.length ? Math.round(done * 100 / REQUIRED.length) : 100;
-        bar.style.width = p + '%';
-        pct.textContent = p + '%';
-        txt.textContent = done === REQUIRED.length ? 'All required details filled — ready to save'
-            : done + ' of ' + REQUIRED.length + ' required details filled';
-        box.classList.toggle('done', done === REQUIRED.length);
-    }
-    ['input', 'change', 'click', 'keyup'].forEach(function (ev) { form.addEventListener(ev, function () { setTimeout(update, 0); }); });
-    setInterval(update, 700); // hidden inputs are also filled by the searchable selects / Paste Email
-    update();
-})();
-</script>
 <?php
 include 'includes/nav.php';
 include 'includes/footer.php';
