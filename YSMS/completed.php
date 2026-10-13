@@ -337,6 +337,23 @@ include 'includes/header.php';
             display: flex; align-items: center; justify-content: center;
         }
         .pv-vessel-name { font-size: 16.5px; font-weight: 800; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
+        /* Mobile alignment: cards line up with the search bar (14px gutter),
+           no double padding (header.php's .vessel-card padding + this page's
+           .pv-card-top padding), and the action row always fits the screen. */
+        .vessel-list-container { padding: 0 14px 16px !important; }
+        .vessel-list-container .vessel-card { padding: 0 !important; margin: 0 0 14px !important; width: 100%; }
+        .pv-actions-row { display: flex; gap: 8px; padding: 0 14px 14px; align-items: stretch; }
+        .pv-actions-row > * { min-width: 0; height: 46px; box-sizing: border-box; }
+        .pv-export-btn { flex: 0 0 auto !important; padding: 0 14px !important; white-space: nowrap; font-size: 13px !important; }
+        .pv-import-btn { flex: 0 0 auto !important; padding: 0 14px !important; white-space: nowrap; }
+        .pv-sort-wrap { flex: 1 1 0 !important; padding: 0 8px 0 12px !important; overflow: hidden; }
+        @media (max-width: 400px) {
+            .pv-sort-wrap > i { display: none; }
+            .pv-export-btn, .pv-import-btn { padding: 0 11px !important; }
+        }
+        .pv-sort-select { width: 100%; min-width: 0; padding: 12px 16px 12px 4px !important; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+        .top-app-bar-title { font-size: clamp(15px, 4.9vw, 20px) !important; letter-spacing: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pv-card-top { padding: 16px 16px 8px !important; }
         .pv-type-pill {
             align-self: flex-end; max-width: 100%; text-align: right;
             background: #6b8e23; color: #fff;
@@ -580,7 +597,7 @@ include 'includes/header.php';
         <button type="button" class="clear-filters-btn" data-clear-filters><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
     </div>
     <div class="pv-actions-row">
-        <a href="export_completed.php" class="pv-export-btn" data-mobile-export data-export-base="export_completed.php"><i class="fa-solid fa-file-excel"></i> Export to Excel</a>
+        <a href="export_completed.php" class="pv-export-btn" data-mobile-export data-export-base="export_completed.php"><i class="fa-solid fa-file-excel"></i> Export</a>
         <?php if ($is_full_access): ?>
         <a href="completed_import.php" class="pv-import-btn" title="Bulk import completed vessels from Excel" data-testid="completed-import-mobile"><i class="fa-solid fa-file-import"></i> Import</a>
         <?php endif; ?>
