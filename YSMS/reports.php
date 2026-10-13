@@ -21,7 +21,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Pending Report'
-        ORDER BY s.id DESC
+        ORDER BY " . SURVEY_APPOINTMENT_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute();
 } elseif ($role === 'Client') {
@@ -33,7 +33,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Pending Report' AND s.client_id = ?
-        ORDER BY s.id DESC
+        ORDER BY " . SURVEY_APPOINTMENT_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute([$client_id]);
 } else {
@@ -47,7 +47,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Pending Report' AND (s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))
-        ORDER BY s.id DESC
+        ORDER BY " . SURVEY_APPOINTMENT_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute([$user_id, $user_id]);
 }
@@ -93,8 +93,8 @@ if ($is_full_access && $filter_surveyor !== '') {
     $params[] = $filter_surveyor;
 }
 $whereSql = implode(' AND ', $where);
-$orderSql = 's.id DESC';
-if ($sort === 'oldest') $orderSql = 's.id ASC';
+$orderSql = SURVEY_APPOINTMENT_ORDER_SQL . ' DESC, s.id DESC';
+if ($sort === 'oldest') $orderSql = SURVEY_APPOINTMENT_ORDER_SQL . ' ASC, s.id ASC';
 elseif ($sort === 'name-asc') $orderSql = 's.vessel_name ASC';
 elseif ($sort === 'name-desc') $orderSql = 's.vessel_name DESC';
 
@@ -667,7 +667,7 @@ include 'includes/header.php';
              data-client="<?= sanitize($survey['company_name'] ?? '') ?>"
              data-surveyor="<?= sanitize($surveyorNames) ?>"
              data-status="pending"
-             data-date="<?= strtotime($survey['survey_completed_date'] ?? $survey['assign_date'] ?? '1970-01-01') ?>"
+             data-date="<?= surveyAppointmentTs($survey) ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '']))) ?>">
             <div class="pv-card-top">
                 <div class="pv-card-headline">
@@ -797,7 +797,7 @@ include 'includes/header.php';
                                 data-place="<?= sanitize(strtolower($survey['port_name'] ?? '')) ?>"
                                 data-client="<?= sanitize(strtolower($survey['company_name'] ?? '')) ?>"
                                 data-surveyor="<?= sanitize(strtolower($surveyorNames)) ?>"
-                                data-date="<?= (int)$ts ?>">
+                                data-date="<?= surveyAppointmentTs($survey) ?>">
                                 <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
                                 <td>
                                     <div class="vd-vessel-cell">

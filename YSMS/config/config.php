@@ -223,6 +223,23 @@ function getCombinedSurveyTypeNames($db, $ids_csv, $fallback_name = '') {
     return !empty($names) ? implode(' + ', $names) : $fallback_name;
 }
 
+// 🌟 Pending Vessels / Pending Reports / Completed lists are ordered by the
+// vessel's Appointment Date (newest first). Records without one (older or
+// imported entries) fall back to their assign date so they still sort sensibly.
+const SURVEY_APPOINTMENT_ORDER_SQL = 'COALESCE(s.appointment_date, DATE(s.assign_date))';
+
+/** Unix timestamp used by the lists' client-side "Newest/Oldest first" sort. */
+function surveyAppointmentTs(array $survey): int {
+    foreach (['appointment_date', 'assign_date'] as $k) {
+        $v = (string)($survey[$k] ?? '');
+        if ($v !== '' && strpos($v, '0000-00-00') !== 0) {
+            $ts = strtotime($v);
+            if ($ts !== false) return $ts;
+        }
+    }
+    return 0;
+}
+
 // 🌟 Survey types for which Recovery does not apply at all (no fuel/cargo
 // quantity to recover) — Recovery shows as RECOVERY_NA_LABEL ("NOT APPLICABLE")
 // instead of a number whenever EVERY type selected on a survey (single or
