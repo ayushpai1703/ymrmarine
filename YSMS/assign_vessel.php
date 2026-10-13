@@ -1241,6 +1241,157 @@ include 'includes/header.php';
         color: #3b32b3; background: #eef2ff; padding: 2px 7px; border-radius: 999px; margin-left: 6px;
         vertical-align: middle;
     }
+
+    /* ═══════════ Ultra-modern Assign Vessel form (sections + progress).
+       Only appearance changes: every field keeps its name/id/class, so the
+       existing searchable-select JS, validation and submit flow are untouched. */
+    #assignVesselForm .avm-form {
+        display: block !important; background: transparent !important; border: none !important;
+        box-shadow: none !important; padding: 0 !important; margin: 14px 12px 24px !important; max-width: 1000px;
+    }
+    @media (min-width: 992px) { #assignVesselForm .avm-form { margin: 18px auto 32px !important; } }
+
+    .avm-progress {
+        position: sticky; top: 8px; z-index: 30;
+        background: rgba(255,255,255,.86); -webkit-backdrop-filter: saturate(160%) blur(12px); backdrop-filter: saturate(160%) blur(12px);
+        border: 1px solid #E9ECF5; border-radius: 18px; padding: 12px 16px; margin-bottom: 14px;
+        box-shadow: 0 10px 30px rgba(30,27,107,.08);
+    }
+    .avm-progress-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    .avm-progress-label { font-size: 12.5px; font-weight: 700; color: #334155; display: inline-flex; align-items: center; gap: 7px; }
+    .avm-progress-label i { color: #7C3AED; }
+    .avm-progress-pct { font-size: 12px; font-weight: 800; color: #4B2FD6; background: #F3EEFE; border-radius: 999px; padding: 3px 10px; }
+    .avm-progress.done .avm-progress-pct { color: #047857; background: #D1FAE5; }
+    .avm-progress-track { height: 8px; border-radius: 999px; background: #EEF0F6; overflow: hidden; }
+    .avm-progress-bar { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #4B2FD6, #7C3AED 55%, #DB2777); transition: width .35s cubic-bezier(.2,.8,.2,1); }
+    .avm-progress.done .avm-progress-bar { background: linear-gradient(90deg, #059669, #10B981); }
+
+    .avm-sec {
+        position: relative; background: #fff; border: 1px solid #E9ECF5; border-radius: 22px;
+        padding: 18px 16px 6px; margin-bottom: 14px;
+        box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 12px 32px rgba(15,23,42,.05);
+        transition: box-shadow .2s ease, border-color .2s ease;
+    }
+    .avm-sec:focus-within { border-color: #C4B5FD; box-shadow: 0 0 0 4px rgba(124,58,237,.08), 0 16px 40px rgba(75,47,214,.10); }
+    @media (min-width: 768px) { .avm-sec { padding: 22px 24px 10px; } }
+    .avm-sec-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .avm-step {
+        width: 36px; height: 36px; border-radius: 12px; flex: none; position: relative;
+        display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 14px;
+        background: linear-gradient(135deg, #4B2FD6, #7C3AED); box-shadow: 0 6px 16px rgba(91,45,238,.30);
+    }
+    .avm-step i { display: none; }
+    .avm-sec.complete .avm-step { background: linear-gradient(135deg, #059669, #10B981); box-shadow: 0 6px 16px rgba(16,185,129,.30); }
+    .avm-sec.complete .avm-step i { display: block; }
+    .avm-sec.complete .avm-step .avm-step-n { display: none; }
+    .avm-sec-title { font-size: 15.5px; font-weight: 800; color: #0f172a; letter-spacing: -.01em; display: flex; align-items: center; gap: 7px; }
+    .avm-sec-title i { color: #A78BFA; font-size: 13px; }
+    .avm-sec-sub { font-size: 12px; color: #94a3b8; font-weight: 500; margin-top: 1px; }
+
+    .avm-grid { display: grid; grid-template-columns: 1fr; gap: 0 18px; }
+    @media (min-width: 768px) {
+        .avm-grid { grid-template-columns: 1fr 1fr; }
+        .avm-grid > .avm-span-2 { grid-column: 1 / -1; }
+    }
+    #assignVesselForm .form-group-custom { margin-bottom: 16px; min-width: 0; }
+    #assignVesselForm .form-group-custom label {
+        display: flex !important; align-items: center; gap: 7px; flex-wrap: wrap;
+        font-size: 12px !important; font-weight: 700 !important; color: #475569 !important;
+        margin: 0 0 7px !important; letter-spacing: .01em;
+    }
+    #assignVesselForm .form-group-custom label i.vdd-field-icon {
+        display: inline-flex !important; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 7px; background: #F3EEFE; color: #7C3AED; font-size: 10.5px;
+    }
+    #assignVesselForm .form-group-custom input:not([type=checkbox]):not([type=hidden]):not([type=file]):not(.ss-search-input):not(.ss-add-new-input):not(.ss-add-new-input-extra),
+    #assignVesselForm .form-group-custom textarea,
+    #assignVesselForm .searchable-select .ss-trigger {
+        border: 1.5px solid #E4E7EF !important; border-radius: 14px !important; background: #F9FAFC !important;
+        padding: 12px 15px !important; min-height: 50px !important; font-size: 15px !important; color: #0f172a !important;
+        box-shadow: inset 0 1px 2px rgba(15,23,42,.03) !important;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    #assignVesselForm .form-group-custom textarea { min-height: 96px !important; line-height: 1.5; }
+    #assignVesselForm .form-group-custom input:hover:not(:disabled):not([readonly]),
+    #assignVesselForm .form-group-custom textarea:hover,
+    #assignVesselForm .searchable-select .ss-trigger:hover { border-color: #CBD2E1 !important; background: #fff !important; }
+    #assignVesselForm .form-group-custom input:focus,
+    #assignVesselForm .form-group-custom textarea:focus,
+    #assignVesselForm .searchable-select .ss-trigger:focus-visible,
+    #assignVesselForm .searchable-select.open .ss-trigger {
+        outline: none !important; border-color: #8B5CF6 !important; background: #fff !important;
+        box-shadow: 0 0 0 4px rgba(139,92,246,.16) !important;
+    }
+    #assignVesselForm .form-group-custom input[readonly], #assignVesselForm .form-group-custom input:disabled {
+        background: linear-gradient(120deg, #F5F3FF, #EEF2FF) !important; border-style: dashed !important; color: #3730A3 !important; font-weight: 800 !important;
+    }
+    #assignVesselForm .searchable-select .ss-trigger { display: flex; align-items: center; justify-content: space-between; text-align: left; }
+    #assignVesselForm .searchable-select .ss-trigger-text:not(.placeholder) { color: #0f172a !important; font-weight: 700 !important; }
+    /* Bootstrap's own .placeholder class (loading skeleton) paints a solid
+       currentColor bar behind the "Select …" text — undo it here. */
+    #assignVesselForm .searchable-select .ss-trigger-text.placeholder {
+        background: transparent !important; cursor: inherit; min-height: 0; vertical-align: baseline;
+        color: #94a3b8 !important; font-weight: 500 !important; font-size: 15px !important;
+    }
+    #assignVesselForm .searchable-select .ss-trigger .fa-chevron-down { color: #8B5CF6; transition: transform .2s ease; }
+    #assignVesselForm .searchable-select.open .ss-trigger .fa-chevron-down { transform: rotate(180deg); }
+    #assignVesselForm .searchable-select .ss-panel {
+        border: 1px solid #E4E7EF !important; border-radius: 16px !important;
+        box-shadow: 0 24px 48px rgba(15,23,42,.16) !important; overflow: hidden;
+    }
+    #assignVesselForm .searchable-select .ss-option { border-radius: 10px; margin: 2px 6px; }
+    #assignVesselForm .searchable-select .ss-option:hover,
+    #assignVesselForm .searchable-select .ss-option.ss-selected { background: #F3EEFE !important; color: #5B2DEE !important; }
+    #assignVesselForm .ss-multi .ss-option-checkbox { accent-color: #7C3AED !important; }
+    #assignVesselForm .searchable-select .ss-search-input { border-radius: 12px !important; }
+
+    /* file input as a drop zone */
+    #assignVesselForm input[type="file"][name="assignment_attachment[]"] {
+        width: 100%; border: 2px dashed #C9C2F5 !important; border-radius: 18px !important;
+        padding: 18px !important; background: linear-gradient(135deg, #FAF8FF, #F5F7FF) !important;
+        cursor: pointer; font-size: 13px; color: #475569; min-height: 0 !important;
+        transition: border-color .15s ease, background .15s ease;
+    }
+    #assignVesselForm input[type="file"][name="assignment_attachment[]"]:hover { border-color: #8B5CF6 !important; background: #F5F3FF !important; }
+    #assignVesselForm input[type="file"]::file-selector-button {
+        border: none; border-radius: 12px; padding: 10px 16px; margin-right: 12px; cursor: pointer;
+        background: linear-gradient(120deg, #4B2FD6, #7C3AED); color: #fff; font-weight: 700; font-size: 13px;
+        box-shadow: 0 6px 14px rgba(91,45,238,.25);
+    }
+    #assignVesselForm .avm-existing > div[style] { border: 1px solid #E9ECF5 !important; border-radius: 12px !important; background: #F9FAFC !important; padding: 10px 14px !important; }
+
+    /* sticky submit bar */
+    .avm-submit-bar {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+        background: #fff; border: 1px solid #E9ECF5; border-radius: 20px; padding: 12px 12px 12px 18px;
+        box-shadow: 0 12px 32px rgba(15,23,42,.08);
+    }
+    @media (min-width: 992px) { .avm-submit-bar { position: sticky; bottom: 16px; z-index: 30; } }
+    .avm-submit-hint { font-size: 12px; color: #64748b; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+    .avm-submit-hint i { color: #A78BFA; }
+    #assignVesselForm .blue-action-btn.avm-submit {
+        width: auto !important; min-width: 240px; flex: 1 1 240px; max-width: 360px; margin: 0 !important; height: 52px;
+        border: none !important; border-radius: 16px !important; color: #fff !important; font-weight: 800 !important; font-size: 15px !important;
+        display: inline-flex !important; align-items: center; justify-content: center; gap: 10px;
+        background: linear-gradient(120deg, #1E1B6B 0%, #4B2FD6 50%, #7C3AED 100%) !important;
+        background-size: 200% 100% !important; background-position: 0% 0% !important;
+        box-shadow: 0 12px 26px rgba(75,47,214,.35) !important;
+        transition: background-position .4s ease, transform .15s ease, box-shadow .2s ease;
+    }
+    #assignVesselForm .blue-action-btn.avm-submit:hover:not(:disabled) { background-position: 100% 0% !important; transform: translateY(-1px); box-shadow: 0 16px 32px rgba(75,47,214,.42) !important; }
+    #assignVesselForm .blue-action-btn.avm-submit:active:not(:disabled) { transform: translateY(0); }
+    @media (max-width: 575.98px) {
+        .avm-submit-bar { padding: 12px; }
+        .avm-submit-hint { width: 100%; justify-content: center; }
+        #assignVesselForm .blue-action-btn.avm-submit { max-width: none; width: 100% !important; }
+    }
+
+    /* Manual / Paste Email toggle as a segmented control */
+    .vessel-input-tabs { background: #EEF0F6; padding: 5px; border-radius: 16px; gap: 4px !important; max-width: 1000px; }
+    @media (min-width: 992px) { .vessel-input-tabs { margin-left: auto !important; margin-right: auto !important; } }
+    .vessel-input-tabs .vit-tab { border: none !important; border-radius: 12px !important; background: transparent !important; color: #475569 !important; font-weight: 700 !important; box-shadow: none !important; }
+    .vessel-input-tabs .vit-tab.active { background: #fff !important; color: #4B2FD6 !important; box-shadow: 0 4px 12px rgba(15,23,42,.08) !important; }
+    @media (prefers-reduced-motion: reduce) { .avm-progress-bar, .avm-sec, #assignVesselForm .blue-action-btn.avm-submit { transition: none; } }
 </style>
 
 <?php
@@ -1382,15 +1533,24 @@ include 'includes/top_app_bar.php';
     <!-- Assignment Form -->
     <form action="assign_vessel.php<?= $edit_mode ? '?edit_id=' . (int)$edit_id : '' ?>" method="POST" id="assignVesselForm" enctype="multipart/form-data"><?= csrf_field() ?>
         <?php if ($edit_mode): ?><input type="hidden" name="edit_id" value="<?= (int)$edit_id ?>"><?php endif; ?>
-        <div class="form-box-custom shadow-sm" style="padding-top:20px;">
-            <div class="vdd-form-card-head">
-                <div class="vdd-form-card-head-icon"><i class="fa-solid <?= $edit_mode ? 'fa-pen' : 'fa-ship' ?>"></i></div>
-                <div>
-                    <div class="vdd-form-card-head-title"><?= $edit_mode ? 'Edit Vessel Assignment' : 'Assign New Vessel' ?></div>
-                    <div class="vdd-form-card-head-sub">Fields marked * are required</div>
+        <div class="form-box-custom avm-form" style="padding-top:20px;">
+            <div class="avm-progress" data-testid="assign-form-progress">
+                <div class="avm-progress-top">
+                    <span class="avm-progress-label"><i class="fa-solid fa-list-check"></i> <span id="avmProgressText">Required details</span></span>
+                    <span class="avm-progress-pct" id="avmProgressPct">0%</span>
                 </div>
+                <div class="avm-progress-track"><div class="avm-progress-bar" id="avmProgressBar"></div></div>
             </div>
 
+            <section class="avm-sec" data-avm-sec="vessel">
+                <div class="avm-sec-head">
+                    <span class="avm-step" aria-hidden="true"><span class="avm-step-n">1</span><i class="fa-solid fa-check"></i></span>
+                    <div class="avm-sec-text">
+                        <div class="avm-sec-title"><i class="fa-solid fa-ship"></i> Vessel &amp; Client</div>
+                        <div class="avm-sec-sub">Who and what this survey is for</div>
+                    </div>
+                </div>
+                <div class="avm-grid">
             <div class="form-group-custom" id="vesselNameField">
                 <label for="vessel_name"><i class="fa-solid fa-ship vdd-field-icon"></i> Vessel Name *</label>
                 <input type="text" name="vessel_name" id="vessel_name" value="<?= $edit_mode ? sanitize($edit_survey['vessel_name']) : '' ?>" placeholder="e.g. MV Pacific Dawn" required autocomplete="off" inputmode="text" style="font-size:16px;min-height:48px;">
@@ -1451,7 +1611,7 @@ include 'includes/top_app_bar.php';
             <!-- Report Number: shown only after client selected — YMR/{SHORT}/{YYYY}/{MM}/{NNNN}.
                  In edit mode this shows the assignment's existing (fixed) number instead of a
                  live preview — editing never generates a new one. -->
-            <div class="form-group-custom" id="reportNumberGroup" style="<?= ($edit_mode && !empty($edit_survey['report_number'])) ? '' : 'display:none;' ?>">
+            <div class="form-group-custom avm-span-2" id="reportNumberGroup" style="<?= ($edit_mode && !empty($edit_survey['report_number'])) ? '' : 'display:none;' ?>">
                 <label><i class="fa-solid fa-hashtag vdd-field-icon"></i> Report Number <?php if (!$edit_mode): ?><span class="text-muted fw-normal">(auto)</span><?php endif; ?></label>
                 <input type="text" id="reportNumberPreview" value="<?= $edit_mode ? sanitize($edit_survey['report_number'] ?? '') : '' ?>" readonly
                        style="background:#f1f5f9; color:#0b1e46; font-weight:700; letter-spacing:0.5px; cursor:default;"
@@ -1464,10 +1624,22 @@ include 'includes/top_app_bar.php';
             </div>
 
 
-<div class="form-group-custom">
+<div class="form-group-custom avm-span-2">
                 <label><i class="fa-solid fa-people-group vdd-field-icon"></i> Agent Name *</label>
                 <input type="text" name="agent_name" value="<?= $edit_mode ? sanitize($edit_survey['agent_name']) : '' ?>" placeholder="e.g. Oceanus Agencies" required>
             </div>
+                </div>
+            </section>
+
+            <section class="avm-sec" data-avm-sec="place">
+                <div class="avm-sec-head">
+                    <span class="avm-step" aria-hidden="true"><span class="avm-step-n">2</span><i class="fa-solid fa-check"></i></span>
+                    <div class="avm-sec-text">
+                        <div class="avm-sec-title"><i class="fa-solid fa-location-dot"></i> Schedule &amp; Port</div>
+                        <div class="avm-sec-sub">When and where the vessel is attended</div>
+                    </div>
+                </div>
+                <div class="avm-grid">
 
             <div class="form-group-custom">
                 <label><i class="fa-solid fa-calendar-day vdd-field-icon"></i> Appointment Date *</label>
@@ -1525,8 +1697,20 @@ include 'includes/top_app_bar.php';
                 <?php endif; ?>
             </div>
 
+                </div>
+            </section>
+
+            <section class="avm-sec" data-avm-sec="survey">
+                <div class="avm-sec-head">
+                    <span class="avm-step" aria-hidden="true"><span class="avm-step-n">3</span><i class="fa-solid fa-check"></i></span>
+                    <div class="avm-sec-text">
+                        <div class="avm-sec-title"><i class="fa-solid fa-user-tie"></i> Survey &amp; Team</div>
+                        <div class="avm-sec-sub">Survey type(s) and the surveyor(s) to assign</div>
+                    </div>
+                </div>
+                <div class="avm-grid">
             <!-- 🌟 Survey Type: searchable MULTI-select (checkboxes) with search box inside -->
-            <div class="form-group-custom">
+            <div class="form-group-custom avm-span-2">
                 <label><i class="fa-solid fa-file-circle-check vdd-field-icon"></i> Survey Type * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
                 <div class="searchable-select ss-multi" data-ss-root="surveyType">
                     <button type="button" class="ss-trigger" data-testid="survey-type-select-trigger">
@@ -1565,7 +1749,7 @@ include 'includes/top_app_bar.php';
             </div>
 
             <?php if (!$is_client_role): ?>
-            <div class="form-group-custom">
+            <div class="form-group-custom avm-span-2">
                 <label><i class="fa-solid fa-user-tie vdd-field-icon"></i> Assign Surveyor(s) * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
                 <div class="searchable-select ss-multi" data-ss-root="surveyor" data-hidden-input="surveyorIdsInput">
                     <button type="button" class="ss-trigger" data-testid="surveyor-select-trigger">
@@ -1597,13 +1781,25 @@ include 'includes/top_app_bar.php';
             </div>
             <?php endif; ?>
 
-            <div class="form-group-custom">
+                </div>
+            </section>
+
+            <section class="avm-sec" data-avm-sec="extra">
+                <div class="avm-sec-head">
+                    <span class="avm-step" aria-hidden="true"><span class="avm-step-n">4</span><i class="fa-solid fa-check"></i></span>
+                    <div class="avm-sec-text">
+                        <div class="avm-sec-title"><i class="fa-solid fa-paperclip"></i> Notes &amp; Files</div>
+                        <div class="avm-sec-sub">Optional instructions and documents for the surveyor</div>
+                    </div>
+                </div>
+                <div class="avm-grid">
+            <div class="form-group-custom avm-span-2">
                 <label><i class="fa-solid fa-comment vdd-field-icon"></i> Remarks (Optional)</label>
                 <textarea name="remarks" rows="3" placeholder="Enter any specific instructions or notes..."><?= $edit_mode ? sanitize($edit_survey['remarks'] ?? '') : '' ?></textarea>
             </div>
 
             <?php if ($edit_mode && !empty($edit_attachments)): ?>
-            <div class="form-group-custom">
+            <div class="form-group-custom avm-span-2 avm-existing">
                 <label><i class="fa-solid fa-paperclip vdd-field-icon"></i> Already Uploaded</label>
                 <?php foreach ($edit_attachments as $att): ?>
                     <div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;border:1px solid var(--border-color);border-radius:10px;padding:8px 12px;margin-bottom:6px;font-size:12px;">
@@ -1614,15 +1810,21 @@ include 'includes/top_app_bar.php';
             </div>
             <?php endif; ?>
 
-            <div class="form-group-custom">
+            <div class="form-group-custom avm-span-2">
                 <label><i class="fa-solid fa-cloud-arrow-up vdd-field-icon"></i> Assignment Attachment(s) <span class="text-muted" style="font-weight:500;text-transform:none;letter-spacing:0;">(optional)</span></label>
                 <input type="file" name="assignment_attachment[]" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip" multiple>
                 <div class="text-muted" style="font-size:11px;margin-top:4px;"><?= $edit_mode ? 'Any files selected here are added to the ones already uploaded above — nothing gets removed.' : 'You can select multiple files at once. Surveyor will see all of them on the vessel detail page.' ?></div>
             </div>
 
-            <button type="submit" class="blue-action-btn mt-3" style="background: #3b32b3;">
-                <i class="fa-solid fa-ship"></i> <?= $edit_mode ? 'Save Changes' : 'Assign & Save Vessel' ?>
-            </button>
+                </div>
+            </section>
+
+            <div class="avm-submit-bar">
+                <div class="avm-submit-hint"><i class="fa-solid fa-circle-info"></i> Fields marked <b>*</b> are required</div>
+                <button type="submit" class="blue-action-btn avm-submit" data-testid="assign-vessel-submit">
+                    <i class="fa-solid <?= $edit_mode ? 'fa-floppy-disk' : 'fa-paper-plane' ?>"></i> <?= $edit_mode ? 'Save Changes' : 'Assign &amp; Save Vessel' ?>
+                </button>
+            </div>
         </div>
     </form>
     </div><!-- /#manualFormPanel -->
@@ -2471,6 +2673,47 @@ $(document).ready(function() {
 </script>
 <?php endif; ?>
 
+
+<script>
+// Assign Vessel: required-field progress + per-section completion ticks.
+(function () {
+    var form = document.getElementById('assignVesselForm');
+    if (!form) return;
+    var REQUIRED = [
+        ['vessel', 'input[name="vessel_name"]'], ['vessel', '#clientSelect'], ['vessel', 'input[name="agent_name"]'],
+        ['place', 'input[name="appointment_date"]'], ['place', '#portSelect'],
+        ['survey', '#surveyTypeIdsInput'], ['survey', '#surveyorIdsInput']
+    ].filter(function (r) { return form.querySelector(r[1]); });
+    var box = document.querySelector('.avm-progress'), bar = document.getElementById('avmProgressBar'),
+        pct = document.getElementById('avmProgressPct'), txt = document.getElementById('avmProgressText');
+    var last = '';
+    function update() {
+        var done = 0, secTotal = {}, secDone = {};
+        REQUIRED.forEach(function (r) {
+            var el = form.querySelector(r[1]);
+            var ok = !!(el && String(el.value || '').trim() !== '');
+            secTotal[r[0]] = (secTotal[r[0]] || 0) + 1;
+            if (ok) { done++; secDone[r[0]] = (secDone[r[0]] || 0) + 1; }
+        });
+        var key = done + '/' + REQUIRED.length + JSON.stringify(secDone);
+        if (key === last) return;
+        last = key;
+        var p = REQUIRED.length ? Math.round(done * 100 / REQUIRED.length) : 100;
+        bar.style.width = p + '%';
+        pct.textContent = p + '%';
+        txt.textContent = done === REQUIRED.length ? 'All required details filled — ready to save'
+            : done + ' of ' + REQUIRED.length + ' required details filled';
+        box.classList.toggle('done', done === REQUIRED.length);
+        document.querySelectorAll('[data-avm-sec]').forEach(function (sec) {
+            var k = sec.getAttribute('data-avm-sec');
+            sec.classList.toggle('complete', !!secTotal[k] && secDone[k] === secTotal[k]);
+        });
+    }
+    ['input', 'change', 'click', 'keyup'].forEach(function (ev) { form.addEventListener(ev, function () { setTimeout(update, 0); }); });
+    setInterval(update, 700); // hidden inputs are also filled by the searchable selects / Paste Email
+    update();
+})();
+</script>
 <?php
 include 'includes/nav.php';
 include 'includes/footer.php';
