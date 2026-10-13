@@ -112,6 +112,48 @@ function getTeamChatDefaultGroupId(PDO $db, int $creatorId = 0): int {
     return (int)$stmt->fetchColumn();
 }
 
+const TEAM_CHAT_GROUP_NAME_MAX = 60;
+
+/**
+ * Groups visible to this user: managers see every group (so they can add
+ * members to any of them), everyone else only the groups they belong to.
+ * Unread counts only for groups the user is a member of. Newest activity first.
+ */
+function getTeamChatGroupsForUser(PDO $db, int $userId, bool $canManage): array {
+    $sql = "SELECT g.id, g.group_name,
+                (SELECT COUNT(*) FROM chat_group_members c WHERE c.group_id = g.id) AS member_count,
+                gm.user_id IS NOT NULL AS is_member,
+                COALESCE((SELECT MAX(m.id) FROM chat_messages m WHERE m.group_id = g.id), 0) AS last_id,
+                CASE WHEN gm.user_id IS NULL THEN 0 ELSE
+                    (SELECT COUNT(*) FROM chat_messages m2
+                      WHERE m2.group_id = g.id AND m2.id > gm.last_read_message_id AND m2.sender_id <> gm.user_id) END AS unread
+            FROM chat_groups g
+            LEFT JOIN chat_group_members gm ON gm.group_id = g.id AND gm.user_id = ?"
+        . ($canManage ? '' : ' WHERE gm.user_id IS NOT NULL')
+        . " ORDER BY last_id DESC, g.id ASC";
+    $stmt = $db->prepare($sql);
+    $stmt->execute([$userId]);
+    $out = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $g) {
+        $out[] = [
+            'id' => (int)$g['id'],
+            'name' => (string)$g['group_name'],
+            'member_count' => (int)$g['member_count'],
+            'is_member' => (bool)$g['is_member'],
+            'unread' => (int)$g['unread'],
+            'last_id' => (int)$g['last_id'],
+        ];
+    }
+    return $out;
+}
+
+/** Trimmed, single-spaced, control-char-free group name, or '' if unusable. */
+function teamChatCleanGroupName(string $name): string {
+    $name = preg_replace('/[\x00-\x1F\x7F]/u', '', $name) ?? '';
+    $name = trim(preg_replace('/\s+/u', ' ', $name) ?? '');
+    return $name;
+}
+
 /** Fresh DB lookup of the user (never trusts the session role alone). Null if inactive or not allowed in chat. */
 function getTeamChatUser(PDO $db, int $userId): ?array {
     if ($userId <= 0) return null;

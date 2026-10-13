@@ -99,6 +99,35 @@ include 'includes/header.php';
     .fnotes-fab { display: none !important; }
     .fnotes-min-bar { top: 168px !important; bottom: auto !important; }
 
+    /* Groups: side list on desktop, "Groups" button + sheet on mobile */
+    .tc-shell { flex-direction: row; }
+    .tc-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .tc-groups { display: none; width: 270px; flex-shrink: 0; border-right: 1px solid var(--border-color); background: #fff; flex-direction: column; min-height: 0; }
+    @media (min-width: 992px) { .tc-groups { display: flex; } .tc-groups-btn { display: none !important; } }
+    .tc-groups-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 14px 10px; }
+    .tc-groups-title { font-size: 15px; font-weight: 800; color: var(--text-dark); margin: 0; }
+    .tc-new-group { border: none; border-radius: 10px; padding: 7px 12px; font-size: 12.5px; font-weight: 700; color: #fff; background: linear-gradient(120deg, #1e3a8a, #4B2FD6); display: inline-flex; align-items: center; gap: 6px; }
+    .tc-new-group:hover { filter: brightness(1.08); }
+    .tc-group-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 10px; }
+    .tc-group-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: none; background: none; border-radius: 12px; text-align: left; color: var(--text-dark); text-decoration: none; }
+    .tc-group-item:hover { background: #F1F5F9; color: var(--text-dark); }
+    .tc-group-item.active { background: #EEF2FF; }
+    .tc-group-item .gi-icon { width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0; background: #1e3a8a; color: #fff; font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+    .tc-group-item.not-member .gi-icon { background: #CBD5E1; }
+    .tc-group-item .gi-meta { flex: 1; min-width: 0; }
+    .tc-group-item .gi-name { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tc-group-item .gi-sub { font-size: 11.5px; color: #64748b; }
+    .tc-group-item .gi-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+    .tc-groups-empty { color: #64748b; font-size: 13px; padding: 12px; text-align: center; }
+    .tc-groups-btn { position: relative; }
+    .tc-groups-btn .gb-dot { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 10.5px; font-weight: 800; display: none; align-items: center; justify-content: center; border: 2px solid #1e3a8a; }
+    .tc-groups-btn .gb-dot.show { display: flex; }
+    .tc-staff-search { margin: 6px 0 8px; }
+    .tc-staff-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 12px; padding: 4px 10px; }
+    .tc-staff-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer; margin: 0; }
+    .tc-staff-row:last-child { border-bottom: none; }
+    .tc-staff-row input { width: 17px; height: 17px; flex-shrink: 0; }
+
     .tc-loading { display: flex; align-items: center; justify-content: center; height: 100%; color: #64748b; gap: 10px; font-size: 14px; }
 
     .swal2-container { z-index: 2100 !important; }
@@ -125,12 +154,23 @@ include 'includes/header.php';
              data-csrf="<?= sanitize(csrf_token()) ?>"
              data-me="<?= (int)$_SESSION['user_id'] ?>"
              aria-label="Team chat" data-testid="team-chat-app">
+        <aside class="tc-groups" aria-label="Chat groups" data-testid="team-chat-groups-pane">
+            <div class="tc-groups-head">
+                <h2 class="tc-groups-title">Groups</h2>
+                <button type="button" class="tc-new-group" data-new-group hidden data-testid="team-chat-new-group-button"><i class="fa-solid fa-plus" aria-hidden="true"></i> New Group</button>
+            </div>
+            <div class="tc-group-list" data-group-list></div>
+        </aside>
+        <div class="tc-main">
         <header class="tc-header">
             <div class="tc-group-icon" aria-hidden="true"><i class="fa-solid fa-users"></i></div>
             <div class="tc-header-text">
                 <h2 class="tc-header-title" id="tcGroupName">Team Chat</h2>
                 <div class="tc-header-sub" id="tcMemberCount" aria-live="polite">Loading…</div>
             </div>
+            <button type="button" class="tc-header-btn tc-groups-btn" id="tcGroupsBtn" aria-label="Groups" title="Groups" data-testid="team-chat-groups-button">
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i><span>Groups</span><span class="gb-dot" id="tcGroupsDot"></span>
+            </button>
             <button type="button" class="tc-header-btn" id="tcNotesBtn" hidden aria-label="Open Notes" title="Notes" data-testid="team-chat-notes-button">
                 <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>
             </button>
@@ -167,7 +207,43 @@ include 'includes/header.php';
             <div class="tc-hint d-none d-md-block">Enter to send · Shift+Enter for a new line · PDF, Word, Excel, JPG, PNG, TXT, CSV</div>
             <div class="tc-error" id="tcError" role="alert"></div>
         </form>
+        </div>
     </section>
+</div>
+
+<div class="tc-dialog-backdrop" id="tcGroupsDialog" aria-hidden="true">
+    <div class="tc-dialog" role="dialog" aria-modal="true" aria-labelledby="tcGroupsDialogTitle">
+        <div class="tc-dialog-head">
+            <h2 id="tcGroupsDialogTitle">Groups</h2>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="tc-new-group" data-new-group hidden data-testid="team-chat-new-group-button-mobile"><i class="fa-solid fa-plus" aria-hidden="true"></i> New</button>
+                <button type="button" class="btn-close" data-close-dialog aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="tc-dialog-body"><div data-group-list></div></div>
+    </div>
+</div>
+
+<div class="tc-dialog-backdrop" id="tcCreateDialog" aria-hidden="true">
+    <div class="tc-dialog" role="dialog" aria-modal="true" aria-labelledby="tcCreateTitle">
+        <div class="tc-dialog-head">
+            <h2 id="tcCreateTitle">New Group</h2>
+            <button type="button" class="btn-close" data-close-dialog aria-label="Close"></button>
+        </div>
+        <form class="tc-dialog-body" id="tcCreateForm" autocomplete="off" novalidate data-testid="team-chat-create-form">
+            <label class="tc-section-label" for="tcNewName">Group name</label>
+            <input type="text" class="form-control" id="tcNewName" maxlength="60" placeholder="e.g. Kakinada Surveyors" data-testid="team-chat-new-group-name">
+            <div class="tc-section-label mt-3">Add members <span class="text-muted fw-normal text-lowercase" id="tcPickedCount"></span></div>
+            <div class="small text-muted">You are added automatically. You can add or remove members later too.</div>
+            <input type="search" class="form-control form-control-sm tc-staff-search" id="tcStaffSearch" placeholder="Search staff…" aria-label="Search staff">
+            <div class="tc-staff-list" id="tcStaffList" data-testid="team-chat-staff-list"></div>
+            <div class="tc-error" id="tcCreateError" role="alert"></div>
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary flex-fill" id="tcCreateBtn" style="background:#1e3a8a;border-color:#1e3a8a;font-weight:700;" data-testid="team-chat-create-group-submit">Create Group</button>
+                <button type="button" class="btn btn-light" data-close-dialog>Cancel</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div class="tc-dialog-backdrop" id="tcDialog" aria-hidden="true">
@@ -212,7 +288,9 @@ include 'includes/header.php';
         manageBox: $('tcManageBox'), candidate: $('tcCandidate'), addBtn: $('tcAddBtn'), manageError: $('tcManageError')
     };
 
+    var REQ_GROUP = parseInt(new URLSearchParams(location.search).get('group') || '0', 10) || 0;
     var S = {
+        groups: [],
         groupId: 0, canManage: false, isMember: false, settings: null,
         messages: [], ids: new Set(), avatars: {}, members: [],
         lastId: 0, hasMore: false, loadingOlder: false,
@@ -488,7 +566,7 @@ include 'includes/header.php';
 
     // ------------------------------------------------------------ data flow
     function boot() {
-        request('GET', { action: 'bootstrap' }).then(function (res) {
+        request('GET', REQ_GROUP ? { action: 'bootstrap', group_id: REQ_GROUP } : { action: 'bootstrap' }).then(function (res) {
             if (!res.data.ok) {
                 if (!handleAuthFailure(res)) {
                     els.list.textContent = '';
@@ -507,6 +585,11 @@ include 'includes/header.php';
             S.settings = d.settings; S.members = d.members || [];
             S.lastReadAtLoad = d.last_read_message_id || 0; S.markedId = S.lastReadAtLoad;
             els.name.textContent = d.group.name;
+            S.groups = d.groups || [];
+            renderGroups();
+            document.querySelectorAll('[data-new-group]').forEach(function (b) { b.hidden = !S.canManage; });
+            if (history.replaceState) history.replaceState(null, '', 'team_chat.php?group=' + S.groupId);
+            setInterval(refreshGroups, 15000);
             setMemberCount(S.members.length);
             els.membersBtn.hidden = !(S.isMember || S.canManage);
             if (S.settings && S.settings.max_text) els.input.maxLength = S.settings.max_text;
@@ -778,6 +861,132 @@ include 'includes/header.php';
     els.dialogClose.addEventListener('click', closeDialog);
     els.dialog.addEventListener('click', function (e) { if (e.target === els.dialog) closeDialog(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && els.dialog.classList.contains('show')) closeDialog(); });
+
+    // ------------------------------------------------------------ groups
+    function renderGroups() {
+        var otherUnread = 0;
+        document.querySelectorAll('[data-group-list]').forEach(function (box) {
+            box.textContent = '';
+            if (!S.groups.length) {
+                box.appendChild(el('div', 'tc-groups-empty', S.canManage ? 'No groups yet — create one.' : 'You are not in any group yet.'));
+                return;
+            }
+            S.groups.forEach(function (g) {
+                var a = el('a', 'tc-group-item' + (g.id === S.groupId ? ' active' : '') + (g.is_member ? '' : ' not-member'));
+                a.href = 'team_chat.php?group=' + g.id;
+                a.setAttribute('data-testid', 'team-chat-group-item');
+                a.setAttribute('data-group-id', String(g.id));
+                if (g.id === S.groupId) a.setAttribute('aria-current', 'true');
+                var ic = el('div', 'gi-icon', initials(g.name)); ic.setAttribute('aria-hidden', 'true');
+                var meta = el('div', 'gi-meta');
+                meta.appendChild(el('div', 'gi-name', g.name));
+                meta.appendChild(el('div', 'gi-sub', g.is_member
+                    ? g.member_count + ' member' + (g.member_count === 1 ? '' : 's')
+                    : 'Not a member · ' + g.member_count + ' member' + (g.member_count === 1 ? '' : 's')));
+                a.appendChild(ic); a.appendChild(meta);
+                var unread = g.id === S.groupId ? 0 : (g.unread || 0);
+                if (unread > 0) {
+                    var b = el('span', 'gi-badge', unread > 99 ? '99+' : String(unread));
+                    b.setAttribute('aria-label', unread + ' unread');
+                    a.appendChild(b);
+                }
+                box.appendChild(a);
+            });
+        });
+        S.groups.forEach(function (g) { if (g.id !== S.groupId) otherUnread += g.unread || 0; });
+        var dot = $('tcGroupsDot');
+        dot.textContent = otherUnread > 99 ? '99+' : String(otherUnread);
+        dot.classList.toggle('show', otherUnread > 0);
+    }
+    function refreshGroups() {
+        if (S.stopped || document.hidden) return;
+        request('GET', { action: 'groups' }).then(function (res) {
+            if (res.data.ok) { S.groups = res.data.groups || []; renderGroups(); }
+        });
+    }
+
+    var openSheets = [];
+    function openSheet(node) {
+        openSheets.push({ node: node, focus: document.activeElement });
+        node.classList.add('show'); node.setAttribute('aria-hidden', 'false');
+        var f = node.querySelector('input[type=text], .btn-close'); if (f) f.focus();
+    }
+    function closeSheet(node) {
+        node.classList.remove('show'); node.setAttribute('aria-hidden', 'true');
+        for (var i = openSheets.length - 1; i >= 0; i--) {
+            if (openSheets[i].node === node) { var f = openSheets[i].focus; openSheets.splice(i, 1); if (f && f.focus) f.focus(); break; }
+        }
+    }
+    [$('tcGroupsDialog'), $('tcCreateDialog')].forEach(function (d) {
+        d.addEventListener('click', function (e) { if (e.target === d || e.target.closest('[data-close-dialog]')) closeSheet(d); });
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && openSheets.length) closeSheet(openSheets[openSheets.length - 1].node);
+    });
+    $('tcGroupsBtn').addEventListener('click', function () { openSheet($('tcGroupsDialog')); });
+
+    var staff = [];
+    function renderStaff() {
+        var box = $('tcStaffList'), q = $('tcStaffSearch').value.trim().toLowerCase();
+        var picked = {};
+        box.querySelectorAll('input:checked').forEach(function (c) { picked[c.value] = true; });
+        box.textContent = '';
+        var shown = 0;
+        staff.forEach(function (u) {
+            var hide = q && (u.name + ' ' + u.role).toLowerCase().indexOf(q) === -1;
+            var row = el('label', 'tc-staff-row');
+            if (hide) row.hidden = true; else shown++;
+            var cb = el('input'); cb.type = 'checkbox'; cb.className = 'form-check-input'; cb.value = String(u.user_id);
+            cb.checked = !!(picked[cb.value] || u._picked);
+            cb.addEventListener('change', function () { u._picked = cb.checked; updatePicked(); });
+            var meta = el('div');
+            meta.appendChild(el('div', 'tc-member-name', u.name));
+            meta.appendChild(el('div', 'tc-member-role', u.role));
+            row.appendChild(cb); row.appendChild(meta);
+            box.appendChild(row);
+        });
+        if (!staff.length) box.appendChild(el('div', 'text-muted small py-2', 'No other staff accounts found.'));
+        else if (!shown) box.appendChild(el('div', 'text-muted small py-2', 'No staff match your search.'));
+        updatePicked();
+    }
+    function updatePicked() {
+        var n = staff.filter(function (u) { return u._picked; }).length;
+        $('tcPickedCount').textContent = n ? '(' + n + ' selected)' : '';
+    }
+    function openCreate() {
+        if (!S.canManage) return;
+        $('tcNewName').value = ''; $('tcStaffSearch').value = '';
+        showError($('tcCreateError'), '');
+        $('tcStaffList').textContent = '';
+        $('tcStaffList').appendChild(el('div', 'text-muted small py-2', 'Loading staff…'));
+        if (openSheets.length && openSheets[openSheets.length - 1].node.id === 'tcGroupsDialog') closeSheet($('tcGroupsDialog'));
+        openSheet($('tcCreateDialog'));
+        request('GET', { action: 'staff' }).then(function (res) {
+            if (!res.data.ok) { showError($('tcCreateError'), res.data.error || 'Staff list could not be loaded.'); $('tcStaffList').textContent = ''; return; }
+            staff = res.data.staff || [];
+            renderStaff();
+        });
+    }
+    document.querySelectorAll('[data-new-group]').forEach(function (b) { b.addEventListener('click', openCreate); });
+    $('tcStaffSearch').addEventListener('input', renderStaff);
+    $('tcCreateForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var name = $('tcNewName').value.trim();
+        if (name.length < 2) { showError($('tcCreateError'), 'Enter a group name (at least 2 characters).'); $('tcNewName').focus(); return; }
+        var fd = new FormData();
+        fd.append('action', 'create_group'); fd.append('name', name);
+        staff.forEach(function (u) { if (u._picked) fd.append('member_ids[]', String(u.user_id)); });
+        var btn = $('tcCreateBtn'); btn.disabled = true; btn.textContent = 'Creating…';
+        showError($('tcCreateError'), '');
+        post(fd).then(function (res) {
+            if (!res.data.ok) {
+                btn.disabled = false; btn.textContent = 'Create Group';
+                if (!handleAuthFailure(res)) showError($('tcCreateError'), res.data.error || 'Group could not be created.');
+                return;
+            }
+            location.href = 'team_chat.php?group=' + res.data.group.id;
+        });
+    });
 
     boot();
 })();

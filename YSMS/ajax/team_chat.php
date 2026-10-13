@@ -4,7 +4,9 @@
  * Surveyor. Reading/sending/downloading also requires current group
  * membership; membership changes require Admin/Super Admin.
  *
- * GET  action=bootstrap                         group, me, members, settings
+ * GET  action=bootstrap[&group_id]             groups, selected group, me, members, settings
+ * GET  action=groups                            group list with unread counts
+ * GET  action=staff                             (managers) staff who can be added to a new group
  * GET  action=messages&group_id[&before_id]     newest page / older page
  * GET  action=poll&group_id&after_id            messages newer than after_id
  * GET  action=members&group_id
@@ -14,6 +16,7 @@
  * POST action=mark_read     group_id, message_id
  * POST action=add_member    group_id, user_id   (managers)
  * POST action=remove_member group_id, user_id   (managers)
+ * POST action=create_group  name, member_ids[]   (managers; creator is always a member)
  * POST requests need csrf_token (field) or X-CSRF-Token (header).
  */
 require_once __DIR__ . '/../config/config.php';
@@ -37,8 +40,8 @@ if (empty($_SESSION['user_id'])) {
 }
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$getActions = ['bootstrap', 'messages', 'poll', 'members', 'candidates', 'download'];
-$postActions = ['send', 'mark_read', 'add_member', 'remove_member'];
+$getActions = ['bootstrap', 'groups', 'staff', 'messages', 'poll', 'members', 'candidates', 'download'];
+$postActions = ['send', 'mark_read', 'add_member', 'remove_member', 'create_group'];
 
 if ($method === 'POST') {
     // post_max_size overflow empties $_POST/$_FILES entirely — report it as a size problem, not a CSRF one.
@@ -168,7 +171,19 @@ function tc_member_count(PDO $db, int $groupId): int {
 try {
     switch ($action) {
         case 'bootstrap': {
-            $groupId = getTeamChatDefaultGroupId($db, $canManage ? $userId : 0);
+            $defaultId = getTeamChatDefaultGroupId($db, $canManage ? $userId : 0);
+            $groups = getTeamChatGroupsForUser($db, $userId, $canManage);
+            $visible = [];
+            foreach ($groups as $g) $visible[$g['id']] = $g;
+            // Requested group if this user may see it; else the default group if
+            // they're in it; else their most recently active group; else default.
+            $groupId = (int)($_GET['group_id'] ?? 0);
+            if (!isset($visible[$groupId])) {
+                $groupId = 0;
+                if (!empty($visible[$defaultId]['is_member'])) $groupId = $defaultId;
+                foreach ($groups as $g) { if ($groupId === 0 && $g['is_member']) $groupId = $g['id']; }
+                if ($groupId === 0) $groupId = $defaultId;
+            }
             $group = tc_group($db, $groupId);
             $isMember = teamChatIsMember($db, $groupId, $userId);
             $lastRead = 0;
@@ -180,6 +195,7 @@ try {
             tc_json([
                 'ok' => true,
                 'group' => ['id' => (int)$group['id'], 'name' => $group['group_name']],
+                'groups' => $groups,
                 'me' => ['id' => $userId, 'name' => $me['full_name'], 'is_member' => $isMember, 'can_manage' => $canManage],
                 'members' => ($isMember || $canManage) ? getTeamChatMembers($db, $groupId) : [],
                 'last_read_message_id' => $lastRead,
@@ -190,6 +206,65 @@ try {
                     'page_size' => TEAM_CHAT_PAGE_SIZE,
                 ],
             ]);
+        }
+
+        case 'groups': {
+            tc_json(['ok' => true, 'groups' => getTeamChatGroupsForUser($db, $userId, $canManage)]);
+        }
+
+        case 'staff': {
+            if (!$canManage) tc_fail('Only administrators can create groups.', 403, 'forbidden');
+            $roles = TEAM_CHAT_ALLOWED_ROLES;
+            $in = implode(',', array_fill(0, count($roles), '?'));
+            $stmt = $db->prepare("SELECT u.id, u.full_name, r.name AS role_name FROM users u
+                JOIN roles r ON r.id = u.role_id
+                WHERE u.status = 'Active' AND r.name IN ($in) AND u.id <> ?
+                ORDER BY u.full_name ASC");
+            $stmt->execute(array_merge($roles, [$userId]));
+            $list = array_map(fn($u) => ['user_id' => (int)$u['id'], 'name' => $u['full_name'], 'role' => $u['role_name']],
+                $stmt->fetchAll(PDO::FETCH_ASSOC));
+            tc_json(['ok' => true, 'staff' => $list]);
+        }
+
+        case 'create_group': {
+            if (!$canManage) tc_fail('Only administrators can create groups.', 403, 'forbidden');
+            $name = teamChatCleanGroupName((string)($_POST['name'] ?? ''));
+            $len = mb_strlen($name, 'UTF-8');
+            if ($len < 2) tc_fail('Enter a group name (at least 2 characters).', 422, 'bad_name');
+            if ($len > TEAM_CHAT_GROUP_NAME_MAX) tc_fail('Group name is too long (maximum ' . TEAM_CHAT_GROUP_NAME_MAX . ' characters).', 422, 'bad_name');
+
+            $rawIds = $_POST['member_ids'] ?? [];
+            if (!is_array($rawIds)) $rawIds = [$rawIds];
+            $memberIds = [];
+            foreach ($rawIds as $rid) {
+                $rid = (int)$rid;
+                if ($rid > 0 && $rid !== $userId) $memberIds[$rid] = true;
+            }
+            if (count($memberIds) > 500) tc_fail('Too many members selected.', 422, 'bad_user');
+            foreach (array_keys($memberIds) as $rid) {
+                if (getTeamChatUser($db, $rid) === null) {
+                    tc_fail('One of the selected users cannot be added (inactive or not a staff account).', 422, 'bad_user');
+                }
+            }
+
+            $dupe = $db->prepare("SELECT 1 FROM chat_groups WHERE LOWER(group_name) = LOWER(?) LIMIT 1");
+            $dupe->execute([$name]);
+            if ($dupe->fetchColumn()) tc_fail('A group with this name already exists.', 409, 'duplicate');
+
+            try {
+                $db->beginTransaction();
+                $db->prepare("INSERT INTO chat_groups (group_name, created_by) VALUES (?, ?)")->execute([$name, $userId]);
+                $newId = (int)$db->lastInsertId();
+                $ins = $db->prepare("INSERT IGNORE INTO chat_group_members (group_id, user_id, added_by, last_read_message_id) VALUES (?, ?, ?, 0)");
+                $ins->execute([$newId, $userId, $userId]);
+                foreach (array_keys($memberIds) as $rid) $ins->execute([$newId, $rid, $userId]);
+                $db->commit();
+            } catch (PDOException $e) {
+                if ($db->inTransaction()) $db->rollBack();
+                if (($e->errorInfo[1] ?? 0) == 1062) tc_fail('A group with this name already exists.', 409, 'duplicate');
+                throw $e;
+            }
+            tc_json(['ok' => true, 'group' => ['id' => $newId, 'name' => $name], 'groups' => getTeamChatGroupsForUser($db, $userId, $canManage)]);
         }
 
         case 'messages': {
