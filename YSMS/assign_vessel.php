@@ -1242,7 +1242,7 @@ include 'includes/header.php';
         vertical-align: middle;
     }
 
-    /* ═══════════ Ultra-modern Assign Vessel form (sections + progress).
+    /* ═══════════ Ultra-modern Assign Vessel form (single card + progress).
        Only appearance changes: every field keeps its name/id/class, so the
        existing searchable-select JS, validation and submit flow are untouched. */
     #assignVesselForm .avm-form {
@@ -1266,27 +1266,11 @@ include 'includes/header.php';
     .avm-progress-bar { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #4B2FD6, #7C3AED 55%, #DB2777); transition: width .35s cubic-bezier(.2,.8,.2,1); }
     .avm-progress.done .avm-progress-bar { background: linear-gradient(90deg, #059669, #10B981); }
 
-    .avm-sec {
-        position: relative; background: #fff; border: 1px solid #E9ECF5; border-radius: 22px;
-        padding: 18px 16px 6px; margin-bottom: 14px;
+    .avm-card {
+        background: #fff; border: 1px solid #E9ECF5; border-radius: 22px; padding: 20px 16px 6px; margin-bottom: 14px;
         box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 12px 32px rgba(15,23,42,.05);
-        transition: box-shadow .2s ease, border-color .2s ease;
     }
-    .avm-sec:focus-within { border-color: #C4B5FD; box-shadow: 0 0 0 4px rgba(124,58,237,.08), 0 16px 40px rgba(75,47,214,.10); }
-    @media (min-width: 768px) { .avm-sec { padding: 22px 24px 10px; } }
-    .avm-sec-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-    .avm-step {
-        width: 36px; height: 36px; border-radius: 12px; flex: none; position: relative;
-        display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 14px;
-        background: linear-gradient(135deg, #4B2FD6, #7C3AED); box-shadow: 0 6px 16px rgba(91,45,238,.30);
-    }
-    .avm-step i { display: none; }
-    .avm-sec.complete .avm-step { background: linear-gradient(135deg, #059669, #10B981); box-shadow: 0 6px 16px rgba(16,185,129,.30); }
-    .avm-sec.complete .avm-step i { display: block; }
-    .avm-sec.complete .avm-step .avm-step-n { display: none; }
-    .avm-sec-title { font-size: 15.5px; font-weight: 800; color: #0f172a; letter-spacing: -.01em; display: flex; align-items: center; gap: 7px; }
-    .avm-sec-title i { color: #A78BFA; font-size: 13px; }
-    .avm-sec-sub { font-size: 12px; color: #94a3b8; font-weight: 500; margin-top: 1px; }
+    @media (min-width: 768px) { .avm-card { padding: 26px 26px 10px; } }
 
     .avm-grid { display: grid; grid-template-columns: 1fr; gap: 0 18px; }
     @media (min-width: 768px) {
@@ -1391,7 +1375,7 @@ include 'includes/header.php';
     @media (min-width: 992px) { .vessel-input-tabs { margin-left: auto !important; margin-right: auto !important; } }
     .vessel-input-tabs .vit-tab { border: none !important; border-radius: 12px !important; background: transparent !important; color: #475569 !important; font-weight: 700 !important; box-shadow: none !important; }
     .vessel-input-tabs .vit-tab.active { background: #fff !important; color: #4B2FD6 !important; box-shadow: 0 4px 12px rgba(15,23,42,.08) !important; }
-    @media (prefers-reduced-motion: reduce) { .avm-progress-bar, .avm-sec, #assignVesselForm .blue-action-btn.avm-submit { transition: none; } }
+    @media (prefers-reduced-motion: reduce) { .avm-progress-bar, #assignVesselForm .blue-action-btn.avm-submit { transition: none; } }
 </style>
 
 <?php
@@ -1542,14 +1526,7 @@ include 'includes/top_app_bar.php';
                 <div class="avm-progress-track"><div class="avm-progress-bar" id="avmProgressBar"></div></div>
             </div>
 
-            <section class="avm-sec" data-avm-sec="vessel">
-                <div class="avm-sec-head">
-                    <span class="avm-step" aria-hidden="true"><span class="avm-step-n">1</span><i class="fa-solid fa-check"></i></span>
-                    <div class="avm-sec-text">
-                        <div class="avm-sec-title"><i class="fa-solid fa-ship"></i> Vessel &amp; Client</div>
-                        <div class="avm-sec-sub">Who and what this survey is for</div>
-                    </div>
-                </div>
+            <div class="avm-card">
                 <div class="avm-grid">
             <div class="form-group-custom" id="vesselNameField">
                 <label for="vessel_name"><i class="fa-solid fa-ship vdd-field-icon"></i> Vessel Name *</label>
@@ -1624,22 +1601,11 @@ include 'includes/top_app_bar.php';
             </div>
 
 
-<div class="form-group-custom avm-span-2">
+<div class="form-group-custom">
                 <label><i class="fa-solid fa-people-group vdd-field-icon"></i> Agent Name *</label>
                 <input type="text" name="agent_name" value="<?= $edit_mode ? sanitize($edit_survey['agent_name']) : '' ?>" placeholder="e.g. Oceanus Agencies" required>
             </div>
-                </div>
-            </section>
 
-            <section class="avm-sec" data-avm-sec="place">
-                <div class="avm-sec-head">
-                    <span class="avm-step" aria-hidden="true"><span class="avm-step-n">2</span><i class="fa-solid fa-check"></i></span>
-                    <div class="avm-sec-text">
-                        <div class="avm-sec-title"><i class="fa-solid fa-location-dot"></i> Schedule &amp; Port</div>
-                        <div class="avm-sec-sub">When and where the vessel is attended</div>
-                    </div>
-                </div>
-                <div class="avm-grid">
 
             <div class="form-group-custom">
                 <label><i class="fa-solid fa-calendar-day vdd-field-icon"></i> Appointment Date *</label>
@@ -1647,7 +1613,7 @@ include 'includes/top_app_bar.php';
             </div>
 
             <!-- 🌟 Port Name: searchable dropdown with search box inside -->
-            <div class="form-group-custom">
+            <div class="form-group-custom avm-span-2">
                 <label><i class="fa-solid fa-location-dot vdd-field-icon"></i> Port Name *</label>
                 <div class="searchable-select" data-ss-root="port">
                     <button type="button" class="ss-trigger" data-testid="port-select-trigger">
@@ -1697,18 +1663,6 @@ include 'includes/top_app_bar.php';
                 <?php endif; ?>
             </div>
 
-                </div>
-            </section>
-
-            <section class="avm-sec" data-avm-sec="survey">
-                <div class="avm-sec-head">
-                    <span class="avm-step" aria-hidden="true"><span class="avm-step-n">3</span><i class="fa-solid fa-check"></i></span>
-                    <div class="avm-sec-text">
-                        <div class="avm-sec-title"><i class="fa-solid fa-user-tie"></i> Survey &amp; Team</div>
-                        <div class="avm-sec-sub">Survey type(s) and the surveyor(s) to assign</div>
-                    </div>
-                </div>
-                <div class="avm-grid">
             <!-- 🌟 Survey Type: searchable MULTI-select (checkboxes) with search box inside -->
             <div class="form-group-custom avm-span-2">
                 <label><i class="fa-solid fa-file-circle-check vdd-field-icon"></i> Survey Type * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
@@ -1781,18 +1735,7 @@ include 'includes/top_app_bar.php';
             </div>
             <?php endif; ?>
 
-                </div>
-            </section>
 
-            <section class="avm-sec" data-avm-sec="extra">
-                <div class="avm-sec-head">
-                    <span class="avm-step" aria-hidden="true"><span class="avm-step-n">4</span><i class="fa-solid fa-check"></i></span>
-                    <div class="avm-sec-text">
-                        <div class="avm-sec-title"><i class="fa-solid fa-paperclip"></i> Notes &amp; Files</div>
-                        <div class="avm-sec-sub">Optional instructions and documents for the surveyor</div>
-                    </div>
-                </div>
-                <div class="avm-grid">
             <div class="form-group-custom avm-span-2">
                 <label><i class="fa-solid fa-comment vdd-field-icon"></i> Remarks (Optional)</label>
                 <textarea name="remarks" rows="3" placeholder="Enter any specific instructions or notes..."><?= $edit_mode ? sanitize($edit_survey['remarks'] ?? '') : '' ?></textarea>
@@ -1817,7 +1760,7 @@ include 'includes/top_app_bar.php';
             </div>
 
                 </div>
-            </section>
+            </div>
 
             <div class="avm-submit-bar">
                 <div class="avm-submit-hint"><i class="fa-solid fa-circle-info"></i> Fields marked <b>*</b> are required</div>
@@ -2675,27 +2618,22 @@ $(document).ready(function() {
 
 
 <script>
-// Assign Vessel: required-field progress + per-section completion ticks.
+// Assign Vessel: required-field progress bar.
 (function () {
     var form = document.getElementById('assignVesselForm');
     if (!form) return;
-    var REQUIRED = [
-        ['vessel', 'input[name="vessel_name"]'], ['vessel', '#clientSelect'], ['vessel', 'input[name="agent_name"]'],
-        ['place', 'input[name="appointment_date"]'], ['place', '#portSelect'],
-        ['survey', '#surveyTypeIdsInput'], ['survey', '#surveyorIdsInput']
-    ].filter(function (r) { return form.querySelector(r[1]); });
+    var REQUIRED = ['input[name="vessel_name"]', '#clientSelect', 'input[name="agent_name"]', 'input[name="appointment_date"]',
+        '#portSelect', '#surveyTypeIdsInput', '#surveyorIdsInput'].filter(function (sel) { return form.querySelector(sel); });
     var box = document.querySelector('.avm-progress'), bar = document.getElementById('avmProgressBar'),
         pct = document.getElementById('avmProgressPct'), txt = document.getElementById('avmProgressText');
     var last = '';
     function update() {
-        var done = 0, secTotal = {}, secDone = {};
-        REQUIRED.forEach(function (r) {
-            var el = form.querySelector(r[1]);
-            var ok = !!(el && String(el.value || '').trim() !== '');
-            secTotal[r[0]] = (secTotal[r[0]] || 0) + 1;
-            if (ok) { done++; secDone[r[0]] = (secDone[r[0]] || 0) + 1; }
+        var done = 0;
+        REQUIRED.forEach(function (sel) {
+            var el = form.querySelector(sel);
+            if (el && String(el.value || '').trim() !== '') done++;
         });
-        var key = done + '/' + REQUIRED.length + JSON.stringify(secDone);
+        var key = done + '/' + REQUIRED.length;
         if (key === last) return;
         last = key;
         var p = REQUIRED.length ? Math.round(done * 100 / REQUIRED.length) : 100;
@@ -2704,10 +2642,6 @@ $(document).ready(function() {
         txt.textContent = done === REQUIRED.length ? 'All required details filled — ready to save'
             : done + ' of ' + REQUIRED.length + ' required details filled';
         box.classList.toggle('done', done === REQUIRED.length);
-        document.querySelectorAll('[data-avm-sec]').forEach(function (sec) {
-            var k = sec.getAttribute('data-avm-sec');
-            sec.classList.toggle('complete', !!secTotal[k] && secDone[k] === secTotal[k]);
-        });
     }
     ['input', 'change', 'click', 'keyup'].forEach(function (ev) { form.addEventListener(ev, function () { setTimeout(update, 0); }); });
     setInterval(update, 700); // hidden inputs are also filled by the searchable selects / Paste Email
