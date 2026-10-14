@@ -28,6 +28,7 @@ function ciLoadLibrary(): bool {
 }
 
 function ciValidateAll(PDO $db, array $rawRows): array {
+    completedImportPrime($db, $rawRows);
     $seen = [];
     $out = [];
     foreach ($rawRows as $r) $out[] = completedImportValidateRow($db, $r, $seen);
@@ -150,6 +151,15 @@ include 'includes/header.php';
     .ci-badge.duplicate { background: #FFFBEB; color: #B45309; }
     .ci-badge.error { background: #FEF2F2; color: #B91C1C; }
     .ci-msg { font-size: 11.5px; min-width: 180px; }
+    .ci-saved { font-weight: 600; color: #0f172a; }
+    .ci-excel { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+    .ci-tag { display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; padding: 1px 6px; border-radius: 6px; margin-left: 4px; vertical-align: middle; }
+    .ci-tag.new { background: #EDE9FE; color: #5B21B6; }
+    .ci-new-box { background: #F5F3FF; border: 1px solid #DDD6FE; border-radius: 14px; padding: 12px 14px; font-size: 12.5px; color: #3B0764; margin-bottom: 12px; display: grid; gap: 6px; }
+    .ci-new-list { color: #6D28D9; }
+    .ci-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .ci-filter button { border: 1px solid #E2E8F0; background: #fff; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 700; color: #475569; }
+    .ci-filter button.active { background: #1E1B6B; border-color: #1E1B6B; color: #fff; }
     .ci-msg .e { color: #B91C1C; }
     .ci-msg .w { color: #92400E; }
     @media (min-width: 992px) {
@@ -200,7 +210,9 @@ include 'includes/top_app_bar.php';
             <li>Use the same layout as the Completed list download: <b>Vessel Name, Client, Agent, Port, Country, Survey Type, Surveyor, Recovery (MT), VLSFO, HSFO, LSMGO, Report Uploaded Date</b>. Country heading rows are ignored.</li>
             <li>Optional columns: Report No, IMO, Assign Date, Survey Completed Date, Remarks. Without a Report No, one is generated for the report's month.</li>
             <li>Combined survey types / surveyors are written with “+” (e.g. <i>Offhire + Condition Survey</i>).</li>
-            <li>Clients, survey types and surveyors must already exist. Ports that don't exist are created.</li>
+            <li>Names are matched to the existing clients, ports, survey types and surveyors (ignoring case, spacing and words like LTD / PTE / PORT). The preview shows each Excel value next to what will be saved.</li>
+            <li>A port name with "Anchorage" is saved to that port's anchorage, otherwise to the port. Ports that don't exist are added (with their anchorage). Surveyors that don't exist are added as inactive records; a blank surveyor is saved as "Not Recorded".</li>
+            <li>A missing Report / Completed date is taken from the Assign Date. Clients and survey types must already exist.</li>
             <li>Vessels already in Completed (same vessel, client, port and report date) are skipped.</li>
         </ul>
     </div>
@@ -220,6 +232,25 @@ include 'includes/top_app_bar.php';
         $cnt = ['ready' => 0, 'duplicate' => 0, 'error' => 0];
         foreach ($rows as $r) $cnt[$r['status']]++;
         $fmtQty = fn($v) => $v === null ? '' : rtrim(rtrim(number_format((float)$v, 3, '.', ''), '0'), '.');
+        // Everything this import will add to the master lists (ready rows only).
+        $newPorts = []; $newSurveyors = []; $changed = 0;
+        foreach ($rows as $r) {
+            if ($r['status'] !== 'ready') continue;
+            if (!empty($r['port_plan'])) $newPorts[strtolower($r['port_plan']['create_port'])] = $r['port_plan'];
+            foreach ($r['surveyor_plan'] as $u) if (!empty($u['create'])) $newSurveyors[strtolower($u['name'])] = $u['name'];
+        }
+        foreach ($rows as $r) foreach ($r['compare'] as $c) if (strcasecmp($c['excel'], $c['saved']) !== 0) { $changed++; break; }
+        $possibleDup = count(array_filter($rows, fn($r) => !empty($r['possible_duplicate']) && $r['status'] === 'ready'));
+        // Saved value, the Excel value under it when it differs, and how it matched.
+        $cmpCell = function (array $r, string $field, string $fallback, string $tag = '') {
+            $c = $r['compare'][$field] ?? null;
+            if (!$c) return sanitize($fallback);
+            $out = '<div class="ci-saved">' . sanitize($c['saved']) . $tag . '</div>';
+            if (strcasecmp(trim($c['excel']), trim($c['saved'])) !== 0) {
+                $out .= '<div class="ci-excel" title="Value in your Excel">Excel: ' . sanitize($c['excel']) . ($c['how'] !== '' ? ' · ' . sanitize($c['how']) : '') . '</div>';
+            }
+            return $out;
+        };
     ?>
     <div class="ci-card">
         <div class="ci-card-title">2. Preview — <?= sanitize($preview['file']) ?></div>
@@ -230,6 +261,26 @@ include 'includes/top_app_bar.php';
             <div class="ci-stat dup"><div class="n" data-testid="ci-count-dup"><?= $cnt['duplicate'] ?></div><div class="l">Already exist</div></div>
             <div class="ci-stat err"><div class="n" data-testid="ci-count-err"><?= $cnt['error'] ?></div><div class="l">Errors</div></div>
         </div>
+        <?php if ($newPorts || $newSurveyors): ?>
+        <div class="ci-new-box" data-testid="ci-new-masters">
+            <?php if ($newPorts): ?>
+            <div><b><i class="fa-solid fa-anchor"></i> <?= count($newPorts) ?> new port<?= count($newPorts) === 1 ? '' : 's' ?> will be added</b> (each with its anchorage):
+                <span class="ci-new-list"><?= sanitize(implode(', ', array_map(fn($p) => $p['create_port'] . ' (' . $p['country'] . ')', $newPorts))) ?></span></div>
+            <?php endif; ?>
+            <?php if ($newSurveyors): ?>
+            <div><b><i class="fa-solid fa-user-plus"></i> <?= count($newSurveyors) ?> new surveyor<?= count($newSurveyors) === 1 ? '' : 's' ?> will be added</b> (inactive — they cannot log in):
+                <span class="ci-new-list"><?= sanitize(implode(', ', $newSurveyors)) ?></span></div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+        <div class="ci-filter" role="group" aria-label="Show rows">
+            <button type="button" class="active" data-ci-filter="all">All (<?= count($rows) ?>)</button>
+            <button type="button" data-ci-filter="ready">Ready (<?= $cnt['ready'] ?>)</button>
+            <button type="button" data-ci-filter="changed">Changed by matching (<?= $changed ?>)</button>
+            <button type="button" data-ci-filter="error">Errors (<?= $cnt['error'] ?>)</button>
+            <button type="button" data-ci-filter="duplicate">Already exist (<?= $cnt['duplicate'] ?>)</button>
+            <?php if ($possibleDup): ?><button type="button" data-ci-filter="possible" data-testid="ci-filter-possible">Possible duplicates (<?= $possibleDup ?>)</button><?php endif; ?>
+        </div>
         <div class="ci-table-wrap">
             <table class="ci-table" data-testid="ci-preview-table">
                 <thead><tr>
@@ -237,14 +288,15 @@ include 'includes/top_app_bar.php';
                 </tr></thead>
                 <tbody>
                 <?php foreach ($rows as $r): ?>
-                    <tr data-status="<?= sanitize($r['status']) ?>">
+                    <?php $isChanged = false; foreach ($r['compare'] as $c) if (strcasecmp($c['excel'], $c['saved']) !== 0) $isChanged = true; ?>
+                    <tr data-status="<?= sanitize($r['status']) ?>" data-changed="<?= $isChanged ? '1' : '0' ?>" data-possible="<?= !empty($r['possible_duplicate']) ? '1' : '0' ?>">
                         <td class="nw"><?= (int)$r['row'] ?></td>
                         <td class="nw"><span class="ci-badge <?= sanitize($r['status']) ?>"><?= $r['status'] === 'ready' ? '<i class="fa-solid fa-check"></i> Ready' : ($r['status'] === 'duplicate' ? '<i class="fa-solid fa-clone"></i> Skip' : '<i class="fa-solid fa-xmark"></i> Error') ?></span></td>
                         <td class="nw"><b><?= sanitize($r['vessel_name']) ?></b></td>
-                        <td><?= sanitize($r['client_name'] !== '' ? $r['client_name'] : $r['client_raw']) ?></td>
-                        <td><?= sanitize($r['port_name'] !== '' ? $r['port_name'] : $r['port_raw']) ?></td>
-                        <td><?= sanitize($r['survey_type_names'] ? implode(' + ', $r['survey_type_names']) : $r['survey_type_raw']) ?></td>
-                        <td><?= sanitize($r['surveyor_names'] ? implode(' + ', $r['surveyor_names']) : $r['surveyor_raw']) ?></td>
+                        <td><?= $cmpCell($r, 'client', $r['client_raw']) ?></td>
+                        <td><?= $cmpCell($r, 'port', $r['port_raw'], !empty($r['port_plan']) ? ' <span class="ci-tag new">NEW PORT</span>' : '') ?></td>
+                        <td><?= $cmpCell($r, 'survey_type', $r['survey_type_raw']) ?></td>
+                        <td><?= $cmpCell($r, 'surveyor', $r['surveyor_raw'], array_filter($r['surveyor_plan'], fn($u) => !empty($u['create'])) ? ' <span class="ci-tag new">NEW SURVEYOR</span>' : '') ?></td>
                         <td class="nw"><?php
                             if ($r['recovery_na']) echo sanitize(RECOVERY_NA_LABEL);
                             else {
@@ -254,7 +306,7 @@ include 'includes/top_app_bar.php';
                                 if ($parts) echo '<div style="font-size:10.5px;color:#94a3b8">' . sanitize(implode(' · ', $parts)) . '</div>';
                             }
                         ?></td>
-                        <td class="nw"><?= $r['report_date'] ? date('d-m-Y', strtotime($r['report_date'])) : '' ?></td>
+                        <td class="nw"><?= isset($r['compare']['report_date']) ? $cmpCell($r, 'report_date', '') : ($r['report_date'] ? date('d-m-Y', strtotime($r['report_date'])) : '') ?></td>
                         <td class="ci-msg"><?php
                             foreach ($r['errors'] as $m) echo '<div class="e">' . sanitize($m) . '</div>';
                             foreach ($r['warnings'] as $m) echo '<div class="w">' . sanitize($m) . '</div>';
@@ -273,6 +325,16 @@ include 'includes/top_app_bar.php';
         </form>
     </div>
     <script>
+    document.querySelectorAll('[data-ci-filter]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var f = b.getAttribute('data-ci-filter');
+            document.querySelectorAll('[data-ci-filter]').forEach(function (x) { x.classList.toggle('active', x === b); });
+            document.querySelectorAll('[data-testid=ci-preview-table] tbody tr').forEach(function (tr) {
+                var show = f === 'all' || (f === 'changed' ? tr.getAttribute('data-changed') === '1' : f === 'possible' ? tr.getAttribute('data-possible') === '1' : tr.getAttribute('data-status') === f);
+                tr.style.display = show ? '' : 'none';
+            });
+        });
+    });
     document.getElementById('ciImportForm').addEventListener('submit', function (e) {
         if (this.dataset.sent) { e.preventDefault(); return; }
         this.dataset.sent = '1';
