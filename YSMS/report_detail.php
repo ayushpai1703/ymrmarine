@@ -372,7 +372,7 @@ include 'includes/header.php';
     </div>
 
     <?php if (!$is_super_admin && $role !== 'Client'): ?>
-    <!-- ✍️ UPLOAD FORM SECTION: కనీసం ఒక WORD FORMAT (.docx) అప్‌లోడ్ చేయాలి -->
+    <!-- ✍️ UPLOAD FORM SECTION: Final Report (PDF) is the required document -->
     <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm">
         <div class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fa-solid fa-cloud-arrow-up text-primary"></i> Upload Final Documentation</div>
 
@@ -382,8 +382,8 @@ include 'includes/header.php';
             <input type="hidden" name="no_report_confirmed" id="noReportConfirmed" value="0">
 
             <div class="mb-3">
-                <label class="form-label fw-bold text-secondary" style="font-size:12px;">1. Formal Final Report (Word Document / .docx)</label>
-                <input type="file" name="word_report" id="wordReportInput" class="form-control form-control-sm" accept=".docx, .doc">
+                <label class="form-label fw-bold text-secondary" style="font-size:12px;" for="finalReportInput">1. Final Report (PDF)</label>
+                <input type="file" name="final_report_pdf" id="finalReportInput" class="form-control form-control-sm final-report-input" accept=".pdf,application/pdf" data-testid="final-report-pdf-input">
             </div>
 
             <div class="mb-3">
@@ -441,7 +441,7 @@ include 'includes/header.php';
             <div class="modal-content">
                 <div class="modal-body text-center py-4">
                     <i class="fa-solid fa-triangle-exclamation text-warning fs-2 mb-2"></i>
-                    <p class="fw-semibold mb-0" style="font-size: 14px;">Do you really want to continue without report?</p>
+                    <p class="fw-semibold mb-0" style="font-size: 14px;">Do you really want to continue without the Final Report (PDF)?</p>
                 </div>
                 <div class="modal-footer border-0 pt-0">
                     <button type="button" class="btn btn-outline-secondary flex-fill" data-bs-dismiss="modal" data-testid="no-report-confirm-cancel">Cancel</button>
@@ -460,8 +460,8 @@ include 'includes/header.php';
         $('#addMoreFilesBtn').on('click', function() {
             let html = `
                 <div class="mb-3 p-2 border rounded bg-light position-relative">
-                    <label class="form-label fw-bold text-muted" style="font-size:11px;">Extra Document #${fileIndex}</label>
-                    <input type="file" name="extra_files[]" class="form-control form-control-sm">
+                    <label class="form-label fw-bold text-muted" style="font-size:11px;">Extra Documents #${fileIndex} <span style="font-weight:500;">— select one or more files (PDF, Word, Excel, PowerPoint, images, ZIP…)</span></label>
+                    <input type="file" name="extra_files[]" class="form-control form-control-sm extra-files-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.txt,.rtf,.ppt,.pptx,.odt,.ods,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.tif,.tiff,.bmp,.zip,.rar,.7z,.msg,.eml" data-testid="extra-files-input">
                     <button type="button" class="btn btn-sm text-danger position-absolute end-0 top-0 mt-1 remove-file-btn"><i class="fa-solid fa-trash"></i></button>
                 </div>`;
             $('#additionalFilesContainer').append(html);
@@ -472,9 +472,9 @@ include 'includes/header.php';
             $(this).parent().remove();
         });
 
-        // 🌟 If no Word report file is selected, confirm before continuing the workflow
+        // 🌟 If no Final Report (PDF) is selected, confirm before continuing the workflow
         $('#reportUploadForm').on('submit', function(e) {
-            const hasFile = document.getElementById('wordReportInput').files.length > 0;
+            const hasFile = document.getElementById('finalReportInput').files.length > 0;
             const alreadyConfirmed = $('#noReportConfirmed').val() === '1';
             if (!hasFile && !alreadyConfirmed) {
                 e.preventDefault();
@@ -541,6 +541,12 @@ document.addEventListener('click', function (ev) {
     function mb(b) { return (b / 1048576).toFixed(1) + ' MB'; }
     document.addEventListener('change', function (e) {
         var input = e.target;
+        if (input.classList && input.classList.contains('final-report-input') && input.files && input.files[0] && !/\.pdf$/i.test(input.files[0].name)) {
+            warn('PDF only', 'The Final Report must be a PDF (.pdf) file. Please choose the PDF version of the report.');
+            input.value = '';
+            input.dispatchEvent(new Event('ysms:cleared', { bubbles: true }));
+            return;
+        }
         if (!input.classList || !input.classList.contains('zip-folder-input') || !input.files || !input.files[0]) return;
         var f = input.files[0];
         if (!/\.zip$/i.test(f.name)) {
