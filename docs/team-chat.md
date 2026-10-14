@@ -15,6 +15,10 @@ Private group chat ("YMR Team Group") inside YSMS. Built on the existing PHP + M
 | Duplicate sends | Button locked while sending + a per-message `client_token` (unique per sender) so a double-click, a retried request or a network replay returns the original message instead of creating another |
 | Failures | "Connection problem — retrying…" banner with back-off, automatic recovery, session-expired and access-removed states, friendly error text for every rejected upload |
 
+### Multiple groups
+
+"YMR Team Group" is created automatically; **Admin / Super Admin** can create more groups with **New Group** (side list on desktop, **Groups** button on mobile). The creator is always a member; other staff can be ticked at creation time or added later from **Members**. Group names are 2–60 characters and unique (case-insensitive). Surveyors only see the groups they belong to; Admin / Super Admin see every group (ones they aren't in show as "Not a member" and stay unreadable until they add themselves). Each group shows its own unread count; the sidebar badge is the total. API: `GET action=groups`, `GET action=staff` (managers), `POST action=create_group` (managers, `name`, `member_ids[]`). No schema change — uses the existing `chat_groups` / `chat_group_members` tables.
+
 ## 2. Files
 
 Created:
