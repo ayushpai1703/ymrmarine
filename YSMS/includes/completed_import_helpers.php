@@ -126,31 +126,241 @@ function completedImportParseQty($raw): array {
     return [true, round((float)$s, 3)];
 }
 
-/** Any surveyor (active or not — historical data) by id / email / name. */
-function completedImportFindSurveyor(PDO $db, string $raw): ?array {
-    $raw = trim($raw);
-    if ($raw === '') return null;
-    $found = bulkAssignFindSurveyor($db, $raw); // active surveyors first
-    if ($found) return $found;
-    $stmt = $db->prepare("SELECT id, full_name, email FROM users WHERE role_id = 2 AND LOWER(TRIM(full_name)) = LOWER(?) LIMIT 2");
-    $stmt->execute([$raw]);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    return count($rows) === 1 ? $rows[0] : null;
+// ─────────────────────────────────────────────────────────────────────────
+// Matching against the live master lists (clients / ports / survey types /
+// surveyors). Exact name first, then the same name ignoring case,
+// punctuation and filler words, then the older partial-match finders. Every
+// result says HOW it matched so the preview can show Excel value → saved as.
+// ─────────────────────────────────────────────────────────────────────────
+
+const COMPLETED_IMPORT_PLACEHOLDER_SURVEYOR = 'Not Recorded';
+
+function completedImportRefs(PDO $db, bool $refresh = false): array {
+    static $refs = null;
+    if ($refs !== null && !$refresh) return $refs;
+    $refs = [
+        'clients'   => $db->query("SELECT id, company_name FROM clients")->fetchAll(PDO::FETCH_ASSOC),
+        'ports'     => $db->query("SELECT id, port_name, country FROM ports")->fetchAll(PDO::FETCH_ASSOC),
+        'types'     => $db->query("SELECT id, type_name FROM survey_types")->fetchAll(PDO::FETCH_ASSOC),
+        'surveyors' => $db->query("SELECT u.id, u.full_name, u.status FROM users u JOIN roles r ON r.id = u.role_id WHERE r.name = 'Surveyor'")->fetchAll(PDO::FETCH_ASSOC),
+    ];
+    return $refs;
 }
 
-/** @return array{id:int,port_name:string,status:string}|null  status: exact|partial|ambiguous */
-function completedImportFindPort(PDO $db, string $raw): ?array {
+function completedImportWords(string $s): array {
+    $s = strtoupper(str_replace("\xC2\xA0", ' ', $s));
+    return preg_split('/\s+/', trim(preg_replace('/[^A-Z0-9]+/', ' ', $s)), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+}
+function completedImportClientKey(string $s): string {
+    $drop = ['PTE', 'LTD', 'LIMITED', 'PVT', 'PRIVATE', 'FZCO', 'FZE', 'DMCC', 'LLC', 'INC', 'CO', 'THE'];
+    return implode(' ', array_diff(completedImportWords($s), $drop));
+}
+function completedImportPortBase(string $s): string {
+    $s = explode(',', $s)[0];
+    $drop = ['PORT', 'ANCHORAGE', 'ANCORAGE', 'ANCHORGAE', 'ANCH', 'OF', 'THE'];
+    return implode(' ', array_diff(completedImportWords($s), $drop));
+}
+function completedImportIsAnchorage(string $s): bool { return (bool)preg_match('/anch|ancor/i', $s); }
+function completedImportTypeKey(string $s): string { return implode(' ', array_diff(completedImportWords($s), ['SURVEY'])); }
+function completedImportPersonKey(string $s): string { return implode(' ', array_diff(completedImportWords($s), ['CAPT', 'CAPTAIN', 'SIR', 'MR', 'MRS', 'MS', 'DR'])); }
+/** ALL-CAPS text → Title Case (names typed in capitals); mixed case is kept as typed. */
+function completedImportNiceName(string $s): string {
+    $s = trim(preg_replace('/\s+/', ' ', str_replace("\xC2\xA0", ' ', $s)), " \t\n\r\0\x0B,;");
+    if ($s !== '' && strtoupper($s) === $s) {
+        $s = ucwords(strtolower($s));
+        $s = preg_replace_callback('/\(([a-z]{2,6})\)/i', fn($m) => '(' . strtoupper($m[1]) . ')', $s); // (KBSP)
+    }
+    return $s;
+}
+
+/**
+ * Same name typed slightly differently: at most 2 letters different, ≥80 %
+ * similar and the same first letter (Dhmara/Dhamra, Karchi/Karachi,
+ * New Manglore/New Mangalore), or equal once spaces are removed
+ * (Khor Fakkan/Khorfakkan). Tested on the historical port list so that
+ * different places (Said/Side, Kandla/Kakinada, Dhamra/Dharamtar) stay apart.
+ */
+function completedImportCloseSpelling(string $a, string $b): bool {
+    if ($a === '' || $b === '') return false;
+    if (str_replace(' ', '', $a) === str_replace(' ', '', $b)) return true;
+    if ($a[0] !== $b[0] || min(strlen($a), strlen($b)) < 4) return false;
+    similar_text($a, $b, $pct);
+    return $pct >= 80 && levenshtein($a, $b) <= 2;
+}
+
+/** @return array{id:int,name:string,how:string}|array{error:string}|null */
+function completedImportFindClient(PDO $db, string $raw): ?array {
     $raw = trim($raw);
     if ($raw === '') return null;
-    $stmt = $db->prepare("SELECT id, port_name FROM ports WHERE LOWER(TRIM(port_name)) = LOWER(?) LIMIT 1");
-    $stmt->execute([$raw]);
-    if ($row = $stmt->fetch(PDO::FETCH_ASSOC)) return $row + ['status' => 'exact'];
-    $stmt = $db->prepare("SELECT id, port_name FROM ports WHERE port_name LIKE ? LIMIT 2");
-    $stmt->execute(['%' . $raw . '%']);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    if (count($rows) === 1) return $rows[0] + ['status' => 'partial'];
-    if (count($rows) > 1) return ['id' => 0, 'port_name' => '', 'status' => 'ambiguous'];
+    $refs = completedImportRefs($db);
+    foreach ($refs['clients'] as $c) if (strcasecmp(trim($c['company_name']), $raw) === 0) return ['id' => (int)$c['id'], 'name' => $c['company_name'], 'how' => 'exact'];
+    $k = completedImportClientKey($raw);
+    $hits = array_values(array_filter($refs['clients'], fn($c) => $k !== '' && completedImportClientKey($c['company_name']) === $k));
+    if (count($hits) === 1) return ['id' => (int)$hits[0]['id'], 'name' => $hits[0]['company_name'], 'how' => 'same name (case / punctuation / LTD, PTE…)'];
+    if (count($hits) > 1) return ['error' => 'matches more than one client: ' . implode(' / ', array_column($hits, 'company_name'))];
+    if ($c = bulkAssignFindClient($db, $raw)) return ['id' => (int)$c['id'], 'name' => $c['company_name'], 'how' => 'partial / short code match'];
     return null;
+}
+
+/** @return array{id:int,name:string,how:string}|array{error:string}|null */
+function completedImportFindType(PDO $db, string $raw): ?array {
+    $raw = trim($raw);
+    if ($raw === '') return null;
+    $refs = completedImportRefs($db);
+    foreach ($refs['types'] as $t) if (strcasecmp(trim($t['type_name']), $raw) === 0) return ['id' => (int)$t['id'], 'name' => $t['type_name'], 'how' => 'exact'];
+    $k = completedImportTypeKey($raw);
+    $hits = array_values(array_filter($refs['types'], fn($t) => $k !== '' && completedImportTypeKey($t['type_name']) === $k));
+    if (count($hits) === 1) return ['id' => (int)$hits[0]['id'], 'name' => $hits[0]['type_name'], 'how' => 'same name'];
+    if (count($hits) > 1) return ['error' => 'matches more than one survey type: ' . implode(' / ', array_column($hits, 'type_name'))];
+    if ($t = bulkAssignFindSurveyType($db, $raw)) return ['id' => (int)$t['id'], 'name' => $t['type_name'], 'how' => 'partial match'];
+    return null;
+}
+
+/**
+ * Surveyor by name (active or inactive — historical data). Unknown names are
+ * planned for creation (id 0, create = true) as an INACTIVE surveyor record.
+ * @return array{id:int,name:string,how:string,create:bool}|array{error:string}
+ */
+function completedImportFindSurveyor(PDO $db, string $raw): array {
+    $raw = trim($raw);
+    $refs = completedImportRefs($db);
+    if ($raw === '') $raw = COMPLETED_IMPORT_PLACEHOLDER_SURVEYOR;
+    foreach ($refs['surveyors'] as $u) if (strcasecmp(trim($u['full_name']), $raw) === 0) return ['id' => (int)$u['id'], 'name' => $u['full_name'], 'how' => 'exact', 'create' => false];
+    $k = completedImportPersonKey($raw);
+    $hits = array_values(array_filter($refs['surveyors'], fn($u) => $k !== '' && completedImportPersonKey($u['full_name']) === $k));
+    if (count($hits) === 1) return ['id' => (int)$hits[0]['id'], 'name' => $hits[0]['full_name'], 'how' => 'same name', 'create' => false];
+    $words = completedImportWords($k);
+    if (count($words) === 1) {
+        $hits = array_values(array_filter($refs['surveyors'], fn($u) => (completedImportWords(completedImportPersonKey($u['full_name']))[0] ?? '') === $words[0]));
+        if (count($hits) === 1) return ['id' => (int)$hits[0]['id'], 'name' => $hits[0]['full_name'], 'how' => 'first name', 'create' => false];
+        if (count($hits) > 1) return ['error' => 'Surveyor "' . $raw . '" matches more than one surveyor (' . implode(' / ', array_column($hits, 'full_name')) . ') — write the full name.'];
+        $close = array_values(array_filter($refs['surveyors'], fn($u) => completedImportCloseSpelling($words[0], completedImportWords(completedImportPersonKey($u['full_name']))[0] ?? '')));
+        if (count($close) === 1) return ['id' => (int)$close[0]['id'], 'name' => $close[0]['full_name'], 'how' => 'close spelling of first name', 'create' => false];
+    }
+    $reg = &completedImportNewSurveyorRegistry();
+    foreach ($reg as $rk => $name) {
+        if ($rk === $k || completedImportCloseSpelling($k, $rk)) { $reg[$k] = $name; return ['id' => 0, 'name' => $name, 'how' => 'same new surveyor as "' . $name . '"', 'create' => true]; }
+    }
+    $name = completedImportNiceName(implode(' ', array_map('ucfirst', array_map('strtolower', completedImportWords($k)))) ?: $raw);
+    $reg[$k] = $name;
+    return ['id' => 0, 'name' => $name, 'how' => 'new surveyor', 'create' => true];
+}
+
+/**
+ * Port rule: a name that says anchorage → that port's "… Anchorage" entry,
+ * otherwise the port itself. Unknown ports are planned for creation together
+ * with their anchorage (same as Admin Controls → Ports).
+ * @return array  id, name, how, create(bool), create_port, create_anchorage, country
+ */
+function completedImportResolvePort(PDO $db, string $raw, string $country = ''): array {
+    $raw = trim(preg_replace('/\s+/', ' ', str_replace("\xC2\xA0", ' ', $raw)));
+    $refs = completedImportRefs($db);
+    foreach ($refs['ports'] as $p) if (strcasecmp(trim($p['port_name']), $raw) === 0) return ['id' => (int)$p['id'], 'name' => $p['port_name'], 'how' => 'exact', 'create' => false];
+    $base = completedImportPortBase($raw);
+    if ($base === '') return ['error' => 'Port "' . $raw . '" is not a port name — write the real port name.'];
+    $wantAnch = completedImportIsAnchorage($raw);
+    $cands = array_values(array_filter($refs['ports'], fn($p) => $base !== '' && completedImportPortBase($p['port_name']) === $base));
+    $anch = array_values(array_filter($cands, fn($p) => completedImportIsAnchorage($p['port_name'])));
+    $port = array_values(array_filter($cands, fn($p) => !completedImportIsAnchorage($p['port_name'])));
+    $pick = $wantAnch ? $anch : $port;
+    if (count($pick) > 1) {
+        $named = array_values(array_filter($pick, fn($p) => preg_match('/\bport\b/i', $p['port_name'])));
+        if (count($named) === 1) $pick = $named;
+    }
+    if (count($pick) === 1) return ['id' => (int)$pick[0]['id'], 'name' => $pick[0]['port_name'], 'how' => $wantAnch ? 'anchorage of this port' : 'port (not its anchorage)', 'create' => false];
+    if (count($pick) > 1) return ['error' => 'Port "' . $raw . '" matches more than one port (' . implode(' / ', array_column($pick, 'port_name')) . ') — use the exact name.'];
+
+    // Typo of an existing port name (only when exactly one port base is that close).
+    if (!$cands) {
+        $close = [];
+        foreach ($refs['ports'] as $p) {
+            $pb = completedImportPortBase($p['port_name']);
+            if ($pb !== $base && completedImportCloseSpelling($base, $pb)) $close[$pb][] = $p;
+        }
+        if (count($close) > 1) { // several close names → keep only the closest one, if it is unique
+            $dist = [];
+            foreach (array_keys($close) as $pb) $dist[$pb] = levenshtein($base, $pb);
+            $min = min($dist);
+            $best = array_keys($dist, $min);
+            $close = count($best) === 1 ? [$best[0] => $close[$best[0]]] : [];
+        }
+        if (count($close) === 1) {
+            $grp = reset($close);
+            $cands = $grp;
+            $anch = array_values(array_filter($grp, fn($p) => completedImportIsAnchorage($p['port_name'])));
+            $port = array_values(array_filter($grp, fn($p) => !completedImportIsAnchorage($p['port_name'])));
+            $pick = $wantAnch ? $anch : $port;
+            if (count($pick) > 1) {
+                $named = array_values(array_filter($pick, fn($p) => preg_match('/\bport\b/i', $p['port_name'])));
+                if (count($named) === 1) $pick = $named;
+            }
+            if (count($pick) === 1) return ['id' => (int)$pick[0]['id'], 'name' => $pick[0]['port_name'], 'how' => 'close spelling of an existing port' . ($wantAnch ? ' (anchorage)' : ''), 'create' => false];
+        }
+    }
+
+    // Not found → create the port and its anchorage.
+    $parts = explode(',', $raw, 2);
+    if ($country === '' && isset($parts[1]) && trim($parts[1]) !== '') $country = completedImportNiceName($parts[1]);
+    $baseName = trim(preg_replace('/\b(anchorage|ancorage|anchorgae|anch)\b\.?/i', '', $parts[0]));
+    $baseName = completedImportNiceName(preg_replace('/\s+/', ' ', $baseName));
+    if ($port) { $baseName = $port[0]['port_name']; $country = $country ?: (string)$port[0]['country']; }
+    $anchName = buildAnchorageName($baseName) ?? ($baseName . ' Anchorage');
+    if ($anch && !$wantAnch) $anchName = $anch[0]['port_name'];
+    $plan = ['id' => 0, 'name' => $wantAnch ? $anchName : $baseName, 'how' => $wantAnch ? 'new port — its anchorage is used' : 'new port',
+            'create' => true, 'create_port' => $baseName, 'create_anchorage' => $anchName, 'country' => $country !== '' ? $country : 'Not specified'];
+
+    // One new port per place: later spellings of a port already planned in
+    // this file (same name, or a close spelling) reuse that first plan.
+    $reg = &completedImportNewPortRegistry();
+    foreach ($reg as $rb => $rp) {
+        if ($rb === $base || completedImportCloseSpelling($base, $rb)) {
+            $reg[$base] = $rp; // this spelling too, so a further typo of it lands on the same port
+            $same = $rp;
+            $same['name'] = $wantAnch ? $rp['create_anchorage'] : $rp['create_port'];
+            $same['how'] = ($rb === $base ? 'same new port as' : 'close spelling of new port') . ' "' . $rp['create_port'] . '"' . ($wantAnch ? ' (anchorage)' : '');
+            return $same;
+        }
+    }
+    $reg[$base] = $plan;
+    return $plan;
+}
+
+/** "A + B", "A / B", "A & B", or two known first names with only a space ("PRAKASH ASHOK"). */
+function completedImportSplitSurveyors(PDO $db, string $raw): array {
+    $parts = array_values(array_filter(array_map('trim', preg_split('/\s*[+\/&]\s*/', trim($raw)) ?: []), fn($p) => $p !== ''));
+    $out = [];
+    $refs = completedImportRefs($db);
+    $firsts = [];
+    foreach ($refs['surveyors'] as $u) { $f = completedImportWords(completedImportPersonKey($u['full_name']))[0] ?? ''; if ($f !== '') $firsts[$f] = ($firsts[$f] ?? 0) + 1; }
+    foreach ($parts as $p) {
+        $w = completedImportWords(completedImportPersonKey($p));
+        $exact = false;
+        foreach ($refs['surveyors'] as $u) if (completedImportPersonKey($u['full_name']) === implode(' ', $w)) $exact = true;
+        if (!$exact && count($w) > 1 && count(array_filter($w, fn($x) => ($firsts[$x] ?? 0) === 1)) === count($w)) { foreach ($w as $x) $out[] = $x; }
+        else $out[] = $p;
+    }
+    return $out;
+}
+
+function &completedImportNewPortRegistry(): array { static $reg = []; return $reg; }
+function &completedImportNewSurveyorRegistry(): array { static $reg = []; return $reg; }
+
+/**
+ * Resolve every distinct port / surveyor once, most-used spelling first, so
+ * the most common spelling becomes the name of any port / surveyor created.
+ */
+function completedImportPrime(PDO $db, array $rawRows): void {
+    $reg = &completedImportNewPortRegistry(); $reg = [];
+    $sreg = &completedImportNewSurveyorRegistry(); $sreg = [];
+    $ports = []; $countries = []; $people = [];
+    foreach ($rawRows as $r) {
+        $p = trim((string)($r['port'] ?? ''));
+        if ($p !== '') { $ports[$p] = ($ports[$p] ?? 0) + 1; $countries[$p] = $countries[$p] ?? trim((string)($r['country'] ?? '')); }
+        foreach (completedImportSplitSurveyors($db, (string)($r['surveyor'] ?? '')) as $s) $people[$s] = ($people[$s] ?? 0) + 1;
+    }
+    arsort($ports); arsort($people);
+    foreach ($ports as $p => $n) completedImportResolvePort($db, $p, $countries[$p]);
+    foreach ($people as $s => $n) completedImportFindSurveyor($db, $s);
 }
 
 /** Splits "Offhire + Draft Survey" / "A + B" combinations. */
@@ -159,21 +369,53 @@ function completedImportSplitCombo(string $raw): array {
     return array_values(array_filter(array_map('trim', $parts), fn($p) => $p !== ''));
 }
 
-function completedImportFindExisting(PDO $db, string $vessel, int $clientId, int $portId, string $reportDate, string $reportNumber): ?array {
+/** "MV. STAR ATLAS", "M/V Star Atlas", "MV STAR ATLAS" → "STAR ATLAS". */
+function completedImportVesselKey(string $s): string {
+    $s = strtoupper(str_replace("\xC2\xA0", ' ', $s));
+    $s = preg_replace('/^\s*(M\s*[.\/]?\s*[VT]\s*[.\/]?\s+|M[VT]\.)+/', '', $s);
+    $s = preg_replace('/^\s*M\s*\/\s*V\s*/', '', $s);
+    return implode(' ', completedImportWords($s));
+}
+
+/** Same vessel + client already completed within ±7 days (different date) — a warning, not a skip. */
+function completedImportNearbyExisting(PDO $db, string $vessel, int $clientId, string $reportDate): ?array {
+    if ($clientId <= 0 || $reportDate === '') return null;
+    $stmt = $db->prepare("SELECT id, report_number, vessel_name, DATE(report_uploaded_date) AS d FROM surveys
+        WHERE status = 'Completed' AND client_id = ? AND report_uploaded_date BETWEEN DATE_SUB(?, INTERVAL 7 DAY) AND DATE_ADD(?, INTERVAL 7 DAY)
+          AND DATE(report_uploaded_date) <> DATE(?)");
+    $d = substr($reportDate, 0, 10);
+    $stmt->execute([$clientId, $d, $d, $d]);
+    $vk = completedImportVesselKey($vessel);
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) if (completedImportVesselKey((string)$row['vessel_name']) === $vk) return $row;
+    return null;
+}
+
+/**
+ * Already in Completed? Same report number, or the same vessel + client +
+ * report date + survey types (port is NOT part of the key, so a port typed
+ * differently in a later file still counts as the same survey).
+ */
+function completedImportFindExisting(PDO $db, string $vessel, int $clientId, array $typeIds, string $reportDate, string $reportNumber): ?array {
     if ($reportNumber !== '') {
         $stmt = $db->prepare("SELECT id, report_number FROM surveys WHERE report_number = ? LIMIT 1");
         $stmt->execute([$reportNumber]);
         if ($row = $stmt->fetch(PDO::FETCH_ASSOC)) return $row;
     }
-    if ($clientId <= 0 || $portId <= 0) return null;
+    if ($clientId <= 0) return null;
     $stmt = $db->prepare("
-        SELECT id, report_number FROM surveys
-        WHERE status = 'Completed' AND LOWER(TRIM(vessel_name)) = LOWER(?)
-          AND client_id = ? AND port_id = ? AND DATE(report_uploaded_date) = ?
-        LIMIT 1
+        SELECT id, report_number, vessel_name, survey_type_ids, survey_type_id FROM surveys
+        WHERE status = 'Completed' AND client_id = ? AND DATE(report_uploaded_date) = ?
     ");
-    $stmt->execute([trim($vessel), $clientId, $portId, substr($reportDate, 0, 10)]);
-    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    $stmt->execute([$clientId, substr($reportDate, 0, 10)]);
+    $want = $typeIds; sort($want);
+    $vk = completedImportVesselKey($vessel);
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (completedImportVesselKey((string)$row['vessel_name']) !== $vk) continue;
+        $have = array_values(array_unique(array_filter(array_map('intval', explode(',', (string)($row['survey_type_ids'] ?: $row['survey_type_id']))))));
+        sort($have);
+        if ($have === $want) return $row;
+    }
+    return null;
 }
 
 /**
@@ -189,7 +431,8 @@ function completedImportValidateRow(PDO $db, array $r, array &$seenKeys): array 
         'surveyor_raw' => $str('surveyor'), 'remarks' => $str('remarks'),
         'imo_number' => bulkAssignNormalizeImo($str('imo')), 'report_number' => $str('report_number'),
         'client_id' => 0, 'client_name' => '', 'port_id' => 0, 'port_name' => '', 'create_port' => false,
-        'survey_type_ids' => [], 'survey_type_names' => [], 'surveyor_ids' => [], 'surveyor_names' => [],
+        'port_plan' => null, 'survey_type_ids' => [], 'survey_type_names' => [], 'surveyor_ids' => [], 'surveyor_names' => [],
+        'surveyor_plan' => [], 'compare' => [],
         'recovery_amount' => null, 'vlsfo' => null, 'hsfo' => null, 'lsmgo' => null, 'recovery_na' => false,
         'report_date' => null, 'completed_date' => null, 'assign_date' => null,
         'errors' => [], 'warnings' => [], 'status' => 'ready', 'existing_id' => 0,
@@ -198,70 +441,96 @@ function completedImportValidateRow(PDO $db, array $r, array &$seenKeys): array 
 
     if ($res['vessel_name'] === '') $err('Vessel name is empty.');
 
+    $cmp = function (string $field, string $excel, string $saved, string $how) use (&$res) {
+        $res['compare'][$field] = ['excel' => $excel, 'saved' => $saved, 'how' => $how];
+    };
     if ($res['client_raw'] === '') {
         $err('Client is empty.');
-    } elseif ($c = bulkAssignFindClient($db, $res['client_raw'])) {
-        $res['client_id'] = (int)$c['id'];
-        $res['client_name'] = (string)$c['company_name'];
     } else {
-        $err('Client "' . $res['client_raw'] . '" not found — add the client first.');
+        $c = completedImportFindClient($db, $res['client_raw']);
+        if ($c && empty($c['error'])) {
+            $res['client_id'] = (int)$c['id'];
+            $res['client_name'] = (string)$c['name'];
+            $cmp('client', $res['client_raw'], $c['name'], $c['how']);
+        } else {
+            $err('Client "' . $res['client_raw'] . '" ' . ($c['error'] ?? 'not found — add the client first (Admin Controls → Clients).'));
+        }
     }
 
     if ($res['port_raw'] === '') {
         $err('Port is empty.');
     } else {
-        $p = completedImportFindPort($db, $res['port_raw']);
-        if ($p && $p['status'] === 'ambiguous') {
-            $err('Port "' . $res['port_raw'] . '" matches more than one port — use the exact port name.');
-        } elseif ($p) {
-            $res['port_id'] = (int)$p['id'];
-            $res['port_name'] = (string)$p['port_name'];
-            if ($p['status'] === 'partial') $res['warnings'][] = 'Port matched to "' . $p['port_name'] . '".';
+        $p = completedImportResolvePort($db, $res['port_raw'], $res['country']);
+        if (!empty($p['error'])) {
+            $err($p['error']);
         } else {
-            $res['create_port'] = true;
-            $res['port_name'] = $res['port_raw'];
-            $res['warnings'][] = 'New port "' . $res['port_raw'] . '"' . ($res['country'] !== '' ? ' (' . $res['country'] . ')' : '') . ' will be created.';
+            $res['port_id'] = (int)$p['id'];
+            $res['port_name'] = (string)$p['name'];
+            $cmp('port', $res['port_raw'], $p['name'], $p['how']);
+            if ($p['create']) {
+                $res['create_port'] = true;
+                $res['port_plan'] = $p;
+                $res['warnings'][] = 'New port "' . $p['create_port'] . '" + "' . $p['create_anchorage'] . '" (' . $p['country'] . ') will be created.';
+            }
         }
     }
 
     $types = completedImportSplitCombo($res['survey_type_raw']);
     if (!$types) $err('Survey type is empty.');
     foreach ($types as $t) {
-        if ($st = bulkAssignFindSurveyType($db, $t)) {
+        $st = completedImportFindType($db, $t);
+        if ($st && empty($st['error'])) {
             if (!in_array((int)$st['id'], $res['survey_type_ids'], true)) {
                 $res['survey_type_ids'][] = (int)$st['id'];
-                $res['survey_type_names'][] = (string)$st['type_name'];
+                $res['survey_type_names'][] = (string)$st['name'];
             }
         } else {
-            $err('Survey type "' . $t . '" not found.');
+            $err('Survey type "' . $t . '" ' . ($st['error'] ?? 'not found (add it in Admin Controls → Survey Types, or correct the name).'));
         }
     }
+    // Same order the Assign Vessel form stores them in (survey type id order).
+    if ($res['survey_type_ids']) {
+        $pairs = array_combine($res['survey_type_ids'], $res['survey_type_names']);
+        ksort($pairs);
+        $res['survey_type_ids'] = array_keys($pairs);
+        $res['survey_type_names'] = array_values($pairs);
+        $cmp('survey_type', $res['survey_type_raw'], implode(' + ', $res['survey_type_names']), '');
+    }
 
-    $surveyors = completedImportSplitCombo($res['surveyor_raw']);
-    if (!$surveyors) $err('Surveyor is empty.');
+    $surveyors = completedImportSplitSurveyors($db, $res['surveyor_raw']);
+    if (!$surveyors) $surveyors = ['']; // blank → the "Not Recorded" placeholder surveyor
     foreach ($surveyors as $s) {
-        if ($u = completedImportFindSurveyor($db, $s)) {
-            if (!in_array((int)$u['id'], $res['surveyor_ids'], true)) {
-                $res['surveyor_ids'][] = (int)$u['id'];
-                $res['surveyor_names'][] = (string)$u['full_name'];
-            }
-        } else {
-            $err('Surveyor "' . $s . '" not found.');
-        }
+        $u = completedImportFindSurveyor($db, $s);
+        if (!empty($u['error'])) { $err($u['error']); continue; }
+        $dupe = false;
+        foreach ($res['surveyor_plan'] as $q) if (($u['id'] && $q['id'] === $u['id']) || (!$u['id'] && strcasecmp($q['name'], $u['name']) === 0)) $dupe = true;
+        if ($dupe) continue;
+        $res['surveyor_plan'][] = $u;
+        $res['surveyor_names'][] = $u['name'];
+        if ($u['id']) $res['surveyor_ids'][] = $u['id'];
+        if ($u['create']) $res['warnings'][] = 'New surveyor "' . $u['name'] . '" will be added (inactive — cannot log in).';
+    }
+    if ($res['surveyor_plan']) {
+        $cmp('surveyor', $res['surveyor_raw'] !== '' ? $res['surveyor_raw'] : '(blank)', implode(' + ', $res['surveyor_names']),
+            implode(', ', array_unique(array_map(fn($u) => $u['how'], $res['surveyor_plan']))));
     }
 
-    $res['report_date'] = bulkAssignParseDate($r['report_date'] ?? '');
-    if ($res['report_date'] === null) {
-        $err(trim((string)($r['report_date'] ?? '')) === '' ? 'Report uploaded date is empty.' : 'Report uploaded date "' . $r['report_date'] . '" is not a valid date.');
+    // Report / completed date missing or not a date → the survey's Assign Date is used.
+    $dateOf = function ($raw) { return trim((string)$raw) === '' ? null : bulkAssignParseDate($raw); };
+    $res['assign_date'] = $dateOf($r['assign_date'] ?? '');
+    if (trim((string)($r['assign_date'] ?? '')) !== '' && $res['assign_date'] === null) $err('Assign date "' . $r['assign_date'] . '" is not a valid date.');
+    $res['report_date'] = $dateOf($r['report_date'] ?? '');
+    $res['completed_date'] = $dateOf($r['completed_date'] ?? '');
+    foreach (['report_date' => 'Report date', 'completed_date' => 'Completed date'] as $k => $label) {
+        if ($res[$k] === null && $res['assign_date'] !== null) {
+            $orig = trim((string)($r[$k] ?? ''));
+            $res[$k] = $res['assign_date'];
+            if ($k === 'report_date') $cmp('report_date', $orig === '' ? '(blank)' : $orig, date('d-m-Y', strtotime($res[$k])), 'taken from Assign Date');
+        }
     }
-    foreach (['completed_date', 'assign_date'] as $k) {
-        $raw = $r[$k] ?? '';
-        if (trim((string)$raw) === '') continue;
-        $res[$k] = bulkAssignParseDate($raw);
-        if ($res[$k] === null) $err(ucfirst(str_replace('_', ' ', $k)) . ' "' . $raw . '" is not a valid date.');
-    }
-    $res['completed_date'] = $res['completed_date'] ?? $res['report_date'];
-    $res['assign_date'] = $res['assign_date'] ?? $res['completed_date'];
+    if ($res['completed_date'] === null) $res['completed_date'] = $res['report_date'];
+    if ($res['report_date'] === null) $err('Report date and Assign date are both empty or not dates.');
+    if ($res['assign_date'] === null) $res['assign_date'] = $res['completed_date'];
 
     if ($res['survey_type_ids']) {
         $res['recovery_na'] = isRecoveryNotApplicable($db, implode(',', $res['survey_type_ids']));
@@ -282,15 +551,19 @@ function completedImportValidateRow(PDO $db, array $r, array &$seenKeys): array 
         return $res;
     }
 
-    $key = strtolower($res['vessel_name']) . '|' . $res['client_id'] . '|' . strtolower($res['port_name']) . '|' . substr((string)$res['report_date'], 0, 10);
+    $key = completedImportVesselKey($res['vessel_name']) . '|' . $res['client_id'] . '|' . substr((string)$res['report_date'], 0, 10) . '|' . implode(',', $res['survey_type_ids']);
     if (isset($seenKeys[$key])) {
         $res['status'] = 'duplicate';
-        $res['warnings'][] = 'Same vessel/client/port/date as row ' . $seenKeys[$key] . ' in this file.';
+        $res['warnings'][] = 'Same vessel, client, report date and survey type as row ' . $seenKeys[$key] . ' in this file.';
         return $res;
     }
     $seenKeys[$key] = $res['row'];
 
-    $existing = completedImportFindExisting($db, $res['vessel_name'], $res['client_id'], $res['port_id'], (string)$res['report_date'], $res['report_number']);
+    $existing = completedImportFindExisting($db, $res['vessel_name'], $res['client_id'], $res['survey_type_ids'], (string)$res['report_date'], $res['report_number']);
+    if (!$existing && ($near = completedImportNearbyExisting($db, $res['vessel_name'], $res['client_id'], (string)$res['report_date']))) {
+        $res['warnings'][] = 'Possible duplicate: ' . $near['vessel_name'] . ' for this client is already in Completed on ' . date('d-m-Y', strtotime($near['d'])) . (!empty($near['report_number']) ? ' (' . $near['report_number'] . ')' : '') . ' — remove this row from the Excel if it is the same survey.';
+        $res['possible_duplicate'] = true;
+    }
     if ($existing) {
         $res['status'] = 'duplicate';
         $res['existing_id'] = (int)$existing['id'];
@@ -336,16 +609,41 @@ function completedImportInsertRow(PDO $db, array $v, string $actorName): array {
             $db->beginTransaction();
 
             $portId = (int)$v['port_id'];
-            if ($v['create_port']) {
-                $chk = $db->prepare("SELECT id FROM ports WHERE LOWER(TRIM(port_name)) = LOWER(?) LIMIT 1");
-                $chk->execute([$v['port_name']]);
-                $portId = (int)($chk->fetchColumn() ?: 0);
-                if ($portId <= 0) {
-                    $db->prepare("INSERT INTO ports (port_name, country) VALUES (?, ?)")
-                       ->execute([$v['port_name'], $v['country'] !== '' ? $v['country'] : 'India']);
-                    $portId = (int)$db->lastInsertId();
-                }
+            if ($v['create_port'] && !empty($v['port_plan'])) {
+                $pp = $v['port_plan'];
+                $ensure = function (string $name) use ($db, $pp): int {
+                    $chk = $db->prepare("SELECT id FROM ports WHERE LOWER(TRIM(port_name)) = LOWER(?) LIMIT 1");
+                    $chk->execute([$name]);
+                    $id = (int)($chk->fetchColumn() ?: 0);
+                    if ($id > 0) return $id;
+                    $db->prepare("INSERT INTO ports (port_name, country) VALUES (?, ?)")->execute([$name, $pp['country']]);
+                    return (int)$db->lastInsertId();
+                };
+                $baseId = $ensure($pp['create_port']);
+                $anchId = $ensure($pp['create_anchorage']);
+                $portId = strcasecmp($v['port_name'], $pp['create_anchorage']) === 0 ? $anchId : $baseId;
             }
+
+            $surveyorIds = [];
+            foreach ($v['surveyor_plan'] as $u) {
+                $sid = (int)$u['id'];
+                if ($sid <= 0) {
+                    $chk = $db->prepare("SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.name = 'Surveyor' AND LOWER(TRIM(u.full_name)) = LOWER(?) LIMIT 1");
+                    $chk->execute([$u['name']]);
+                    $sid = (int)($chk->fetchColumn() ?: 0);
+                }
+                if ($sid <= 0) {
+                    $roleId = (int)$db->query("SELECT id FROM roles WHERE name = 'Surveyor' LIMIT 1")->fetchColumn();
+                    $slug = trim(preg_replace('/[^a-z0-9]+/', '.', strtolower($u['name'])), '.') ?: 'surveyor';
+                    $username = 'hist.' . substr($slug, 0, 40) . '.' . bin2hex(random_bytes(3));
+                    // Record only: inactive, random unknown password → can never log in.
+                    $db->prepare("INSERT INTO users (role_id, username, password, full_name, status) VALUES (?, ?, ?, ?, 'Inactive')")
+                       ->execute([$roleId, $username, password_hash(bin2hex(random_bytes(24)), PASSWORD_DEFAULT), $u['name']]);
+                    $sid = (int)$db->lastInsertId();
+                }
+                if (!in_array($sid, $surveyorIds, true)) $surveyorIds[] = $sid;
+            }
+            $v['surveyor_ids'] = $surveyorIds;
 
             $reportNumber = $v['report_number'] !== '' ? $v['report_number'] : completedImportNextReportNumber($db, $short, (string)$v['report_date']);
             $firstSurveyor = (int)$v['surveyor_ids'][0];
