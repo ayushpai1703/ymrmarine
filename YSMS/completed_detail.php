@@ -544,8 +544,8 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
         <input type="hidden" name="survey_id" value="<?= $id ?>">
         <input type="hidden" name="current_status" value="Completed">
         <div class="caf-title"><i class="fa-solid fa-folder-plus"></i> Add Files</div>
-        <label class="caf-label" for="cafFiles-<?= $variant ?>">Documents / photos <span>(PDF, Word, Excel, JPG, PNG — you can pick several)</span></label>
-        <input type="file" name="extra_files[]" id="cafFiles-<?= $variant ?>" class="form-control form-control-sm caf-files" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.jpg,.jpeg,.png,.zip">
+        <label class="caf-label" for="cafFiles-<?= $variant ?>">Documents / photos <span>(PDF, Word, Excel, PowerPoint, images, ZIP… — you can pick several)</span></label>
+        <input type="file" name="extra_files[]" id="cafFiles-<?= $variant ?>" class="form-control form-control-sm caf-files" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.txt,.rtf,.ppt,.pptx,.odt,.ods,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.tif,.tiff,.bmp,.zip,.rar,.7z,.msg,.eml">
         <label class="caf-label mt-2" for="cafZip-<?= $variant ?>">ZIP Folder <span>(optional, max 30 MB)</span></label>
         <input type="file" name="zip_folder" id="cafZip-<?= $variant ?>" class="form-control form-control-sm zip-folder-input" accept=".zip,application/zip,application/x-zip-compressed">
         <button type="submit" class="caf-submit" data-testid="completed-add-files-submit-<?= $variant ?>"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Files</button>

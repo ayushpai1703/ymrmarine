@@ -160,16 +160,62 @@ require_once __DIR__ . '/../includes/notifications.php';
         }
     }
 
+    // 3b. Final Report as PDF (Pending Report stage — replaces the old
+    // mandatory Word report). Stored as a normal 'Formal Report PDF' row and
+    // added ALONGSIDE the signed-documents PDF from the Pending Vessel stage
+    // (no DELETE here, so that earlier PDF is never replaced).
+    $final_pdf_saved = false;
+    $final_pdf_error = '';
+    if (isset($_FILES['final_report_pdf']) && (int)($_FILES['final_report_pdf']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $fp_orig = basename((string)$_FILES['final_report_pdf']['name']);
+        $fp_err = (int)$_FILES['final_report_pdf']['error'];
+        if ($fp_err === UPLOAD_ERR_INI_SIZE || $fp_err === UPLOAD_ERR_FORM_SIZE) {
+            $final_pdf_error = 'it is too large';
+        } elseif (!$isAllowedExt($fp_orig, ['pdf'])) {
+            $final_pdf_error = 'only a PDF (.pdf) file is allowed';
+        } else {
+            $final_pdf_error = upload_validate($_FILES['final_report_pdf'], UPLOAD_MIMES_PDF, 30 * 1024 * 1024);
+        }
+        if ($final_pdf_error === '') {
+            $fp_name = time() . "_" . preg_replace('/[^A-Za-z0-9._-]/', '_', $fp_orig);
+            $fp_bytes = (int)$_FILES['final_report_pdf']['size'];
+            if (move_uploaded_file($_FILES['final_report_pdf']['tmp_name'], $target_dir . $fp_name)) {
+                $fp_size = $fp_bytes >= 1048576 ? round($fp_bytes / 1048576, 1) . ' MB' : max(1, (int)round($fp_bytes / 1024)) . ' KB';
+                $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Formal Report PDF', ?, ?)");
+                $stmt->execute([$survey_id, $fp_orig, "uploads/" . $fp_name, $fp_size]);
+                $final_pdf_saved = true;
+                $uploaded_labels[] = 'Final Report PDF: ' . $fp_orig;
+                $uploaded_attachments[] = ['path' => $target_dir . $fp_name, 'name' => $fp_orig];
+            } else {
+                $final_pdf_error = 'it could not be stored, please try again';
+            }
+        }
+        if ($final_pdf_error !== '') {
+            $final_pdf_error = 'Final report "' . $fp_orig . '" was not saved: ' . rtrim($final_pdf_error, '.') . '.';
+        }
+    }
+
     $extra_saved = 0;
     $extra_rejected = [];
-    // 4. ఎక్స్‌ట్రా ఫైల్స్
-    if (isset($_FILES['extra_files'])) {
+    // 4. ఎక్స్‌ట్రా ఫైల్స్ — several per "Add More Files" row, common office /
+    // image / archive formats. Extension allowlist + the shared executable /
+    // script content check (upload_validate).
+    $extra_allowed = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'xlsm', 'csv', 'txt', 'rtf', 'ppt', 'pptx', 'odt', 'ods',
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'tif', 'tiff', 'bmp', 'zip', 'rar', '7z', 'msg', 'eml'];
+    if (isset($_FILES['extra_files']) && is_array($_FILES['extra_files']['name'])) {
         foreach ($_FILES['extra_files']['name'] as $key => $name) {
-            if ($_FILES['extra_files']['error'][$key] == 0 && !$isAllowedExt($name, ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'xlsm', 'jpg', 'jpeg', 'png', 'zip'])) {
+            if ($_FILES['extra_files']['error'][$key] == 0 && !$isAllowedExt($name, $extra_allowed)) {
                 $extra_rejected[] = basename($name);
                 continue;
             }
-            if ($_FILES['extra_files']['error'][$key] == 0 && $isAllowedExt($name, ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'xlsm', 'jpg', 'jpeg', 'png', 'zip'])) {
+            if ($_FILES['extra_files']['error'][$key] == 0 && upload_validate([
+                    'name' => $name, 'type' => $_FILES['extra_files']['type'][$key] ?? '',
+                    'tmp_name' => $_FILES['extra_files']['tmp_name'][$key], 'error' => 0,
+                    'size' => $_FILES['extra_files']['size'][$key]], [], 30 * 1024 * 1024) !== '') {
+                $extra_rejected[] = basename($name);
+                continue;
+            }
+            if ($_FILES['extra_files']['error'][$key] == 0 && $isAllowedExt($name, $extra_allowed)) {
                 $extra_orig = basename($name);
                 $extra_name = time() . "_" . preg_replace('/[^A-Za-z0-9._-]/', '_', $extra_orig);
                 if (move_uploaded_file($_FILES['extra_files']['tmp_name'][$key], $target_dir . $extra_name)) {
@@ -321,13 +367,18 @@ require_once __DIR__ . '/../includes/notifications.php';
     // 🌟 వర్డ్ రిపోర్ట్ అప్‌లోడ్ చేసినా, లేదా యూజర్ "Continue without report" కన్ఫర్మ్ చేసినా ముందుకు వెళ్లేలా
     $no_report_confirmed = isset($_POST['no_report_confirmed']) && $_POST['no_report_confirmed'] === '1';
     $word_report_missing = !isset($_FILES['word_report']) || $_FILES['word_report']['error'] != 0 || empty($_FILES['word_report']['name']);
+    $final_pdf_missing = !isset($_FILES['final_report_pdf']) || (int)$_FILES['final_report_pdf']['error'] === UPLOAD_ERR_NO_FILE;
 
-    if ($current_status === 'Pending Report' && ($files_uploaded === 3 || ($word_report_missing && $no_report_confirmed))) {
+    if ($current_status === 'Pending Report' && ($files_uploaded === 3 || $final_pdf_saved || ($word_report_missing && $final_pdf_missing && $no_report_confirmed))) {
         $update = $db->prepare("UPDATE surveys SET status = 'Completed', report_uploaded_date = NOW(), notes = 'All surveys and reports are verified and uploaded successfully.', status_updated_by = ? WHERE id = ?");
         $update->execute([$_SESSION['user_id'], $survey_id]);
         $_SESSION['flash_msg'] = "Pending report is completed";
         if ($zip_error !== '') {
             $_SESSION['flash_msg'] .= ' · ' . $zip_error;
+            $_SESSION['flash_type'] = 'warning';
+        }
+        if ($extra_rejected) {
+            $_SESSION['flash_msg'] .= ' · Not saved (file type not allowed): ' . implode(', ', $extra_rejected) . '.';
             $_SESSION['flash_type'] = 'warning';
         }
         try {
@@ -394,9 +445,10 @@ require_once __DIR__ . '/../includes/notifications.php';
     }
 
     // Only extra files / a ZIP folder were sent (no status change): say what happened instead of dropping to the dashboard.
-    if ($extra_saved > 0 || $zip_error !== '' || $extra_rejected) {
+    if ($extra_saved > 0 || $zip_error !== '' || $extra_rejected || $final_pdf_error !== '') {
         $problems = [];
-        if ($extra_rejected) $problems[] = 'Not allowed (use PDF, Word, Excel, JPG, PNG or ZIP): ' . implode(', ', $extra_rejected) . '.';
+        if ($final_pdf_error !== '') $problems[] = $final_pdf_error;
+        if ($extra_rejected) $problems[] = 'Not allowed: ' . implode(', ', $extra_rejected) . '. Use PDF, Word, Excel, PowerPoint, text/CSV, images or ZIP/RAR/7Z.';
         if ($zip_error !== '') $problems[] = $zip_error;
         if ($extra_saved > 0) {
             $_SESSION['flash_msg'] = $extra_saved . ' file' . ($extra_saved === 1 ? '' : 's') . ' uploaded successfully.' . ($problems ? ' · ' . implode(' · ', $problems) : '');
