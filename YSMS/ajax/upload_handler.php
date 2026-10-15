@@ -114,6 +114,7 @@ require_once __DIR__ . '/../includes/notifications.php';
     $vlsfo_val = 0.00;
     $lsmgo_val = 0.00;
     $hsfo_val = 0.00;
+    $excel_saved_this_request = false;
     if (isset($_FILES['excel_report']) && $_FILES['excel_report']['error'] == 0 && $isAllowedExt($_FILES['excel_report']['name'], ['xlsx', 'xls', 'xlsm'])) {
         $excel_orig = basename($_FILES['excel_report']['name']);
         $excel_name = time() . "_" . preg_replace('/[^A-Za-z0-9._-]/', '_', $excel_orig);
@@ -141,6 +142,7 @@ require_once __DIR__ . '/../includes/notifications.php';
                 : [$recovery_val, $vlsfo_val, $lsmgo_val, $hsfo_val, $survey_id]);
             
             $files_uploaded++;
+            $excel_saved_this_request = true;
             $uploaded_labels[] = 'Excel: ' . $excel_orig;
             $uploaded_attachments[] = ['path' => $full_target_path, 'name' => $excel_orig];
         }
@@ -321,8 +323,32 @@ require_once __DIR__ . '/../includes/notifications.php';
 
     // ⚙️ వర్క్‌ఫ్లో & సెషన్ అలర్ట్ మెసేజ్ లాజిక్
     if ($current_status === 'Pending Vessel' && $has_pdf_uploaded) {
-        $update = $db->prepare("UPDATE surveys SET status = 'Pending Report', survey_completed_date = NOW(), status_updated_by = ? WHERE id = ?");
-        $update->execute([$_SESSION['user_id'], $survey_id]);
+        // Survey Completed date chosen in the submit popup (Y-m-d); today when
+        // missing / invalid / in the future.
+        $completed_at = date('Y-m-d H:i:s');
+        $posted_date = trim((string)($_POST['survey_completed_date'] ?? ''));
+        $pd = $posted_date !== '' ? DateTime::createFromFormat('!Y-m-d', $posted_date) : false;
+        if ($pd && $pd->format('Y-m-d') === $posted_date && $posted_date <= date('Y-m-d') && $posted_date >= '2000-01-01') {
+            $completed_at = $posted_date . ' ' . date('H:i:s');
+        }
+        // Recovery typed in the popup is used only when there is no
+        // Calculation Sheet — an uploaded Excel is still the source of truth.
+        if (!$recoveryNA && !$excel_saved_this_request && !$has_excel_uploaded && isset($_POST['manual_recovery'])) {
+            $num = function ($k) {
+                $v = str_replace([',', ' '], '', trim((string)($_POST[$k] ?? '')));
+                return ($v !== '' && is_numeric($v)) ? round((float)$v, 3) : null;
+            };
+            $m_vlsfo = $num('manual_vlsfo'); $m_hsfo = $num('manual_hsfo'); $m_lsmgo = $num('manual_lsmgo'); $m_total = $num('manual_total');
+            if ($m_total === null && ($m_vlsfo !== null || $m_hsfo !== null || $m_lsmgo !== null)) {
+                $m_total = round((float)$m_vlsfo + (float)$m_hsfo + (float)$m_lsmgo, 3);
+            }
+            if ($m_total !== null) {
+                $db->prepare("UPDATE surveys SET recovery_amount = ?, vlsfo_recovery = ?, lsmgo_recovery = ?, hsfo_recovery = ? WHERE id = ?")
+                   ->execute([$m_total, $m_vlsfo, $m_lsmgo, $m_hsfo, $survey_id]);
+            }
+        }
+        $update = $db->prepare("UPDATE surveys SET status = 'Pending Report', survey_completed_date = ?, status_updated_by = ? WHERE id = ?");
+        $update->execute([$completed_at, $_SESSION['user_id'], $survey_id]);
         $_SESSION['flash_msg'] = "Pending vessel is uploaded and moved to pending report";
         if ($excel_failed_this_request) {
             $_SESSION['flash_msg'] .= ' (Calculation Sheet could not be saved — must be .xlsx/.xls; you can add it later.)';

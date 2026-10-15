@@ -98,6 +98,16 @@ $survey = $stmt->fetch();
 
 if (!$survey) { die("Survey details missing."); }
 
+// Submit popup (Pending Vessel): asks the Survey Completed date, and the
+// recovery figures when no Calculation Sheet is uploaded.
+$vdRecoveryNA = isRecoveryNotApplicable($db, (string)($survey['survey_type_ids'] ?? ''), (string)($survey['type_name'] ?? ''));
+$vdHasExcel = false;
+try {
+    $xs = $db->prepare("SELECT 1 FROM uploads WHERE survey_id = ? AND file_type = 'Formal Report Excel' LIMIT 1");
+    $xs->execute([$survey['id']]);
+    $vdHasExcel = (bool)$xs->fetchColumn();
+} catch (Throwable $e) { error_log('vessel_detail excel check: ' . $e->getMessage()); }
+
 // 🔒 Authorization check (IDOR fix): a non-admin (Surveyor) may only view
 // surveys assigned to their own account. Previously checkAuth() only verified
 // that *someone* was logged in, so any authenticated user could view any
@@ -1206,6 +1216,131 @@ document.addEventListener('click', function (ev) {
     }
     window.open(webUrl, '_blank', 'noopener');
 });
+</script>
+
+<div class="vdc-modal" id="vdCompleteModal" hidden data-recovery-na="<?= $vdRecoveryNA ? '1' : '0' ?>" data-has-excel="<?= $vdHasExcel ? '1' : '0' ?>" data-testid="complete-modal" role="dialog" aria-modal="true" aria-labelledby="vdCompleteTitle">
+    <div class="vdc-box">
+        <div class="vdc-head">
+            <div class="vdc-ico"><i class="fa-solid fa-flag-checkered"></i></div>
+            <div>
+                <div class="vdc-title" id="vdCompleteTitle">Survey details</div>
+                <div class="vdc-sub"><?= sanitize($survey['vessel_name']) ?></div>
+            </div>
+        </div>
+        <label class="vdc-label" for="vdcDate">Survey Completed Date <span class="req">*</span></label>
+        <input type="date" id="vdcDate" class="vdc-input" max="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>" data-testid="complete-date">
+        <div class="vdc-note" data-vdc-excel-note hidden><i class="fa-solid fa-file-excel"></i> Recovery will be read from the Calculation Sheet.</div>
+        <div data-vdc-recovery hidden>
+            <div class="vdc-label">Recovery (MT) <span class="req">*</span></div>
+            <div class="vdc-grid">
+                <div><span>VLSFO</span><input type="number" step="0.001" inputmode="decimal" class="vdc-input" data-vdc-part name="vdc_vlsfo" data-testid="complete-vlsfo"></div>
+                <div><span>HSFO</span><input type="number" step="0.001" inputmode="decimal" class="vdc-input" data-vdc-part name="vdc_hsfo" data-testid="complete-hsfo"></div>
+                <div><span>LSMGO</span><input type="number" step="0.001" inputmode="decimal" class="vdc-input" data-vdc-part name="vdc_lsmgo" data-testid="complete-lsmgo"></div>
+                <div><span>Total</span><input type="number" step="0.001" inputmode="decimal" class="vdc-input vdc-total" id="vdcTotal" data-testid="complete-total"></div>
+            </div>
+            <div class="vdc-hint">Total fills in from VLSFO + HSFO + LSMGO; enter 0 if there was no recovery.</div>
+        </div>
+        <div class="vdc-error" data-vdc-error hidden></div>
+        <div class="vdc-actions">
+            <button type="button" class="vdc-btn ghost" data-vdc-cancel>Cancel</button>
+            <button type="button" class="vdc-btn primary" data-vdc-ok data-testid="complete-submit"><i class="fa-solid fa-paper-plane"></i> Submit &amp; Send</button>
+        </div>
+    </div>
+</div>
+<style>
+.vdc-modal { position: fixed; inset: 0; z-index: 9998; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.vdc-modal[hidden] { display: none; }
+.vdc-box { background: #fff; border-radius: 18px; width: 100%; max-width: 420px; padding: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.25); max-height: calc(100vh - 32px); overflow: auto; }
+.vdc-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.vdc-ico { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg,#1E1B6B,#4B2FD6); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+.vdc-title { font-size: 16px; font-weight: 800; color: #0f172a; }
+.vdc-sub { font-size: 12px; color: #64748b; }
+.vdc-label { display: block; font-size: 12px; font-weight: 700; color: #334155; margin: 10px 0 6px; }
+.vdc-label .req { color: #DC2626; }
+.vdc-input { width: 100%; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 9px 11px; font-size: 14px; background: #F8FAFC; min-width: 0; }
+.vdc-input:focus { outline: none; border-color: #A78BFA; background: #fff; }
+.vdc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.vdc-grid span { display: block; font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 4px; }
+.vdc-total { font-weight: 800; color: #1E1B6B; }
+.vdc-hint { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+.vdc-note { margin-top: 12px; font-size: 12px; color: #047857; background: #ECFDF5; border-radius: 10px; padding: 8px 10px; }
+.vdc-error { margin-top: 12px; font-size: 12px; color: #B91C1C; background: #FEF2F2; border-radius: 10px; padding: 8px 10px; font-weight: 600; }
+.vdc-actions { display: flex; gap: 10px; margin-top: 18px; }
+.vdc-btn { flex: 1; border: none; border-radius: 12px; padding: 11px 14px; font-size: 13px; font-weight: 700; }
+.vdc-btn.primary { background: linear-gradient(120deg,#1E1B6B,#4B2FD6); color: #fff; }
+.vdc-btn.ghost { background: #F1F5F9; color: #334155; }
+</style>
+<script>
+// Pending Vessel submit: before uploading, ask for the Survey Completed date
+// and — when no Calculation Sheet (Excel) is attached or already uploaded and
+// recovery applies to this survey type — the recovery figures.
+(function () {
+    var modal = document.getElementById('vdCompleteModal');
+    if (!modal) return;
+    var pendingForm = null;
+    var recBox = modal.querySelector('[data-vdc-recovery]'), note = modal.querySelector('[data-vdc-excel-note]');
+    var err = modal.querySelector('[data-vdc-error]'), total = document.getElementById('vdcTotal');
+    var parts = modal.querySelectorAll('[data-vdc-part]');
+    var totalTouched = false;
+    function close() { modal.hidden = true; pendingForm = null; }
+    function showErr(m) { err.textContent = m; err.hidden = !m; }
+    parts.forEach(function (p) { p.addEventListener('input', function () {
+        if (totalTouched) return;
+        var any = false, sum = 0;
+        parts.forEach(function (x) { if (x.value !== '') { any = true; sum += parseFloat(x.value) || 0; } });
+        total.value = any ? (Math.round(sum * 1000) / 1000) : '';
+    }); });
+    total.addEventListener('input', function () { totalTouched = total.value !== ''; });
+    modal.querySelector('[data-vdc-cancel]').addEventListener('click', close);
+    modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.hidden) close(); });
+
+    document.addEventListener('submit', function (ev) {
+        var form = ev.target.closest('[data-report-upload-form]');
+        if (!form || form.dataset.vdcConfirmed === '1') return;
+        var st = form.querySelector('[name=current_status]');
+        if (!st || st.value !== 'Pending Vessel') return;
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        var excelInput = form.querySelector('[name=excel_report]');
+        var hasExcel = modal.dataset.hasExcel === '1' || (excelInput && excelInput.files.length > 0);
+        var needRecovery = modal.dataset.recoveryNa !== '1' && !hasExcel;
+        recBox.hidden = !needRecovery;
+        note.hidden = !(hasExcel && modal.dataset.recoveryNa !== '1');
+        showErr('');
+        pendingForm = form;
+        modal.hidden = false;
+        setTimeout(function () { document.getElementById('vdcDate').focus(); }, 30);
+    }, true);
+
+    modal.querySelector('[data-vdc-ok]').addEventListener('click', function () {
+        if (!pendingForm) return;
+        var date = document.getElementById('vdcDate').value;
+        var max = document.getElementById('vdcDate').getAttribute('max');
+        if (!date) return showErr('Please choose the Survey Completed date.');
+        if (date > max) return showErr('Survey Completed date cannot be in the future.');
+        var form = pendingForm;
+        form.querySelectorAll('[data-vdc-hidden]').forEach(function (h) { h.remove(); });
+        var add = function (name, value) {
+            var h = document.createElement('input');
+            h.type = 'hidden'; h.name = name; h.value = value; h.setAttribute('data-vdc-hidden', '');
+            form.appendChild(h);
+        };
+        add('survey_completed_date', date);
+        if (!recBox.hidden) {
+            if (total.value === '') return showErr('Please enter the recovery (enter 0 if none).');
+            add('manual_recovery', '1');
+            add('manual_vlsfo', modal.querySelector('[name=vdc_vlsfo]').value);
+            add('manual_hsfo', modal.querySelector('[name=vdc_hsfo]').value);
+            add('manual_lsmgo', modal.querySelector('[name=vdc_lsmgo]').value);
+            add('manual_total', total.value);
+        }
+        form.dataset.vdcConfirmed = '1';
+        modal.hidden = true;
+        pendingForm = null;
+        if (form.requestSubmit) form.requestSubmit(); else form.submit();
+    });
+})();
 </script>
 
 <script>

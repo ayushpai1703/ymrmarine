@@ -228,6 +228,15 @@ function getCombinedSurveyTypeNames($db, $ids_csv, $fallback_name = '') {
 // imported entries) fall back to their assign date so they still sort sensibly.
 const SURVEY_APPOINTMENT_ORDER_SQL = 'COALESCE(s.appointment_date, DATE(s.assign_date))';
 
+/** Pending Reports are dated and ordered by the Survey Completed date. */
+const SURVEY_COMPLETED_ORDER_SQL = 'COALESCE(DATE(s.survey_completed_date), s.appointment_date, DATE(s.assign_date))';
+
+function surveyCompletedTs(array $survey): int {
+    $v = (string)($survey['survey_completed_date'] ?? '');
+    if ($v !== '' && strpos($v, '0000-00-00') !== 0 && ($ts = strtotime(substr($v, 0, 10))) !== false) return $ts;
+    return surveyAppointmentTs($survey);
+}
+
 /** Unix timestamp used by the lists' client-side "Newest/Oldest first" sort. */
 function surveyAppointmentTs(array $survey): int {
     foreach (['appointment_date', 'assign_date'] as $k) {

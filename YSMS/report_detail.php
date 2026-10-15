@@ -477,6 +477,7 @@ include 'includes/header.php';
     <!-- Read-Only Info Table -->
     <div class="info-table-list shadow-sm">
         <div class="info-row"><span class="info-label">Vessel Name</span><span class="info-value"><?= sanitize($survey['vessel_name']) ?></span></div>
+        <div class="info-row" data-testid="rd-port-mobile"><span class="info-label">Port</span><span class="info-value"><?= sanitize($survey['port_name'] ?? '—') ?></span></div>
         <div class="info-row"><span class="info-label">Report No</span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
         <div class="info-row"><span class="info-label">Client Name</span><span class="info-value"><?= sanitize($survey['company_name']) ?></span></div>
         <div class="info-row"><span class="info-label">Surveyor Name</span><span class="info-value"><?= sanitize(getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A')) ?></span></div>
@@ -671,33 +672,38 @@ include 'includes/header.php';
                                 <div class="vdd-info-label">Vessel Name</div>
                                 <div class="vdd-info-value"><?= sanitize($survey['vessel_name']) ?></div>
                             </div>
-                            <div class="vdd-info-row alt">
+                            <div class="vdd-info-row alt" data-testid="rd-port-desktop">
+                                <div class="vdd-info-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-location-dot"></i></div>
+                                <div class="vdd-info-label">Port</div>
+                                <div class="vdd-info-value"><?= sanitize($survey['port_name'] ?? '—') ?></div>
+                            </div>
+                            <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:#F1F5FF;color:#4F46E5;"><i class="fa-solid fa-hashtag"></i></div>
                                 <div class="vdd-info-label">Report No</div>
                                 <div class="vdd-info-value"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></div>
                             </div>
-                            <div class="vdd-info-row">
+                            <div class="vdd-info-row alt">
                                 <div class="vdd-info-icon" style="background:#F1F5FF;color:#4F46E5;"><i class="fa-solid fa-building"></i></div>
                                 <div class="vdd-info-label">Client Name</div>
                                 <div class="vdd-info-value"><?= sanitize($survey['company_name']) ?></div>
                             </div>
-                            <div class="vdd-info-row alt">
+                            <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:linear-gradient(135deg,#8B7CF6,#4B2FD6);color:#fff;"><i class="fa-solid fa-user-tie"></i></div>
                                 <div class="vdd-info-label">Surveyor Name</div>
                                 <div class="vdd-info-value" style="color:#5B2DEE;"><?= sanitize(getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A')) ?></div>
                             </div>
-                            <div class="vdd-info-row">
+                            <div class="vdd-info-row alt">
                                 <div class="vdd-info-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-file-circle-check"></i></div>
                                 <div class="vdd-info-label">Survey Type</div>
                                 <div><span class="vdd-badge"><span class="dot"></span><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
                             </div>
-                            <div class="vdd-info-row alt">
+                            <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:#D1FAE5;color:#047857;"><i class="fa-solid fa-calendar-check"></i></div>
                                 <div class="vdd-info-label">Survey Completed</div>
                                 <div class="vdd-info-value" style="color:#047857;"><?= sanitize(date('d M Y', strtotime($survey['survey_completed_date']))) ?></div>
                             </div>
                             <?php if ($recoveryNA): ?>
-                            <div class="vdd-info-row" data-testid="recovery-na-desktop">
+                            <div class="vdd-info-row alt" data-testid="recovery-na-desktop">
                                 <div class="vdd-info-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-droplet"></i></div>
                                 <div class="vdd-info-label">Recovery</div>
                                 <div class="vdd-info-value"><?= sanitize(RECOVERY_NA_LABEL) ?></div>
