@@ -396,8 +396,16 @@ require_once __DIR__ . '/../includes/notifications.php';
     $final_pdf_missing = !isset($_FILES['final_report_pdf']) || (int)$_FILES['final_report_pdf']['error'] === UPLOAD_ERR_NO_FILE;
 
     if ($current_status === 'Pending Report' && ($files_uploaded === 3 || $final_pdf_saved || ($word_report_missing && $final_pdf_missing && $no_report_confirmed))) {
-        $update = $db->prepare("UPDATE surveys SET status = 'Completed', report_uploaded_date = NOW(), notes = 'All surveys and reports are verified and uploaded successfully.', status_updated_by = ? WHERE id = ?");
-        $update->execute([$_SESSION['user_id'], $survey_id]);
+        // Report Completed date chosen in the popup (Y-m-d); today when
+        // missing / invalid / in the future. The Completed list is ordered by it.
+        $report_at = date('Y-m-d H:i:s');
+        $posted_rdate = trim((string)($_POST['report_completed_date'] ?? ''));
+        $rd = $posted_rdate !== '' ? DateTime::createFromFormat('!Y-m-d', $posted_rdate) : false;
+        if ($rd && $rd->format('Y-m-d') === $posted_rdate && $posted_rdate <= date('Y-m-d') && $posted_rdate >= '2000-01-01') {
+            $report_at = $posted_rdate . ' ' . date('H:i:s');
+        }
+        $update = $db->prepare("UPDATE surveys SET status = 'Completed', report_uploaded_date = ?, notes = 'All surveys and reports are verified and uploaded successfully.', status_updated_by = ? WHERE id = ?");
+        $update->execute([$report_at, $_SESSION['user_id'], $survey_id]);
         $_SESSION['flash_msg'] = "Pending report is completed";
         if ($zip_error !== '') {
             $_SESSION['flash_msg'] .= ' · ' . $zip_error;

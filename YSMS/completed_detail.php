@@ -178,6 +178,13 @@ function fmtDateTime($val) {
     return date('d M Y, H:i', $ts);
 }
 
+// Dates the user picks (appointment / survey completed / report completed) — date only.
+function fmtDateOnly($val) {
+    if (empty($val) || strpos((string)$val, '0000-00-00') === 0) return '—';
+    $ts = strtotime(substr((string)$val, 0, 10));
+    return $ts ? date('d M Y', $ts) : '—';
+}
+
 include 'includes/header.php';
 ?>
 
@@ -456,13 +463,17 @@ include 'includes/header.php';
             <span class="info-label"><i class="fa-regular fa-calendar-plus text-primary"></i> Survey Assigned Date</span>
             <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateTime($survey['assign_date'] ?? '') ?></span></span>
         </div>
+        <div class="info-row" data-testid="cd-appointment-mobile">
+            <span class="info-label"><i class="fa-regular fa-calendar text-info"></i> Appointment Date</span>
+            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['appointment_date'] ?? '') ?></span></span>
+        </div>
         <div class="info-row">
             <span class="info-label"><i class="fa-regular fa-calendar-check text-warning"></i> Survey Completed Date</span>
-            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateTime($survey['survey_completed_date'] ?? '') ?></span></span>
+            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['survey_completed_date'] ?? '') ?></span></span>
         </div>
         <div class="info-row">
             <span class="info-label"><i class="fa-solid fa-calendar-check text-success"></i> Report Completed Date</span>
-            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateTime($survey['report_uploaded_date'] ?? '') ?></span></span>
+            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['report_uploaded_date'] ?? '') ?></span></span>
         </div>
     </div>
 
@@ -676,15 +687,20 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                                 <div class="vdd-info-label">Survey Assigned</div>
                                 <div><span class="vdd-badge-soft"><?= fmtDateTime($survey['assign_date'] ?? '') ?></span></div>
                             </div>
-                            <div class="vdd-info-row alt">
-                                <div class="vdd-info-icon" style="background:#FFFBEB;color:#B45309;"><i class="fa-regular fa-calendar-check"></i></div>
-                                <div class="vdd-info-label">Survey Completed</div>
-                                <div><span class="vdd-badge-soft"><?= fmtDateTime($survey['survey_completed_date'] ?? '') ?></span></div>
+                            <div class="vdd-info-row alt" data-testid="cd-appointment-desktop">
+                                <div class="vdd-info-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-regular fa-calendar"></i></div>
+                                <div class="vdd-info-label">Appointment</div>
+                                <div><span class="vdd-badge-soft"><?= fmtDateOnly($survey['appointment_date'] ?? '') ?></span></div>
                             </div>
                             <div class="vdd-info-row">
+                                <div class="vdd-info-icon" style="background:#FFFBEB;color:#B45309;"><i class="fa-regular fa-calendar-check"></i></div>
+                                <div class="vdd-info-label">Survey Completed</div>
+                                <div><span class="vdd-badge-soft"><?= fmtDateOnly($survey['survey_completed_date'] ?? '') ?></span></div>
+                            </div>
+                            <div class="vdd-info-row alt">
                                 <div class="vdd-info-icon" style="background:#D1FAE5;color:#047857;"><i class="fa-solid fa-calendar-check"></i></div>
                                 <div class="vdd-info-label">Report Completed</div>
-                                <div><span class="vdd-badge-soft"><?= fmtDateTime($survey['report_uploaded_date'] ?? '') ?></span></div>
+                                <div><span class="vdd-badge-soft"><?= fmtDateOnly($survey['report_uploaded_date'] ?? '') ?></span></div>
                             </div>
                         </div>
                     </div>

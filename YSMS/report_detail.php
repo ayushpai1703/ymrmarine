@@ -1008,6 +1008,12 @@ include 'includes/header.php';
                     activeForm = $form;
                     var confirmModal = new bootstrap.Modal(document.getElementById('noReportConfirmModal'));
                     confirmModal.show();
+                    return;
+                }
+                // Then ask for the Report Completed date (saved as the report date).
+                if ($form.attr('data-rcd-done') !== '1' && window.ysmsAskReportDate) {
+                    e.preventDefault();
+                    window.ysmsAskReportDate($form[0]);
                 }
             });
         });
@@ -1101,6 +1107,80 @@ document.addEventListener('click', function (ev) {
             warn('Files too large to upload together', 'The selected files add up to ' + mb(total) + ' (limit 31 MB per upload). Please upload them in smaller batches.');
         }
     }, true);
+})();
+</script>
+
+<?php $rcdMin = !empty($survey['survey_completed_date']) && strpos((string)$survey['survey_completed_date'], '0000') !== 0 ? date('Y-m-d', strtotime($survey['survey_completed_date'])) : ''; ?>
+<div class="rcd-modal" id="rcdModal" hidden data-testid="report-date-modal" role="dialog" aria-modal="true" aria-labelledby="rcdTitle">
+    <div class="rcd-box">
+        <div class="rcd-head">
+            <div class="rcd-ico"><i class="fa-solid fa-file-circle-check"></i></div>
+            <div>
+                <div class="rcd-title" id="rcdTitle">Report Completed Date</div>
+                <div class="rcd-sub"><?= sanitize($survey['vessel_name']) ?></div>
+            </div>
+        </div>
+        <label class="rcd-label" for="rcdDate">Report Completed Date <span class="req">*</span></label>
+        <input type="date" id="rcdDate" class="rcd-input" value="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d') ?>"<?= $rcdMin !== '' && $rcdMin <= date('Y-m-d') ? ' min="' . sanitize($rcdMin) . '"' : '' ?> data-testid="report-date-input">
+        <?php if ($rcdMin !== ''): ?><div class="rcd-hint">Survey completed on <?= sanitize(date('d M Y', strtotime($rcdMin))) ?>. The Completed list is ordered by this date.</div><?php endif; ?>
+        <div class="rcd-error" data-rcd-error hidden></div>
+        <div class="rcd-actions">
+            <button type="button" class="rcd-btn ghost" data-rcd-cancel>Cancel</button>
+            <button type="button" class="rcd-btn primary" data-rcd-ok data-testid="report-date-submit"><i class="fa-solid fa-check"></i> Complete &amp; Move</button>
+        </div>
+    </div>
+</div>
+<style>
+.rcd-modal { position: fixed; inset: 0; z-index: 9998; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.rcd-modal[hidden] { display: none; }
+.rcd-box { background: #fff; border-radius: 18px; width: 100%; max-width: 400px; padding: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.25); }
+.rcd-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.rcd-ico { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg,#14532D,#16A34A); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+.rcd-title { font-size: 16px; font-weight: 800; color: #0f172a; }
+.rcd-sub { font-size: 12px; color: #64748b; }
+.rcd-label { display: block; font-size: 12px; font-weight: 700; color: #334155; margin: 8px 0 6px; }
+.rcd-label .req { color: #DC2626; }
+.rcd-input { width: 100%; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 9px 11px; font-size: 14px; background: #F8FAFC; }
+.rcd-input:focus { outline: none; border-color: #A78BFA; background: #fff; }
+.rcd-hint { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+.rcd-error { margin-top: 10px; font-size: 12px; color: #B91C1C; background: #FEF2F2; border-radius: 10px; padding: 8px 10px; font-weight: 600; }
+.rcd-actions { display: flex; gap: 10px; margin-top: 18px; }
+.rcd-btn { flex: 1; border: none; border-radius: 12px; padding: 11px 14px; font-size: 13px; font-weight: 700; }
+.rcd-btn.primary { background: linear-gradient(120deg,#14532D,#16A34A); color: #fff; }
+.rcd-btn.ghost { background: #F1F5F9; color: #334155; }
+</style>
+<script>
+// Pending Report → Completed: ask the Report Completed date before the form
+// is sent. The upload form's own submit handler calls ysmsAskReportDate().
+(function () {
+    var modal = document.getElementById('rcdModal'), input = document.getElementById('rcdDate');
+    var err = modal.querySelector('[data-rcd-error]'), pending = null;
+    function close() { modal.hidden = true; pending = null; }
+    function showErr(m) { err.textContent = m; err.hidden = !m; }
+    window.ysmsAskReportDate = function (form) {
+        pending = form; showErr(''); modal.hidden = false;
+        setTimeout(function () { input.focus(); }, 30);
+    };
+    modal.querySelector('[data-rcd-cancel]').addEventListener('click', function () {
+        if (pending) { var nr = pending.querySelector('.no-report-confirmed'); if (nr) nr.value = '0'; }
+        close();
+    });
+    modal.addEventListener('click', function (e) { if (e.target === modal) modal.querySelector('[data-rcd-cancel]').click(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.hidden) modal.querySelector('[data-rcd-cancel]').click(); });
+    modal.querySelector('[data-rcd-ok]').addEventListener('click', function () {
+        if (!pending) return;
+        var v = input.value;
+        if (!v) return showErr('Please choose the Report Completed date.');
+        if (input.max && v > input.max) return showErr('Report Completed date cannot be in the future.');
+        if (input.min && v < input.min) return showErr('Report Completed date cannot be before the Survey Completed date.');
+        var form = pending;
+        var h = form.querySelector('input[name=report_completed_date]');
+        if (!h) { h = document.createElement('input'); h.type = 'hidden'; h.name = 'report_completed_date'; form.appendChild(h); }
+        h.value = v;
+        form.setAttribute('data-rcd-done', '1');
+        modal.hidden = true; pending = null;
+        if (form.requestSubmit) form.requestSubmit(); else form.submit();
+    });
 })();
 </script>
 

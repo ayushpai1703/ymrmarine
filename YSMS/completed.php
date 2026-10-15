@@ -54,7 +54,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Completed'
-        ORDER BY " . SURVEY_APPOINTMENT_ORDER_SQL . " DESC, s.id DESC
+        ORDER BY " . SURVEY_REPORT_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute();
 } elseif ($role === 'Client') {
@@ -66,7 +66,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Completed' AND s.client_id = ?
-        ORDER BY " . SURVEY_APPOINTMENT_ORDER_SQL . " DESC, s.id DESC
+        ORDER BY " . SURVEY_REPORT_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute([$client_id]);
 } else {
@@ -80,7 +80,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Completed' AND (s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))
-        ORDER BY " . SURVEY_APPOINTMENT_ORDER_SQL . " DESC, s.id DESC
+        ORDER BY " . SURVEY_REPORT_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute([$user_id, $user_id]);
 }
@@ -143,8 +143,8 @@ if ($is_full_access && $filter_surveyor !== '') {
     $params[] = $filter_surveyor;
 }
 $whereSql = implode(' AND ', $where);
-$orderSql = SURVEY_APPOINTMENT_ORDER_SQL . ' DESC, s.id DESC';
-if ($sort === 'oldest') $orderSql = SURVEY_APPOINTMENT_ORDER_SQL . ' ASC, s.id ASC';
+$orderSql = SURVEY_REPORT_ORDER_SQL . ' DESC, s.id DESC';
+if ($sort === 'oldest') $orderSql = SURVEY_REPORT_ORDER_SQL . ' ASC, s.id ASC';
 elseif ($sort === 'name-asc') $orderSql = 's.vessel_name ASC';
 elseif ($sort === 'name-desc') $orderSql = 's.vessel_name DESC';
 
@@ -628,7 +628,7 @@ include 'includes/header.php';
              data-surveyor="<?= sanitize($surveyorNames) ?>"
              data-status="completed"
              data-month="<?= $card_ts ? sanitize(date('Y-m', $card_ts)) : '' ?>"
-             data-date="<?= surveyAppointmentTs($survey) ?>"
+             data-date="<?= surveyReportTs($survey) ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$survey['vessel_name'] ?? '', $survey['company_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>">
             <div class="pv-card-top">
                 <div class="pv-card-headline">
@@ -766,7 +766,7 @@ include 'includes/header.php';
                                 <th>Survey type</th>
                                 <th>Port</th>
                                 <th>Recovery</th>
-                                <th>Date</th>
+                                <th>Report Completed</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -788,7 +788,7 @@ include 'includes/header.php';
                                 data-client="<?= sanitize(strtolower($survey['company_name'] ?? '')) ?>"
                                 data-surveyor="<?= sanitize(strtolower($surveyorNames)) ?>"
                                 data-month="<?= $ts ? sanitize(date('Y-m', $ts)) : '' ?>"
-                                data-date="<?= surveyAppointmentTs($survey) ?>">
+                                data-date="<?= surveyReportTs($survey) ?>">
                                 <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
                                 <td>
                                     <div class="vd-vessel-cell">
@@ -826,7 +826,7 @@ include 'includes/header.php';
                                         <?php endif; ?>
                                     </span>
                                 </td>
-                                <td style="white-space:nowrap;color:#64748b;font-size:12.5px;"><?php if ($date_disp !== '—'): ?><?= sanitize(date('d M Y', strtotime($date_src))) ?><span style="display:block;font-size:11px;color:#94a3b8;"><?= sanitize(date('H:i', strtotime($date_src))) ?></span><?php else: ?>—<?php endif; ?></td>
+                                <td style="white-space:nowrap;color:#64748b;font-size:12.5px;"><?= surveyReportTs($survey) ? sanitize(date('d M Y', surveyReportTs($survey))) : '—' ?></td>
                                 <td>
                                     <div class="vd-actions">
                                         <a href="completed_detail.php?id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-eye"></i> View</a>

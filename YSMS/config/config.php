@@ -237,6 +237,15 @@ function surveyCompletedTs(array $survey): int {
     return surveyAppointmentTs($survey);
 }
 
+/** Completed list is ordered by the Report Completed date (report_uploaded_date). */
+const SURVEY_REPORT_ORDER_SQL = 'COALESCE(DATE(s.report_uploaded_date), DATE(s.survey_completed_date), s.appointment_date, DATE(s.assign_date))';
+
+function surveyReportTs(array $survey): int {
+    $v = (string)($survey['report_uploaded_date'] ?? '');
+    if ($v !== '' && strpos($v, '0000-00-00') !== 0 && ($ts = strtotime(substr($v, 0, 10))) !== false) return $ts;
+    return surveyCompletedTs($survey);
+}
+
 /** Unix timestamp used by the lists' client-side "Newest/Oldest first" sort. */
 function surveyAppointmentTs(array $survey): int {
     foreach (['appointment_date', 'assign_date'] as $k) {
