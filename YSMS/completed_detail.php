@@ -178,6 +178,17 @@ function fmtDateTime($val) {
     return date('d M Y, H:i', $ts);
 }
 
+// Dates the user picks (assign form / survey completed / report completed) — date only.
+function fmtDateOnly($val) {
+    if (empty($val) || strpos((string)$val, '0000-00-00') === 0) return '—';
+    $ts = strtotime(substr((string)$val, 0, 10));
+    return $ts ? date('d M Y', $ts) : '—';
+}
+
+// Survey Assigned Date = the date entered on the Assign Vessel form
+// (appointment_date); older records without one fall back to assign_date.
+$cdAssignedDate = fmtDateOnly(!empty($survey['appointment_date']) ? $survey['appointment_date'] : ($survey['assign_date'] ?? ''));
+
 include 'includes/header.php';
 ?>
 
@@ -301,15 +312,15 @@ include 'includes/header.php';
     <div class="info-table-list shadow-sm">
         <div class="info-row">
             <span class="info-label"><i class="fa-regular fa-calendar-plus text-primary"></i> Survey Assigned Date</span>
-            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateTime($survey['assign_date'] ?? '') ?></span></span>
+            <span class="info-value" data-testid="cd-assigned-mobile"><span class="badge bg-light text-dark border"><?= $cdAssignedDate ?></span></span>
         </div>
         <div class="info-row">
             <span class="info-label"><i class="fa-regular fa-calendar-check text-warning"></i> Survey Completed Date</span>
-            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateTime($survey['survey_completed_date'] ?? '') ?></span></span>
+            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['survey_completed_date'] ?? '') ?></span></span>
         </div>
         <div class="info-row">
             <span class="info-label"><i class="fa-solid fa-calendar-check text-success"></i> Report Completed Date</span>
-            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateTime($survey['report_uploaded_date'] ?? '') ?></span></span>
+            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['report_uploaded_date'] ?? '') ?></span></span>
         </div>
     </div>
 

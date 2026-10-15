@@ -21,7 +21,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Completed'
-        ORDER BY s.id DESC
+        ORDER BY " . SURVEY_REPORT_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute();
 } elseif ($role === 'Client') {
@@ -33,7 +33,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Completed' AND s.client_id = ?
-        ORDER BY s.id DESC
+        ORDER BY " . SURVEY_REPORT_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute([$client_id]);
 } else {
@@ -47,7 +47,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Completed' AND (s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))
-        ORDER BY s.id DESC
+        ORDER BY " . SURVEY_REPORT_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute([$user_id, $user_id]);
 }
@@ -109,8 +109,8 @@ if ($is_full_access && $filter_surveyor !== '') {
     $params[] = $filter_surveyor;
 }
 $whereSql = implode(' AND ', $where);
-$orderSql = 's.id DESC';
-if ($sort === 'oldest') $orderSql = 's.id ASC';
+$orderSql = SURVEY_REPORT_ORDER_SQL . ' DESC, s.id DESC';
+if ($sort === 'oldest') $orderSql = SURVEY_REPORT_ORDER_SQL . ' ASC, s.id ASC';
 elseif ($sort === 'name-asc') $orderSql = 's.vessel_name ASC';
 elseif ($sort === 'name-desc') $orderSql = 's.vessel_name DESC';
 
@@ -362,7 +362,7 @@ include 'includes/header.php';
              data-surveyor="<?= sanitize($surveyorNames) ?>"
              data-status="completed"
              data-month="<?= $card_ts ? sanitize(date('Y-m', $card_ts)) : '' ?>"
-             data-date="<?= strtotime($survey['report_uploaded_date'] ?? '1970-01-01') ?>"
+             data-date="<?= surveyReportTs($survey) ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$survey['vessel_name'] ?? '', $survey['company_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>">
             <div style="display:flex;align-items:center;gap:12px;">
                 <span class="pv-row-num" data-row-num data-testid="pv-row-num"></span>
@@ -473,7 +473,7 @@ include 'includes/header.php';
                                 <th>Survey type</th>
                                 <th>Port</th>
                                 <th>Recovery</th>
-                                <th>Date</th>
+                                <th>Report Completed</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -483,8 +483,7 @@ include 'includes/header.php';
                                 $typeLabel = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
                                 $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
                                 $date_src = $survey['report_uploaded_date'] ?? $survey['survey_completed_date'] ?? $survey['assign_date'] ?? '';
-                                $date_disp = (!empty($date_src) && $date_src !== '0000-00-00' && $date_src !== '0000-00-00 00:00:00')
-                                    ? date('d M Y H:i', strtotime($date_src)) : '—';
+                                $date_disp = surveyReportTs($survey) ? date('d M Y', surveyReportTs($survey)) : '—';
                                 $ts = strtotime($date_src ?: '1970-01-01') ?: 0;
                             ?>
                             <tr class="vd-row"
@@ -495,7 +494,7 @@ include 'includes/header.php';
                                 data-client="<?= sanitize(strtolower($survey['company_name'] ?? '')) ?>"
                                 data-surveyor="<?= sanitize(strtolower($surveyorNames)) ?>"
                                 data-month="<?= $ts ? sanitize(date('Y-m', $ts)) : '' ?>"
-                                data-date="<?= (int)$ts ?>">
+                                data-date="<?= surveyReportTs($survey) ?>">
                                 <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
                                 <td>
                                     <a class="vd-vessel" href="completed_detail.php?id=<?= (int)$survey['id'] ?>"><?= sanitize($vessel_name) ?></a>

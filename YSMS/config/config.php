@@ -268,6 +268,15 @@ function surveyAppointmentTs(array $survey): int {
     return 0;
 }
 
+/** Completed list is ordered by the Report Completed date (report_uploaded_date). */
+const SURVEY_REPORT_ORDER_SQL = 'COALESCE(DATE(s.report_uploaded_date), DATE(s.survey_completed_date), s.appointment_date, DATE(s.assign_date))';
+
+function surveyReportTs(array $survey): int {
+    $v = (string)($survey['report_uploaded_date'] ?? '');
+    if ($v !== '' && strpos($v, '0000-00-00') !== 0 && ($ts = strtotime(substr($v, 0, 10))) !== false) return $ts;
+    return surveyCompletedTs($survey);
+}
+
 /** Pending Reports are dated and ordered by the Survey Completed date (assign date when missing). */
 const SURVEY_COMPLETED_ORDER_SQL = 'COALESCE(DATE(s.survey_completed_date), s.appointment_date, DATE(s.assign_date))';
 
