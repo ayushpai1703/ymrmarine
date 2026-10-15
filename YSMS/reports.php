@@ -21,7 +21,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Pending Report'
-        ORDER BY s.id DESC
+        ORDER BY " . SURVEY_COMPLETED_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute();
 } elseif ($role === 'Client') {
@@ -33,7 +33,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Pending Report' AND s.client_id = ?
-        ORDER BY s.id DESC
+        ORDER BY " . SURVEY_COMPLETED_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute([$client_id]);
 } else {
@@ -47,7 +47,7 @@ if ($is_full_access) {
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE s.status = 'Pending Report' AND (s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))
-        ORDER BY s.id DESC
+        ORDER BY " . SURVEY_COMPLETED_ORDER_SQL . " DESC, s.id DESC
     ");
     $stmt->execute([$user_id, $user_id]);
 }
@@ -93,8 +93,8 @@ if ($is_full_access && $filter_surveyor !== '') {
     $params[] = $filter_surveyor;
 }
 $whereSql = implode(' AND ', $where);
-$orderSql = 's.id DESC';
-if ($sort === 'oldest') $orderSql = 's.id ASC';
+$orderSql = SURVEY_COMPLETED_ORDER_SQL . ' DESC, s.id DESC';
+if ($sort === 'oldest') $orderSql = SURVEY_COMPLETED_ORDER_SQL . ' ASC, s.id ASC';
 elseif ($sort === 'name-asc') $orderSql = 's.vessel_name ASC';
 elseif ($sort === 'name-desc') $orderSql = 's.vessel_name DESC';
 
@@ -447,7 +447,7 @@ include 'includes/header.php';
              data-client="<?= sanitize($survey['company_name'] ?? '') ?>"
              data-surveyor="<?= sanitize($surveyorNames) ?>"
              data-status="pending"
-             data-date="<?= strtotime($survey['survey_completed_date'] ?? $survey['assign_date'] ?? '1970-01-01') ?>"
+             data-date="<?= surveyCompletedTs($survey) ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '']))) ?>">
             <div class="vessel-card-top-content">
                 <div class="vessel-avatar-info"><span class="pv-row-num" data-row-num data-testid="pv-row-num"></span><div>
@@ -459,6 +459,7 @@ include 'includes/header.php';
                 <div class="vessel-badge-date text-end">
                     <span class="badge-assigned"><?= sanitize($typeLabel) ?></span>
                     <div><span class="badge-place"><i class="fa-solid fa-location-dot"></i> <?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
+                    <div class="vessel-client-sub mt-1" style="text-align:right" data-testid="pr-completed-date"><i class="fa-solid fa-calendar-check"></i> <?= surveyCompletedTs($survey) ? date('d M Y', surveyCompletedTs($survey)) : '—' ?></div>
                 </div>
             </div>
         </div>
@@ -530,7 +531,7 @@ include 'includes/header.php';
                                 <th>Survey type</th>
                                 <th>Port</th>
                                 <?php if ($is_full_access): ?><th>Surveyor</th><?php endif; ?>
-                                <th>Date</th>
+                                <th>Survey Completed</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -539,10 +540,8 @@ include 'includes/header.php';
                                 $vessel_name = $survey['vessel_name'] ?: 'Vessel';
                                 $typeLabel = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
                                 $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
-                                $date_src = $survey['report_uploaded_date'] ?? $survey['survey_completed_date'] ?? $survey['assign_date'] ?? '';
-                                $date_disp = (!empty($date_src) && $date_src !== '0000-00-00' && $date_src !== '0000-00-00 00:00:00')
-                                    ? date('d M Y H:i', strtotime($date_src)) : '—';
-                                $ts = strtotime($date_src ?: '1970-01-01') ?: 0;
+                                $ts = surveyCompletedTs($survey);
+                                $date_disp = $ts ? date('d M Y', $ts) : '—';
                             ?>
                             <tr class="vd-row"
                                 data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '', $surveyorNames, $survey['report_number'] ?? '']))) ?>"

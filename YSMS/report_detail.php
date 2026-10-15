@@ -286,6 +286,7 @@ include 'includes/header.php';
     <!-- Read-Only Info Table -->
     <div class="info-table-list shadow-sm">
         <div class="info-row"><span class="info-label">Vessel Name</span><span class="info-value"><?= sanitize($survey['vessel_name']) ?></span></div>
+        <div class="info-row" data-testid="rd-port-mobile"><span class="info-label">Port</span><span class="info-value"><?= sanitize($survey['port_name'] ?? '—') ?></span></div>
         <div class="info-row"><span class="info-label">Report No</span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
         <div class="info-row"><span class="info-label">Client Name</span><span class="info-value"><?= sanitize($survey['company_name']) ?></span></div>
         <div class="info-row"><span class="info-label">Surveyor Name</span><span class="info-value"><?= sanitize(getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A')) ?></span></div>

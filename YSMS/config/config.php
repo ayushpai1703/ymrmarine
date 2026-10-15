@@ -252,6 +252,17 @@ const RECOVERY_NA_LABEL = 'NOT APPLICABLE';
 // True only when every selected survey type (single or combination) is in
 // RECOVERY_NOT_APPLICABLE_TYPES. An unresolved/empty type list is treated
 // as applicable (false) — i.e. the old numeric behavior, never silently N/A.
+/** Pending Reports are dated and ordered by the Survey Completed date (assign date when missing). */
+const SURVEY_COMPLETED_ORDER_SQL = 'COALESCE(DATE(s.survey_completed_date), s.appointment_date, DATE(s.assign_date))';
+
+function surveyCompletedTs(array $survey): int {
+    foreach (['survey_completed_date', 'appointment_date', 'assign_date'] as $k) {
+        $v = (string)($survey[$k] ?? '');
+        if ($v !== '' && strpos($v, '0000-00-00') !== 0 && ($ts = strtotime(substr($v, 0, 10))) !== false) return $ts;
+    }
+    return 0;
+}
+
 function isRecoveryNotApplicable($db, $ids_csv, $fallback_name = '') {
     $names = getSurveyTypeNamesArray($db, $ids_csv, $fallback_name);
     if (empty($names)) {

@@ -97,6 +97,12 @@ include 'includes/header.php';
         font-weight: 650;
         white-space: nowrap;
     }
+    .admin-bulk-btn {
+        flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+        border: 1.5px solid var(--accent-purple); color: var(--accent-purple); background: #fff;
+        border-radius: 10px; padding: 0 14px; font-size: 13px; font-weight: 650; white-space: nowrap; text-decoration: none;
+    }
+    .admin-bulk-btn:hover { background: #F5F3FF; color: var(--accent-purple); }
     .admin-item-card {
         background: #fff;
         border: 1px solid var(--border-color);
@@ -180,6 +186,9 @@ include 'includes/header.php';
         <div class="admin-module-panel <?= $key === $default_module ? 'active' : '' ?>" data-module-panel="<?= sanitize($key) ?>" data-testid="admin-panel-<?= sanitize($key) ?>">
             <div class="admin-search-row">
                 <input type="text" class="admin-search-input" placeholder="Search <?= sanitize(strtolower($mod['label'])) ?>..." data-testid="admin-search-<?= sanitize($key) ?>">
+                <?php if ($key === 'ports'): ?>
+                    <a href="ports_import.php" class="admin-bulk-btn" data-testid="admin-bulk-ports"><i class="fa-solid fa-file-arrow-up"></i> Bulk Upload</a>
+                <?php endif; ?>
                 <button type="button" class="admin-add-btn" data-testid="admin-add-<?= sanitize($key) ?>"><i class="fa-solid fa-plus"></i> Add</button>
             </div>
             <div class="admin-list-container" data-testid="admin-list-<?= sanitize($key) ?>">
