@@ -185,6 +185,10 @@ function fmtDateOnly($val) {
     return $ts ? date('d M Y', $ts) : '—';
 }
 
+// Survey Assigned Date = the date entered on the Assign Vessel form
+// (appointment_date); older records without one fall back to assign_date.
+$cdAssignedDate = fmtDateOnly(!empty($survey['appointment_date']) ? $survey['appointment_date'] : ($survey['assign_date'] ?? ''));
+
 include 'includes/header.php';
 ?>
 
@@ -461,11 +465,7 @@ include 'includes/header.php';
     <div class="info-table-list shadow-sm">
         <div class="info-row">
             <span class="info-label"><i class="fa-regular fa-calendar-plus text-primary"></i> Survey Assigned Date</span>
-            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateTime($survey['assign_date'] ?? '') ?></span></span>
-        </div>
-        <div class="info-row" data-testid="cd-appointment-mobile">
-            <span class="info-label"><i class="fa-regular fa-calendar text-info"></i> Appointment Date</span>
-            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['appointment_date'] ?? '') ?></span></span>
+            <span class="info-value" data-testid="cd-assigned-mobile"><span class="badge bg-light text-dark border"><?= $cdAssignedDate ?></span></span>
         </div>
         <div class="info-row">
             <span class="info-label"><i class="fa-regular fa-calendar-check text-warning"></i> Survey Completed Date</span>
@@ -685,19 +685,14 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                             <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:#F1F5FF;color:#4F46E5;"><i class="fa-regular fa-calendar-plus"></i></div>
                                 <div class="vdd-info-label">Survey Assigned</div>
-                                <div><span class="vdd-badge-soft"><?= fmtDateTime($survey['assign_date'] ?? '') ?></span></div>
+                                <div><span class="vdd-badge-soft" data-testid="cd-assigned-desktop"><?= $cdAssignedDate ?></span></div>
                             </div>
-                            <div class="vdd-info-row alt" data-testid="cd-appointment-desktop">
-                                <div class="vdd-info-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-regular fa-calendar"></i></div>
-                                <div class="vdd-info-label">Appointment</div>
-                                <div><span class="vdd-badge-soft"><?= fmtDateOnly($survey['appointment_date'] ?? '') ?></span></div>
-                            </div>
-                            <div class="vdd-info-row">
+                            <div class="vdd-info-row alt">
                                 <div class="vdd-info-icon" style="background:#FFFBEB;color:#B45309;"><i class="fa-regular fa-calendar-check"></i></div>
                                 <div class="vdd-info-label">Survey Completed</div>
                                 <div><span class="vdd-badge-soft"><?= fmtDateOnly($survey['survey_completed_date'] ?? '') ?></span></div>
                             </div>
-                            <div class="vdd-info-row alt">
+                            <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:#D1FAE5;color:#047857;"><i class="fa-solid fa-calendar-check"></i></div>
                                 <div class="vdd-info-label">Report Completed</div>
                                 <div><span class="vdd-badge-soft"><?= fmtDateOnly($survey['report_uploaded_date'] ?? '') ?></span></div>
