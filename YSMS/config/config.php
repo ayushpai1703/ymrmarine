@@ -252,6 +252,22 @@ const RECOVERY_NA_LABEL = 'NOT APPLICABLE';
 // True only when every selected survey type (single or combination) is in
 // RECOVERY_NOT_APPLICABLE_TYPES. An unresolved/empty type list is treated
 // as applicable (false) — i.e. the old numeric behavior, never silently N/A.
+// 🌟 Pending Vessels list is ordered by the vessel's Appointment Date (newest
+// first). Records without one fall back to their assign date.
+const SURVEY_APPOINTMENT_ORDER_SQL = 'COALESCE(s.appointment_date, DATE(s.assign_date))';
+
+/** Unix timestamp used by the list's client-side "Newest/Oldest first" sort. */
+function surveyAppointmentTs(array $survey): int {
+    foreach (['appointment_date', 'assign_date'] as $k) {
+        $v = (string)($survey[$k] ?? '');
+        if ($v !== '' && strpos($v, '0000-00-00') !== 0) {
+            $ts = strtotime($v);
+            if ($ts !== false) return $ts;
+        }
+    }
+    return 0;
+}
+
 /** Pending Reports are dated and ordered by the Survey Completed date (assign date when missing). */
 const SURVEY_COMPLETED_ORDER_SQL = 'COALESCE(DATE(s.survey_completed_date), s.appointment_date, DATE(s.assign_date))';
 
