@@ -83,8 +83,11 @@ try {
         $params[] = $filter_surveyor;
     }
     if ($filter_month !== '') {
-        $where[] = "DATE_FORMAT(COALESCE(s.report_uploaded_date, s.survey_completed_date, s.assign_date), '%Y-%m') = ?";
-        $params[] = $filter_month;
+        // Report Completed Date month (same as completed.php's Filter by Month).
+        $mStart = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $filter_month) ? $filter_month . '-01' : '1900-01-01';
+        $where[] = "s.report_uploaded_date >= ? AND s.report_uploaded_date < (? + INTERVAL 1 MONTH)";
+        $params[] = $mStart;
+        $params[] = $mStart;
     }
     $whereSql = implode(' AND ', $where);
 

@@ -57,10 +57,19 @@ $survey_types_filter = [];
 $survey_places_filter = [];
 $survey_clients_filter = [];
 $survey_surveyors_filter = [];
+/** Report Completed month ('YYYY-MM') — the only date the month filter uses. */
+function cvReportMonth(array $r): string {
+    $v = (string)($r['report_uploaded_date'] ?? '');
+    return ($v !== '' && strpos($v, '0000') !== 0 && ($t = strtotime(substr($v, 0, 10)))) ? date('Y-m', $t) : '';
+}
+/** Recovery counted in the month/total summary (blank / N/A → 0). */
+function cvRecovery(array $r): float { return $r['recovery_amount'] !== null ? (float)$r['recovery_amount'] : 0.0; }
+
 // Month filter ('YYYY-MM' => ['label' => 'October 2026', 'count' => 12]) —
-// lets every role see how many vessels were completed in a given month,
-// right in the dropdown label.
+// filters the whole Completed list by the vessel's Report Completed Date
+// (report_uploaded_date). Vessels without a report date show only under "All months".
 $survey_months_filter = [];
+$cv_selected_month = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', (string)($_GET['month'] ?? '')) ? (string)$_GET['month'] : '';
 foreach ($db->query("SELECT type_name FROM survey_types ORDER BY type_name ASC")->fetchAll() as $st_row) {
     if (!empty($st_row['type_name'])) $survey_types_filter[$st_row['type_name']] = $st_row['type_name'];
 }
@@ -70,13 +79,10 @@ foreach ($surveys as $row) {
     $rowSurveyorNames = getCombinedSurveyorNames($db, $row['id'], $row['surveyor_name'] ?? '');
     if (!empty($rowSurveyorNames)) $survey_surveyors_filter[$rowSurveyorNames] = $rowSurveyorNames;
 
-    $row_date_src = $row['report_uploaded_date'] ?? $row['survey_completed_date'] ?? $row['assign_date'] ?? '';
-    $row_ts = (!empty($row_date_src) && $row_date_src !== '0000-00-00' && $row_date_src !== '0000-00-00 00:00:00')
-        ? strtotime($row_date_src) : false;
-    if ($row_ts) {
-        $month_key = date('Y-m', $row_ts);
+    $month_key = cvReportMonth($row);
+    if ($month_key !== '') {
         if (!isset($survey_months_filter[$month_key])) {
-            $survey_months_filter[$month_key] = ['label' => date('F Y', $row_ts), 'count' => 0];
+            $survey_months_filter[$month_key] = ['label' => date('F Y', strtotime($month_key . '-01')), 'count' => 0];
         }
         $survey_months_filter[$month_key]['count']++;
     }
@@ -332,7 +338,7 @@ include 'includes/header.php';
         <?php if ($is_full_access): ?>
         <select data-filter-surveyor><option value="">All surveyors</option><?php foreach ($survey_surveyors_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
         <?php endif; ?>
-        <select data-filter-month><option value="">All months</option><?php foreach ($survey_months_filter as $m_key => $m_info): ?><option value="<?= sanitize($m_key) ?>"><?= sanitize($m_info['label']) ?> (<?= (int)$m_info['count'] ?>)</option><?php endforeach; ?></select>
+        <select data-filter-month aria-label="Filter by month (Report Completed Date)" data-testid="cv-month-mobile"><option value="">Filter by month — All</option><?php foreach ($survey_months_filter as $m_key => $m_info): ?><option value="<?= sanitize($m_key) ?>"<?= $m_key === $cv_selected_month ? ' selected' : '' ?>><?= sanitize($m_info['label']) ?> (<?= (int)$m_info['count'] ?>)</option><?php endforeach; ?></select>
         <button type="button" class="clear-filters-btn" data-clear-filters><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
     </div>
     <div class="px-3 mb-3">
@@ -344,6 +350,11 @@ include 'includes/header.php';
             <i class="fa-solid fa-file-import me-2"></i> Import Excel
         </a>
         <?php endif; ?>
+    </div>
+    <div class="cv-rec-summary cv-rec-mob" data-testid="cv-recovery-mobile">
+        <span><i class="fa-solid fa-droplet"></i> <span data-cv-recovery-label-m>Total Recovery</span></span>
+        <b><span data-cv-recovery-m><?= number_format(array_sum(array_map('cvRecovery', $surveys)), 3) ?></span> MT</b>
+        <small><span data-cv-count-m><?= count($surveys) ?></span> vessels</small>
     </div>
     <div class="vessel-list-container" data-list-container>
         <?php if (count($surveys) > 0): foreach ($surveys as $survey):
@@ -361,7 +372,8 @@ include 'includes/header.php';
              data-client="<?= sanitize($survey['company_name'] ?? '') ?>"
              data-surveyor="<?= sanitize($surveyorNames) ?>"
              data-status="completed"
-             data-month="<?= $card_ts ? sanitize(date('Y-m', $card_ts)) : '' ?>"
+             data-month="<?= sanitize(cvReportMonth($survey)) ?>"
+             data-recovery="<?= cvRecovery($survey) ?>"
              data-date="<?= surveyReportTs($survey) ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$survey['vessel_name'] ?? '', $survey['company_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>">
             <div style="display:flex;align-items:center;gap:12px;">
@@ -434,10 +446,10 @@ include 'includes/header.php';
                             <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
                         <?php endforeach; ?>
                     </select>
-                    <select data-desk-month>
-                        <option value="">All months</option>
+                    <select data-desk-month aria-label="Filter by month (Report Completed Date)" data-testid="cv-month-desktop">
+                        <option value="">Filter by month — All</option>
                         <?php foreach ($survey_months_filter as $m_key => $m_info): ?>
-                            <option value="<?= sanitize($m_key) ?>"><?= sanitize($m_info['label']) ?> (<?= (int)$m_info['count'] ?>)</option>
+                            <option value="<?= sanitize($m_key) ?>"<?= $m_key === $cv_selected_month ? ' selected' : '' ?>><?= sanitize($m_info['label']) ?> (<?= (int)$m_info['count'] ?>)</option>
                         <?php endforeach; ?>
                     </select>
                     <?php if ($is_full_access): ?>
@@ -456,6 +468,11 @@ include 'includes/header.php';
                 <?php if ($is_full_access): ?>
                 <a href="completed_import.php" class="btn-export" style="background:#fff;color:#4B2FD6;border:1.5px solid #C4B5FD;margin-left:8px;" title="Bulk import completed vessels from Excel" data-testid="completed-import-desktop"><i class="fa-solid fa-file-import"></i> Import Excel</a>
                 <?php endif; ?>
+            </div>
+            <div class="cv-rec-summary cv-rec-desk" data-testid="cv-recovery-desktop">
+                <span><i class="fa-solid fa-droplet"></i> <span data-cv-recovery-label>Total Recovery</span></span>
+                <b><span data-cv-recovery><?= number_format(array_sum(array_map('cvRecovery', $surveys)), 3) ?></span> MT</b>
+                <small><span data-cv-count><?= count($surveys) ?></span> vessels</small>
             </div>
             <div class="vd-meta" data-desk-meta></div>
             <div class="vd-table-card">
@@ -493,7 +510,8 @@ include 'includes/header.php';
                                 data-place="<?= sanitize(strtolower($survey['port_name'] ?? '')) ?>"
                                 data-client="<?= sanitize(strtolower($survey['company_name'] ?? '')) ?>"
                                 data-surveyor="<?= sanitize(strtolower($surveyorNames)) ?>"
-                                data-month="<?= $ts ? sanitize(date('Y-m', $ts)) : '' ?>"
+                                data-month="<?= sanitize(cvReportMonth($survey)) ?>"
+                                data-recovery="<?= cvRecovery($survey) ?>"
                                 data-date="<?= surveyReportTs($survey) ?>">
                                 <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
                                 <td>
@@ -627,6 +645,16 @@ include 'includes/header.php';
       if (num) num.textContent = String(start + i + 1);
     });
 
+    // Recovery of every vessel matching the filters (all pages, not just this one).
+    var rec = 0;
+    rows.forEach(function (r) { rec += parseFloat(r.getAttribute('data-recovery') || '0') || 0; });
+    var mSel = monthSel ? monthSel.options[monthSel.selectedIndex] : null;
+    var mLabel = monthSel && monthSel.value ? mSel.textContent.replace(/\s*\(\d+\)\s*$/, '') : '';
+    var recEl = root.querySelector('[data-cv-recovery]'), recLbl = root.querySelector('[data-cv-recovery-label]'), cntEl = root.querySelector('[data-cv-count]');
+    if (recEl) recEl.textContent = rec.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    if (recLbl) recLbl.textContent = mLabel ? mLabel + ' Recovery' : 'Total Recovery';
+    if (cntEl) cntEl.textContent = String(total);
+
     if (empty) empty.style.display = total === 0 ? 'block' : 'none';
     var tableWrap = root.querySelector('.vd-table-wrap');
     if (tableWrap) tableWrap.style.display = total === 0 ? 'none' : '';
@@ -683,7 +711,15 @@ include 'includes/header.php';
     exportLink.href = 'export_completed.php' + (params.length ? '?' + params.join('&') : '');
   }
 
-  function onChange() { page = 1; render(); updateExportLink(); }
+  function onChange() {
+    page = 1; render(); updateExportLink();
+    try {
+      var u = new URL(window.location.href);
+      if (monthSel && monthSel.value) u.searchParams.set('month', monthSel.value); else u.searchParams.delete('month');
+      u.searchParams.delete('page');
+      history.replaceState(null, '', u.toString());
+    } catch (e) {}
+  }
 
   if (search) search.addEventListener('input', onChange);
   [sortSel, typeSel, placeSel, clientSel, surveyorSel, monthSel].forEach(function (el) {
@@ -724,6 +760,32 @@ document.addEventListener('click', function (ev) {
         cell.classList.toggle('tooltip-open');
     }
 }, true);
+</script>
+
+<style>
+.cv-rec-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 14px 10px; padding: 10px 14px; border-radius: 14px; background: linear-gradient(120deg,#ECFDF5,#F0FDFA); border: 1px solid #A7F3D0; color: #065F46; font-size: 12.5px; }
+.cv-rec-summary b { font-size: 15px; color: #047857; }
+.cv-rec-summary small { margin-left: auto; color: #64748b; font-weight: 600; }
+.cv-rec-desk { margin: 0 0 10px; }
+@media (min-width: 992px) { .cv-rec-mob { display: none; } }
+</style>
+<script>
+(function () {
+    var scope = document.querySelector('[data-list-scope]');
+    if (!scope) return;
+    function update() {
+        var cards = scope.querySelectorAll('[data-survey-card]'), rec = 0, n = 0;
+        cards.forEach(function (c) { if (c.style.display === 'none') return; n++; rec += parseFloat(c.getAttribute('data-recovery') || '0') || 0; });
+        var sel = scope.querySelector('[data-filter-month]');
+        var lbl = sel && sel.value ? sel.options[sel.selectedIndex].textContent.replace(/\s*\(\d+\)\s*$/, '') + ' Recovery' : 'Total Recovery';
+        var r = scope.querySelector('[data-cv-recovery-m]'), l = scope.querySelector('[data-cv-recovery-label-m]'), k = scope.querySelector('[data-cv-count-m]');
+        if (r) r.textContent = rec.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+        if (l) l.textContent = lbl;
+        if (k) k.textContent = String(n);
+    }
+    ['input', 'change', 'click'].forEach(function (ev) { document.addEventListener(ev, function () { setTimeout(update, 0); }); });
+    window.addEventListener('load', function () { setTimeout(update, 0); });
+})();
 </script>
 
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>
