@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
+// Current calendar month in the app's timezone (not the DB server's) for "This Month" figures.
+$cm_start = date('Y-m-01');
+$cm_end = date('Y-m-01', strtotime('first day of next month'));
 checkAuth();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -36,7 +39,7 @@ $sql = "
 $params = [];
 
 if ($period === 'month') {
-    $sql .= " AND s.survey_completed_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND s.survey_completed_date < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH";
+    $sql .= " AND s.survey_completed_date >= '$cm_start' AND s.survey_completed_date < '$cm_end'";
 }
 
 if ($role === 'Client') {

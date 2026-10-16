@@ -1,5 +1,8 @@
 <?php
 require_once 'config/config.php';
+// Current calendar month in the app's timezone (not the DB server's) for "This Month" figures.
+$cm_start = date('Y-m-01');
+$cm_end = date('Y-m-01', strtotime('first day of next month'));
 checkAuth();
 
 $db = getDB();
@@ -39,7 +42,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $total_recovery = $db->query("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL")->fetchColumn();
     
     // This Month Recovery: same vessels, Survey Completed Date in the current calendar month.
-    $month_recovery = $db->query("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND survey_completed_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND survey_completed_date < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH")->fetchColumn();
+    $month_recovery = $db->query("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND survey_completed_date >= '$cm_start' AND survey_completed_date < '$cm_end'")->fetchColumn();
 
     // అడ్మిన్ కి M20 (VLSFO) రికవరీ సమ్
     $total_vlsfo = $db->query("SELECT SUM(vlsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND vlsfo_recovery IS NOT NULL")->fetchColumn();
@@ -69,8 +72,8 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
                 THEN s.id END) AS ships_month,
             COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed') THEN s.recovery_amount END), 0) AS recovery_total,
             COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed')
-                AND s.survey_completed_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
-                AND s.survey_completed_date < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH
+                AND s.survey_completed_date >= '$cm_start'
+                AND s.survey_completed_date < '$cm_end'
                 THEN s.recovery_amount END), 0) AS recovery_month
         FROM users u
         LEFT JOIN surveys s ON (s.surveyor_id = u.id OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = u.id))
@@ -98,7 +101,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $stmt_t_rec->execute([$client_row_id]);
     $total_recovery = $stmt_t_rec->fetchColumn();
 
-    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND client_id = ? AND survey_completed_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND survey_completed_date < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH");
+    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND client_id = ? AND survey_completed_date >= '$cm_start' AND survey_completed_date < '$cm_end'");
     $stmt_m_rec->execute([$client_row_id]);
     $month_recovery = $stmt_m_rec->fetchColumn();
 
@@ -135,7 +138,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $total_recovery = $stmt_t_rec->fetchColumn();
 
     // సర్వేయర్ కి ఈ నెలలో వచ్చిన రికవరీ సమ్ మాత్రమే
-    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND $assignedSql AND survey_completed_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND survey_completed_date < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH");
+    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND $assignedSql AND survey_completed_date >= '$cm_start' AND survey_completed_date < '$cm_end'");
     $stmt_m_rec->execute([$user_id, $user_id]);
     $month_recovery = $stmt_m_rec->fetchColumn();
 
