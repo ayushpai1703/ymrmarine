@@ -10,22 +10,37 @@
  *   aieInit($db, $survey);           once, after the survey row is loaded
  *   <?= aie('vessel_name') ?>        pencil button beside a label
  *   <?= aieFileButtons($file) ?>     file actions beside Replace
- *   <?= aieExtraRows('mobile') ?>    rows for fields the page doesn't show
  *   <?php aieRender(); ?>            popup + script, once near the footer
  */
 
-const AIE_STATUSES = ['Pending Vessel', 'Pending Report', 'Completed', 'Cancelled'];
 const AIE_UNASSIGNED_SURVEYOR = 1; // outsourcing / unassigned placeholder (assign_vessel.php)
 
 const AIE_FIELDS = [
-    'vessel_name' => 'Vessel Name', 'imo_number' => 'IMO Number', 'report_number' => 'Report No',
+    'vessel_name' => 'Vessel Name', 'report_number' => 'Report No',
     'client_id' => 'Client', 'agent_name' => 'Agent Name', 'port_id' => 'Port',
     'survey_type_ids' => 'Survey Type(s)', 'surveyors' => 'Surveyor(s)',
-    'appointment_date' => 'Survey Assigned Date', 'assign_date' => 'Created on (system)',
+    'appointment_date' => 'Survey Assigned Date', 'assign_date' => 'Assigned Date',
     'survey_completed_date' => 'Survey Completed Date', 'report_uploaded_date' => 'Report Completed Date',
-    'status' => 'Status', 'recovery' => 'Recovery', 'remarks' => 'Remarks', 'notes' => 'Notes',
-    'custom_live_status' => 'Latest Status Update',
+    'recovery' => 'Recovery', 'remarks' => 'Remarks',
 ];
+
+/**
+ * Fields an Admin may edit, per stage — exactly what that stage's detail
+ * page displays. Later-stage fields (e.g. Survey / Report Completed dates on
+ * a Pending Vessel) are not editable from an earlier stage. Enforced both
+ * when drawing the pencils and again on save.
+ */
+const AIE_STAGE_FIELDS = [
+    // vessel_detail.php (Pending Vessels; Cancelled vessels open the same page)
+    'Pending Vessel' => ['vessel_name', 'report_number', 'client_id', 'survey_type_ids', 'assign_date', 'agent_name', 'surveyors', 'port_id', 'remarks'],
+    'Cancelled'      => ['vessel_name', 'report_number', 'client_id', 'survey_type_ids', 'assign_date', 'agent_name', 'surveyors', 'port_id', 'remarks'],
+    // report_detail.php
+    'Pending Report' => ['vessel_name', 'port_id', 'report_number', 'client_id', 'surveyors', 'survey_type_ids', 'survey_completed_date', 'recovery'],
+    // completed_detail.php
+    'Completed'      => ['vessel_name', 'client_id', 'appointment_date', 'survey_completed_date', 'report_uploaded_date', 'report_number', 'survey_type_ids', 'port_id', 'agent_name', 'recovery'],
+];
+
+function aieAllowedFields(string $status): array { return AIE_STAGE_FIELDS[$status] ?? []; }
 
 function aieIsAdmin(): bool { return ($_SESSION['role'] ?? '') === 'Admin'; }
 
@@ -35,6 +50,7 @@ function aieInit(PDO $db, array $survey): void {
 
 function aie(string $field): string {
     if (!aieIsAdmin() || empty($GLOBALS['__aie']) || !isset(AIE_FIELDS[$field])) return '';
+    if (!in_array($field, aieAllowedFields((string)$GLOBALS['__aie']['survey']['status']), true)) return '';
     $label = AIE_FIELDS[$field];
     return '<button type="button" class="aie-btn" data-aie="' . htmlspecialchars($field, ENT_QUOTES) . '" title="Edit ' . htmlspecialchars($label, ENT_QUOTES)
         . '" aria-label="Edit ' . htmlspecialchars($label, ENT_QUOTES) . '" data-testid="aie-' . htmlspecialchars($field, ENT_QUOTES) . '"><i class="fa-solid fa-pen"></i></button>';
@@ -48,40 +64,6 @@ function aieFileButtons(array $file): string {
     return '<button type="button" class="aie-file-btn" data-aie-file="rename" data-file-id="' . $id . '" data-file-name="' . $name . '" data-file-type="' . $type . '" title="Rename" data-testid="aie-file-rename-' . $id . '"><i class="fa-solid fa-pen"></i></button>'
          . '<button type="button" class="aie-file-btn" data-aie-file="type" data-file-id="' . $id . '" data-file-name="' . $name . '" data-file-type="' . $type . '" title="Change file type" data-testid="aie-file-type-' . $id . '"><i class="fa-solid fa-tag"></i></button>'
          . '<button type="button" class="aie-file-btn danger" data-aie-file="delete" data-file-id="' . $id . '" data-file-name="' . $name . '" data-file-type="' . $type . '" title="Delete file" data-testid="aie-file-delete-' . $id . '"><i class="fa-solid fa-trash"></i></button>';
-}
-
-/** Admin-only rows for fields the page doesn't otherwise show. */
-function aieExtraRows(string $variant, array $fields = ['imo_number', 'status', 'notes', 'custom_live_status', 'assign_date']): string {
-    if (!aieIsAdmin() || empty($GLOBALS['__aie'])) return '';
-    $s = $GLOBALS['__aie']['survey'];
-    $fmt = function ($f) use ($s) {
-        $v = $s[$f] ?? '';
-        if ($f === 'assign_date') return (!empty($v) && strpos((string)$v, '0000') !== 0) ? date('d M Y, H:i', strtotime((string)$v)) : '—';
-        return trim((string)$v) !== '' ? (string)$v : '—';
-    };
-    $out = '';
-    foreach ($fields as $k => $f) {
-        $display = null;
-        if (is_string($k)) { $display = $f; $f = $k; } // 'field' => 'text to show'
-        if (!isset(AIE_FIELDS[$f])) continue;
-        $val = htmlspecialchars($display ?? $fmt($f), ENT_QUOTES);
-        if ($variant === 'desktop') {
-            $out .= '<div class="vdd-info-row" data-testid="aie-row-' . $f . '"><div class="vdd-info-icon" style="background:#F1F5F9;color:#64748b;"><i class="fa-solid fa-user-shield"></i></div>'
-                . '<div class="vdd-info-label">' . AIE_FIELDS[$f] . aie($f) . '</div><div class="vdd-info-value" style="white-space:pre-line">' . $val . '</div></div>';
-        } else {
-            $out .= '<div class="info-row" data-testid="aie-row-' . $f . '"><span class="info-label">' . AIE_FIELDS[$f] . aie($f) . '</span><span class="info-value" style="white-space:pre-line">' . $val . '</span></div>';
-        }
-    }
-    return $out;
-}
-
-function fmtAieDate($v): string {
-    return (!empty($v) && strpos((string)$v, '0000') !== 0 && ($t = strtotime(substr((string)$v, 0, 10)))) ? date('d M Y', $t) : '—';
-}
-
-function fmtAieRecovery(array $s): string {
-    if (($s['recovery_amount'] ?? null) === null) return '—';
-    return number_format((float)$s['recovery_amount'], 3) . ' MT (VLSFO ' . ($s['vlsfo_recovery'] ?? '—') . ' · HSFO ' . ($s['hsfo_recovery'] ?? '—') . ' · LSMGO ' . ($s['lsmgo_recovery'] ?? '—') . ')';
 }
 
 function aieFileTypes(PDO $db): array {
@@ -113,18 +95,16 @@ function aieData(PDO $db, array $survey): array {
     return [
         'id' => $id,
         'values' => [
-            'vessel_name' => (string)$survey['vessel_name'], 'imo_number' => (string)($survey['imo_number'] ?? ''),
+            'vessel_name' => (string)$survey['vessel_name'],
             'report_number' => (string)($survey['report_number'] ?? ''), 'client_id' => (int)$survey['client_id'],
             'agent_name' => (string)$survey['agent_name'], 'port_id' => (int)$survey['port_id'],
             'survey_type_ids' => $types, 'surveyor_ids' => $sv, 'outsourcing' => !$sv,
             'appointment_date' => $d($survey['appointment_date'] ?? ''),
             'assign_date' => (!empty($survey['assign_date']) && strpos((string)$survey['assign_date'], '0000') !== 0) ? date('Y-m-d\TH:i', strtotime($survey['assign_date'])) : '',
             'survey_completed_date' => $d($survey['survey_completed_date'] ?? ''), 'report_uploaded_date' => $d($survey['report_uploaded_date'] ?? ''),
-            'status' => (string)$survey['status'],
             'recovery_amount' => $q($survey['recovery_amount'] ?? null), 'vlsfo_recovery' => $q($survey['vlsfo_recovery'] ?? null),
             'hsfo_recovery' => $q($survey['hsfo_recovery'] ?? null), 'lsmgo_recovery' => $q($survey['lsmgo_recovery'] ?? null),
-            'remarks' => (string)($survey['remarks'] ?? ''), 'notes' => (string)($survey['notes'] ?? ''),
-            'custom_live_status' => (string)($survey['custom_live_status'] ?? ''),
+            'remarks' => (string)($survey['remarks'] ?? ''),
         ],
         'labels' => AIE_FIELDS,
         'clients' => $db->query('SELECT id, company_name AS name FROM clients ORDER BY company_name ASC')->fetchAll(PDO::FETCH_ASSOC),
@@ -132,7 +112,6 @@ function aieData(PDO $db, array $survey): array {
         'types' => $typeRows,
         'surveyors' => $db->query("SELECT u.id, u.full_name AS name, u.status FROM users u JOIN roles r ON r.id = u.role_id
             WHERE r.name = 'Surveyor' AND u.id <> " . AIE_UNASSIGNED_SURVEYOR . " AND (u.status = 'Active' OR u.id IN ($svIn)) ORDER BY u.full_name ASC")->fetchAll(PDO::FETCH_ASSOC),
-        'statuses' => AIE_STATUSES,
         'fileTypes' => aieFileTypes($db),
         'today' => date('Y-m-d'),
         'naLabel' => defined('RECOVERY_NA_LABEL') ? RECOVERY_NA_LABEL : 'N/A',
@@ -166,10 +145,6 @@ function aieQty(string $v) {
     return is_numeric($v) ? round((float)$v, 3) : false;
 }
 
-function aieDetailPage(string $status, int $id): string {
-    return (['Pending Report' => 'report_detail.php', 'Completed' => 'completed_detail.php'][$status] ?? 'vessel_detail.php') . '?id=' . $id;
-}
-
 /**
  * @return array{ok: bool, message: string, redirect?: string}
  */
@@ -182,6 +157,9 @@ function aieSaveField(PDO $db, array $s, string $field, array $post, array $file
     $msg = (AIE_FIELDS[$field] ?? 'Field') . ' updated.';
     $redirect = null;
     $extra = null; // callable run inside the transaction
+    if (!in_array($field, aieAllowedFields((string)$s['status']), true)) {
+        return $err('This field cannot be edited at the ' . $s['status'] . ' stage.');
+    }
 
     switch ($field) {
         case 'vessel_name':
@@ -190,11 +168,6 @@ function aieSaveField(PDO $db, array $s, string $field, array $post, array $file
             if ($v === '') return $err(AIE_FIELDS[$field] . ' is required.');
             if (mb_strlen($v) > 255) return $err(AIE_FIELDS[$field] . ' is too long.');
             $set[$field] = $v;
-            break;
-        case 'imo_number':
-            $v = $p('value');
-            if (mb_strlen($v) > 20) return $err('IMO Number is too long (20 characters max).');
-            $set[$field] = $v !== '' ? $v : null;
             break;
         case 'report_number':
             $v = $p('value');
@@ -207,12 +180,9 @@ function aieSaveField(PDO $db, array $s, string $field, array $post, array $file
             $set[$field] = $v !== '' ? $v : null;
             break;
         case 'remarks':
-        case 'notes':
-        case 'custom_live_status':
             $v = trim((string)($post['value'] ?? ''));
             if (mb_strlen($v) > 5000) return $err(AIE_FIELDS[$field] . ' is too long.');
             $set[$field] = $v !== '' ? $v : null;
-            if ($field === 'custom_live_status') { $set['status_updated_by'] = $actorId; $set['status_updated_at'] = date('Y-m-d H:i:s'); }
             break;
         case 'client_id':
         case 'port_id':
@@ -312,33 +282,6 @@ function aieSaveField(PDO $db, array $s, string $field, array $post, array $file
                 $q['recovery_amount'] = round((float)$q['vlsfo_recovery'] + (float)$q['hsfo_recovery'] + (float)$q['lsmgo_recovery'], 3);
             }
             $set = $q;
-            break;
-        case 'status':
-            $new = $p('value');
-            if (!in_array($new, AIE_STATUSES, true)) return $err('Unknown status.');
-            if ($new === (string)$s['status']) return ['ok' => true, 'message' => 'Status unchanged.'];
-            if (empty($post['confirm'])) return $err('Tick "Yes, change the status" to confirm.');
-            // Dates the new stage needs can be given in the same popup.
-            foreach (['survey_completed_date', 'report_uploaded_date'] as $k) {
-                $d = aieDate($p($k));
-                if ($d === null) return $err(AIE_FIELDS[$k] . ' is not a valid date.');
-                if ($d !== '') $set[$k] = aieWithTime($d, $s[$k] ?? null);
-            }
-            $scd = isset($set['survey_completed_date']) ? substr($set['survey_completed_date'], 0, 10) : substr((string)($s['survey_completed_date'] ?? ''), 0, 10);
-            $rpt = isset($set['report_uploaded_date']) ? substr($set['report_uploaded_date'], 0, 10) : substr((string)($s['report_uploaded_date'] ?? ''), 0, 10);
-            $scd = strpos($scd, '0000') === 0 ? '' : $scd; $rpt = strpos($rpt, '0000') === 0 ? '' : $rpt;
-            if (in_array($new, ['Pending Report', 'Completed'], true) && $scd === '') return $err('A ' . $new . ' record needs a Survey Completed date.');
-            if ($new === 'Completed' && $rpt === '') return $err('A Completed record needs a Report Completed date.');
-            if ($scd && $rpt && $rpt < $scd) return $err('Report Completed date cannot be before the Survey Completed date.');
-            if ($new === 'Cancelled') {
-                // Same safety net the Cancel action uses (ajax/admin_surveys.php).
-                try { $db->exec("ALTER TABLE surveys MODIFY COLUMN status ENUM('Pending Vessel','Pending Report','Completed','Cancelled') DEFAULT 'Pending Vessel'"); } catch (Throwable $e) {}
-            }
-            $set['status'] = $new;
-            $set['status_updated_by'] = $actorId;
-            $set['status_updated_at'] = date('Y-m-d H:i:s');
-            $msg = 'Status changed to ' . $new . '.';
-            $redirect = aieDetailPage($new, $id);
             break;
         default:
             return $err('This field cannot be edited.');
@@ -491,9 +434,9 @@ select.aie-i[size] { padding: 4px; }
     function build(field) {
         var L = D.labels[field] || field;
         switch (field) {
-            case 'vessel_name': case 'agent_name': case 'imo_number': case 'report_number':
-                return open('Edit ' + L, '<label class="aie-l">' + esc(L) + '</label>' + input('value', V[field], 'text', 'maxlength="' + (field === 'imo_number' ? 20 : field === 'report_number' ? 50 : 255) + '"'), { field: field });
-            case 'remarks': case 'notes': case 'custom_live_status':
+            case 'vessel_name': case 'agent_name': case 'report_number':
+                return open('Edit ' + L, '<label class="aie-l">' + esc(L) + '</label>' + input('value', V[field], 'text', 'maxlength="' + (field === 'report_number' ? 50 : 255) + '"'), { field: field });
+            case 'remarks':
                 return open('Edit ' + L, '<label class="aie-l">' + esc(L) + '</label><textarea class="aie-i" name="value" maxlength="5000" data-testid="aie-input-value">' + esc(V[field]) + '</textarea>', { field: field });
             case 'client_id':
                 return open('Edit Client', '<label class="aie-l">Client</label>' + filterable('value', D.clients, V.client_id), { field: field, after: bindFilter });
@@ -524,12 +467,6 @@ select.aie-i[size] { padding: 4px; }
                     '<div class="aie-hint">Leave a box empty for "not recorded". A blank Total is filled from VLSFO + HSFO + LSMGO.</div>' +
                     '<label class="aie-l">Or replace the Calculation Sheet (Excel)</label><input class="aie-i" type="file" name="excel_report" accept=".xlsx,.xls,.xlsm" data-testid="aie-input-excel_report">' +
                     '<div class="aie-hint">Recovery is then read from the new sheet (TABLES 54B).</div>', { field: field });
-            case 'status':
-                return open('Change Status', '<label class="aie-l">Status</label><select class="aie-i" name="value" data-testid="aie-input-value">' +
-                    D.statuses.map(function (s) { return '<option' + (s === V.status ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + '</select>' +
-                    '<div class="aie-grid" data-aie-stdates><div><label class="aie-l">Survey Completed Date</label>' + input('survey_completed_date', V.survey_completed_date, 'date', 'max="' + D.today + '"') + '</div>' +
-                    '<div><label class="aie-l">Report Completed Date</label>' + input('report_uploaded_date', V.report_uploaded_date, 'date', 'max="' + D.today + '"') + '</div></div>' +
-                    '<label class="aie-confirm"><input type="checkbox" name="confirm" value="1" data-testid="aie-confirm"><span><b>Yes, change the status</b> from <b>' + esc(V.status) + '</b>. The vessel moves to that list.</span></label>', { field: field });
         }
     }
 

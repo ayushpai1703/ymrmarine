@@ -494,7 +494,6 @@ include 'includes/header.php';
         <?php else: ?>
         <div class="info-row" data-testid="recovery-na-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
         <?php endif; ?>
-        <?= aieExtraRows('mobile', ['agent_name', 'appointment_date' => fmtAieDate($survey['appointment_date'] ?? ''), 'imo_number', 'status', 'report_uploaded_date' => fmtAieDate($survey['report_uploaded_date'] ?? ''), 'remarks', 'notes', 'custom_live_status', 'assign_date']) ?>
     </div>
 
     <?php if ($is_admin && !$recoveryNA): ?>
@@ -713,7 +712,6 @@ include 'includes/header.php';
                                 <div class="vdd-info-value"><?= sanitize(RECOVERY_NA_LABEL) ?></div>
                             </div>
                             <?php endif; ?>
-                            <?= aieExtraRows('desktop', ['agent_name', 'appointment_date' => fmtAieDate($survey['appointment_date'] ?? ''), 'imo_number', 'status', 'report_uploaded_date' => fmtAieDate($survey['report_uploaded_date'] ?? ''), 'remarks', 'notes', 'custom_live_status', 'assign_date']) ?>
                         </div>
                     </div>
 

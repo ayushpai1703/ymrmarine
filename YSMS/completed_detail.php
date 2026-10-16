@@ -454,8 +454,8 @@ include 'includes/header.php';
         <div class="vessel-initial-avatar mx-auto mb-2" style="width: 55px; height: 55px; background:#e0f2fe; color:#0369a1; font-weight:700; display:flex; justify-content:center; align-items:center; border-radius:50%;">
             <?= strtoupper(substr($survey['vessel_name'], 3, 1)) ?>
         </div>
-        <h3 class="fw-bold text-dark m-0" style="font-size: 18px;"><?= sanitize($survey['vessel_name']) ?></h3>
-        <p class="text-muted m-0 mt-1" style="font-size: 12px;">Client: <span class="text-primary fw-bold"><?= sanitize($survey['company_name']) ?></span></p>
+        <h3 class="fw-bold text-dark m-0" style="font-size: 18px;"><?= sanitize($survey['vessel_name']) ?><?= aie('vessel_name') ?></h3>
+        <p class="text-muted m-0 mt-1" style="font-size: 12px;">Client: <span class="text-primary fw-bold"><?= sanitize($survey['company_name']) ?></span><?= aie('client_id') ?></p>
         <?php if (!empty($survey['report_number'])): ?>
         <p class="text-muted m-0 mt-1" style="font-size: 12px;">Report No: <span class="text-dark fw-bold"><?= sanitize($survey['report_number']) ?></span></p>
         <?php endif; ?>
@@ -478,7 +478,6 @@ include 'includes/header.php';
             <span class="info-label"><i class="fa-solid fa-calendar-check text-success"></i> Report Completed Date<?= aie('report_uploaded_date') ?></span>
             <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['report_uploaded_date'] ?? '') ?></span></span>
         </div>
-        <?= aieExtraRows('mobile', ['vessel_name', 'client_id' => (string)($survey['company_name'] ?? ''), 'surveyors' => getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? '—'), 'imo_number', 'status', 'remarks', 'notes', 'custom_live_status', 'assign_date']) ?>
     </div>
 
     <!-- Other records -->
@@ -670,7 +669,7 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                             <span class="vdd-hero-status"><i class="fa-solid fa-circle-check"></i>&nbsp; Fully Completed</span>
                         </div>
                         <div class="vdd-hero-sub">
-                            Client: <b><?= sanitize($survey['company_name']) ?></b>
+                            Client: <b><?= sanitize($survey['company_name']) ?></b><?= aie('client_id') ?>
                             <?php if (!empty($survey['report_number'])): ?>&nbsp;·&nbsp; Report No: <b><?= sanitize($survey['report_number']) ?></b><?php endif; ?>
                             &nbsp;·&nbsp; Uploaded by <b><?= sanitize($survey['uploader_name'] ?: $survey['surveyor_name'] ?: 'Admin') ?></b>
                         </div>
@@ -701,7 +700,6 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                                 <div class="vdd-info-label">Report Completed<?= aie('report_uploaded_date') ?></div>
                                 <div><span class="vdd-badge-soft"><?= fmtDateOnly($survey['report_uploaded_date'] ?? '') ?></span></div>
                             </div>
-                            <?= aieExtraRows('desktop', ['vessel_name', 'client_id' => (string)($survey['company_name'] ?? ''), 'surveyors' => getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? '—'), 'imo_number', 'status', 'remarks', 'notes', 'custom_live_status', 'assign_date']) ?>
                         </div>
                     </div>
 

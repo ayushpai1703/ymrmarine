@@ -581,7 +581,6 @@ include 'includes/header.php';
                     }
                 ?>
             </span></div>
-            <?= aieExtraRows('mobile', ['appointment_date' => fmtAieDate($survey['appointment_date'] ?? ''), 'imo_number', 'status', 'survey_completed_date' => fmtAieDate($survey['survey_completed_date'] ?? ''), 'report_uploaded_date' => fmtAieDate($survey['report_uploaded_date'] ?? ''), 'recovery' => fmtAieRecovery($survey), 'notes', 'custom_live_status']) ?>
     </div>
     <?php if (!$is_client_viewer && !$is_super_admin): ?>
     <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm mt-2">
@@ -786,7 +785,6 @@ include 'includes/header.php';
                                 <div class="vdd-info-label">Port Name<?= aie('port_id') ?></div>
                                 <div class="vdd-info-value"><?= sanitize($survey['port_name']) ?></div>
                             </div>
-                            <?= aieExtraRows('desktop', array_merge(empty($survey['remarks']) ? ['remarks'] : [], ['appointment_date' => fmtAieDate($survey['appointment_date'] ?? ''), 'imo_number', 'status', 'survey_completed_date' => fmtAieDate($survey['survey_completed_date'] ?? ''), 'report_uploaded_date' => fmtAieDate($survey['report_uploaded_date'] ?? ''), 'recovery' => fmtAieRecovery($survey), 'notes', 'custom_live_status'])) ?>
                         </div>
 
                         <div class="vdd-remarks">
