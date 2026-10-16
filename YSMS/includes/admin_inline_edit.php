@@ -119,6 +119,74 @@ function aieData(PDO $db, array $survey): array {
     ];
 }
 
+/** "Add files" for the Pre-Uploaded Survey Files list (Pending Report stage only). */
+function aieAddFilesButton(): string {
+    if (!aieIsAdmin() || empty($GLOBALS['__aie']) || ($GLOBALS['__aie']['survey']['status'] ?? '') !== 'Pending Report') return '';
+    return '<button type="button" class="aie-add-files" data-aie-add-files data-testid="aie-add-files"><i class="fa-solid fa-plus"></i> Add Files</button>';
+}
+
+const AIE_ADD_FILE_EXT = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'xlsm', 'jpg', 'jpeg', 'png', 'zip'];
+const AIE_ADD_FILE_MAX = 30 * 1024 * 1024;
+
+/**
+ * Add one or more files to a Pending Report's pre-uploaded files.
+ * $files is $_FILES['files'] (multiple). Optionally re-reads recovery from
+ * an added Calculation Sheet.
+ */
+function aieAddFiles(PDO $db, array $s, array $files, string $type, bool $readRecovery, int $actorId): array {
+    if (($s['status'] ?? '') !== 'Pending Report') return ['ok' => false, 'message' => 'Files can be added here only while the vessel is in Pending Reports.'];
+    if (!in_array($type, aieFileTypes($db), true)) return ['ok' => false, 'message' => 'Unknown file type.'];
+    $list = [];
+    if (isset($files['name']) && is_array($files['name'])) {
+        foreach ($files['name'] as $i => $n) {
+            if (($files['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) continue;
+            $list[] = ['name' => $n, 'type' => $files['type'][$i] ?? '', 'tmp_name' => $files['tmp_name'][$i], 'error' => $files['error'][$i], 'size' => $files['size'][$i]];
+        }
+    }
+    if (!$list) return ['ok' => false, 'message' => 'Please choose at least one file.'];
+    $typeExt = ['Formal Report PDF' => ['pdf'], 'Formal Report Excel' => ['xls', 'xlsx', 'xlsm'], 'Formal Report Word' => ['doc', 'docx']];
+    foreach ($list as $f) {
+        $ext = strtolower(pathinfo((string)$f['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, AIE_ADD_FILE_EXT, true)) return ['ok' => false, 'message' => '"' . $f['name'] . '": file type not allowed (PDF, Word, Excel, JPG/PNG or ZIP).'];
+        if (isset($typeExt[$type]) && !in_array($ext, $typeExt[$type], true)) return ['ok' => false, 'message' => '"' . $f['name'] . '" is not a ' . $type . ' file.'];
+        $mimes = function_exists('documentReplaceMimeSetFor') ? documentReplaceMimeSetFor($ext) : [];
+        if (($ve = upload_validate($f, $mimes, AIE_ADD_FILE_MAX)) !== '') return ['ok' => false, 'message' => '"' . $f['name'] . '": ' . $ve];
+    }
+    $dir = dirname(__DIR__) . '/uploads/';
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    $hasBy = (bool)$db->query("SHOW COLUMNS FROM uploads LIKE 'uploaded_by'")->fetch();
+    $ins = $db->prepare($hasBy
+        ? 'INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)'
+        : 'INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, ?, ?, ?)');
+    $saved = []; $recMsg = '';
+    foreach ($list as $i => $f) {
+        $orig = basename((string)$f['name']);
+        $name = time() . '_' . $i . '_' . preg_replace('/[^A-Za-z0-9._-]/', '_', $orig);
+        if (!move_uploaded_file($f['tmp_name'], $dir . $name)) continue;
+        $size = (int)$f['size'];
+        $label = $size >= 1048576 ? round($size / 1048576, 1) . ' MB' : max(1, (int)round($size / 1024)) . ' KB';
+        $args = [(int)$s['id'], $orig, $type, 'uploads/' . $name, $label];
+        if ($hasBy) $args[] = $actorId;
+        $ins->execute($args);
+        $saved[] = $orig;
+        $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
+        if ($readRecovery && $recMsg === '' && in_array($ext, ['xls', 'xlsx', 'xlsm'], true)
+            && !isRecoveryNotApplicable($db, (string)($s['survey_type_ids'] ?: $s['survey_type_id']))) {
+            $rec = extractRecoveryFromExcel($dir . $name);
+            if (($rec['recovery'] ?? null) !== null || ($rec['vlsfo'] ?? null) !== null) {
+                $db->prepare('UPDATE surveys SET recovery_amount = ?, vlsfo_recovery = ?, hsfo_recovery = ?, lsmgo_recovery = ? WHERE id = ?')
+                   ->execute([$rec['recovery'] ?? null, $rec['vlsfo'] ?? null, $rec['hsfo'] ?? null, $rec['lsmgo'] ?? null, (int)$s['id']]);
+                $recMsg = ' · recovery read from ' . $orig;
+            } else {
+                $recMsg = ' · no recovery figures found in ' . $orig;
+            }
+        }
+    }
+    if (!$saved) return ['ok' => false, 'message' => 'Could not store the files. Please try again.'];
+    error_log(sprintf('admin inline edit: user %d added %d file(s) to survey %d', $actorId, count($saved), (int)$s['id']));
+    return ['ok' => true, 'message' => count($saved) . ' file' . (count($saved) === 1 ? '' : 's') . ' added (' . $type . ')' . $recMsg . '.'];
+}
+
 /* ------------------------------------------------------------------ */
 /* Server side: validate + save ONE field (used by the AJAX endpoint).  */
 /* ------------------------------------------------------------------ */
@@ -369,6 +437,8 @@ function aieRender(): void {
 .aie-file-btn { width: 30px; height: 30px; font-size: 12px; margin-left: 4px; border-radius: 9px; }
 .aie-file-btn.danger { border-color: #FECACA; background: #FEF2F2; color: #DC2626; }
 .aie-file-btn.danger:hover { background: #DC2626; color: #fff; border-color: #DC2626; }
+.aie-add-files { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 7px 14px; border-radius: 10px; border: 1.5px dashed #A78BFA; background: #F5F3FF; color: #5B2DEE; font-size: 12.5px; font-weight: 700; }
+.aie-add-files:hover { background: #5B2DEE; color: #fff; border-style: solid; }
 .aie-modal { position: fixed; inset: 0; z-index: 100000; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .aie-modal[hidden] { display: none; }
 .aie-box { background: #fff; border-radius: 18px; width: 100%; max-width: 460px; padding: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.25); max-height: calc(100vh - 32px); overflow: auto; }
@@ -410,7 +480,7 @@ select.aie-i[size] { padding: 4px; }
     function open(title, html, opt) {
         current = opt; document.getElementById('aieTitle').textContent = title; body.innerHTML = html; err('');
         saveBtn.classList.toggle('danger', !!opt.danger);
-        saveBtn.innerHTML = opt.danger ? '<i class="fa-solid fa-trash"></i> Delete' : '<i class="fa-solid fa-check"></i> Save';
+        saveBtn.innerHTML = opt.danger ? '<i class="fa-solid fa-trash"></i> Delete' : opt.addFiles ? '<i class="fa-solid fa-cloud-arrow-up"></i> Upload' : '<i class="fa-solid fa-check"></i> Save';
         modal.hidden = false;
         var f = body.querySelector('input:not([type=checkbox]):not([type=hidden]),select,textarea'); if (f) setTimeout(function () { f.focus(); }, 30);
         if (opt.after) opt.after();
@@ -471,6 +541,13 @@ select.aie-i[size] { padding: 4px; }
     }
 
     document.addEventListener('click', function (e) {
+        if (e.target.closest('[data-aie-add-files]')) {
+            e.preventDefault();
+            return open('Add Pre-Uploaded Files', '<label class="aie-l">Files</label><input class="aie-i" type="file" name="files[]" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.jpg,.jpeg,.png,.zip" data-testid="aie-input-files">' +
+                '<div class="aie-hint">PDF, Word, Excel, JPG/PNG or ZIP · up to 30 MB each.</div>' +
+                '<label class="aie-l">File type</label><select class="aie-i" name="file_type" data-testid="aie-input-add_file_type">' + D.fileTypes.map(function (t) { return '<option' + (t === 'Field Report' ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select>' +
+                '<label class="aie-confirm" style="background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF"><input type="checkbox" name="read_recovery" value="1" checked data-testid="aie-read-recovery"><span>If an Excel Calculation Sheet is added, read the recovery from it (TABLES 54B).</span></label>', { addFiles: true });
+        }
         var b = e.target.closest('.aie-btn');
         if (b) { e.preventDefault(); e.stopPropagation(); build(b.getAttribute('data-aie')); return; }
         var fb = e.target.closest('.aie-file-btn');
@@ -495,7 +572,14 @@ select.aie-i[size] { padding: 4px; }
         if (!current) return;
         var fd = new FormData(form);
         var url;
-        if (current.file) { url = 'ajax/admin_inline_edit.php?file=1'; fd.append('file_id', current.file); fd.append('action', current.action); }
+        if (current.addFiles) {
+            var fi = form.querySelector('input[name="files[]"]'), tot = 0;
+            if (!fi.files.length) { err('Please choose at least one file.'); return; }
+            for (var k = 0; k < fi.files.length; k++) tot += fi.files[k].size;
+            if (tot > 31 * 1024 * 1024) { err('The selected files add up to more than 31 MB — please add them in smaller batches.'); return; }
+            url = 'ajax/admin_inline_edit.php?add_files=1';
+        }
+        else if (current.file) { url = 'ajax/admin_inline_edit.php?file=1'; fd.append('file_id', current.file); fd.append('action', current.action); }
         else { url = 'ajax/admin_inline_edit.php'; fd.append('field', current.field); }
         fd.append('survey_id', D.id);
         saveBtn.disabled = true; err('');

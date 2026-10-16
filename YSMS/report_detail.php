@@ -564,6 +564,7 @@ include 'includes/header.php';
         <?php else: ?>
             <div class="text-muted small ps-2">No files attached to this vessel yet.</div>
         <?php endif; ?>
+        <?= aieAddFilesButton() ?>
     </div>
 
     <?php if (!$is_super_admin && $role !== 'Client'): ?>
@@ -794,6 +795,7 @@ include 'includes/header.php';
                             <?php endforeach; else: ?>
                             <div class="vdd-file-empty"><i class="fa-solid fa-folder-open d-block mb-2" style="font-size:22px;opacity:.5;"></i>No files attached to this vessel yet.</div>
                             <?php endif; ?>
+                            <?= aieAddFilesButton() ?>
                         </div>
                     </div>
                 </div>

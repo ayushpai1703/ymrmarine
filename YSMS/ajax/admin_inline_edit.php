@@ -6,6 +6,7 @@
  *
  * POST field edit: survey_id, field, value | values[] | (recovery parts) …
  * POST file edit:  ?file=1, survey_id, file_id, action (rename|type|delete) …
+ * POST add files:  ?add_files=1, survey_id, files[], file_type, read_recovery (Pending Report only)
  * Response: {"success":bool,"message":"…","redirect":"…" (status change only)}
  */
 header('Content-Type: application/json; charset=utf-8');
@@ -18,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__, 2) . '/includes/upload_validation.php';
 require_once dirname(__DIR__) . '/includes/recovery_excel.php';
+require_once dirname(__DIR__) . '/includes/document_replace_helpers.php';
 require_once dirname(__DIR__) . '/includes/admin_inline_edit.php';
 checkAuth(); // session + CSRF
 
@@ -38,7 +40,9 @@ if (!$survey) {
     exit;
 }
 
-if (!empty($_GET['file'])) {
+if (!empty($_GET['add_files'])) {
+    $res = aieAddFiles($db, $survey, $_FILES['files'] ?? [], (string)($_POST['file_type'] ?? ''), !empty($_POST['read_recovery']), (int)$_SESSION['user_id']);
+} elseif (!empty($_GET['file'])) {
     $fileId = (int)($_POST['file_id'] ?? 0);
     // The file must belong to this survey (never trust the pair from the browser).
     $own = $db->prepare('SELECT 1 FROM uploads WHERE id = ? AND survey_id = ?');
