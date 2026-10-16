@@ -727,7 +727,7 @@ include 'includes/header.php';
                                 <?php endif; ?>
                             </div>
                             <?php if ($can_edit): ?>
-                                <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vessel-edit-btn pv-edit-btn" onclick="event.stopPropagation();" data-testid="pending-vessel-edit-<?= (int)$survey['id'] ?>">
+                                <a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=vessels.php" class="vessel-edit-btn pv-edit-btn" onclick="event.stopPropagation();" data-testid="pending-vessel-edit-<?= (int)$survey['id'] ?>">
                                     <i class="fa-solid fa-pen"></i> Edit
                                 </a>
                             <?php endif; ?>
@@ -924,7 +924,7 @@ include 'includes/header.php';
                                     <div class="vd-actions">
                                         <a href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-eye"></i> View</a>
                                         <?php if ($can_edit): ?>
-                                        <a class="edit" href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-pen"></i> Edit</a>
+                                        <a class="edit" href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=vessels.php"><i class="fa-solid fa-pen"></i> Edit</a>
                                         <?php endif; ?>
                                     </div>
                                 </td>

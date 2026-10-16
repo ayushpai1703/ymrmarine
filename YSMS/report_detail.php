@@ -473,6 +473,7 @@ include 'includes/header.php';
     <?php $page_title = 'Pending Report Details'; $back_url = 'reports.php'; $page_testid = 'report-detail'; include 'includes/top_app_bar.php'; ?>
 
     <div class="detail-mobile-view">
+    <?php if ($is_admin): ?><div class="px-3 mb-2 text-end"><a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=report_detail.php%3Fid%3D<?= (int)$survey['id'] ?>" data-testid="rd-edit-mobile" style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;background:#fff;color:#1E1B6B;font-size:12px;font-weight:800;text-decoration:none;border:1.5px solid #C4B5FD;"><i class="fa-solid fa-pen"></i> Edit</a></div><?php endif; ?>
     <div class="detail-bottom-row">
     <!-- Read-Only Info Table -->
     <div class="info-table-list shadow-sm">
@@ -642,6 +643,7 @@ include 'includes/header.php';
                     <div>
                         <div class="vdd-hero-title-row">
                             <div class="vdd-hero-title"><?= sanitize($survey['vessel_name']) ?></div>
+                            <?php if ($is_admin): ?><a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=report_detail.php%3Fid%3D<?= (int)$survey['id'] ?>" data-testid="rd-edit-desktop" style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;background:#fff;color:#1E1B6B;font-size:12px;font-weight:800;text-decoration:none;"><i class="fa-solid fa-pen"></i> Edit</a><?php endif; ?>
                         </div>
                         <div class="vdd-hero-sub">
                             <?php if (!empty($survey['report_number'])): ?>Report <?= sanitize($survey['report_number']) ?> &nbsp;·&nbsp; <?php endif; ?>

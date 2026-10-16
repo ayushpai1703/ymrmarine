@@ -513,6 +513,11 @@ include 'includes/header.php';
                 <?php endif; ?>
                 <div class="pv-info-row"><i class="fa-solid fa-location-dot"></i><span class="pv-info-label">Port</span><span>:</span><span class="badge-place"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
                 <div class="pv-info-row"><i class="fa-solid fa-ban"></i><span class="pv-info-label">Status</span><span>:</span><span class="pv-status-pill"><i class="fa-solid fa-ban"></i> Cancelled</span></div>
+                <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
+                <div class="pv-info-row" style="justify-content:flex-end;border-top:1px dashed #e2e8f0;padding-top:8px;margin-top:2px;">
+                    <a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=cancelled.php" onclick="event.stopPropagation();" data-testid="cn-edit-<?= (int)$survey['id'] ?>" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1.5px solid #FED7AA;color:#C2410C;background:#FFF7ED;font-size:12px;font-weight:700;text-decoration:none;"><i class="fa-solid fa-pen"></i> Edit</a>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
         <?php endforeach; ?>
@@ -664,8 +669,8 @@ include 'includes/header.php';
                                 <td>
                                     <div class="vd-actions">
                                         <a href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-eye"></i> View</a>
-                                        <?php if ($role === 'Admin' && 'cancelled' === 'vessels'): ?>
-                                        <a class="edit" href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-pen"></i> Edit</a>
+                                        <?php if ($role === 'Admin'): ?>
+                                        <a class="edit" href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=cancelled.php" data-testid="cn-edit-desk-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-pen"></i> Edit</a>
                                         <?php endif; ?>
                                     </div>
                                 </td>

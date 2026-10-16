@@ -536,7 +536,7 @@ include 'includes/header.php';
                 <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="btn-whatsapp" data-testid="vessel-detail-whatsapp-link" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
                 <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-ios-url="<?= sanitize($mail_ios_url) ?>" data-android-url="<?= sanitize($mail_android_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
                 <?php if ($is_admin): ?>
-                    <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vessel-edit-btn" data-testid="vessel-detail-edit-link"><i class="fa-solid fa-pen"></i> Edit</a>
+                    <a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=vessel_detail.php%3Fid%3D<?= (int)$survey['id'] ?>" class="vessel-edit-btn" data-testid="vessel-detail-edit-link"><i class="fa-solid fa-pen"></i> Edit</a>
                 <?php endif; ?>
             </div>
             <div class="info-row"><span class="info-label">Vessel Name</span><span class="info-value"><?= sanitize($survey['vessel_name']) ?></span></div>
@@ -720,7 +720,7 @@ include 'includes/header.php';
                     <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-whatsapp" data-testid="vessel-detail-whatsapp-link-desktop" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
                     <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-ios-url="<?= sanitize($mail_ios_url) ?>" data-android-url="<?= sanitize($mail_android_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link-desktop" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
                     <?php if ($is_admin): ?>
-                        <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vdd-btn-edit" data-testid="vessel-detail-edit-link-desktop"><i class="fa-solid fa-pen"></i> Edit</a>
+                        <a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=vessel_detail.php%3Fid%3D<?= (int)$survey['id'] ?>" class="vdd-btn-edit" data-testid="vessel-detail-edit-link-desktop"><i class="fa-solid fa-pen"></i> Edit</a>
                     <?php endif; ?>
                 </div>
             </div>

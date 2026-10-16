@@ -457,6 +457,7 @@ include 'includes/header.php';
         <p class="text-muted m-0 mt-1" style="font-size: 12px;">Report No: <span class="text-dark fw-bold"><?= sanitize($survey['report_number']) ?></span></p>
         <?php endif; ?>
         <div class="mt-2"><span class="badge bg-success px-2 py-1" style="font-size:10px;"><i class="fa-solid fa-circle-check"></i> Survey Fully Completed</span></div>
+        <?php if ($is_admin): ?><div class="mt-2"><a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=completed_detail.php%3Fid%3D<?= (int)$survey['id'] ?>" data-testid="cd-edit-mobile" style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;background:#fff;color:#1E1B6B;font-size:12px;font-weight:800;text-decoration:none;border:1.5px solid #C4B5FD;"><i class="fa-solid fa-pen"></i> Edit</a></div><?php endif; ?>
         <p class="text-muted m-0 mt-2" style="font-size:12px;" data-testid="completed-detail-uploaded-by">Uploaded By: <span class="text-dark fw-bold"><?= sanitize($survey['uploader_name'] ?: $survey['surveyor_name'] ?: 'Admin') ?></span></p>
     </div>
 
@@ -663,6 +664,7 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                     <div>
                         <div class="vdd-hero-title-row">
                             <div class="vdd-hero-title"><?= sanitize($survey['vessel_name']) ?></div>
+                            <?php if ($is_admin): ?><a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=completed_detail.php%3Fid%3D<?= (int)$survey['id'] ?>" data-testid="cd-edit-desktop" style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;background:#fff;color:#1E1B6B;font-size:12px;font-weight:800;text-decoration:none;"><i class="fa-solid fa-pen"></i> Edit</a><?php endif; ?>
                             <span class="vdd-hero-status"><i class="fa-solid fa-circle-check"></i>&nbsp; Fully Completed</span>
                         </div>
                         <div class="vdd-hero-sub">

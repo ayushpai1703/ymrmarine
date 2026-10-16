@@ -481,7 +481,7 @@ $(document).ready(function() {
                     (sub ? '<p class="admin-item-sub">' + sub + '</p>' : '') +
                 '</div>' +
                 '<div class="admin-item-actions">' +
-                    '<a href="assign_vessel.php?edit_id=' + row.id + '" class="edit-btn" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;" data-testid="admin-edit-' + moduleKey + '-' + row.id + '" title="Edit"><i class="fa-solid fa-pen"></i></a>' +
+                    '<a href="admin_edit_vessel.php?id=' + row.id + '&return=admin_controls.php" class="edit-btn" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;" data-testid="admin-edit-' + moduleKey + '-' + row.id + '" title="Edit"><i class="fa-solid fa-pen"></i></a>' +
                     (moduleKey === 'assigned_vessels'
                         ? '<button type="button" class="cancel-btn" data-id="' + row.id + '" data-testid="admin-cancel-' + moduleKey + '-' + row.id + '" title="Cancel vessel"><i class="fa-solid fa-ban"></i></button>'
                         : '') +
