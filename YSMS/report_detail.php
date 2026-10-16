@@ -150,6 +150,9 @@ if ($has_email_col) {
     $my_email = (string)($myEmailStmt->fetchColumn() ?: '');
 }
 
+require_once 'includes/admin_inline_edit.php';
+aieInit($db, $survey);
+
 include 'includes/header.php';
 ?>
 
@@ -285,15 +288,15 @@ include 'includes/header.php';
     <div class="detail-bottom-row">
     <!-- Read-Only Info Table -->
     <div class="info-table-list shadow-sm">
-        <div class="info-row"><span class="info-label">Vessel Name</span><span class="info-value"><?= sanitize($survey['vessel_name']) ?></span></div>
-        <div class="info-row" data-testid="rd-port-mobile"><span class="info-label">Port</span><span class="info-value"><?= sanitize($survey['port_name'] ?? '—') ?></span></div>
-        <div class="info-row"><span class="info-label">Report No</span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">Client Name</span><span class="info-value"><?= sanitize($survey['company_name']) ?></span></div>
-        <div class="info-row"><span class="info-label">Surveyor Name</span><span class="info-value"><?= sanitize(getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A')) ?></span></div>
-        <div class="info-row"><span class="info-label">Survey Type</span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
-        <div class="info-row"><span class="info-label">Survey Completed</span><span class="info-value text-success fw-bold"><?= date('d M Y', strtotime($survey['survey_completed_date'])) ?></span></div>
+        <div class="info-row"><span class="info-label">Vessel Name<?= aie('vessel_name') ?></span><span class="info-value"><?= sanitize($survey['vessel_name']) ?></span></div>
+        <div class="info-row" data-testid="rd-port-mobile"><span class="info-label">Port<?= aie('port_id') ?></span><span class="info-value"><?= sanitize($survey['port_name'] ?? '—') ?></span></div>
+        <div class="info-row"><span class="info-label">Report No<?= aie('report_number') ?></span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
+        <div class="info-row"><span class="info-label">Client Name<?= aie('client_id') ?></span><span class="info-value"><?= sanitize($survey['company_name']) ?></span></div>
+        <div class="info-row"><span class="info-label">Surveyor Name<?= aie('surveyors') ?></span><span class="info-value"><?= sanitize(getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A')) ?></span></div>
+        <div class="info-row"><span class="info-label">Survey Type<?= aie('survey_type_ids') ?></span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
+        <div class="info-row"><span class="info-label">Survey Completed<?= aie('survey_completed_date') ?></span><span class="info-value text-success fw-bold"><?= date('d M Y', strtotime($survey['survey_completed_date'])) ?></span></div>
         <?php if (!$recoveryNA): // Recovery rows are left out entirely for N/A survey types ?>
-        <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
+        <div class="info-row"><span class="info-label">Total Recovery<?= aie('recovery') ?></span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
         <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
@@ -363,13 +366,14 @@ include 'includes/header.php';
                                 data-doc-uploaded-by="<?= sanitize($file['uploaded_by'] ? getUserFullNameById($db, (int)$file['uploaded_by']) : '—') ?>">
                             <i class="fa-solid fa-rotate"></i> Replace
                         </button>
-                        <?php endif; ?>
+                        <?php endif; ?><?= aieFileButtons($file) ?>
                     </div>
                 </div>
             <?php endforeach; ?>
         <?php else: ?>
             <div class="text-muted small ps-2">No files attached to this vessel yet.</div>
         <?php endif; ?>
+        <?= aieAddFilesButton() ?>
     </div>
 
     <?php if (!$is_super_admin && $role !== 'Client'): ?>
@@ -656,6 +660,7 @@ document.addEventListener('click', function (ev) {
 </script>
 
 <?php
+aieRender();
 include 'includes/nav.php';
 include 'includes/footer.php';
 

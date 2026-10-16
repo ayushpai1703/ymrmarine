@@ -189,6 +189,9 @@ function fmtDateOnly($val) {
 // (appointment_date); older records without one fall back to assign_date.
 $cdAssignedDate = fmtDateOnly(!empty($survey['appointment_date']) ? $survey['appointment_date'] : ($survey['assign_date'] ?? ''));
 
+require_once 'includes/admin_inline_edit.php';
+aieInit($db, $survey);
+
 include 'includes/header.php';
 ?>
 
@@ -298,8 +301,8 @@ include 'includes/header.php';
         <div class="vessel-initial-avatar mx-auto mb-2" style="width: 55px; height: 55px; background:#e0f2fe; color:#0369a1; font-weight:700; display:flex; justify-content:center; align-items:center; border-radius:50%;">
             <?= strtoupper(substr($survey['vessel_name'], 3, 1)) ?>
         </div>
-        <h3 class="fw-bold text-dark m-0" style="font-size: 18px;"><?= sanitize($survey['vessel_name']) ?></h3>
-        <p class="text-muted m-0 mt-1" style="font-size: 12px;">Client: <span class="text-primary fw-bold"><?= sanitize($survey['company_name']) ?></span></p>
+        <h3 class="fw-bold text-dark m-0" style="font-size: 18px;"><?= sanitize($survey['vessel_name']) ?><?= aie('vessel_name') ?></h3>
+        <p class="text-muted m-0 mt-1" style="font-size: 12px;">Client: <span class="text-primary fw-bold"><?= sanitize($survey['company_name']) ?></span><?= aie('client_id') ?></p>
         <?php if (!empty($survey['report_number'])): ?>
         <p class="text-muted m-0 mt-1" style="font-size: 12px;">Report No: <span class="text-dark fw-bold"><?= sanitize($survey['report_number']) ?></span></p>
         <?php endif; ?>
@@ -311,25 +314,25 @@ include 'includes/header.php';
     <!-- Timeline Dates -->
     <div class="info-table-list shadow-sm">
         <div class="info-row">
-            <span class="info-label"><i class="fa-regular fa-calendar-plus text-primary"></i> Survey Assigned Date</span>
+            <span class="info-label"><i class="fa-regular fa-calendar-plus text-primary"></i> Survey Assigned Date<?= aie('appointment_date') ?></span>
             <span class="info-value" data-testid="cd-assigned-mobile"><span class="badge bg-light text-dark border"><?= $cdAssignedDate ?></span></span>
         </div>
         <div class="info-row">
-            <span class="info-label"><i class="fa-regular fa-calendar-check text-warning"></i> Survey Completed Date</span>
+            <span class="info-label"><i class="fa-regular fa-calendar-check text-warning"></i> Survey Completed Date<?= aie('survey_completed_date') ?></span>
             <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['survey_completed_date'] ?? '') ?></span></span>
         </div>
         <div class="info-row">
-            <span class="info-label"><i class="fa-solid fa-calendar-check text-success"></i> Report Completed Date</span>
+            <span class="info-label"><i class="fa-solid fa-calendar-check text-success"></i> Report Completed Date<?= aie('report_uploaded_date') ?></span>
             <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['report_uploaded_date'] ?? '') ?></span></span>
         </div>
     </div>
 
     <!-- Other records -->
     <div class="info-table-list shadow-sm">
-        <div class="info-row"><span class="info-label">Report No</span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">Survey Operation Type</span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
-        <div class="info-row"><span class="info-label">Port of Operation</span><span class="info-value"><?= sanitize($survey['port_name']) ?></span></div>
-        <div class="info-row"><span class="info-label">Agent Handle</span><span class="info-value"><?= sanitize($survey['agent_name']) ?></span></div>
+        <div class="info-row"><span class="info-label">Report No<?= aie('report_number') ?></span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
+        <div class="info-row"><span class="info-label">Survey Operation Type<?= aie('survey_type_ids') ?></span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
+        <div class="info-row"><span class="info-label">Port of Operation<?= aie('port_id') ?></span><span class="info-value"><?= sanitize($survey['port_name']) ?></span></div>
+        <div class="info-row"><span class="info-label">Agent Handle<?= aie('agent_name') ?></span><span class="info-value"><?= sanitize($survey['agent_name']) ?></span></div>
         <?php if ($recoveryNA): ?>
         <div class="info-row" data-testid="recovery-na-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
         <?php endif; ?>
@@ -353,7 +356,7 @@ include 'includes/header.php';
             <?php if ($recoveryEmpty): ?>
             <div class="info-row" data-testid="recovery-empty-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
             <?php else: ?>
-            <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
+            <div class="info-row"><span class="info-label">Total Recovery<?= aie('recovery') ?></span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
@@ -466,7 +469,7 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                                 data-doc-uploaded-by="<?= sanitize($file['uploaded_by'] ? getUserFullNameById($db, (int)$file['uploaded_by']) : '—') ?>">
                             <i class="fa-solid fa-rotate"></i> Replace
                         </button>
-                        <?php endif; ?>
+                        <?php endif; ?><?= aieFileButtons($file) ?>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -701,6 +704,7 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
 </script>
 
 <?php
+aieRender();
 include 'includes/nav.php';
 include 'includes/footer.php';
 
