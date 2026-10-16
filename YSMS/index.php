@@ -1,5 +1,6 @@
 <?php
 require_once 'config/config.php';
+require_once 'includes/dashboard_month.php';
 // Current calendar month in the app's timezone (not the DB server's) for "This Month" figures.
 $cm_start = date('Y-m-01');
 $cm_end = date('Y-m-01', strtotime('first day of next month'));
@@ -44,14 +45,8 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     // This Month Recovery: same vessels, Survey Completed Date in the current calendar month.
     $month_recovery = $db->query("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND survey_completed_date >= '$cm_start' AND survey_completed_date < '$cm_end'")->fetchColumn();
 
-    // అడ్మిన్ కి M20 (VLSFO) రికవరీ సమ్
-    $total_vlsfo = $db->query("SELECT SUM(vlsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND vlsfo_recovery IS NOT NULL")->fetchColumn();
 
-    // అడ్మిన్ కి O20 (LSMGO) రికవరీ సమ్
-    $total_lsmgo = $db->query("SELECT SUM(lsmgo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND lsmgo_recovery IS NOT NULL")->fetchColumn();
 
-    // అడ్మిన్ కి N20 (HSFO) రికవరీ సమ్
-    $total_hsfo = $db->query("SELECT SUM(hsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND hsfo_recovery IS NOT NULL")->fetchColumn();
 
     // 🌟 ప్రతి సర్వేయర్ కి పూర్తి రిపోర్ట్ (dashboard bottom table): Ships
     // Attended (as of now / this month) + Total Recovery (as of now / this
@@ -105,17 +100,8 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $stmt_m_rec->execute([$client_row_id]);
     $month_recovery = $stmt_m_rec->fetchColumn();
 
-    $stmt_vlsfo = $db->prepare("SELECT SUM(vlsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND vlsfo_recovery IS NOT NULL AND client_id = ?");
-    $stmt_vlsfo->execute([$client_row_id]);
-    $total_vlsfo = $stmt_vlsfo->fetchColumn();
 
-    $stmt_lsmgo = $db->prepare("SELECT SUM(lsmgo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND lsmgo_recovery IS NOT NULL AND client_id = ?");
-    $stmt_lsmgo->execute([$client_row_id]);
-    $total_lsmgo = $stmt_lsmgo->fetchColumn();
 
-    $stmt_hsfo = $db->prepare("SELECT SUM(hsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND hsfo_recovery IS NOT NULL AND client_id = ?");
-    $stmt_hsfo->execute([$client_row_id]);
-    $total_hsfo = $stmt_hsfo->fetchColumn();
 } else {
     // సర్వేయర్ కి కేవలం తనకు assign చేసినవి మాత్రమే — primary surveys.surveyor_id
     // మరియు survey_surveyors జంక్షన్ టేబుల్ (multi-surveyor) రెండూ కలిపి.
@@ -142,20 +128,8 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $stmt_m_rec->execute([$user_id, $user_id]);
     $month_recovery = $stmt_m_rec->fetchColumn();
 
-    // సర్వేయర్ కి తన VLSFO (M20) రికవరీ సమ్ మాత్రమే
-    $stmt_vlsfo = $db->prepare("SELECT SUM(vlsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND vlsfo_recovery IS NOT NULL AND $assignedSql");
-    $stmt_vlsfo->execute([$user_id, $user_id]);
-    $total_vlsfo = $stmt_vlsfo->fetchColumn();
 
-    // సర్వేయర్ కి తన LSMGO (O20) రికవరీ సమ్ మాత్రమే
-    $stmt_lsmgo = $db->prepare("SELECT SUM(lsmgo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND lsmgo_recovery IS NOT NULL AND $assignedSql");
-    $stmt_lsmgo->execute([$user_id, $user_id]);
-    $total_lsmgo = $stmt_lsmgo->fetchColumn();
 
-    // సర్వేయర్ కి తన HSFO (N20) రికవరీ సమ్ మాత్రమే
-    $stmt_hsfo = $db->prepare("SELECT SUM(hsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND hsfo_recovery IS NOT NULL AND $assignedSql");
-    $stmt_hsfo->execute([$user_id, $user_id]);
-    $total_hsfo = $stmt_hsfo->fetchColumn();
 }
 
 
@@ -210,9 +184,6 @@ $avg_recovery_per_surveyor_disp = !empty($avg_recovery_per_surveyor) ? number_fo
 // 🌟 డెసిమల్స్ 3 స్థానాలకు మార్చి (0.000) వెనుక 'MT' యాడ్ చేయడం
 $total_recovery = !empty($total_recovery) ? number_format((float)$total_recovery, 3) . ' MT' : '0.000 MT';
 $month_recovery = !empty($month_recovery) ? number_format((float)$month_recovery, 3) . ' MT' : '0.000 MT';
-$total_vlsfo = !empty($total_vlsfo) ? number_format((float)$total_vlsfo, 3) . ' MT' : '0.000 MT';
-$total_lsmgo = !empty($total_lsmgo) ? number_format((float)$total_lsmgo, 3) . ' MT' : '0.000 MT';
-$total_hsfo = !empty($total_hsfo) ? number_format((float)$total_hsfo, 3) . ' MT' : '0.000 MT';
 
 include 'includes/header.php';
 
@@ -341,20 +312,25 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                 </svg>
             </div>
         </div>
-        <!-- 🌟 కొత్త కార్డ్: Recovery in VLSFO (TABLES 54B - M20 సెల్ నుండి) -->
-        <div class="stat-card">
-            <span class="stat-title"><i class="fa-solid fa-droplet stat-title-icon"></i>Recovery in VLSFO</span>
-            <div class="stat-val"><?= $total_vlsfo ?></div>
-        </div>
-        <!-- 🌟 కొత్త కార్డ్: Recovery in LSMGO (TABLES 54B - O20 సెల్ నుండి) -->
-        <div class="stat-card">
-            <span class="stat-title stat-title--blue"><i class="fa-solid fa-droplet stat-title-icon"></i>Recovery in LSMGO</span>
-            <div class="stat-val"><?= $total_lsmgo ?></div>
-        </div>
-        <!-- 🌟 కొత్త కార్డ్: Recovery in HSFO (TABLES 54B - N20 సెల్ నుండి) -->
-        <div class="stat-card">
-            <span class="stat-title stat-title--orange"><i class="fa-solid fa-droplet stat-title-icon"></i>Recovery in HSFO</span>
-            <div class="stat-val"><?= $total_hsfo ?></div>
+        <!-- Month Summary: pick a year + month → ships surveyed and recovery by Survey Completed Date (replaces the VLSFO / LSMGO / HSFO cards). -->
+        <?php $dm = dashboardMonthStats($db, $role, (int)$user_id, (int)$client_row_id, (int)date('Y'), (int)date('n')); ?>
+        <div class="stat-card dm-card" data-testid="month-summary-card">
+            <div class="dm-head">
+                <span class="stat-title stat-title--purple"><i class="fa-solid fa-calendar-check stat-title-icon"></i>Month Summary</span>
+                <div class="dm-selects">
+                    <select class="dm-select" data-dm-month aria-label="Month" data-testid="dm-month">
+                        <?php for ($mi = 1; $mi <= 12; $mi++): ?><option value="<?= $mi ?>"<?= $mi === (int)date('n') ? ' selected' : '' ?>><?= date('M', mktime(0, 0, 0, $mi, 1)) ?></option><?php endfor; ?>
+                    </select>
+                    <select class="dm-select" data-dm-year aria-label="Year" data-testid="dm-year">
+                        <?php foreach (dashboardMonthYears($db) as $yy): ?><option value="<?= $yy ?>"<?= $yy === (int)date('Y') ? ' selected' : '' ?>><?= $yy ?></option><?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="dm-stats">
+                <div><div class="stat-val" data-dm-ships data-testid="dm-ships"><?= (int)$dm['ships'] ?></div><div class="dm-l">Ships surveyed</div></div>
+                <div><div class="stat-val" data-dm-recovery data-testid="dm-recovery"><?= number_format($dm['recovery'], 3) ?> MT</div><div class="dm-l">Recovery</div></div>
+            </div>
+            <div class="dm-note" data-dm-label>By Survey Completed Date · <?= sanitize($dm['label']) ?></div>
         </div>
         <div class="stat-card" data-testid="recent-survey-recovery-card">
             <span class="stat-title stat-title--purple"><i class="fa-solid fa-ship stat-title-icon"></i>Recent Survey Recovery</span>
@@ -779,6 +755,37 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
 
 <?php include 'includes/recovery_detail.php'; ?>
 
+<style>
+.dm-card { grid-column: span 2; }
+.dm-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.dm-selects { display: flex; gap: 6px; }
+.dm-select { border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 4px 8px; font-size: 12.5px; font-weight: 600; background: #F8FAFC; color: #0f172a; }
+.dm-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.dm-l { font-size: 11px; color: #64748b; font-weight: 600; margin-top: 2px; }
+.dm-note { font-size: 10.5px; color: #94a3b8; margin-top: 8px; }
+.dm-card.loading .stat-val { opacity: .4; }
+</style>
+<script>
+(function () {
+    var card = document.querySelector('[data-testid=month-summary-card]');
+    if (!card) return;
+    var mSel = card.querySelector('[data-dm-month]'), ySel = card.querySelector('[data-dm-year]');
+    function load() {
+        card.classList.add('loading');
+        fetch('ajax/dashboard_month.php?y=' + encodeURIComponent(ySel.value) + '&m=' + encodeURIComponent(mSel.value), { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (!j.success) return;
+                card.querySelector('[data-dm-ships]').textContent = j.ships;
+                card.querySelector('[data-dm-recovery]').textContent = j.recovery;
+                card.querySelector('[data-dm-label]').textContent = 'By Survey Completed Date · ' + j.label;
+            })
+            .finally(function () { card.classList.remove('loading'); });
+    }
+    mSel.addEventListener('change', load);
+    ySel.addEventListener('change', load);
+})();
+</script>
 <?php
 include 'includes/nav.php';
 include 'includes/footer.php';
