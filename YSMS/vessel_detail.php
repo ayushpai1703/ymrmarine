@@ -268,6 +268,9 @@ try {
 // re-derived independently rather than assumed).
 $can_replace_docs = canReplaceDocument($db, $role, $current_user_id, (int)$survey['id']);
 
+require_once 'includes/admin_inline_edit.php';
+aieInit($db, $survey);
+
 include 'includes/header.php';
 ?>
 
@@ -536,16 +539,16 @@ include 'includes/header.php';
                 <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="btn-whatsapp" data-testid="vessel-detail-whatsapp-link" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
                 <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-ios-url="<?= sanitize($mail_ios_url) ?>" data-android-url="<?= sanitize($mail_android_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
                 <?php if ($is_admin): ?>
-                    <a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=vessel_detail.php%3Fid%3D<?= (int)$survey['id'] ?>" class="vessel-edit-btn" data-testid="vessel-detail-edit-link"><i class="fa-solid fa-pen"></i> Edit</a>
+                    <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vessel-edit-btn" data-testid="vessel-detail-edit-link"><i class="fa-solid fa-pen"></i> Edit</a>
                 <?php endif; ?>
             </div>
-            <div class="info-row"><span class="info-label">Vessel Name</span><span class="info-value"><?= sanitize($survey['vessel_name']) ?></span></div>
-            <div class="info-row"><span class="info-label">Report No</span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
-            <div class="info-row"><span class="info-label">Client Name</span><span class="info-value"><?= sanitize($survey['company_name']) ?></span></div>
-            <div class="info-row"><span class="info-label">Survey Type</span><span class="info-value text-primary"><?= sanitize($combined_survey_type) ?></span></div>
-            <div class="info-row"><span class="info-label">Assigned Date</span><span class="info-value fw-bold text-dark"><?= $display_date ?></span></div>
+            <div class="info-row"><span class="info-label">Vessel Name<?= aie('vessel_name') ?></span><span class="info-value"><?= sanitize($survey['vessel_name']) ?></span></div>
+            <div class="info-row"><span class="info-label">Report No<?= aie('report_number') ?></span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
+            <div class="info-row"><span class="info-label">Client Name<?= aie('client_id') ?></span><span class="info-value"><?= sanitize($survey['company_name']) ?></span></div>
+            <div class="info-row"><span class="info-label">Survey Type<?= aie('survey_type_ids') ?></span><span class="info-value text-primary"><?= sanitize($combined_survey_type) ?></span></div>
+            <div class="info-row"><span class="info-label">Assigned Date<?= aie('assign_date') ?></span><span class="info-value fw-bold text-dark"><?= $display_date ?></span></div>
             <div class="info-row" style="align-items:flex-start;">
-                <span class="info-label">Agent Name</span>
+                <span class="info-label">Agent Name<?= aie('agent_name') ?></span>
                 <span class="info-value">
                     <?= sanitize($survey['agent_name']) ?>
                     <?php if ($is_admin && !empty($survey['agent_name'])): ?>
@@ -563,10 +566,10 @@ include 'includes/header.php';
                     <?php endif; ?>
                 </span>
             </div>
-            <div class="info-row"><span class="info-label">Surveyor Name</span><span class="info-value text-primary"><?= sanitize($combined_surveyor_names) ?></span></div>
-            <div class="info-row"><span class="info-label">Port Name</span><span class="info-value"><?= sanitize($survey['port_name']) ?></span></div>
+            <div class="info-row"><span class="info-label">Surveyor Name<?= aie('surveyors') ?></span><span class="info-value text-primary"><?= sanitize($combined_surveyor_names) ?></span></div>
+            <div class="info-row"><span class="info-label">Port Name<?= aie('port_id') ?></span><span class="info-value"><?= sanitize($survey['port_name']) ?></span></div>
 
-            <div class="info-row"><span class="info-label" style="color: #ea580c;">Admin Remarks</span><span class="info-value text-dark fw-semibold">
+            <div class="info-row"><span class="info-label" style="color: #ea580c;">Admin Remarks<?= aie('remarks') ?></span><span class="info-value text-dark fw-semibold">
                 <?php
                     $remarks_full = !empty($survey['remarks']) ? $survey['remarks'] : '';
                     if ($remarks_full === '') {
@@ -578,7 +581,8 @@ include 'includes/header.php';
                     }
                 ?>
             </span></div>
-        </div>
+            <?= aieExtraRows('mobile', ['appointment_date' => fmtAieDate($survey['appointment_date'] ?? ''), 'imo_number', 'status', 'survey_completed_date' => fmtAieDate($survey['survey_completed_date'] ?? ''), 'report_uploaded_date' => fmtAieDate($survey['report_uploaded_date'] ?? ''), 'recovery' => fmtAieRecovery($survey), 'notes', 'custom_live_status']) ?>
+    </div>
     <?php if (!$is_client_viewer && !$is_super_admin): ?>
     <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm mt-2">
         <div class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fa-solid fa-cloud-arrow-up text-primary"></i> Upload Required Reports</div>
@@ -643,7 +647,7 @@ include 'includes/header.php';
                         data-doc-uploaded-by="<?= sanitize($doc_uploader) ?>">
                     <i class="fa-solid fa-rotate"></i> Replace
                 </button>
-                <?php endif; ?>
+                <?php endif; ?><?= aieFileButtons($doc) ?>
             </div>
         </div>
         <?php endforeach; ?>
@@ -708,7 +712,7 @@ include 'includes/header.php';
                     <div class="vdd-hero-ship"><i class="fa-solid fa-ship"></i></div>
                     <div>
                         <div class="vdd-hero-title-row">
-                            <div class="vdd-hero-title"><?= sanitize($survey['vessel_name']) ?></div>
+                            <div class="vdd-hero-title"><?= sanitize($survey['vessel_name']) ?></div><?= aie('vessel_name') ?>
                         </div>
                         <div class="vdd-hero-sub">
                             <?php if (!empty($survey['report_number'])): ?>Report <?= sanitize($survey['report_number']) ?> &nbsp;·&nbsp; <?php endif; ?>
@@ -720,7 +724,7 @@ include 'includes/header.php';
                     <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-whatsapp" data-testid="vessel-detail-whatsapp-link-desktop" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
                     <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="vdd-btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-ios-url="<?= sanitize($mail_ios_url) ?>" data-android-url="<?= sanitize($mail_android_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link-desktop" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
                     <?php if ($is_admin): ?>
-                        <a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=vessel_detail.php%3Fid%3D<?= (int)$survey['id'] ?>" class="vdd-btn-edit" data-testid="vessel-detail-edit-link-desktop"><i class="fa-solid fa-pen"></i> Edit</a>
+                        <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vdd-btn-edit" data-testid="vessel-detail-edit-link-desktop"><i class="fa-solid fa-pen"></i> Edit</a>
                     <?php endif; ?>
                 </div>
             </div>
@@ -735,27 +739,27 @@ include 'includes/header.php';
                         <div class="vdd-info-rows">
                             <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:#F1F5FF;color:#4F46E5;"><i class="fa-solid fa-building"></i></div>
-                                <div class="vdd-info-label">Client Name</div>
+                                <div class="vdd-info-label">Client Name<?= aie('client_id') ?></div>
                                 <div class="vdd-info-value"><?= sanitize($survey['company_name']) ?></div>
                             </div>
                             <div class="vdd-info-row alt">
                                 <div class="vdd-info-icon" style="background:#F1F5FF;color:#4F46E5;"><i class="fa-solid fa-hashtag"></i></div>
-                                <div class="vdd-info-label">Report No</div>
+                                <div class="vdd-info-label">Report No<?= aie('report_number') ?></div>
                                 <div class="vdd-info-value"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></div>
                             </div>
                             <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-file-circle-check"></i></div>
-                                <div class="vdd-info-label">Survey Type</div>
+                                <div class="vdd-info-label">Survey Type<?= aie('survey_type_ids') ?></div>
                                 <div><span class="vdd-badge"><span class="dot"></span><?= sanitize($combined_survey_type) ?></span></div>
                             </div>
                             <div class="vdd-info-row alt">
                                 <div class="vdd-info-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-calendar-days"></i></div>
-                                <div class="vdd-info-label">Assigned Date</div>
+                                <div class="vdd-info-label">Assigned Date<?= aie('assign_date') ?></div>
                                 <div class="vdd-info-value"><?= $display_date ?></div>
                             </div>
                             <div class="vdd-info-row align-top">
                                 <div class="vdd-info-icon" style="background:#FFF7ED;color:#EA580C;"><i class="fa-solid fa-people-group"></i></div>
-                                <div class="vdd-info-label">Agent Name</div>
+                                <div class="vdd-info-label">Agent Name<?= aie('agent_name') ?></div>
                                 <div>
                                     <div class="vdd-info-value"><?= sanitize($survey['agent_name']) ?></div>
                                     <?php if ($is_admin && !empty($survey['agent_name'])):
@@ -774,20 +778,21 @@ include 'includes/header.php';
                             </div>
                             <div class="vdd-info-row alt">
                                 <div class="vdd-avatar" style="background: <?= pvAvatarGradient($combined_surveyor_names) ?>;"><?= sanitize(pvInitials($combined_surveyor_names)) ?></div>
-                                <div class="vdd-info-label">Surveyor Name</div>
+                                <div class="vdd-info-label">Surveyor Name<?= aie('surveyors') ?></div>
                                 <div class="vdd-info-value" style="color:#5B2DEE;"><?= sanitize($combined_surveyor_names) ?></div>
                             </div>
                             <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-location-dot"></i></div>
-                                <div class="vdd-info-label">Port Name</div>
+                                <div class="vdd-info-label">Port Name<?= aie('port_id') ?></div>
                                 <div class="vdd-info-value"><?= sanitize($survey['port_name']) ?></div>
                             </div>
+                            <?= aieExtraRows('desktop', array_merge(empty($survey['remarks']) ? ['remarks'] : [], ['appointment_date' => fmtAieDate($survey['appointment_date'] ?? ''), 'imo_number', 'status', 'survey_completed_date' => fmtAieDate($survey['survey_completed_date'] ?? ''), 'report_uploaded_date' => fmtAieDate($survey['report_uploaded_date'] ?? ''), 'recovery' => fmtAieRecovery($survey), 'notes', 'custom_live_status'])) ?>
                         </div>
 
                         <div class="vdd-remarks">
                             <div class="vdd-remarks-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
                             <div>
-                                <div class="vdd-remarks-label">Admin Remarks</div>
+                                <div class="vdd-remarks-label">Admin Remarks<?= aie('remarks') ?></div>
                                 <div class="vdd-remarks-text">
                                     <?php
                                         if ($remarks_full === '') {
@@ -867,7 +872,7 @@ include 'includes/header.php';
                                             data-doc-uploaded-by="<?= sanitize($doc_uploader) ?>">
                                         <i class="fa-solid fa-rotate"></i> Replace
                                     </button>
-                                    <?php endif; ?>
+                                    <?php endif; ?><?= aieFileButtons($doc) ?>
                                 </div>
                             </div>
                             <?php endforeach; ?>
@@ -1392,6 +1397,7 @@ document.addEventListener('submit', function (ev) {
 </style>
 
 <?php
+aieRender();
 include 'includes/nav.php';
 include 'includes/footer.php';
 

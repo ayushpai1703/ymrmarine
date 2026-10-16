@@ -687,7 +687,7 @@ include 'includes/header.php';
                 <div class="pv-info-row" data-testid="pr-completed-date"><i class="fa-solid fa-calendar-check"></i><span class="pv-info-label">Completed</span><span>:</span><span class="pv-info-val"><?= surveyCompletedTs($survey) ? date('d M Y', surveyCompletedTs($survey)) : '—' ?></span></div>
                 <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
                 <div class="pv-info-row" style="justify-content:flex-end;border-top:1px dashed #e2e8f0;padding-top:8px;margin-top:2px;">
-                    <a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=reports.php" onclick="event.stopPropagation();" data-testid="pr-edit-<?= (int)$survey['id'] ?>" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1.5px solid #FED7AA;color:#C2410C;background:#FFF7ED;font-size:12px;font-weight:700;text-decoration:none;"><i class="fa-solid fa-pen"></i> Edit</a>
+                    <a href="report_detail.php?id=<?= (int)$survey['id'] ?>" onclick="event.stopPropagation();" data-testid="pr-edit-<?= (int)$survey['id'] ?>" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1.5px solid #FED7AA;color:#C2410C;background:#FFF7ED;font-size:12px;font-weight:700;text-decoration:none;"><i class="fa-solid fa-pen"></i> Edit</a>
                 </div>
                 <?php endif; ?>
             </div>
@@ -837,7 +837,7 @@ include 'includes/header.php';
                                     <div class="vd-actions">
                                         <a href="report_detail.php?id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-eye"></i> View</a>
                                         <?php if ($role === 'Admin'): ?>
-                                        <a class="edit" href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=reports.php" data-testid="pr-edit-desk-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-pen"></i> Edit</a>
+                                        <a class="edit" href="report_detail.php?id=<?= (int)$survey['id'] ?>" data-testid="pr-edit-desk-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-pen"></i> Edit</a>
                                         <?php endif; ?>
                                     </div>
                                 </td>

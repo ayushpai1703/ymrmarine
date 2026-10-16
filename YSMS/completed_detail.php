@@ -189,6 +189,9 @@ function fmtDateOnly($val) {
 // (appointment_date); older records without one fall back to assign_date.
 $cdAssignedDate = fmtDateOnly(!empty($survey['appointment_date']) ? $survey['appointment_date'] : ($survey['assign_date'] ?? ''));
 
+require_once 'includes/admin_inline_edit.php';
+aieInit($db, $survey);
+
 include 'includes/header.php';
 ?>
 
@@ -457,7 +460,6 @@ include 'includes/header.php';
         <p class="text-muted m-0 mt-1" style="font-size: 12px;">Report No: <span class="text-dark fw-bold"><?= sanitize($survey['report_number']) ?></span></p>
         <?php endif; ?>
         <div class="mt-2"><span class="badge bg-success px-2 py-1" style="font-size:10px;"><i class="fa-solid fa-circle-check"></i> Survey Fully Completed</span></div>
-        <?php if ($is_admin): ?><div class="mt-2"><a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=completed_detail.php%3Fid%3D<?= (int)$survey['id'] ?>" data-testid="cd-edit-mobile" style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;background:#fff;color:#1E1B6B;font-size:12px;font-weight:800;text-decoration:none;border:1.5px solid #C4B5FD;"><i class="fa-solid fa-pen"></i> Edit</a></div><?php endif; ?>
         <p class="text-muted m-0 mt-2" style="font-size:12px;" data-testid="completed-detail-uploaded-by">Uploaded By: <span class="text-dark fw-bold"><?= sanitize($survey['uploader_name'] ?: $survey['surveyor_name'] ?: 'Admin') ?></span></p>
     </div>
 
@@ -465,25 +467,26 @@ include 'includes/header.php';
     <!-- Timeline Dates -->
     <div class="info-table-list shadow-sm">
         <div class="info-row">
-            <span class="info-label"><i class="fa-regular fa-calendar-plus text-primary"></i> Survey Assigned Date</span>
+            <span class="info-label"><i class="fa-regular fa-calendar-plus text-primary"></i> Survey Assigned Date<?= aie('appointment_date') ?></span>
             <span class="info-value" data-testid="cd-assigned-mobile"><span class="badge bg-light text-dark border"><?= $cdAssignedDate ?></span></span>
         </div>
         <div class="info-row">
-            <span class="info-label"><i class="fa-regular fa-calendar-check text-warning"></i> Survey Completed Date</span>
+            <span class="info-label"><i class="fa-regular fa-calendar-check text-warning"></i> Survey Completed Date<?= aie('survey_completed_date') ?></span>
             <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['survey_completed_date'] ?? '') ?></span></span>
         </div>
         <div class="info-row">
-            <span class="info-label"><i class="fa-solid fa-calendar-check text-success"></i> Report Completed Date</span>
+            <span class="info-label"><i class="fa-solid fa-calendar-check text-success"></i> Report Completed Date<?= aie('report_uploaded_date') ?></span>
             <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['report_uploaded_date'] ?? '') ?></span></span>
         </div>
+        <?= aieExtraRows('mobile', ['vessel_name', 'client_id' => (string)($survey['company_name'] ?? ''), 'surveyors' => getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? '—'), 'imo_number', 'status', 'remarks', 'notes', 'custom_live_status', 'assign_date']) ?>
     </div>
 
     <!-- Other records -->
     <div class="info-table-list shadow-sm">
-        <div class="info-row"><span class="info-label">Report No</span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">Survey Operation Type</span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
-        <div class="info-row"><span class="info-label">Port of Operation</span><span class="info-value"><?= sanitize($survey['port_name']) ?></span></div>
-        <div class="info-row"><span class="info-label">Agent Handle</span><span class="info-value"><?= sanitize($survey['agent_name']) ?></span></div>
+        <div class="info-row"><span class="info-label">Report No<?= aie('report_number') ?></span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
+        <div class="info-row"><span class="info-label">Survey Operation Type<?= aie('survey_type_ids') ?></span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
+        <div class="info-row"><span class="info-label">Port of Operation<?= aie('port_id') ?></span><span class="info-value"><?= sanitize($survey['port_name']) ?></span></div>
+        <div class="info-row"><span class="info-label">Agent Handle<?= aie('agent_name') ?></span><span class="info-value"><?= sanitize($survey['agent_name']) ?></span></div>
         <?php if ($recoveryNA): ?>
         <div class="info-row" data-testid="recovery-na-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
         <?php endif; ?>
@@ -507,7 +510,7 @@ include 'includes/header.php';
             <?php if ($recoveryEmpty): ?>
             <div class="info-row" data-testid="recovery-empty-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
             <?php else: ?>
-            <div class="info-row"><span class="info-label">Total Recovery</span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
+            <div class="info-row"><span class="info-label">Total Recovery<?= aie('recovery') ?></span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
             <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
@@ -620,7 +623,7 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                                 data-doc-uploaded-by="<?= sanitize($file['uploaded_by'] ? getUserFullNameById($db, (int)$file['uploaded_by']) : '—') ?>">
                             <i class="fa-solid fa-rotate"></i> Replace
                         </button>
-                        <?php endif; ?>
+                        <?php endif; ?><?= aieFileButtons($file) ?>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -663,8 +666,7 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                     <div class="vdd-hero-ship"><i class="fa-solid fa-ship"></i></div>
                     <div>
                         <div class="vdd-hero-title-row">
-                            <div class="vdd-hero-title"><?= sanitize($survey['vessel_name']) ?></div>
-                            <?php if ($is_admin): ?><a href="admin_edit_vessel.php?id=<?= (int)$survey['id'] ?>&amp;return=completed_detail.php%3Fid%3D<?= (int)$survey['id'] ?>" data-testid="cd-edit-desktop" style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;background:#fff;color:#1E1B6B;font-size:12px;font-weight:800;text-decoration:none;"><i class="fa-solid fa-pen"></i> Edit</a><?php endif; ?>
+                            <div class="vdd-hero-title"><?= sanitize($survey['vessel_name']) ?></div><?= aie('vessel_name') ?>
                             <span class="vdd-hero-status"><i class="fa-solid fa-circle-check"></i>&nbsp; Fully Completed</span>
                         </div>
                         <div class="vdd-hero-sub">
@@ -686,19 +688,20 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                         <div class="vdd-info-rows">
                             <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:#F1F5FF;color:#4F46E5;"><i class="fa-regular fa-calendar-plus"></i></div>
-                                <div class="vdd-info-label">Survey Assigned</div>
+                                <div class="vdd-info-label">Survey Assigned<?= aie('appointment_date') ?></div>
                                 <div><span class="vdd-badge-soft" data-testid="cd-assigned-desktop"><?= $cdAssignedDate ?></span></div>
                             </div>
                             <div class="vdd-info-row alt">
                                 <div class="vdd-info-icon" style="background:#FFFBEB;color:#B45309;"><i class="fa-regular fa-calendar-check"></i></div>
-                                <div class="vdd-info-label">Survey Completed</div>
+                                <div class="vdd-info-label">Survey Completed<?= aie('survey_completed_date') ?></div>
                                 <div><span class="vdd-badge-soft"><?= fmtDateOnly($survey['survey_completed_date'] ?? '') ?></span></div>
                             </div>
                             <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:#D1FAE5;color:#047857;"><i class="fa-solid fa-calendar-check"></i></div>
-                                <div class="vdd-info-label">Report Completed</div>
+                                <div class="vdd-info-label">Report Completed<?= aie('report_uploaded_date') ?></div>
                                 <div><span class="vdd-badge-soft"><?= fmtDateOnly($survey['report_uploaded_date'] ?? '') ?></span></div>
                             </div>
+                            <?= aieExtraRows('desktop', ['vessel_name', 'client_id' => (string)($survey['company_name'] ?? ''), 'surveyors' => getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? '—'), 'imo_number', 'status', 'remarks', 'notes', 'custom_live_status', 'assign_date']) ?>
                         </div>
                     </div>
 
@@ -710,22 +713,22 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                         <div class="vdd-info-rows">
                             <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:#F1F5FF;color:#4F46E5;"><i class="fa-solid fa-hashtag"></i></div>
-                                <div class="vdd-info-label">Report No</div>
+                                <div class="vdd-info-label">Report No<?= aie('report_number') ?></div>
                                 <div class="vdd-info-value"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></div>
                             </div>
                             <div class="vdd-info-row alt">
                                 <div class="vdd-info-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-file-circle-check"></i></div>
-                                <div class="vdd-info-label">Survey Type</div>
+                                <div class="vdd-info-label">Survey Type<?= aie('survey_type_ids') ?></div>
                                 <div><span class="vdd-badge"><span class="dot"></span><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
                             </div>
                             <div class="vdd-info-row">
                                 <div class="vdd-info-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-location-dot"></i></div>
-                                <div class="vdd-info-label">Port</div>
+                                <div class="vdd-info-label">Port<?= aie('port_id') ?></div>
                                 <div class="vdd-info-value"><?= sanitize($survey['port_name']) ?></div>
                             </div>
                             <div class="vdd-info-row alt">
                                 <div class="vdd-info-icon" style="background:#FFF7ED;color:#EA580C;"><i class="fa-solid fa-people-group"></i></div>
-                                <div class="vdd-info-label">Agent</div>
+                                <div class="vdd-info-label">Agent<?= aie('agent_name') ?></div>
                                 <div class="vdd-info-value"><?= sanitize($survey['agent_name']) ?></div>
                             </div>
                             <?php if ($recoveryNA): ?>
@@ -742,7 +745,7 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                     <div class="vdd-card recovery-block<?= $recovery_edit_open ? ' editing' : '' ?>" id="recoveryBlockDesktop" data-testid="recovery-block-desktop">
                         <div class="vdd-card-head">
                             <div class="vdd-card-head-icon" style="background:#ECFEFF;color:#0891B2;"><i class="fa-solid fa-droplet"></i></div>
-                            <div class="vdd-card-head-title">Recovery Summary</div>
+                            <div class="vdd-card-head-title">Recovery Summary<?= aie('recovery') ?></div>
                             <?php if ($is_admin && !$recoveryNA): ?>
                             <button type="button" class="recovery-edit-toggle" data-recovery-edit-toggle="recoveryBlockDesktop" title="Edit Recovery" data-testid="recovery-edit-toggle-desktop"><i class="fa-solid fa-pen"></i></button>
                             <?php endif; ?>
@@ -856,7 +859,7 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
                                             data-doc-uploaded-by="<?= sanitize($file['uploaded_by'] ? getUserFullNameById($db, (int)$file['uploaded_by']) : '—') ?>">
                                         <i class="fa-solid fa-rotate"></i> Replace
                                     </button>
-                                    <?php endif; ?>
+                                    <?php endif; ?><?= aieFileButtons($file) ?>
                                 </div>
                             </div>
                             <?php endforeach; else: ?>
@@ -1099,6 +1102,7 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
 </script>
 
 <?php
+aieRender();
 include 'includes/nav.php';
 include 'includes/footer.php';
 
