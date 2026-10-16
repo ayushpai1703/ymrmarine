@@ -33,20 +33,22 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $pending_reports = $db->query("SELECT COUNT(*) FROM surveys WHERE status = 'Pending Report'")->fetchColumn();
     $completed_vessels = $db->query("SELECT COUNT(*) FROM surveys WHERE status = 'Completed'")->fetchColumn();
 
-    // అడ్మిన్ కి మొత్తం వెసెల్స్ లోని O21 రికవరీ సమ్ (అన్ని అప్‌లోడ్ అయిన ఎక్సెల్ రిపోర్ట్స్ నుండి)
-    $total_recovery = $db->query("SELECT SUM(recovery_amount) FROM surveys WHERE recovery_amount IS NOT NULL")->fetchColumn();
+    // Total Recovery: every vessel that has left Pending Vessels (Pending Report +
+    // Completed). One row per vessel, so a vessel is counted once whatever stage it is in;
+    // the stored value is the Excel-extracted or manually entered recovery.
+    $total_recovery = $db->query("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL")->fetchColumn();
     
-    // ఈ కరెంట్ మంత్ కి సంబంధించిన రికవరీ సమ్ మాత్రమే (రిపోర్ట్ అప్‌లోడ్ అయిన నెల ఆధారంగా)
-    $month_recovery = $db->query("SELECT SUM(recovery_amount) FROM surveys WHERE recovery_amount IS NOT NULL AND MONTH(COALESCE(survey_completed_date, report_uploaded_date)) = MONTH(CURDATE()) AND YEAR(COALESCE(survey_completed_date, report_uploaded_date)) = YEAR(CURDATE())")->fetchColumn();
+    // This Month Recovery: same vessels, Survey Completed Date in the current calendar month.
+    $month_recovery = $db->query("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND survey_completed_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND survey_completed_date < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH")->fetchColumn();
 
     // అడ్మిన్ కి M20 (VLSFO) రికవరీ సమ్
-    $total_vlsfo = $db->query("SELECT SUM(vlsfo_recovery) FROM surveys WHERE vlsfo_recovery IS NOT NULL")->fetchColumn();
+    $total_vlsfo = $db->query("SELECT SUM(vlsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND vlsfo_recovery IS NOT NULL")->fetchColumn();
 
     // అడ్మిన్ కి O20 (LSMGO) రికవరీ సమ్
-    $total_lsmgo = $db->query("SELECT SUM(lsmgo_recovery) FROM surveys WHERE lsmgo_recovery IS NOT NULL")->fetchColumn();
+    $total_lsmgo = $db->query("SELECT SUM(lsmgo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND lsmgo_recovery IS NOT NULL")->fetchColumn();
 
     // అడ్మిన్ కి N20 (HSFO) రికవరీ సమ్
-    $total_hsfo = $db->query("SELECT SUM(hsfo_recovery) FROM surveys WHERE hsfo_recovery IS NOT NULL")->fetchColumn();
+    $total_hsfo = $db->query("SELECT SUM(hsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND hsfo_recovery IS NOT NULL")->fetchColumn();
 
     // 🌟 ప్రతి సర్వేయర్ కి పూర్తి రిపోర్ట్ (dashboard bottom table): Ships
     // Attended (as of now / this month) + Total Recovery (as of now / this
@@ -65,10 +67,10 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
                 AND MONTH(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = MONTH(CURDATE())
                 AND YEAR(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = YEAR(CURDATE())
                 THEN s.id END) AS ships_month,
-            COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL THEN s.recovery_amount END), 0) AS recovery_total,
-            COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL
-                AND MONTH(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = MONTH(CURDATE())
-                AND YEAR(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = YEAR(CURDATE())
+            COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed') THEN s.recovery_amount END), 0) AS recovery_total,
+            COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed')
+                AND s.survey_completed_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                AND s.survey_completed_date < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH
                 THEN s.recovery_amount END), 0) AS recovery_month
         FROM users u
         LEFT JOIN surveys s ON (s.surveyor_id = u.id OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = u.id))
@@ -92,23 +94,23 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
 
     // క్లయింట్ కి తన కంపెనీ వెసెల్స్ లోని రికవరీ సమ్ మాత్రమే
     // (గతంలో ఇక్కడ 0 హార్డ్‌కోడ్ చేయబడింది — ఎప్పుడూ డేటాబేస్ నుండి తీసుకోబడలేదు — బగ్ ఫిక్స్)
-    $stmt_t_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE recovery_amount IS NOT NULL AND client_id = ?");
+    $stmt_t_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND client_id = ?");
     $stmt_t_rec->execute([$client_row_id]);
     $total_recovery = $stmt_t_rec->fetchColumn();
 
-    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE recovery_amount IS NOT NULL AND client_id = ? AND MONTH(COALESCE(survey_completed_date, report_uploaded_date)) = MONTH(CURDATE()) AND YEAR(COALESCE(survey_completed_date, report_uploaded_date)) = YEAR(CURDATE())");
+    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND client_id = ? AND survey_completed_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND survey_completed_date < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH");
     $stmt_m_rec->execute([$client_row_id]);
     $month_recovery = $stmt_m_rec->fetchColumn();
 
-    $stmt_vlsfo = $db->prepare("SELECT SUM(vlsfo_recovery) FROM surveys WHERE vlsfo_recovery IS NOT NULL AND client_id = ?");
+    $stmt_vlsfo = $db->prepare("SELECT SUM(vlsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND vlsfo_recovery IS NOT NULL AND client_id = ?");
     $stmt_vlsfo->execute([$client_row_id]);
     $total_vlsfo = $stmt_vlsfo->fetchColumn();
 
-    $stmt_lsmgo = $db->prepare("SELECT SUM(lsmgo_recovery) FROM surveys WHERE lsmgo_recovery IS NOT NULL AND client_id = ?");
+    $stmt_lsmgo = $db->prepare("SELECT SUM(lsmgo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND lsmgo_recovery IS NOT NULL AND client_id = ?");
     $stmt_lsmgo->execute([$client_row_id]);
     $total_lsmgo = $stmt_lsmgo->fetchColumn();
 
-    $stmt_hsfo = $db->prepare("SELECT SUM(hsfo_recovery) FROM surveys WHERE hsfo_recovery IS NOT NULL AND client_id = ?");
+    $stmt_hsfo = $db->prepare("SELECT SUM(hsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND hsfo_recovery IS NOT NULL AND client_id = ?");
     $stmt_hsfo->execute([$client_row_id]);
     $total_hsfo = $stmt_hsfo->fetchColumn();
 } else {
@@ -128,27 +130,27 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $completed_vessels = $stmt_c->fetchColumn();
 
     // సర్వేయర్ కి కేవలం తను అప్‌లోడ్ చేసిన రిపోర్ట్స్ లోని టోటల్ రికవరీ సమ్ మాత్రమే
-    $stmt_t_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE recovery_amount IS NOT NULL AND $assignedSql");
+    $stmt_t_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND $assignedSql");
     $stmt_t_rec->execute([$user_id, $user_id]);
     $total_recovery = $stmt_t_rec->fetchColumn();
 
     // సర్వేయర్ కి ఈ నెలలో వచ్చిన రికవరీ సమ్ మాత్రమే
-    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE recovery_amount IS NOT NULL AND $assignedSql AND MONTH(COALESCE(survey_completed_date, report_uploaded_date)) = MONTH(CURDATE()) AND YEAR(COALESCE(survey_completed_date, report_uploaded_date)) = YEAR(CURDATE())");
+    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND $assignedSql AND survey_completed_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND survey_completed_date < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH");
     $stmt_m_rec->execute([$user_id, $user_id]);
     $month_recovery = $stmt_m_rec->fetchColumn();
 
     // సర్వేయర్ కి తన VLSFO (M20) రికవరీ సమ్ మాత్రమే
-    $stmt_vlsfo = $db->prepare("SELECT SUM(vlsfo_recovery) FROM surveys WHERE vlsfo_recovery IS NOT NULL AND $assignedSql");
+    $stmt_vlsfo = $db->prepare("SELECT SUM(vlsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND vlsfo_recovery IS NOT NULL AND $assignedSql");
     $stmt_vlsfo->execute([$user_id, $user_id]);
     $total_vlsfo = $stmt_vlsfo->fetchColumn();
 
     // సర్వేయర్ కి తన LSMGO (O20) రికవరీ సమ్ మాత్రమే
-    $stmt_lsmgo = $db->prepare("SELECT SUM(lsmgo_recovery) FROM surveys WHERE lsmgo_recovery IS NOT NULL AND $assignedSql");
+    $stmt_lsmgo = $db->prepare("SELECT SUM(lsmgo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND lsmgo_recovery IS NOT NULL AND $assignedSql");
     $stmt_lsmgo->execute([$user_id, $user_id]);
     $total_lsmgo = $stmt_lsmgo->fetchColumn();
 
     // సర్వేయర్ కి తన HSFO (N20) రికవరీ సమ్ మాత్రమే
-    $stmt_hsfo = $db->prepare("SELECT SUM(hsfo_recovery) FROM surveys WHERE hsfo_recovery IS NOT NULL AND $assignedSql");
+    $stmt_hsfo = $db->prepare("SELECT SUM(hsfo_recovery) FROM surveys WHERE status IN ('Pending Report','Completed') AND hsfo_recovery IS NOT NULL AND $assignedSql");
     $stmt_hsfo->execute([$user_id, $user_id]);
     $total_hsfo = $stmt_hsfo->fetchColumn();
 }
@@ -156,15 +158,15 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
 
 // 🌟 Recent Survey Recovery (latest vessel with recovery)
 if (in_array($role, ['Admin', 'Super Admin'], true)) {
-    $recent_row = $db->query("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE recovery_amount IS NOT NULL ORDER BY COALESCE(survey_completed_date, report_uploaded_date) DESC, id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    $recent_row = $db->query("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL ORDER BY survey_completed_date DESC, id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
     $avg_ships = $db->query("SELECT COUNT(*) FROM surveys WHERE status = 'Completed'")->fetchColumn();
     $months_span = $db->query("SELECT GREATEST(1, TIMESTAMPDIFF(MONTH, MIN(COALESCE(survey_completed_date, report_uploaded_date, assign_date)), CURDATE()) + 1) FROM surveys WHERE status IN ('Completed','Pending Report')")->fetchColumn();
     $avg_ships_per_month = $months_span > 0 ? round(((float)$avg_ships) / (float)$months_span, 1) : 0;
-    $avg_recovery_per_ship = $db->query("SELECT AVG(recovery_amount) FROM surveys WHERE recovery_amount IS NOT NULL AND recovery_amount > 0")->fetchColumn();
-    $avg_recovery_per_surveyor = $db->query("SELECT AVG(t.s) FROM (SELECT SUM(recovery_amount) AS s FROM surveys WHERE recovery_amount IS NOT NULL GROUP BY surveyor_id) t")->fetchColumn();
+    $avg_recovery_per_ship = $db->query("SELECT AVG(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND recovery_amount > 0")->fetchColumn();
+    $avg_recovery_per_surveyor = $db->query("SELECT AVG(t.s) FROM (SELECT SUM(recovery_amount) AS s FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL GROUP BY surveyor_id) t")->fetchColumn();
     $avg_ships_per_surveyor = $db->query("SELECT AVG(t.cnt) FROM (SELECT COUNT(*) AS cnt FROM surveys WHERE status = 'Completed' GROUP BY surveyor_id) t")->fetchColumn();
 } elseif ($role === 'Client') {
-    $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE recovery_amount IS NOT NULL AND client_id = ? ORDER BY COALESCE(survey_completed_date, report_uploaded_date) DESC, id DESC LIMIT 1");
+    $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND client_id = ? ORDER BY survey_completed_date DESC, id DESC LIMIT 1");
     $stmt_recent->execute([$client_row_id]);
     $recent_row = $stmt_recent->fetch(PDO::FETCH_ASSOC);
     // (గతంలో ఇక్కడ avg_ships_per_month 0 హార్డ్‌కోడ్ చేయబడింది — బగ్ ఫిక్స్)
@@ -180,7 +182,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $avg_ships_per_surveyor = null;
 } else {
     $assignedSql = "(surveyor_id = ? OR id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))";
-    $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE recovery_amount IS NOT NULL AND $assignedSql ORDER BY COALESCE(survey_completed_date, report_uploaded_date) DESC, id DESC LIMIT 1");
+    $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND $assignedSql ORDER BY survey_completed_date DESC, id DESC LIMIT 1");
     $stmt_recent->execute([$user_id, $user_id]);
     $recent_row = $stmt_recent->fetch(PDO::FETCH_ASSOC);
     $stmt_avg = $db->prepare("SELECT COUNT(*) FROM surveys WHERE status = 'Completed' AND $assignedSql");
@@ -384,7 +386,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             SELECT u.full_name, SUM(s.recovery_amount) AS total
             FROM surveys s
             JOIN users u ON s.surveyor_id = u.id
-            WHERE s.recovery_amount IS NOT NULL
+            WHERE s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed')
             GROUP BY s.surveyor_id, u.full_name
             ORDER BY total DESC
             LIMIT 10
@@ -394,7 +396,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             SELECT p.port_name, SUM(s.recovery_amount) AS total
             FROM surveys s
             JOIN ports p ON s.port_id = p.id
-            WHERE s.recovery_amount IS NOT NULL
+            WHERE s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed')
             GROUP BY s.port_id, p.port_name
             ORDER BY total DESC
             LIMIT 5
@@ -404,7 +406,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             SELECT COALESCE(NULLIF(p.country, ''), 'India') AS country, SUM(s.recovery_amount) AS total
             FROM surveys s
             JOIN ports p ON s.port_id = p.id
-            WHERE s.recovery_amount IS NOT NULL
+            WHERE s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed')
             GROUP BY COALESCE(NULLIF(p.country, ''), 'India')
             ORDER BY total DESC
             LIMIT 5
@@ -414,7 +416,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             SELECT c.company_name, SUM(s.recovery_amount) AS total
             FROM surveys s
             JOIN clients c ON s.client_id = c.id
-            WHERE s.recovery_amount IS NOT NULL
+            WHERE s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed')
             GROUP BY s.client_id, c.company_name
             ORDER BY total DESC
             LIMIT 5

@@ -22,7 +22,7 @@ if ($role === 'Client') {
 }
 
 // period=total  -> అన్ని అప్‌లోడ్ అయిన రికార్డులు (Total Recovery కార్డ్)
-// period=month  -> ఈ నెల అప్‌లోడ్ అయిన రికార్డులు మాత్రమే (This Month Recovery కార్డ్)
+// period=month  -> Survey Completed Date in the current month (This Month Recovery card)
 $period = isset($_GET['period']) && $_GET['period'] === 'month' ? 'month' : 'total';
 
 $sql = "
@@ -30,13 +30,13 @@ $sql = "
            s.vlsfo_recovery, s.lsmgo_recovery, s.hsfo_recovery, s.recovery_amount, s.report_uploaded_date
     FROM surveys s
     LEFT JOIN survey_types t ON s.survey_type_id = t.id
-    WHERE s.recovery_amount IS NOT NULL
+    WHERE s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed')
 ";
 
 $params = [];
 
 if ($period === 'month') {
-    $sql .= " AND MONTH(s.report_uploaded_date) = MONTH(CURDATE()) AND YEAR(s.report_uploaded_date) = YEAR(CURDATE())";
+    $sql .= " AND s.survey_completed_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND s.survey_completed_date < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH";
 }
 
 if ($role === 'Client') {
@@ -50,7 +50,7 @@ if ($role === 'Client') {
     $params[] = $user_id;
 }
 
-$sql .= " ORDER BY s.report_uploaded_date DESC";
+$sql .= " ORDER BY s.survey_completed_date DESC, s.id DESC";
 
 $stmt = $db->prepare($sql);
 $stmt->execute($params);
