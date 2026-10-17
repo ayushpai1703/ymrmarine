@@ -5,7 +5,8 @@
  * Pending Vessels (Pending Report + Completed), scoped to what the viewer may
  * see (Admin / Super Admin: all, Client: own company, Surveyor: assigned).
  */
-function dashboardMonthStats(PDO $db, string $role, int $userId, int $clientRowId, int $year, int $month): array {
+/** WHERE clause + params selecting the month's vessels for this viewer (shared by the card and its download). */
+function dashboardMonthWhere(string $role, int $userId, int $clientRowId, int $year, int $month): array {
     $start = sprintf('%04d-%02d-01', $year, $month);
     $end = date('Y-m-d', strtotime($start . ' +1 month'));
     $where = ["s.status IN ('Pending Report','Completed')", 's.survey_completed_date >= ?', 's.survey_completed_date < ?'];
@@ -18,7 +19,12 @@ function dashboardMonthStats(PDO $db, string $role, int $userId, int $clientRowI
         $params[] = $userId;
         $params[] = $userId;
     }
-    $st = $db->prepare('SELECT COUNT(*) AS ships, COALESCE(SUM(s.recovery_amount), 0) AS recovery FROM surveys s WHERE ' . implode(' AND ', $where));
+    return [implode(' AND ', $where), $params, $start];
+}
+
+function dashboardMonthStats(PDO $db, string $role, int $userId, int $clientRowId, int $year, int $month): array {
+    [$whereSql, $params, $start] = dashboardMonthWhere($role, $userId, $clientRowId, $year, $month);
+    $st = $db->prepare('SELECT COUNT(*) AS ships, COALESCE(SUM(s.recovery_amount), 0) AS recovery FROM surveys s WHERE ' . $whereSql);
     $st->execute($params);
     $r = $st->fetch(PDO::FETCH_ASSOC) ?: ['ships' => 0, 'recovery' => 0];
     return ['ships' => (int)$r['ships'], 'recovery' => (float)$r['recovery'], 'label' => date('F Y', strtotime($start))];
