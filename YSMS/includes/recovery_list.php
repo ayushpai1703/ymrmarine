@@ -13,6 +13,25 @@ const RECOVERY_LIST_FROM = "
     LEFT JOIN ports p ON s.port_id = p.id
 ";
 
+/** Vessels with no surveyor login (outsourced / unassigned placeholder) are credited to this surveyor. */
+const OUTSOURCED_CREDIT_SURVEYOR = 'Apurva Dandekar';
+
+/** SQL condition: the vessel has no surveyor login (neither primary nor co-surveyor is a Surveyor user). */
+const RECOVERY_NO_SURVEYOR_SQL = "(NOT EXISTS (SELECT 1 FROM users su WHERE su.id = s.surveyor_id AND su.role_id = 2)
+    AND NOT EXISTS (SELECT 1 FROM survey_surveyors ss JOIN users su ON su.id = ss.surveyor_id AND su.role_id = 2 WHERE ss.survey_id = s.id))";
+
+/** [id, full_name] of the surveyor credited with outsourced vessels, or [0, ''] when there is no such user. */
+function outsourcedCreditSurveyor(PDO $db): array {
+    static $cache = null;
+    if ($cache === null) {
+        $st = $db->prepare('SELECT id, full_name FROM users WHERE role_id = 2 AND full_name = ? ORDER BY id LIMIT 1');
+        $st->execute([OUTSOURCED_CREDIT_SURVEYOR]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        $cache = $r ? [(int)$r['id'], (string)$r['full_name']] : [0, ''];
+    }
+    return $cache;
+}
+
 /** Normalised filters from the query string; the surveyor filter is Admin / Super Admin only. */
 function recoveryListFilters(array $get, bool $fullAccess): array {
     $str = fn($k) => trim((string)($get[$k] ?? ''));
@@ -47,7 +66,8 @@ function recoveryListScope(string $role, int $userId, int $clientRowId): array {
 }
 
 /** Role scope + filters → [whereSql, params, orderSql]. */
-function recoveryListWhere(string $role, int $userId, int $clientRowId, array $f): array {
+/** $creditId: surveyor credited with outsourced vessels (their filter includes those vessels). */
+function recoveryListWhere(string $role, int $userId, int $clientRowId, array $f, int $creditId = 0): array {
     [$where, $params] = recoveryListScope($role, $userId, $clientRowId);
     if ($f['q'] !== '') {
         $where[] = '(s.vessel_name LIKE ? OR s.report_number LIKE ? OR c.company_name LIKE ? OR st.type_name LIKE ? OR p.port_name LIKE ? OR u.full_name LIKE ?)';
@@ -58,7 +78,8 @@ function recoveryListWhere(string $role, int $userId, int $clientRowId, array $f
     if ($f['place'] !== '') { $where[] = 'p.port_name = ?'; $params[] = $f['place']; }
     if ($f['client'] !== '') { $where[] = 'c.company_name = ?'; $params[] = $f['client']; }
     if ($f['surveyor'] > 0) {
-        $where[] = '(s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))';
+        $where[] = '(s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?)'
+            . ($f['surveyor'] === $creditId ? ' OR ' . RECOVERY_NO_SURVEYOR_SQL : '') . ')';
         $params[] = $f['surveyor'];
         $params[] = $f['surveyor'];
     }
@@ -98,7 +119,8 @@ function recoveryListRow(PDO $db, array $r): array {
         'port'      => (string)($r['port_name'] ?? ''),
         'country'   => (string)($r['country'] ?? '') ?: 'India',
         'type'      => getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? ''),
-        'surveyor'  => getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? ''),
+        'surveyor'  => (!empty($r['no_surveyor']) && outsourcedCreditSurveyor($db)[1] !== '') ? outsourcedCreditSurveyor($db)[1]
+                       : getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? ''),
         'status'    => (string)$r['status'],
         'completed' => $d($r['survey_completed_date'] ?? null),
         'report'    => $d($r['report_uploaded_date'] ?? null),
@@ -112,4 +134,4 @@ function recoveryListRow(PDO $db, array $r): array {
 
 const RECOVERY_LIST_COLUMNS = "s.id, s.vessel_name, s.report_number, s.status, s.survey_type_ids, st.type_name, c.company_name,
     u.full_name AS surveyor_name, p.port_name, p.country, s.survey_completed_date, s.report_uploaded_date,
-    s.vlsfo_recovery, s.lsmgo_recovery, s.hsfo_recovery, s.recovery_amount";
+    s.vlsfo_recovery, s.lsmgo_recovery, s.hsfo_recovery, s.recovery_amount, " . RECOVERY_NO_SURVEYOR_SQL . " AS no_surveyor";

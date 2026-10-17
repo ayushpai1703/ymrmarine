@@ -10,7 +10,7 @@ $is_full_access = in_array($role, ['Admin', 'Super Admin'], true);
 $client_row_id = ($role === 'Client') ? getClientIdForUser($db, $user_id) : 0;
 
 $f = recoveryListFilters($_GET, $is_full_access);
-[$whereSql, $params, $orderSql] = recoveryListWhere($role, $user_id, $client_row_id, $f);
+[$whereSql, $params, $orderSql] = recoveryListWhere($role, $user_id, $client_row_id, $f, outsourcedCreditSurveyor($db)[0]);
 
 // Filter options — only values that occur in the vessels this user can see.
 [$scopeWhere, $scopeParams] = recoveryListScope($role, $user_id, $client_row_id);
