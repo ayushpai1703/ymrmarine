@@ -49,7 +49,7 @@ if (!empty($_GET['full'])) {
         @set_time_limit(120);
         @ini_set('memory_limit', '256M');
         $f = recoveryListFilters($_GET, $is_full_access);
-        [$whereSql, $params, $orderSql] = recoveryListWhere($role, $user_id, $client_row_id, $f);
+        [$whereSql, $params, $orderSql] = recoveryListWhere($role, $user_id, $client_row_id, $f, outsourcedCreditSurveyor($db)[0]);
         $stmt = $db->prepare("SELECT " . RECOVERY_LIST_COLUMNS . " " . RECOVERY_LIST_FROM . " WHERE $whereSql ORDER BY $orderSql");
         $stmt->execute($params);
 

@@ -1,6 +1,7 @@
 <?php
 require_once 'config/config.php';
 require_once 'includes/dashboard_month.php';
+require_once 'includes/recovery_list.php';
 // Current calendar month in the app's timezone (not the DB server's) for "This Month" figures.
 $cm_start = date('Y-m-01');
 $cm_end = date('Y-m-01', strtotime('first day of next month'));
@@ -77,10 +78,9 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
         ORDER BY u.full_name ASC
     ")->fetchAll(PDO::FETCH_ASSOC);
 
-    // Vessels with no surveyor login (outsourced / unassigned placeholder) —
-    // shown as their own row so the table accounts for every vessel.
-    $sfrNoSurveyor = "NOT EXISTS (SELECT 1 FROM users su WHERE su.id = s.surveyor_id AND su.role_id = 2)
-        AND NOT EXISTS (SELECT 1 FROM survey_surveyors ss JOIN users su ON su.id = ss.surveyor_id AND su.role_id = 2 WHERE ss.survey_id = s.id)";
+    // Vessels with no surveyor login (outsourced / unassigned placeholder) are
+    // credited to OUTSOURCED_CREDIT_SURVEYOR's row (no separate "outsourced" row).
+    $sfrNoSurveyor = RECOVERY_NO_SURVEYOR_SQL;
     $sfr_unassigned = $db->query("
         SELECT COUNT(*) AS ships_total,
                COUNT(CASE WHEN $sfrMonth THEN 1 END) AS ships_month,
@@ -88,6 +88,15 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
                COALESCE(SUM(CASE WHEN $sfrMonth THEN s.recovery_amount END), 0) AS recovery_month
         FROM surveys s WHERE $sfrDone AND $sfrNoSurveyor
     ")->fetch(PDO::FETCH_ASSOC);
+    [$sfrCreditId] = outsourcedCreditSurveyor($db);
+    foreach ($surveyor_full_report as &$sfrRow) {
+        if ((int)$sfrRow['id'] === $sfrCreditId) {
+            foreach (['ships_total', 'ships_month', 'recovery_total', 'recovery_month'] as $k) {
+                $sfrRow[$k] += $sfr_unassigned[$k];
+            }
+        }
+    }
+    unset($sfrRow);
     // Footer: every vessel once (a vessel shared by two surveyors appears in
     // both their rows, so the rows can add up to more than this).
     $sfr_total = $db->query("
@@ -609,15 +618,6 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr><td colspan="5" class="text-muted text-center py-3" style="font-size:12.5px;">No surveyors found.</td></tr>
-                        <?php endif; ?>
-                        <?php if (!empty($sfr_unassigned['ships_total'])): ?>
-                            <tr data-testid="sfr-unassigned-row">
-                                <td class="fst-italic" style="font-size:13.5px;">Outsourced / No surveyor login</td>
-                                <td class="text-end" style="font-size:13.5px;"><?= (int)$sfr_unassigned['ships_total'] ?></td>
-                                <td class="text-end" style="font-size:13.5px;"><?= (int)$sfr_unassigned['ships_month'] ?></td>
-                                <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$sfr_unassigned['recovery_total'], 3) ?> MT</td>
-                                <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$sfr_unassigned['recovery_month'], 3) ?> MT</td>
-                            </tr>
                         <?php endif; ?>
                     </tbody>
                     <?php if (!empty($sfr_total)): ?>
