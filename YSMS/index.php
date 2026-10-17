@@ -55,25 +55,48 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     // co-surveyor's ships/recovery here read lower than their own
     // completed.php/vessels.php view (which already matches surveyor_id OR
     // survey_surveyors membership) — join the same way those pages do.
+    // Same rules as the Total / This Month Recovery cards: a ship counts as
+    // attended once it has left Pending Vessels (Pending Report + Completed),
+    // and "This Month" is the Survey Completed Date in the current month
+    // (app timezone). Previously ships counted only Completed and the month
+    // used the DB server's CURDATE() with a report-date fallback, so the
+    // ships and recovery columns disagreed with each other and with the cards.
+    $sfrDone = "s.status IN ('Pending Report','Completed')";
+    $sfrMonth = "s.survey_completed_date >= '$cm_start' AND s.survey_completed_date < '$cm_end'";
     $surveyor_full_report = $db->query("
         SELECT
-            u.full_name,
-            COUNT(DISTINCT CASE WHEN s.status = 'Completed' THEN s.id END) AS ships_total,
-            COUNT(DISTINCT CASE WHEN s.status = 'Completed'
-                AND MONTH(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = MONTH(CURDATE())
-                AND YEAR(COALESCE(s.survey_completed_date, s.report_uploaded_date)) = YEAR(CURDATE())
-                THEN s.id END) AS ships_month,
-            COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed') THEN s.recovery_amount END), 0) AS recovery_total,
-            COALESCE(SUM(CASE WHEN s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed')
-                AND s.survey_completed_date >= '$cm_start'
-                AND s.survey_completed_date < '$cm_end'
-                THEN s.recovery_amount END), 0) AS recovery_month
+            u.id, u.full_name, u.status AS user_status,
+            COUNT(DISTINCT CASE WHEN $sfrDone THEN s.id END) AS ships_total,
+            COUNT(DISTINCT CASE WHEN $sfrDone AND $sfrMonth THEN s.id END) AS ships_month,
+            COALESCE(SUM(CASE WHEN $sfrDone THEN s.recovery_amount END), 0) AS recovery_total,
+            COALESCE(SUM(CASE WHEN $sfrDone AND $sfrMonth THEN s.recovery_amount END), 0) AS recovery_month
         FROM users u
         LEFT JOIN surveys s ON (s.surveyor_id = u.id OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = u.id))
         WHERE u.role_id = 2
-        GROUP BY u.id, u.full_name
+        GROUP BY u.id, u.full_name, u.status
         ORDER BY u.full_name ASC
     ")->fetchAll(PDO::FETCH_ASSOC);
+
+    // Vessels with no surveyor login (outsourced / unassigned placeholder) —
+    // shown as their own row so the table accounts for every vessel.
+    $sfrNoSurveyor = "NOT EXISTS (SELECT 1 FROM users su WHERE su.id = s.surveyor_id AND su.role_id = 2)
+        AND NOT EXISTS (SELECT 1 FROM survey_surveyors ss JOIN users su ON su.id = ss.surveyor_id AND su.role_id = 2 WHERE ss.survey_id = s.id)";
+    $sfr_unassigned = $db->query("
+        SELECT COUNT(*) AS ships_total,
+               COUNT(CASE WHEN $sfrMonth THEN 1 END) AS ships_month,
+               COALESCE(SUM(s.recovery_amount), 0) AS recovery_total,
+               COALESCE(SUM(CASE WHEN $sfrMonth THEN s.recovery_amount END), 0) AS recovery_month
+        FROM surveys s WHERE $sfrDone AND $sfrNoSurveyor
+    ")->fetch(PDO::FETCH_ASSOC);
+    // Footer: every vessel once (a vessel shared by two surveyors appears in
+    // both their rows, so the rows can add up to more than this).
+    $sfr_total = $db->query("
+        SELECT COUNT(*) AS ships_total,
+               COUNT(CASE WHEN $sfrMonth THEN 1 END) AS ships_month,
+               COALESCE(SUM(s.recovery_amount), 0) AS recovery_total,
+               COALESCE(SUM(CASE WHEN $sfrMonth THEN s.recovery_amount END), 0) AS recovery_month
+        FROM surveys s WHERE $sfrDone
+    ")->fetch(PDO::FETCH_ASSOC);
 } elseif ($role === 'Client') {
     // క్లయింట్ కి కేవలం తన కంపెనీ వెసెల్స్ మాత్రమే
     $stmt_v = $db->prepare("SELECT COUNT(*) FROM surveys WHERE status = 'Pending Vessel' AND client_id = ?");
@@ -559,6 +582,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
     <div class="overview-section mt-4">
         <div class="section-title-row">
             <span class="section-title">Surveyor Performance — Full Report</span>
+            <a href="recovery.php" class="sfr-link" data-testid="sfr-recovery-link">Recovery details <i class="fa-solid fa-chevron-right"></i></a>
         </div>
         <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="surveyor-full-report-card">
             <div class="table-responsive">
@@ -576,7 +600,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                         <?php if (!empty($surveyor_full_report)): ?>
                             <?php foreach ($surveyor_full_report as $row): ?>
                             <tr>
-                                <td class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['full_name']) ?></td>
+                                <td class="fw-semibold" style="font-size:13.5px;"><a href="recovery.php?surveyor=<?= (int)$row['id'] ?>" class="text-reset text-decoration-none"><?= sanitize($row['full_name']) ?></a><?php if (($row['user_status'] ?? '') === 'Inactive'): ?> <span class="text-muted" style="font-weight:400;font-size:11px;">(Inactive)</span><?php endif; ?></td>
                                 <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_total'] ?></td>
                                 <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_month'] ?></td>
                                 <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_total'], 3) ?> MT</td>
@@ -586,7 +610,27 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                         <?php else: ?>
                             <tr><td colspan="5" class="text-muted text-center py-3" style="font-size:12.5px;">No surveyors found.</td></tr>
                         <?php endif; ?>
+                        <?php if (!empty($sfr_unassigned['ships_total'])): ?>
+                            <tr data-testid="sfr-unassigned-row">
+                                <td class="fst-italic" style="font-size:13.5px;">Outsourced / No surveyor login</td>
+                                <td class="text-end" style="font-size:13.5px;"><?= (int)$sfr_unassigned['ships_total'] ?></td>
+                                <td class="text-end" style="font-size:13.5px;"><?= (int)$sfr_unassigned['ships_month'] ?></td>
+                                <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$sfr_unassigned['recovery_total'], 3) ?> MT</td>
+                                <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$sfr_unassigned['recovery_month'], 3) ?> MT</td>
+                            </tr>
+                        <?php endif; ?>
                     </tbody>
+                    <?php if (!empty($sfr_total)): ?>
+                    <tfoot>
+                        <tr class="sfr-total" data-testid="sfr-total-row">
+                            <td style="font-size:13.5px;">All vessels<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">each vessel once</span></td>
+                            <td class="text-end" style="font-size:13.5px;" data-testid="sfr-total-ships"><?= (int)$sfr_total['ships_total'] ?></td>
+                            <td class="text-end" style="font-size:13.5px;" data-testid="sfr-month-ships"><?= (int)$sfr_total['ships_month'] ?></td>
+                            <td class="text-end" style="font-size:13.5px;" data-testid="sfr-total-recovery"><?= number_format((float)$sfr_total['recovery_total'], 3) ?> MT</td>
+                            <td class="text-end" style="font-size:13.5px;" data-testid="sfr-month-recovery"><?= number_format((float)$sfr_total['recovery_month'], 3) ?> MT</td>
+                        </tr>
+                    </tfoot>
+                    <?php endif; ?>
                 </table>
             </div>
         </div>
@@ -745,6 +789,9 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
 .dm-dl { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 10px; background: #ECFDF5; border: 1px solid #A7F3D0; color: #047857; font-size: 12px; font-weight: 700; text-decoration: none; }
 .dm-dl:hover { background: #047857; color: #fff; }
 .dm-card.loading .stat-val { opacity: .4; }
+.sfr-link { font-size: 12.5px; font-weight: 700; color: #4B2FD6; text-decoration: none; white-space: nowrap; }
+.sfr-link i { font-size: 10px; }
+.sfr-total td { font-weight: 800; border-top: 2px solid #cbd5e1; background: #F8FAFC; }
 </style>
 <script>
 (function () {

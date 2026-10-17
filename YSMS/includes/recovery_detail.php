@@ -26,6 +26,9 @@
                 <div id="recoveryModalEmpty" class="text-center text-muted py-4" style="display:none;">No recovery records found.</div>
             </div>
             <div class="modal-footer">
+                <a href="recovery.php" id="recoveryModalPageBtn" class="btn btn-outline-primary btn-sm me-auto" data-testid="recovery-modal-page-link">
+                    <i class="fa-solid fa-table-list me-1"></i> View full details
+                </a>
                 <a href="#" id="recoveryModalExportBtn" class="btn btn-success btn-sm" download>
                     <i class="fa-solid fa-file-excel me-1"></i> Export
                 </a>
@@ -48,6 +51,7 @@ function openRecoveryModal(period) {
 
     title.textContent = period === 'month' ? 'This Month Recovery — Vessel Details' : 'Total Recovery — Vessel Details';
     exportBtn.href = 'export_recovery.php?period=' + encodeURIComponent(period);
+    document.getElementById('recoveryModalPageBtn').href = period === 'month' ? 'recovery.php?month=<?= date('Y-m') ?>' : 'recovery.php';
 
     loading.style.display = 'block';
     tableWrap.style.display = 'none';
