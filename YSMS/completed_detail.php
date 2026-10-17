@@ -191,6 +191,13 @@ $cdAssignedDate = fmtDateOnly(!empty($survey['appointment_date']) ? $survey['app
 
 require_once 'includes/admin_inline_edit.php';
 aieInit($db, $survey);
+require_once 'includes/recovery_list.php';
+// Surveyor shown on this page: assigned surveyor(s); a vessel with no surveyor login
+// (outsourced) shows OUTSOURCED_CREDIT_SURVEYOR, same as the dashboard / Recovery page.
+$cdNoSv = $db->prepare('SELECT ' . RECOVERY_NO_SURVEYOR_SQL . ' FROM surveys s WHERE s.id = ?');
+$cdNoSv->execute([(int)$survey['id']]);
+$cd_surveyor_name = $cdNoSv->fetchColumn() ? outsourcedCreditSurveyor($db)[1]
+    : getCombinedSurveyorNames($db, (int)$survey['id'], $survey['surveyor_name'] ?? '');
 
 include 'includes/header.php';
 ?>
@@ -333,6 +340,7 @@ include 'includes/header.php';
         <div class="info-row"><span class="info-label">Survey Operation Type<?= aie('survey_type_ids') ?></span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
         <div class="info-row"><span class="info-label">Port of Operation<?= aie('port_id') ?></span><span class="info-value"><?= sanitize($survey['port_name']) ?></span></div>
         <div class="info-row"><span class="info-label">Agent Handle<?= aie('agent_name') ?></span><span class="info-value"><?= sanitize($survey['agent_name']) ?></span></div>
+        <div class="info-row" data-testid="cd-surveyor-mobile"><span class="info-label">Surveyor<?= aie('surveyors') ?></span><span class="info-value"><?= sanitize($cd_surveyor_name ?: '—') ?></span></div>
         <?php if ($recoveryNA): ?>
         <div class="info-row" data-testid="recovery-na-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
         <?php endif; ?>

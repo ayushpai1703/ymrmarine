@@ -37,7 +37,7 @@ const AIE_STAGE_FIELDS = [
     // report_detail.php
     'Pending Report' => ['vessel_name', 'port_id', 'report_number', 'client_id', 'surveyors', 'survey_type_ids', 'survey_completed_date', 'recovery'],
     // completed_detail.php
-    'Completed'      => ['vessel_name', 'client_id', 'appointment_date', 'survey_completed_date', 'report_uploaded_date', 'report_number', 'survey_type_ids', 'port_id', 'agent_name', 'recovery'],
+    'Completed'      => ['vessel_name', 'client_id', 'appointment_date', 'survey_completed_date', 'report_uploaded_date', 'report_number', 'survey_type_ids', 'port_id', 'agent_name', 'surveyors', 'recovery'],
 ];
 
 function aieAllowedFields(string $status): array { return AIE_STAGE_FIELDS[$status] ?? []; }
