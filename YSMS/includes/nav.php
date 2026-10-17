@@ -155,6 +155,10 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-ban"></i>
             <span>Cancelled</span>
         </a>
+        <a href="recovery.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'recovery.php') ? 'active' : '' ?>" data-testid="navigation-recovery-link">
+            <i class="fa-solid fa-gas-pump"></i>
+            <span>Recovery</span>
+        </a>
 
         <?php if ($user_role === 'Admin'): ?>
         <!-- Desktop sidebar + mobile drawer: FAB Quick Actions as menu links -->
