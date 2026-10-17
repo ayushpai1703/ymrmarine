@@ -302,6 +302,24 @@ function isRecoveryNotApplicable($db, $ids_csv, $fallback_name = '') {
     return true;
 }
 
+// SQL twin of isRecoveryNotApplicable(): true when recovery counts for the
+// survey row aliased $a (at least one selected type is outside
+// RECOVERY_NOT_APPLICABLE_TYPES; unresolved types count as applicable).
+// Every recovery SUM/AVG uses it, so a NOT APPLICABLE vessel with a stale
+// stored value can't make on-screen totals differ from the exports.
+function recoveryAppliesSql(string $a = 's'): string {
+    $list = implode(',', array_map(fn($n) => "'" . str_replace("'", "''", strtolower(trim($n))) . "'", RECOVERY_NOT_APPLICABLE_TYPES));
+    $inIds = "FIND_IN_SET(x.id, REPLACE(COALESCE($a.survey_type_ids, ''), ' ', ''))";
+    return "(CASE WHEN EXISTS (SELECT 1 FROM survey_types x WHERE $inIds)
+        THEN EXISTS (SELECT 1 FROM survey_types x WHERE $inIds AND LOWER(TRIM(x.type_name)) NOT IN ($list))
+        ELSE NOT EXISTS (SELECT 1 FROM survey_types x WHERE x.id = $a.survey_type_id AND LOWER(TRIM(x.type_name)) IN ($list)) END)";
+}
+
+/** recovery_amount (or $col) counted in totals: NULL for NOT APPLICABLE survey types. */
+function recoveryCountedSql(string $a = 's', string $col = 'recovery_amount'): string {
+    return "(CASE WHEN " . recoveryAppliesSql($a) . " THEN $a.$col END)";
+}
+
 // 🌟 ఒక సర్వేకి బహుళ Surveyors అసైన్ చేసినప్పుడు (survey_surveyors జంక్షన్ టేబుల్), వాటన్నింటినీ
 // "+" తో కలిపి చూపించడానికి హెల్పర్ — ఏ surveyor రికార్డు లేకపోతే (పాత single-surveyor
 // అసైన్‌మెంట్లు) $fallback_name (సాధారణంగా surveys.surveyor_id నుండి వచ్చిన పేరు) ఇస్తుంది.
