@@ -177,6 +177,16 @@ try {
         ];
     }
     writeCountryGroupedSheet($sheet, $headers, $rows);
+    // Total row — same figure as the Total / This Month Recovery card (NOT APPLICABLE rows count as 0).
+    $sum = [0.0, 0.0, 0.0, 0.0];
+    foreach ($rows as $r) {
+        foreach ([2, 3, 4, 5] as $i => $c) { $sum[$i] += is_numeric($r['cells'][$c]) ? (float)$r['cells'][$c] : 0; }
+    }
+    $last = $rows ? $sheet->getHighestRow() + 1 : 3;
+    $sheet->setCellValue('A' . $last, 'Total — ' . count($rows) . ' vessel' . (count($rows) === 1 ? '' : 's'));
+    foreach (['C', 'D', 'E', 'F'] as $i => $col) { $sheet->setCellValue($col . $last, round($sum[$i], 3)); }
+    $sheet->getStyle('A' . $last . ':F' . $last)->getFont()->setBold(true);
+    $sheet->getStyle('C1:F' . $last)->getNumberFormat()->setFormatCode('0.000');
 
     while (ob_get_level() > 0) { ob_end_clean(); }
 

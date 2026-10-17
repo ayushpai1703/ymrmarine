@@ -96,7 +96,12 @@ function cvReportMonth(array $r): string {
     return ($v !== '' && strpos($v, '0000') !== 0 && ($t = strtotime(substr($v, 0, 10)))) ? date('Y-m', $t) : '';
 }
 /** Recovery counted in the month/total summary (blank / N/A → 0). */
-function cvRecovery(array $r): float { return $r['recovery_amount'] !== null ? (float)$r['recovery_amount'] : 0.0; }
+function cvRecovery(array $r): float {
+    global $db;
+    if ($r['recovery_amount'] === null) return 0.0;
+    // NOT APPLICABLE survey types count as 0 — same as the cards and the Excel export.
+    return isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')) ? 0.0 : (float)$r['recovery_amount'];
+}
 
 // Month filter ('YYYY-MM' => ['label' => 'October 2026', 'count' => 12]) —
 // filters the whole Completed list by the vessel's Report Completed Date

@@ -33,8 +33,10 @@ if ($is_full_access && outsourcedCreditSurveyor($db)[0] === -1) {
 }
 
 // Totals over every matching vessel (all pages).
-$st = $db->prepare("SELECT COUNT(*) AS n, COALESCE(SUM(s.vlsfo_recovery),0) AS vlsfo, COALESCE(SUM(s.lsmgo_recovery),0) AS lsmgo,
-    COALESCE(SUM(s.hsfo_recovery),0) AS hsfo, COALESCE(SUM(s.recovery_amount),0) AS total " . RECOVERY_LIST_FROM . " WHERE $whereSql");
+// NOT APPLICABLE survey types count as 0 (same as the Excel download).
+$st = $db->prepare("SELECT COUNT(*) AS n, COALESCE(SUM(" . recoveryCountedSql('s', 'vlsfo_recovery') . "),0) AS vlsfo,
+    COALESCE(SUM(" . recoveryCountedSql('s', 'lsmgo_recovery') . "),0) AS lsmgo, COALESCE(SUM(" . recoveryCountedSql('s', 'hsfo_recovery') . "),0) AS hsfo,
+    COALESCE(SUM(" . recoveryCountedSql('s') . "),0) AS total " . RECOVERY_LIST_FROM . " WHERE $whereSql");
 $st->execute($params);
 $tot = $st->fetch(PDO::FETCH_ASSOC);
 

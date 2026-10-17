@@ -24,7 +24,7 @@ function dashboardMonthWhere(string $role, int $userId, int $clientRowId, int $y
 
 function dashboardMonthStats(PDO $db, string $role, int $userId, int $clientRowId, int $year, int $month): array {
     [$whereSql, $params, $start] = dashboardMonthWhere($role, $userId, $clientRowId, $year, $month);
-    $st = $db->prepare('SELECT COUNT(*) AS ships, COALESCE(SUM(s.recovery_amount), 0) AS recovery FROM surveys s WHERE ' . $whereSql);
+    $st = $db->prepare('SELECT COUNT(*) AS ships, COALESCE(SUM(' . recoveryCountedSql('s') . '), 0) AS recovery FROM surveys s WHERE ' . $whereSql);
     $st->execute($params);
     $r = $st->fetch(PDO::FETCH_ASSOC) ?: ['ships' => 0, 'recovery' => 0];
     return ['ships' => (int)$r['ships'], 'recovery' => (float)$r['recovery'], 'label' => date('F Y', strtotime($start))];
