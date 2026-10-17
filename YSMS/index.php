@@ -322,7 +322,10 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                 <div><div class="stat-val" data-dm-ships data-testid="dm-ships"><?= (int)$dm['ships'] ?></div><div class="dm-l">Ships surveyed</div></div>
                 <div><div class="stat-val" data-dm-recovery data-testid="dm-recovery"><?= number_format($dm['recovery'], 3) ?> MT</div><div class="dm-l">Recovery</div></div>
             </div>
-            <div class="dm-note" data-dm-label>By Survey Completed Date · <?= sanitize($dm['label']) ?></div>
+            <div class="dm-foot">
+                <div class="dm-note" data-dm-label>By Survey Completed Date · <?= sanitize($dm['label']) ?></div>
+                <a class="dm-dl" data-dm-download href="export_month_summary.php?y=<?= (int)date('Y') ?>&amp;m=<?= (int)date('n') ?>" data-testid="dm-download"><i class="fa-solid fa-file-excel"></i> Download</a>
+            </div>
         </div>
         <div class="stat-card" data-testid="recent-survey-recovery-card">
             <span class="stat-title">Recent Survey Recovery</span>
@@ -737,7 +740,10 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
 .dm-select { border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 4px 8px; font-size: 12.5px; font-weight: 600; background: #F8FAFC; color: #0f172a; }
 .dm-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 .dm-l { font-size: 11px; color: #64748b; font-weight: 600; margin-top: 2px; }
-.dm-note { font-size: 10.5px; color: #94a3b8; margin-top: 8px; }
+.dm-note { font-size: 10.5px; color: #94a3b8; }
+.dm-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.dm-dl { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 10px; background: #ECFDF5; border: 1px solid #A7F3D0; color: #047857; font-size: 12px; font-weight: 700; text-decoration: none; }
+.dm-dl:hover { background: #047857; color: #fff; }
 .dm-card.loading .stat-val { opacity: .4; }
 </style>
 <script>
@@ -746,6 +752,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
     if (!card) return;
     var mSel = card.querySelector('[data-dm-month]'), ySel = card.querySelector('[data-dm-year]');
     function load() {
+        card.querySelector('[data-dm-download]').href = 'export_month_summary.php?y=' + encodeURIComponent(ySel.value) + '&m=' + encodeURIComponent(mSel.value);
         card.classList.add('loading');
         fetch('ajax/dashboard_month.php?y=' + encodeURIComponent(ySel.value) + '&m=' + encodeURIComponent(mSel.value), { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })

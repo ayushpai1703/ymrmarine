@@ -57,12 +57,15 @@ try {
         FROM surveys s
         LEFT JOIN survey_types t ON s.survey_type_id = t.id
         LEFT JOIN ports p ON s.port_id = p.id
-        WHERE s.recovery_amount IS NOT NULL
+        WHERE s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed')
     ";
     $params = [];
 
     if ($period === 'month') {
-        $sql .= " AND MONTH(s.report_uploaded_date) = MONTH(CURDATE()) AND YEAR(s.report_uploaded_date) = YEAR(CURDATE())";
+        // Survey Completed Date in the current month (app timezone) — same as the dashboard card.
+        $sql .= " AND s.survey_completed_date >= ? AND s.survey_completed_date < ?";
+        $params[] = date('Y-m-01');
+        $params[] = date('Y-m-01', strtotime('first day of next month'));
     }
 
     if ($role === 'Client') {
@@ -76,7 +79,7 @@ try {
         $params[] = $user_id;
     }
 
-    $sql .= " ORDER BY s.report_uploaded_date DESC";
+    $sql .= " ORDER BY s.survey_completed_date DESC, s.id DESC";
 
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
