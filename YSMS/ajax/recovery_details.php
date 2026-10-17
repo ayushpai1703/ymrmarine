@@ -39,7 +39,7 @@ $sql = "
 $params = [];
 
 if ($period === 'month') {
-    $sql .= " AND s.survey_completed_date >= '$cm_start' AND s.survey_completed_date < '$cm_end'";
+    $sql .= " AND " . surveyCompletedDateSql('s') . " >= '$cm_start' AND " . surveyCompletedDateSql('s') . " < '$cm_end'";
 }
 
 if ($role === 'Client') {

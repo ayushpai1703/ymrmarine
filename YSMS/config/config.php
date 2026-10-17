@@ -231,6 +231,14 @@ const SURVEY_APPOINTMENT_ORDER_SQL = 'COALESCE(s.appointment_date, DATE(s.assign
 /** Pending Reports are dated and ordered by the Survey Completed date. */
 const SURVEY_COMPLETED_ORDER_SQL = 'COALESCE(DATE(s.survey_completed_date), s.appointment_date, DATE(s.assign_date))';
 
+/** Survey Completed date used for month figures (dashboard cards, Month Summary,
+ *  Surveyor Performance, Recovery page, exports): the same fallback as the
+ *  Pending Reports list, so a vessel moved on before the date was captured still
+ *  lands in exactly one month instead of none. */
+function surveyCompletedDateSql(string $a = 's'): string {
+    return "COALESCE(DATE(NULLIF($a.survey_completed_date, '0000-00-00 00:00:00')), $a.appointment_date, DATE($a.assign_date))";
+}
+
 function surveyCompletedTs(array $survey): int {
     $v = (string)($survey['survey_completed_date'] ?? '');
     if ($v !== '' && strpos($v, '0000-00-00') !== 0 && ($ts = strtotime(substr($v, 0, 10))) !== false) return $ts;

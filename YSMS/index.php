@@ -44,7 +44,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $total_recovery = $db->query("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . "")->fetchColumn();
     
     // This Month Recovery: same vessels, Survey Completed Date in the current calendar month.
-    $month_recovery = $db->query("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND survey_completed_date >= '$cm_start' AND survey_completed_date < '$cm_end'")->fetchColumn();
+    $month_recovery = $db->query("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND " . surveyCompletedDateSql('surveys') . " >= '$cm_start' AND " . surveyCompletedDateSql('surveys') . " < '$cm_end'")->fetchColumn();
 
 
 
@@ -66,7 +66,8 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     // ships and recovery columns disagreed with each other and with the cards.
     $sfrRec = recoveryCountedSql('s'); // NOT APPLICABLE survey types count as 0
     $sfrDone = "s.status IN ('Pending Report','Completed')";
-    $sfrMonth = "s.survey_completed_date >= '$cm_start' AND s.survey_completed_date < '$cm_end'";
+    $sfrCd = surveyCompletedDateSql('s');
+    $sfrMonth = "$sfrCd >= '$cm_start' AND $sfrCd < '$cm_end'";
     $surveyor_full_report = $db->query("
         SELECT
             u.id, u.full_name, u.status AS user_status,
@@ -135,7 +136,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $stmt_t_rec->execute([$client_row_id]);
     $total_recovery = $stmt_t_rec->fetchColumn();
 
-    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND client_id = ? AND survey_completed_date >= '$cm_start' AND survey_completed_date < '$cm_end'");
+    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND client_id = ? AND " . surveyCompletedDateSql('surveys') . " >= '$cm_start' AND " . surveyCompletedDateSql('surveys') . " < '$cm_end'");
     $stmt_m_rec->execute([$client_row_id]);
     $month_recovery = $stmt_m_rec->fetchColumn();
 
@@ -163,7 +164,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $total_recovery = $stmt_t_rec->fetchColumn();
 
     // సర్వేయర్ కి ఈ నెలలో వచ్చిన రికవరీ సమ్ మాత్రమే
-    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND $assignedSql AND survey_completed_date >= '$cm_start' AND survey_completed_date < '$cm_end'");
+    $stmt_m_rec = $db->prepare("SELECT SUM(recovery_amount) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND $assignedSql AND " . surveyCompletedDateSql('surveys') . " >= '$cm_start' AND " . surveyCompletedDateSql('surveys') . " < '$cm_end'");
     $stmt_m_rec->execute([$user_id, $user_id]);
     $month_recovery = $stmt_m_rec->fetchColumn();
 

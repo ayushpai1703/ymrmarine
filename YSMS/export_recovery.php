@@ -124,7 +124,7 @@ try {
 
     if ($period === 'month') {
         // Survey Completed Date in the current month (app timezone) — same as the dashboard card.
-        $sql .= " AND s.survey_completed_date >= ? AND s.survey_completed_date < ?";
+        $sql .= " AND " . surveyCompletedDateSql('s') . " >= ? AND " . surveyCompletedDateSql('s') . " < ?";
         $params[] = date('Y-m-01');
         $params[] = date('Y-m-01', strtotime('first day of next month'));
     }
@@ -140,7 +140,7 @@ try {
         $params[] = $user_id;
     }
 
-    $sql .= " ORDER BY s.survey_completed_date DESC, s.id DESC";
+    $sql .= " ORDER BY " . SURVEY_COMPLETED_ORDER_SQL . " DESC, s.id DESC";
 
     $stmt = $db->prepare($sql);
     $stmt->execute($params);

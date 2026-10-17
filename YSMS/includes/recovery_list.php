@@ -91,13 +91,13 @@ function recoveryListWhere(string $role, int $userId, int $clientRowId, array $f
     if ($f['status'] !== '') { $where[] = 's.status = ?'; $params[] = $f['status']; }
     if ($f['month'] !== '') {
         $start = $f['month'] . '-01';
-        $where[] = 's.survey_completed_date >= ? AND s.survey_completed_date < ?';
+        $where[] = surveyCompletedDateSql('s') . ' >= ? AND ' . surveyCompletedDateSql('s') . ' < ?';
         $params[] = $start;
         $params[] = date('Y-m-d', strtotime($start . ' +1 month'));
     }
     $order = [
-        'newest'        => 's.survey_completed_date DESC, s.id DESC',
-        'oldest'        => 's.survey_completed_date IS NULL, s.survey_completed_date ASC, s.id ASC',
+        'newest'        => SURVEY_COMPLETED_ORDER_SQL . ' DESC, s.id DESC',
+        'oldest'        => SURVEY_COMPLETED_ORDER_SQL . ' IS NULL, ' . SURVEY_COMPLETED_ORDER_SQL . ' ASC, s.id ASC',
         'recovery-desc' => 's.recovery_amount IS NULL, s.recovery_amount DESC, s.id DESC',
         'recovery-asc'  => 's.recovery_amount IS NULL, s.recovery_amount ASC, s.id DESC',
         'name-asc'      => 's.vessel_name ASC, s.id DESC',
@@ -127,7 +127,8 @@ function recoveryListRow(PDO $db, array $r): array {
         'surveyor'  => !empty($r['no_surveyor']) ? outsourcedCreditSurveyor($db)[1]
                        : getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? ''),
         'status'    => (string)$r['status'],
-        'completed' => $d($r['survey_completed_date'] ?? null),
+        // Same date the month filter uses (falls back like the Pending Reports list)
+        'completed' => ($ts = surveyCompletedTs($r)) > 0 ? date('d-m-Y', $ts) : '',
         'report'    => $d($r['report_uploaded_date'] ?? null),
         'na'        => isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')),
         'vlsfo'     => $n($r['vlsfo_recovery']),
@@ -138,5 +139,5 @@ function recoveryListRow(PDO $db, array $r): array {
 }
 
 const RECOVERY_LIST_COLUMNS = "s.id, s.vessel_name, s.report_number, s.status, s.survey_type_ids, st.type_name, c.company_name,
-    u.full_name AS surveyor_name, p.port_name, p.country, s.survey_completed_date, s.report_uploaded_date,
+    u.full_name AS surveyor_name, p.port_name, p.country, s.survey_completed_date, s.appointment_date, s.assign_date, s.report_uploaded_date,
     s.vlsfo_recovery, s.lsmgo_recovery, s.hsfo_recovery, s.recovery_amount, " . RECOVERY_NO_SURVEYOR_SQL . " AS no_surveyor";

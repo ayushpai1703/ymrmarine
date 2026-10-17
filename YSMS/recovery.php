@@ -23,7 +23,7 @@ $opt = function (string $col) use ($db, $scopeSql, $scopeParams): array {
 $types_opt = $opt('st.type_name');
 $places_opt = $opt('p.port_name');
 $clients_opt = $role === 'Client' ? [] : $opt('c.company_name');
-$st = $db->prepare("SELECT DATE_FORMAT(s.survey_completed_date, '%Y-%m') AS m, COUNT(*) AS n " . RECOVERY_LIST_FROM . " WHERE $scopeSql AND s.survey_completed_date IS NOT NULL GROUP BY m ORDER BY m DESC");
+$st = $db->prepare("SELECT DATE_FORMAT(" . surveyCompletedDateSql('s') . ", '%Y-%m') AS m, COUNT(*) AS n " . RECOVERY_LIST_FROM . " WHERE $scopeSql AND " . surveyCompletedDateSql('s') . " IS NOT NULL GROUP BY m ORDER BY m DESC");
 $st->execute($scopeParams);
 $months_opt = array_filter($st->fetchAll(PDO::FETCH_KEY_PAIR), fn($k) => preg_match('/^\d{4}-\d{2}$/', (string)$k) && strpos((string)$k, '0000') !== 0, ARRAY_FILTER_USE_KEY);
 $surveyors_opt = $is_full_access ? $db->query("SELECT id, full_name, status FROM users WHERE role_id = 2 ORDER BY full_name ASC")->fetchAll(PDO::FETCH_ASSOC) : [];
