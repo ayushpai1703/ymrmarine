@@ -280,6 +280,16 @@ function surveyReportTs(array $survey): int {
 /** Pending Reports are dated and ordered by the Survey Completed date (assign date when missing). */
 const SURVEY_COMPLETED_ORDER_SQL = 'COALESCE(DATE(s.survey_completed_date), s.appointment_date, DATE(s.assign_date))';
 
+/** Survey Completed date used for month figures (dashboard cards, Month Summary,
+ *  Surveyor Performance, Recovery page, exports): the same fallback as the
+ *  Pending Reports list, so a vessel moved on before the date was captured still
+ *  lands in exactly one month instead of none. */
+function surveyCompletedDateSql(string $a = 's'): string {
+    // No zero-date literal here: MySQL 8 strict mode rejects comparing with '0000-00-00 …'
+    // (500 on staging); YEAR() > 0 skips a stored zero date without one.
+    return "COALESCE(IF(YEAR($a.survey_completed_date) > 0, DATE($a.survey_completed_date), NULL), $a.appointment_date, DATE($a.assign_date))";
+}
+
 function surveyCompletedTs(array $survey): int {
     foreach (['survey_completed_date', 'appointment_date', 'assign_date'] as $k) {
         $v = (string)($survey[$k] ?? '');

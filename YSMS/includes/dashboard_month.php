@@ -9,7 +9,7 @@
 function dashboardMonthWhere(string $role, int $userId, int $clientRowId, int $year, int $month): array {
     $start = sprintf('%04d-%02d-01', $year, $month);
     $end = date('Y-m-d', strtotime($start . ' +1 month'));
-    $where = ["s.status IN ('Pending Report','Completed')", 's.survey_completed_date >= ?', 's.survey_completed_date < ?'];
+    $where = ["s.status IN ('Pending Report','Completed')", surveyCompletedDateSql('s') . ' >= ?', surveyCompletedDateSql('s') . ' < ?'];
     $params = [$start, $end];
     if ($role === 'Client') {
         $where[] = 's.client_id = ?';
@@ -32,7 +32,10 @@ function dashboardMonthStats(PDO $db, string $role, int $userId, int $clientRowI
 
 /** Years offered in the selector: earliest survey-completed year → this year. */
 function dashboardMonthYears(PDO $db): array {
-    $min = (int)($db->query("SELECT MIN(YEAR(survey_completed_date)) FROM surveys WHERE survey_completed_date IS NOT NULL AND survey_completed_date > '2000-01-01'")->fetchColumn() ?: date('Y'));
+    // Every year that has a Pending Report / Completed vessel (same date as the month figures),
+    // so no vessel is left in a year that can't be picked.
+    $cd = surveyCompletedDateSql('s');
+    $r = $db->query("SELECT MIN(YEAR($cd)) AS lo, MAX(YEAR($cd)) AS hi FROM surveys s WHERE s.status IN ('Pending Report','Completed') AND $cd > '2000-01-01'")->fetch(PDO::FETCH_ASSOC);
     $cur = (int)date('Y');
-    return range($cur, min($min, $cur));
+    return range(max($cur, min((int)($r['hi'] ?: $cur), 2100)), min((int)($r['lo'] ?: $cur), $cur));
 }

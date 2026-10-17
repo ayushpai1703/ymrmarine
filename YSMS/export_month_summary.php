@@ -7,6 +7,7 @@ require 'vendor/autoload.php';
 require_once 'config/config.php';
 require_once __DIR__ . '/includes/excel_export_helpers.php';
 require_once __DIR__ . '/includes/dashboard_month.php';
+require_once __DIR__ . '/includes/recovery_list.php';
 checkAuth();
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -31,7 +32,8 @@ try {
     [$whereSql, $params, $start] = dashboardMonthWhere($role, $userId, $clientRowId, $y, $m);
     $st = $db->prepare("
         SELECT s.id, s.vessel_name, s.report_number, s.status, s.survey_type_ids, t.type_name, c.company_name, u.full_name AS surveyor_name,
-               p.port_name, p.country, s.survey_completed_date, s.report_uploaded_date,
+               p.port_name, p.country, s.survey_completed_date, s.appointment_date, s.assign_date, s.report_uploaded_date,
+               " . RECOVERY_NO_SURVEYOR_SQL . " AS no_surveyor,
                s.vlsfo_recovery, s.hsfo_recovery, s.lsmgo_recovery, s.recovery_amount
         FROM surveys s
         LEFT JOIN survey_types t ON s.survey_type_id = t.id
@@ -39,7 +41,7 @@ try {
         LEFT JOIN users u ON s.surveyor_id = u.id
         LEFT JOIN ports p ON s.port_id = p.id
         WHERE $whereSql
-        ORDER BY s.survey_completed_date DESC, s.id DESC
+        ORDER BY " . SURVEY_COMPLETED_ORDER_SQL . " DESC, s.id DESC
     ");
     $st->execute($params);
     $label = date('F Y', strtotime($start));
@@ -55,9 +57,10 @@ try {
         $rows[] = ['country' => $r['country'] ?? 'India', 'cells' => [
             $r['vessel_name'] ?? '', $r['report_number'] ?? '', $r['company_name'] ?? '', $r['port_name'] ?? '',
             getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? ''),
-            getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? ''),
+            // Outsourced (no surveyor login) → OUTSOURCED_CREDIT_SURVEYOR, same as the dashboard / Recovery page
+            !empty($r['no_surveyor']) ? outsourcedCreditSurveyor($db)[1] : getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? ''),
             $r['status'] === 'Completed' ? 'Completed' : 'Report Pending',
-            $d($r['survey_completed_date']), $d($r['report_uploaded_date']),
+            ($ts = surveyCompletedTs($r)) > 0 ? date('d-m-Y', $ts) : '', $d($r['report_uploaded_date']),
             $na ? '' : $q($r['vlsfo_recovery']), $na ? '' : $q($r['hsfo_recovery']), $na ? '' : $q($r['lsmgo_recovery']),
             $na ? RECOVERY_NA_LABEL : $q($r['recovery_amount']),
         ]];
