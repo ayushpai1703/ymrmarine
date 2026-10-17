@@ -20,14 +20,16 @@ const OUTSOURCED_CREDIT_SURVEYOR = 'Apurva Dandekar';
 const RECOVERY_NO_SURVEYOR_SQL = "(NOT EXISTS (SELECT 1 FROM users su WHERE su.id = s.surveyor_id AND su.role_id = 2)
     AND NOT EXISTS (SELECT 1 FROM survey_surveyors ss JOIN users su ON su.id = ss.surveyor_id AND su.role_id = 2 WHERE ss.survey_id = s.id))";
 
-/** [id, full_name] of the surveyor credited with outsourced vessels, or [0, ''] when there is no such user. */
+/** [id, full_name] of the surveyor credited with outsourced vessels. Matches the Surveyor login by
+ *  name (case / surrounding spaces ignored); with no such login the id is -1 and the row is shown
+ *  under OUTSOURCED_CREDIT_SURVEYOR anyway (outsourced vessels only). */
 function outsourcedCreditSurveyor(PDO $db): array {
     static $cache = null;
     if ($cache === null) {
-        $st = $db->prepare('SELECT id, full_name FROM users WHERE role_id = 2 AND full_name = ? ORDER BY id LIMIT 1');
+        $st = $db->prepare('SELECT id, full_name FROM users WHERE role_id = 2 AND LOWER(TRIM(full_name)) = LOWER(?) ORDER BY id LIMIT 1');
         $st->execute([OUTSOURCED_CREDIT_SURVEYOR]);
         $r = $st->fetch(PDO::FETCH_ASSOC);
-        $cache = $r ? [(int)$r['id'], (string)$r['full_name']] : [0, ''];
+        $cache = $r ? [(int)$r['id'], trim((string)$r['full_name'])] : [-1, OUTSOURCED_CREDIT_SURVEYOR];
     }
     return $cache;
 }
@@ -43,7 +45,8 @@ function recoveryListFilters(array $get, bool $fullAccess): array {
         'type'     => $str('type'),
         'place'    => $str('place'),
         'client'   => $str('client'),
-        'surveyor' => $fullAccess ? max(0, (int)($get['surveyor'] ?? 0)) : 0,
+        // -1 = OUTSOURCED_CREDIT_SURVEYOR when they have no Surveyor login (outsourced vessels only)
+        'surveyor' => $fullAccess && ((int)($get['surveyor'] ?? 0) > 0 || (int)($get['surveyor'] ?? 0) === -1) ? (int)$get['surveyor'] : 0,
         'status'   => in_array($status, ['Pending Report', 'Completed'], true) ? $status : '',
         'month'    => preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month) ? $month : '',
         'sort'     => in_array($sort, ['oldest', 'recovery-desc', 'recovery-asc', 'name-asc'], true) ? $sort : 'newest',
@@ -77,7 +80,9 @@ function recoveryListWhere(string $role, int $userId, int $clientRowId, array $f
     if ($f['type'] !== '') { $where[] = 'st.type_name = ?'; $params[] = $f['type']; }
     if ($f['place'] !== '') { $where[] = 'p.port_name = ?'; $params[] = $f['place']; }
     if ($f['client'] !== '') { $where[] = 'c.company_name = ?'; $params[] = $f['client']; }
-    if ($f['surveyor'] > 0) {
+    if ($f['surveyor'] === -1) {
+        $where[] = RECOVERY_NO_SURVEYOR_SQL;
+    } elseif ($f['surveyor'] > 0) {
         $where[] = '(s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?)'
             . ($f['surveyor'] === $creditId ? ' OR ' . RECOVERY_NO_SURVEYOR_SQL : '') . ')';
         $params[] = $f['surveyor'];
@@ -119,7 +124,7 @@ function recoveryListRow(PDO $db, array $r): array {
         'port'      => (string)($r['port_name'] ?? ''),
         'country'   => (string)($r['country'] ?? '') ?: 'India',
         'type'      => getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? ''),
-        'surveyor'  => (!empty($r['no_surveyor']) && outsourcedCreditSurveyor($db)[1] !== '') ? outsourcedCreditSurveyor($db)[1]
+        'surveyor'  => !empty($r['no_surveyor']) ? outsourcedCreditSurveyor($db)[1]
                        : getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? ''),
         'status'    => (string)$r['status'],
         'completed' => $d($r['survey_completed_date'] ?? null),

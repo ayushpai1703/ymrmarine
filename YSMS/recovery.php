@@ -27,6 +27,10 @@ $st = $db->prepare("SELECT DATE_FORMAT(s.survey_completed_date, '%Y-%m') AS m, C
 $st->execute($scopeParams);
 $months_opt = array_filter($st->fetchAll(PDO::FETCH_KEY_PAIR), fn($k) => preg_match('/^\d{4}-\d{2}$/', (string)$k) && strpos((string)$k, '0000') !== 0, ARRAY_FILTER_USE_KEY);
 $surveyors_opt = $is_full_access ? $db->query("SELECT id, full_name, status FROM users WHERE role_id = 2 ORDER BY full_name ASC")->fetchAll(PDO::FETCH_ASSOC) : [];
+if ($is_full_access && outsourcedCreditSurveyor($db)[0] === -1) {
+    $surveyors_opt[] = ['id' => -1, 'full_name' => outsourcedCreditSurveyor($db)[1], 'status' => 'Active'];
+    usort($surveyors_opt, fn($x, $y) => strcasecmp($x['full_name'], $y['full_name']));
+}
 
 // Totals over every matching vessel (all pages).
 $st = $db->prepare("SELECT COUNT(*) AS n, COALESCE(SUM(s.vlsfo_recovery),0) AS vlsfo, COALESCE(SUM(s.lsmgo_recovery),0) AS lsmgo,
