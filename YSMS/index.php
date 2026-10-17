@@ -90,7 +90,13 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
                COALESCE(SUM(CASE WHEN $sfrMonth THEN s.recovery_amount END), 0) AS recovery_month
         FROM surveys s WHERE $sfrDone AND $sfrNoSurveyor
     ")->fetch(PDO::FETCH_ASSOC);
-    [$sfrCreditId] = outsourcedCreditSurveyor($db);
+    [$sfrCreditId, $sfrCreditName] = outsourcedCreditSurveyor($db);
+    if ($sfrCreditId === -1) {
+        // No Surveyor login with that name: still list them, with the outsourced vessels.
+        $surveyor_full_report[] = ['id' => -1, 'full_name' => $sfrCreditName, 'user_status' => 'Active',
+            'ships_total' => 0, 'ships_month' => 0, 'recovery_total' => 0, 'recovery_month' => 0];
+        usort($surveyor_full_report, fn($x, $y) => strcasecmp($x['full_name'], $y['full_name']));
+    }
     foreach ($surveyor_full_report as &$sfrRow) {
         if ((int)$sfrRow['id'] === $sfrCreditId) {
             foreach (['ships_total', 'ships_month', 'recovery_total', 'recovery_month'] as $k) {
