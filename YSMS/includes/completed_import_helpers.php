@@ -551,6 +551,23 @@ function completedImportValidateRow(PDO $db, array $r, array &$seenKeys): array 
     if ($res['survey_type_ids']) {
         $res['recovery_na'] = isRecoveryNotApplicable($db, implode(',', $res['survey_type_ids']));
     }
+    // "NOT APPLICABLE" (or N/A, NA) in the Excel's recovery columns: recovery isn't needed for
+    // this vessel — imported with no recovery, shown as NOT APPLICABLE and counted as 0.
+    $isNaCell = fn($v) => in_array(strtolower(preg_replace('/\s+/', ' ', trim((string)$v))), ['not applicable', 'n/a', 'na', 'n.a', 'n.a.'], true);
+    if (!$res['recovery_na']) {
+        $naCols = []; $numCols = [];
+        foreach (['recovery' => 'Recovery', 'vlsfo' => 'VLSFO', 'hsfo' => 'HSFO', 'lsmgo' => 'LSMGO'] as $src => $label) {
+            $cell = trim((string)($r[$src] ?? ''));
+            if ($cell === '') continue;
+            if ($isNaCell($cell)) $naCols[] = $label; else $numCols[] = $label;
+        }
+        if ($naCols && $numCols) {
+            $err(implode(' / ', $naCols) . ' says NOT APPLICABLE but ' . implode(' / ', $numCols) . ' has a value — keep only one.');
+        } elseif ($naCols) {
+            $res['recovery_na'] = true;
+            $cmp('recovery', implode(', ', array_map(fn($c) => trim((string)$r[strtolower($c)]), $naCols)), RECOVERY_NA_LABEL, 'no recovery needed');
+        }
+    }
     if (!$res['recovery_na']) {
         foreach (['recovery' => 'recovery_amount', 'vlsfo' => 'vlsfo', 'hsfo' => 'hsfo', 'lsmgo' => 'lsmgo'] as $src => $dst) {
             [$ok, $val] = completedImportParseQty($r[$src] ?? null);
