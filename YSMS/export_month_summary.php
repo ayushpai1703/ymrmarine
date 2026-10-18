@@ -34,7 +34,7 @@ try {
         SELECT s.id, s.vessel_name, s.report_number, s.status, s.survey_type_ids, t.type_name, c.company_name, u.full_name AS surveyor_name,
                p.port_name, p.country, s.survey_completed_date, s.appointment_date, s.assign_date, s.report_uploaded_date,
                " . RECOVERY_NO_SURVEYOR_SQL . " AS no_surveyor,
-               s.vlsfo_recovery, s.hsfo_recovery, s.lsmgo_recovery, s.recovery_amount
+               s.vlsfo_recovery, s.hsfo_recovery, s.lsmgo_recovery, s.recovery_amount, s.client_id, s.notes
         FROM surveys s
         LEFT JOIN survey_types t ON s.survey_type_id = t.id
         LEFT JOIN clients c ON s.client_id = c.id
@@ -48,9 +48,14 @@ try {
 
     $d = fn($v) => (!empty($v) && strpos((string)$v, '0000') !== 0) ? date('d-m-Y', strtotime((string)$v)) : '';
     $q = fn($v) => $v !== null ? (float)$v : '';
-    $headers = ['Vessel Name', 'Report No', 'Client', 'Port', 'Survey Type', 'Surveyor', 'Status', 'Survey Completed', 'Report Completed', 'VLSFO', 'HSFO', 'LSMGO', 'Total Recovery'];
+    $headers = ['Vessel Name', 'Report No', 'Client', 'Port', 'Survey Type', 'Surveyor', 'Status', 'Survey Completed', 'Report Completed', 'VLSFO', 'HSFO', 'LSMGO', 'Total Recovery', 'Source', 'Check'];
     $rows = []; $ships = 0; $total = 0.0;
-    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    $all = $st->fetchAll(PDO::FETCH_ASSOC);
+    // Reconciliation aids only (no effect on the figures): where the record came from, and
+    // the same vessel + client listed more than once this month (a repeat survey, or a duplicate).
+    $vkey = fn($r) => preg_replace('/^(mv|mt|m v|m t)\s+/', '', trim(preg_replace('/[^a-z0-9]+/', ' ', strtolower((string)$r['vessel_name'])))) . '|' . (int)$r['client_id'];
+    $seen = array_count_values(array_map($vkey, $all));
+    foreach ($all as $r) {
         $ships++;
         $na = isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? ''));
         $total += $na ? 0 : (float)$r['recovery_amount'];
@@ -60,9 +65,11 @@ try {
             // Outsourced (no surveyor login) → OUTSOURCED_CREDIT_SURVEYOR, same as the dashboard / Recovery page
             !empty($r['no_surveyor']) ? outsourcedCreditSurveyor($db)[1] : getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? ''),
             $r['status'] === 'Completed' ? 'Completed' : 'Report Pending',
-            ($ts = surveyCompletedTs($r)) > 0 ? date('d-m-Y', $ts) : '', $d($r['report_uploaded_date']),
+            surveyCompletedDateText($r), $d($r['report_uploaded_date']),
             $na ? '' : $q($r['vlsfo_recovery']), $na ? '' : $q($r['hsfo_recovery']), $na ? '' : $q($r['lsmgo_recovery']),
             $na ? RECOVERY_NA_LABEL : $q($r['recovery_amount']),
+            strpos((string)($r['notes'] ?? ''), 'Imported from Excel') === 0 ? 'Imported from Excel' : 'Entered in YSMS',
+            ($n = $seen[$vkey($r)]) > 1 ? 'Same vessel + client listed ' . $n . ' times this month' : '',
         ]];
     }
 

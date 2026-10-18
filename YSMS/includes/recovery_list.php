@@ -127,8 +127,8 @@ function recoveryListRow(PDO $db, array $r): array {
         'surveyor'  => !empty($r['no_surveyor']) ? outsourcedCreditSurveyor($db)[1]
                        : getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? ''),
         'status'    => (string)$r['status'],
-        // Same date the month filter uses (falls back like the Pending Reports list)
-        'completed' => ($ts = surveyCompletedTs($r)) > 0 ? date('d-m-Y', $ts) : '',
+        // Same date the month filter uses (the vessel's own Survey Completed Date)
+        'completed' => surveyCompletedDateText($r),
         'report'    => $d($r['report_uploaded_date'] ?? null),
         'na'        => isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')),
         'vlsfo'     => $n($r['vlsfo_recovery']),
