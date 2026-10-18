@@ -573,6 +573,19 @@ function completedImportNearbyExisting(PDO $db, string $vessel, int $clientId, s
     return null;
 }
 
+/** Same vessel + client still in Pending Reports (Survey Completed within ±7 days) — importing it
+ *  as Completed would count the vessel twice in the monthly figures. A warning, not a skip. */
+function completedImportPendingExisting(PDO $db, string $vessel, int $clientId, ?string $completedDate): ?array {
+    if ($clientId <= 0 || !$completedDate) return null;
+    $stmt = $db->prepare("SELECT id, vessel_name, DATE(survey_completed_date) AS d FROM surveys
+        WHERE status = 'Pending Report' AND client_id = ? AND survey_completed_date BETWEEN DATE_SUB(?, INTERVAL 7 DAY) AND DATE_ADD(?, INTERVAL 8 DAY)");
+    $d = substr($completedDate, 0, 10);
+    $stmt->execute([$clientId, $d, $d]);
+    $vk = completedImportVesselKey($vessel);
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) if (completedImportVesselKey((string)$row['vessel_name']) === $vk) return $row;
+    return null;
+}
+
 /**
  * Already in Completed? Same report number, or the same vessel + client +
  * report date + survey types (port is NOT part of the key, so a port typed
@@ -714,22 +727,26 @@ function completedImportValidateRow(PDO $db, array $r, array &$seenKeys): array 
             implode(', ', array_unique(array_map(fn($u) => $u['how'], $res['surveyor_plan']))));
     }
 
-    // Report / completed date missing or not a date → the survey's Assign Date is used.
+    // Report date missing or not a date → the survey's Assign Date is used (Survey Completed Date: see below).
     $dateOf = function ($raw) { return trim((string)$raw) === '' ? null : bulkAssignParseDate($raw); };
     $res['assign_date'] = $dateOf($r['assign_date'] ?? '');
     if (trim((string)($r['assign_date'] ?? '')) !== '' && $res['assign_date'] === null) $err('Assign date "' . $r['assign_date'] . '" is not a valid date.');
     $res['report_date'] = $dateOf($r['report_date'] ?? '');
     $res['completed_date'] = $dateOf($r['completed_date'] ?? '');
-    foreach (['report_date' => 'Report date', 'completed_date' => 'Completed date'] as $k => $label) {
-        if ($res[$k] === null && $res['assign_date'] !== null) {
-            $orig = trim((string)($r[$k] ?? ''));
-            $res[$k] = $res['assign_date'];
-            if ($k === 'report_date') $cmp('report_date', $orig === '' ? '(blank)' : $orig, date('d-m-Y', strtotime($res[$k])), 'taken from Assign Date');
-        }
+    if ($res['report_date'] === null && $res['assign_date'] !== null) {
+        $orig = trim((string)($r['report_date'] ?? ''));
+        $res['report_date'] = $res['assign_date'];
+        $cmp('report_date', $orig === '' ? '(blank)' : $orig, date('d-m-Y', strtotime($res['report_date'])), 'taken from Assign Date');
     }
-    if ($res['completed_date'] === null) $res['completed_date'] = $res['report_date'];
+    // Survey Completed Date comes only from the Excel: monthly figures are by this date, so
+    // it is never filled in from the Report / Assign date (that put vessels in the wrong month).
+    if ($res['completed_date'] === null) {
+        $origC = trim((string)($r['completed_date'] ?? ''));
+        $res['warnings'][] = ($origC === '' ? 'No Survey Completed Date' : 'Survey Completed Date "' . $origC . '" is not a date')
+            . ' — saved blank, so this vessel is not counted in any month until the date is added.';
+    }
     if ($res['report_date'] === null) $err('Report date and Assign date are both empty or not dates.');
-    if ($res['assign_date'] === null) $res['assign_date'] = $res['completed_date'];
+    if ($res['assign_date'] === null) $res['assign_date'] = $res['completed_date'] ?? $res['report_date'];
 
     if ($res['survey_type_ids']) {
         $res['recovery_na'] = isRecoveryNotApplicable($db, implode(',', $res['survey_type_ids']));
@@ -779,6 +796,10 @@ function completedImportValidateRow(PDO $db, array $r, array &$seenKeys): array 
     $existing = completedImportFindExisting($db, $res['vessel_name'], $res['client_id'], $res['survey_type_ids'], (string)$res['report_date'], $res['report_number']);
     if (!$existing && ($near = completedImportNearbyExisting($db, $res['vessel_name'], $res['client_id'], (string)$res['report_date']))) {
         $res['warnings'][] = 'Possible duplicate: ' . $near['vessel_name'] . ' for this client is already in Completed on ' . date('d-m-Y', strtotime($near['d'])) . (!empty($near['report_number']) ? ' (' . $near['report_number'] . ')' : '') . ' — remove this row from the Excel if it is the same survey.';
+        $res['possible_duplicate'] = true;
+    }
+    if (!$existing && ($pend = completedImportPendingExisting($db, $res['vessel_name'], $res['client_id'], $res['completed_date']))) {
+        $res['warnings'][] = 'Possible duplicate: ' . $pend['vessel_name'] . ' for this client is in Pending Reports (Survey Completed ' . date('d-m-Y', strtotime($pend['d'])) . ') — importing it would count the vessel twice; remove this row if it is the same survey.';
         $res['possible_duplicate'] = true;
     }
     if ($existing) {

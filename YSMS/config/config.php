@@ -281,13 +281,19 @@ function surveyReportTs(array $survey): int {
 const SURVEY_COMPLETED_ORDER_SQL = 'COALESCE(DATE(s.survey_completed_date), s.appointment_date, DATE(s.assign_date))';
 
 /** Survey Completed date used for month figures (dashboard cards, Month Summary,
- *  Surveyor Performance, Recovery page, exports): the same fallback as the
- *  Pending Reports list, so a vessel moved on before the date was captured still
- *  lands in exactly one month instead of none. */
+ *  Surveyor Performance, Recovery page, exports): the vessel's own Survey Completed
+ *  Date only — no fallback to the appointment / assign date, so a vessel without one
+ *  is in no month rather than in the month it was assigned. NULL when missing. */
 function surveyCompletedDateSql(string $a = 's'): string {
     // No zero-date literal here: MySQL 8 strict mode rejects comparing with '0000-00-00 …'
     // (500 on staging); YEAR() > 0 skips a stored zero date without one.
-    return "COALESCE(IF(YEAR($a.survey_completed_date) > 0, DATE($a.survey_completed_date), NULL), $a.appointment_date, DATE($a.assign_date))";
+    return "IF(YEAR($a.survey_completed_date) > 0, DATE($a.survey_completed_date), NULL)";
+}
+
+/** d-m-Y of the vessel's own Survey Completed Date ('' when missing) — what the month figures use. */
+function surveyCompletedDateText(array $r): string {
+    $v = (string)($r['survey_completed_date'] ?? '');
+    return ($v !== '' && strpos($v, '0000') !== 0 && ($t = strtotime(substr($v, 0, 10)))) ? date('d-m-Y', $t) : '';
 }
 
 function surveyCompletedTs(array $survey): int {
