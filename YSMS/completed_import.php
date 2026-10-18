@@ -233,10 +233,12 @@ include 'includes/top_app_bar.php';
         foreach ($rows as $r) $cnt[$r['status']]++;
         $fmtQty = fn($v) => $v === null ? '' : rtrim(rtrim(number_format((float)$v, 3, '.', ''), '0'), '.');
         // Everything this import will add to the master lists (ready rows only).
-        $newPorts = []; $newSurveyors = []; $changed = 0;
+        $newPorts = []; $newSurveyors = []; $newClients = []; $changed = 0;
         foreach ($rows as $r) {
             if ($r['status'] !== 'ready') continue;
             if (!empty($r['port_plan'])) $newPorts[strtolower($r['port_plan']['create_port'])] = $r['port_plan'];
+            // first spelling in the file wins — that's the name the import saves
+            if (!empty($r['create_client'])) $newClients[completedImportClientKey($r['client_name'])] ??= $r['client_name'];
             foreach ($r['surveyor_plan'] as $u) if (!empty($u['create'])) $newSurveyors[strtolower($u['name'])] = $u['name'];
         }
         foreach ($rows as $r) foreach ($r['compare'] as $c) if (strcasecmp($c['excel'], $c['saved']) !== 0) { $changed++; break; }
@@ -261,8 +263,12 @@ include 'includes/top_app_bar.php';
             <div class="ci-stat dup"><div class="n" data-testid="ci-count-dup"><?= $cnt['duplicate'] ?></div><div class="l">Already exist</div></div>
             <div class="ci-stat err"><div class="n" data-testid="ci-count-err"><?= $cnt['error'] ?></div><div class="l">Errors</div></div>
         </div>
-        <?php if ($newPorts || $newSurveyors): ?>
+        <?php if ($newPorts || $newSurveyors || $newClients): ?>
         <div class="ci-new-box" data-testid="ci-new-masters">
+            <?php if ($newClients): ?>
+            <div data-testid="ci-new-clients"><b><i class="fa-solid fa-building"></i> <?= count($newClients) ?> new client<?= count($newClients) === 1 ? '' : 's' ?> will be added</b> (not in the client records):
+                <span class="ci-new-list"><?= sanitize(implode(', ', $newClients)) ?></span></div>
+            <?php endif; ?>
             <?php if ($newPorts): ?>
             <div><b><i class="fa-solid fa-anchor"></i> <?= count($newPorts) ?> new port<?= count($newPorts) === 1 ? '' : 's' ?> will be added</b> (each with its anchorage):
                 <span class="ci-new-list"><?= sanitize(implode(', ', array_map(fn($p) => $p['create_port'] . ' (' . $p['country'] . ')', $newPorts))) ?></span></div>

@@ -613,7 +613,7 @@ function completedImportValidateRow(PDO $db, array $r, array &$seenKeys): array 
         'port_raw' => $str('port'), 'country' => $str('country'), 'survey_type_raw' => $str('survey_type'),
         'surveyor_raw' => $str('surveyor'), 'remarks' => $str('remarks'),
         'imo_number' => bulkAssignNormalizeImo($str('imo')), 'report_number' => $str('report_number'),
-        'client_id' => 0, 'client_name' => '', 'port_id' => 0, 'port_name' => '', 'create_port' => false,
+        'client_id' => 0, 'client_name' => '', 'create_client' => false, 'port_id' => 0, 'port_name' => '', 'create_port' => false,
         'port_plan' => null, 'survey_type_ids' => [], 'survey_type_names' => [], 'surveyor_ids' => [], 'surveyor_names' => [],
         'surveyor_plan' => [], 'compare' => [],
         'recovery_amount' => null, 'vlsfo' => null, 'hsfo' => null, 'lsmgo' => null, 'recovery_na' => false,
@@ -635,8 +635,24 @@ function completedImportValidateRow(PDO $db, array $r, array &$seenKeys): array 
             $res['client_id'] = (int)$c['id'];
             $res['client_name'] = (string)$c['name'];
             $cmp('client', $res['client_raw'], $c['name'], $c['how']);
+        } elseif (!empty($c['error'])) {
+            // Looks like more than one existing client — don't guess.
+            $err('Client "' . $res['client_raw'] . '" ' . $c['error']);
         } else {
-            $err('Client "' . $res['client_raw'] . '" ' . ($c['error'] ?? 'not found — add the client first (Admin Controls → Clients).'));
+            // Not in the client records: added (as a client record, no login) when this row is imported.
+            $res['create_client'] = true;
+            $res['client_name'] = preg_replace('/\s+/', ' ', $res['client_raw']);
+            // Same new client earlier in this file (case / punctuation / LTD… aside) → that row's spelling.
+            $nk = 'new-client:' . completedImportClientKey($res['client_name']);
+            if (isset($seenKeys[$nk])) {
+                $res['client_name'] = $seenKeys[$nk]['name'];
+                $cmp('client', $res['client_raw'], $res['client_name'], 'new client (same as row ' . $seenKeys[$nk]['row'] . ')');
+                $res['warnings'][] = 'New client "' . $res['client_name'] . '" will be added (same new client as row ' . $seenKeys[$nk]['row'] . ').';
+            } else {
+                $seenKeys[$nk] = ['name' => $res['client_name'], 'row' => $res['row']];
+                $cmp('client', $res['client_raw'], $res['client_name'], 'new client');
+                $res['warnings'][] = 'New client "' . $res['client_name'] . '" will be added.';
+            }
         }
     }
 
@@ -718,6 +734,23 @@ function completedImportValidateRow(PDO $db, array $r, array &$seenKeys): array 
     if ($res['survey_type_ids']) {
         $res['recovery_na'] = isRecoveryNotApplicable($db, implode(',', $res['survey_type_ids']));
     }
+    // "NOT APPLICABLE" (or N/A, NA) in the Excel's recovery columns: recovery isn't needed for
+    // this vessel — imported with no recovery, shown as NOT APPLICABLE and counted as 0.
+    $isNaCell = fn($v) => in_array(strtolower(preg_replace('/\s+/', ' ', trim((string)$v))), ['not applicable', 'n/a', 'na', 'n.a', 'n.a.'], true);
+    if (!$res['recovery_na']) {
+        $naCols = []; $numCols = [];
+        foreach (['recovery' => 'Recovery', 'vlsfo' => 'VLSFO', 'hsfo' => 'HSFO', 'lsmgo' => 'LSMGO'] as $src => $label) {
+            $cell = trim((string)($r[$src] ?? ''));
+            if ($cell === '') continue;
+            if ($isNaCell($cell)) $naCols[] = $label; else $numCols[] = $label;
+        }
+        if ($naCols && $numCols) {
+            $err(implode(' / ', $naCols) . ' says NOT APPLICABLE but ' . implode(' / ', $numCols) . ' has a value — keep only one.');
+        } elseif ($naCols) {
+            $res['recovery_na'] = true;
+            $cmp('recovery', implode(', ', array_map(fn($c) => trim((string)$r[strtolower($c)]), $naCols)), RECOVERY_NA_LABEL, 'no recovery needed');
+        }
+    }
     if (!$res['recovery_na']) {
         foreach (['recovery' => 'recovery_amount', 'vlsfo' => 'vlsfo', 'hsfo' => 'hsfo', 'lsmgo' => 'lsmgo'] as $src => $dst) {
             [$ok, $val] = completedImportParseQty($r[$src] ?? null);
@@ -734,7 +767,8 @@ function completedImportValidateRow(PDO $db, array $r, array &$seenKeys): array 
         return $res;
     }
 
-    $key = completedImportVesselKey($res['vessel_name']) . '|' . $res['client_id'] . '|' . substr((string)$res['report_date'], 0, 10) . '|' . implode(',', $res['survey_type_ids']);
+    $clientKey = $res['create_client'] ? 'new:' . completedImportClientKey($res['client_name']) : (string)$res['client_id'];
+    $key = completedImportVesselKey($res['vessel_name']) . '|' . $clientKey . '|' . substr((string)$res['report_date'], 0, 10) . '|' . implode(',', $res['survey_type_ids']);
     if (isset($seenKeys[$key])) {
         $res['status'] = 'duplicate';
         $res['warnings'][] = 'Same vessel, client, report date and survey type as row ' . $seenKeys[$key] . ' in this file.';
@@ -779,6 +813,22 @@ function completedImportSurveyColumns(PDO $db): array {
     return $cols;
 }
 
+/**
+ * Client for a row whose client is not in the records yet: reuses one added
+ * earlier (same name ignoring case / punctuation / LTD…, e.g. an earlier row of
+ * this file), otherwise adds it with a short code — same as Assign Vessel's
+ * "Add client" (client record only, no login). @return int client id
+ */
+function completedImportEnsureClient(PDO $db, string $name): int {
+    $k = completedImportClientKey($name);
+    foreach ($db->query("SELECT id, company_name FROM clients ORDER BY id")->fetchAll(PDO::FETCH_ASSOC) as $c) {
+        if (strcasecmp(trim($c['company_name']), $name) === 0 || ($k !== '' && completedImportClientKey($c['company_name']) === $k)) return (int)$c['id'];
+    }
+    $code = allocateClientShortCode($db, $name);
+    $db->prepare("INSERT INTO clients (company_name, short_code) VALUES (?, ?)")->execute([$name, $code]);
+    return (int)$db->lastInsertId();
+}
+
 /** Inserts one validated ('ready') row. @return array{ok:bool,survey_id:int,report_number:string,error:string} */
 function completedImportInsertRow(PDO $db, array $v, string $actorName): array {
     $cols = completedImportSurveyColumns($db);
@@ -786,6 +836,14 @@ function completedImportInsertRow(PDO $db, array $v, string $actorName): array {
     // an open transaction — so they must run before beginTransaction().
     static $columnWidened = false;
     if (!$columnWidened) { ensureReportNumberColumnWide($db); $columnWidened = true; }
+    if (!empty($v['create_client'])) {
+        try {
+            $v['client_id'] = completedImportEnsureClient($db, (string)$v['client_name']);
+        } catch (Throwable $e) {
+            error_log('completedImportEnsureClient: ' . $e->getMessage());
+            return ['ok' => false, 'survey_id' => 0, 'report_number' => '', 'error' => 'Could not add client "' . $v['client_name'] . '".'];
+        }
+    }
     $short = $v['report_number'] === '' ? ensureClientHasShortCode($db, (int)$v['client_id']) : '';
     for ($attempt = 0; $attempt < 5; $attempt++) {
         try {
