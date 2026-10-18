@@ -200,6 +200,23 @@ function ensurePortAnchorages(PDO $db): void {
 
 // 🌟 ఒక సర్వేకి బహుళ Survey Types ఎంచుకున్నప్పుడు, వాటన్నింటినీ "+" తో కలిపి చూపించడానికి హెల్పర్
 // (survey_type_ids కాలమ్ ఖాళీగా ఉంటే, పాత రికార్డుల కోసం $fallback_name ఇస్తుంది)
+/**
+ * id => type_name for the given survey type ids. The survey_types table is small, so it is
+ * read once per request and reused (list pages call the name helpers for every row — one
+ * query per row made Completed slow with hundreds of vessels). Re-read once if an id is
+ * missing (a type added during this request).
+ */
+function surveyTypeNameMap($db, array $ids): array {
+    static $all = null;
+    if ($all === null || array_diff($ids, array_keys($all))) {
+        $all = [];
+        foreach ($db->query("SELECT id, type_name FROM survey_types")->fetchAll() as $row) {
+            $all[(int)$row['id']] = $row['type_name'];
+        }
+    }
+    return array_intersect_key($all, array_flip($ids));
+}
+
 function getCombinedSurveyTypeNames($db, $ids_csv, $fallback_name = '') {
     $ids_csv = trim((string)$ids_csv);
     if ($ids_csv === '') {
@@ -209,13 +226,7 @@ function getCombinedSurveyTypeNames($db, $ids_csv, $fallback_name = '') {
     if (empty($ids)) {
         return $fallback_name;
     }
-    $placeholders = implode(',', array_fill(0, count($ids), '?'));
-    $stmt = $db->prepare("SELECT id, type_name FROM survey_types WHERE id IN ($placeholders)");
-    $stmt->execute($ids);
-    $name_by_id = [];
-    foreach ($stmt->fetchAll() as $row) {
-        $name_by_id[(int)$row['id']] = $row['type_name'];
-    }
+    $name_by_id = surveyTypeNameMap($db, $ids);
     $names = [];
     foreach ($ids as $tid) {
         if (isset($name_by_id[$tid])) $names[] = $name_by_id[$tid];
@@ -299,13 +310,7 @@ function getSurveyTypeNamesArray($db, $ids_csv, $fallback_name = '') {
     if (empty($ids)) {
         return $fallback_name !== '' ? [$fallback_name] : [];
     }
-    $placeholders = implode(',', array_fill(0, count($ids), '?'));
-    $stmt = $db->prepare("SELECT id, type_name FROM survey_types WHERE id IN ($placeholders)");
-    $stmt->execute($ids);
-    $name_by_id = [];
-    foreach ($stmt->fetchAll() as $row) {
-        $name_by_id[(int)$row['id']] = $row['type_name'];
-    }
+    $name_by_id = surveyTypeNameMap($db, $ids);
     $names = [];
     foreach ($ids as $tid) {
         if (isset($name_by_id[$tid])) $names[] = $name_by_id[$tid];
@@ -359,12 +364,38 @@ function recoveryCountedSql(string $a = 's', string $col = 'recovery_amount'): s
 // పిలిస్తే మళ్ళీ query చేయదు.
 function getAssignedSurveyorNamesArray($db, $surveyId): array {
     static $cache = [];
+    static $misses = 0;
     $surveyId = (int)$surveyId;
     if ($surveyId <= 0) {
         return [];
     }
     if (array_key_exists($surveyId, $cache)) {
         return $cache[$surveyId];
+    }
+    // A list page asks for many vessels: after a few single lookups, read every survey's
+    // surveyors in one query instead of one query per row. Every existing survey gets an
+    // entry (empty when it has none), so only a survey created later in this request falls
+    // through to the single lookup below.
+    if (++$misses === 4) {
+        try {
+            $rows = $db->query("
+                SELECT s.id, u.full_name
+                FROM surveys s
+                LEFT JOIN survey_surveyors ss ON ss.survey_id = s.id
+                LEFT JOIN users u ON u.id = ss.surveyor_id
+                ORDER BY s.id, ss.id
+            ")->fetchAll(PDO::FETCH_NUM);
+            foreach ($rows as [$sid, $name]) {
+                $sid = (int)$sid;
+                if (!isset($cache[$sid])) $cache[$sid] = [];
+                if ($name !== null) $cache[$sid][] = $name;
+            }
+            if (array_key_exists($surveyId, $cache)) {
+                return $cache[$surveyId];
+            }
+        } catch (Throwable $e) {
+            error_log('getAssignedSurveyorNamesArray bulk: ' . $e->getMessage());
+        }
     }
     try {
         $stmt = $db->prepare("
