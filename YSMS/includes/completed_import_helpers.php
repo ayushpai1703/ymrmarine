@@ -390,16 +390,28 @@ function completedImportNearbyExisting(PDO $db, string $vessel, int $clientId, s
     return null;
 }
 
-/** Same vessel + client still in Pending Reports (Survey Completed within ±7 days) — importing it
- *  as Completed would count the vessel twice in the monthly figures. A warning, not a skip. */
-function completedImportPendingExisting(PDO $db, string $vessel, int $clientId, ?string $completedDate): ?array {
-    if ($clientId <= 0 || !$completedDate) return null;
-    $stmt = $db->prepare("SELECT id, vessel_name, DATE(survey_completed_date) AS d FROM surveys
-        WHERE status = 'Pending Report' AND client_id = ? AND survey_completed_date BETWEEN DATE_SUB(?, INTERVAL 7 DAY) AND DATE_ADD(?, INTERVAL 8 DAY)");
-    $d = substr($completedDate, 0, 10);
-    $stmt->execute([$clientId, $d, $d]);
+/**
+ * The same vessel + client already in YSMS (Pending Reports or Completed — e.g. entered live
+ * before the Excel was imported) with a Survey Completed Date within $days days of this row.
+ * $sameRecovery: also the identical, non-zero recovery — that is the same survey, so the row
+ * is skipped; otherwise it is only a 'Possible duplicate' warning (could be a repeat survey).
+ * Records in $usedIds were already matched to an earlier row of this file and are ignored, so
+ * one existing record never hides two Excel rows.
+ */
+function completedImportLiveExisting(PDO $db, string $vessel, int $clientId, ?string $date, ?float $recovery, bool $sameRecovery, int $days, array $usedIds): ?array {
+    if ($clientId <= 0 || !$date || ($sameRecovery && !$recovery)) return null;
+    $sql = "SELECT id, vessel_name, status, report_number, recovery_amount, DATE(survey_completed_date) AS d FROM surveys
+        WHERE status IN ('Pending Report','Completed') AND client_id = ? AND YEAR(survey_completed_date) > 0
+          AND survey_completed_date BETWEEN DATE_SUB(?, INTERVAL $days DAY) AND DATE_ADD(?, INTERVAL " . ($days + 1) . " DAY)";
+    $params = [$clientId, substr($date, 0, 10), substr($date, 0, 10)];
+    if ($sameRecovery) { $sql .= ' AND ROUND(recovery_amount, 3) = ROUND(?, 3)'; $params[] = $recovery; }
+    $stmt = $db->prepare($sql . ' ORDER BY ABS(DATEDIFF(survey_completed_date, ?)), id');
+    $params[] = substr($date, 0, 10);
+    $stmt->execute($params);
     $vk = completedImportVesselKey($vessel);
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) if (completedImportVesselKey((string)$row['vessel_name']) === $vk) return $row;
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (!in_array((int)$row['id'], $usedIds, true) && completedImportVesselKey((string)$row['vessel_name']) === $vk) return $row;
+    }
     return null;
 }
 
@@ -615,14 +627,27 @@ function completedImportValidateRow(PDO $db, array $r, array &$seenKeys): array 
         $res['warnings'][] = 'Possible duplicate: ' . $near['vessel_name'] . ' for this client is already in Completed on ' . date('d-m-Y', strtotime($near['d'])) . (!empty($near['report_number']) ? ' (' . $near['report_number'] . ')' : '') . ' — remove this row from the Excel if it is the same survey.';
         $res['possible_duplicate'] = true;
     }
-    if (!$existing && ($pend = completedImportPendingExisting($db, $res['vessel_name'], $res['client_id'], $res['completed_date']))) {
-        $res['warnings'][] = 'Possible duplicate: ' . $pend['vessel_name'] . ' for this client is in Pending Reports (Survey Completed ' . date('d-m-Y', strtotime($pend['d'])) . ') — importing it would count the vessel twice; remove this row if it is the same survey.';
+    // Entered live in YSMS before this import (any report date / survey-type wording): same vessel,
+    // client and recovery within a month → the same survey, skipped; same vessel + client within
+    // 15 days → warning only. Each existing record is matched to at most one row of the file.
+    $usedIds = $seenKeys['__live_ids'] ?? [];
+    $liveDate = $res['completed_date'] ?? $res['report_date'];
+    if (!$existing && ($live = completedImportLiveExisting($db, $res['vessel_name'], $res['client_id'], $liveDate, $res['recovery_amount'] !== null ? (float)$res['recovery_amount'] : null, true, 31, $usedIds))) {
+        $existing = $live;
+        $seenKeys['__live_ids'][] = (int)$live['id'];
+        $res['warnings'][] = 'Same vessel, client and recovery (' . number_format((float)$live['recovery_amount'], 3) . ' MT) already in '
+            . ($live['status'] === 'Completed' ? 'Completed' : 'Pending Reports') . (!empty($live['report_number']) ? ' (' . $live['report_number'] . ')' : '')
+            . ', Survey Completed ' . date('d-m-Y', strtotime($live['d'])) . ' — not imported again.';
+    } elseif (!$existing && ($near = completedImportLiveExisting($db, $res['vessel_name'], $res['client_id'], $liveDate, null, false, 15, []))) {
+        $res['warnings'][] = 'Possible duplicate: ' . $near['vessel_name'] . ' for this client is already in ' . ($near['status'] === 'Completed' ? 'Completed' : 'Pending Reports')
+            . (!empty($near['report_number']) ? ' (' . $near['report_number'] . ')' : '') . ', Survey Completed ' . date('d-m-Y', strtotime($near['d']))
+            . ' — importing it would count the vessel twice; remove this row if it is the same survey.';
         $res['possible_duplicate'] = true;
     }
     if ($existing) {
         $res['status'] = 'duplicate';
         $res['existing_id'] = (int)$existing['id'];
-        $res['warnings'][] = 'Already in Completed' . (!empty($existing['report_number']) ? ' (' . $existing['report_number'] . ')' : '') . '.';
+        if (empty($live)) $res['warnings'][] = 'Already in Completed' . (!empty($existing['report_number']) ? ' (' . $existing['report_number'] . ')' : '') . '.';
     }
     return $res;
 }
