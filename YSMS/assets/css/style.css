@@ -519,3 +519,6 @@ body {
     cursor: pointer;
     border: none;
 }
+/* Long lists (Completed / Pending Reports / Cancelled): the browser only lays out and paints
+   the cards near the screen — with hundreds of vessels this keeps the page fast on phones. */
+.vessel-list-container .vessel-card { content-visibility: auto; contain-intrinsic-size: auto 280px; }

@@ -65,41 +65,49 @@ $(document).ready(function() {
 
         const queryParts = query ? query.split(/\s+/).filter(Boolean) : [];
 
-        cards.sort(function(a, b) {
-            const $a = $(a), $b = $(b);
-            const nameA = cardAttr($a, 'name').toLowerCase();
-            const nameB = cardAttr($b, 'name').toLowerCase();
-            const dateA = Number(cardAttr($a, 'date') || 0);
-            const dateB = Number(cardAttr($b, 'date') || 0);
-            if (sort === 'name-asc') return nameA.localeCompare(nameB);
-            if (sort === 'name-desc') return nameB.localeCompare(nameA);
-            if (sort === 'oldest') return dateA - dateB;
-            return dateB - dateA; // newest
+        // Plain DOM here (no jQuery per card): with hundreds of vessels, jQuery's toggle()
+        // read each card's computed style and the sort built jQuery objects per comparison,
+        // which took seconds on phones.
+        const attr = function(el, name) { return String(el.getAttribute('data-' + name) || '').trim(); };
+        const keyed = cards.map(function(el) {
+            return { el: el, name: attr(el, 'name').toLowerCase(), date: Number(attr(el, 'date') || 0) };
         });
-        container.append(cards);
+        keyed.sort(function(a, b) {
+            if (sort === 'name-asc') return a.name.localeCompare(b.name);
+            if (sort === 'name-desc') return b.name.localeCompare(a.name);
+            if (sort === 'oldest') return a.date - b.date;
+            return b.date - a.date; // newest
+        });
+        const parent = container.get(0);
+        if (parent && keyed.some(function(k, i) { return k.el !== cards[i]; })) {
+            const frag = document.createDocumentFragment();
+            keyed.forEach(function(k) { frag.appendChild(k.el); });
+            parent.appendChild(frag);
+        }
 
         let visible = 0;
-        cards.forEach(function(card) {
-            const $card = $(card);
-            const haystack = cardAttr($card, 'search').toLowerCase();
+        keyed.forEach(function(k) {
+            const card = k.el;
+            const haystack = attr(card, 'search').toLowerCase();
             const matchQuery = !queryParts.length || queryParts.every(function(part) {
                 return haystack.indexOf(part) !== -1;
             });
             const show = matchQuery
-                && (!type || cardAttr($card, 'type') === type)
-                && (!place || cardAttr($card, 'place') === place)
-                && (!client || cardAttr($card, 'client') === client)
-                && (!status || cardAttr($card, 'status') === status)
-                && (!surveyor || cardAttr($card, 'surveyor') === surveyor)
-                && (!month || cardAttr($card, 'month') === month)
-                && (!appointment || cardAttr($card, 'appointment') === appointment);
-            $card.toggle(show);
+                && (!type || attr(card, 'type') === type)
+                && (!place || attr(card, 'place') === place)
+                && (!client || attr(card, 'client') === client)
+                && (!status || attr(card, 'status') === status)
+                && (!surveyor || attr(card, 'surveyor') === surveyor)
+                && (!month || attr(card, 'month') === month)
+                && (!appointment || attr(card, 'appointment') === appointment);
+            card.style.display = show ? '' : 'none';
             if (show) {
                 visible++;
                 // Sequential "#1, #2, ..." badge — recomputed on every
                 // search/filter/sort so it always matches what's actually
                 // on screen right now, same as the desktop table's numbering.
-                $card.find('[data-row-num]').text(visible);
+                const num = card.querySelector('[data-row-num]');
+                if (num) num.textContent = visible;
             }
         });
         $scope.find('[data-list-empty]').toggle(visible === 0);

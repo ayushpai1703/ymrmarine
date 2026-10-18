@@ -21,19 +21,22 @@ FROM php:8.3-apache
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libpng-dev libjpeg62-turbo-dev libfreetype6-dev libzip-dev libmagic-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo pdo_mysql gd zip fileinfo \
+    && docker-php-ext-install pdo pdo_mysql gd zip fileinfo opcache \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Configure Apache to listen on Cloud Run's port
 RUN sed -i 's/Listen 80/Listen 8080/' /etc/apache2/ports.conf && \
     sed -i 's/<VirtualHost \*:80>/<VirtualHost *:8080>/' /etc/apache2/sites-available/000-default.conf
 
-# Enable Apache rewrite module
-RUN a2enmod rewrite
+# Enable Apache rewrite module, and gzip for pages / CSS / JS (long vessel lists are
+# large, repetitive HTML that compresses well)
+RUN a2enmod rewrite deflate
 
 # Raise PHP's stock upload/post size limits — the default 2M/8M rejects real
 # survey PDF/Excel/Word reports and scanned attachments (see docker/uploads.ini).
 COPY docker/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
+# OPcache: PHP files are compiled once per container instead of on every request.
+COPY docker/opcache.ini /usr/local/etc/php/conf.d/opcache-ysms.ini
 
 # Copy application
 COPY . /var/www/html/
