@@ -190,6 +190,10 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-shield-halved"></i>
             <span>Login Activity</span>
         </a>
+        <a href="possible_duplicates.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'possible_duplicates.php') ? 'active' : '' ?>" data-testid="sidebar-possible-duplicates-link">
+            <i class="fa-solid fa-clone"></i>
+            <span>Possible Duplicates</span>
+        </a>
 
         <?php elseif ($user_role === 'Client'): ?>
         <!-- Desktop sidebar + mobile drawer: Client-only section. Request
