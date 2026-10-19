@@ -42,6 +42,11 @@ function has_surveys_column($db, $column_name) {
     return in_array($column_name, $existing, true);
 }
 
+// An uploaded Excel workbook — the Pending Vessel 'Formal Report Excel', or one the Admin added
+// later in Pending Reports ("Add files"), which may be saved under another file type (default
+// 'Field Report'). Matched by the file extension so either shows in the Excel dropdown.
+const RG_EXCEL_UPLOAD_SQL = "(u.file_type = 'Formal Report Excel' OR LOWER(u.file_name) LIKE '%.xlsx' OR LOWER(u.file_name) LIKE '%.xlsm' OR LOWER(u.file_name) LIKE '%.xls')";
+
 function json_out($data) {
     echo json_encode($data);
     exit;
@@ -72,7 +77,7 @@ if ($action === 'list_excels') {
             FROM uploads u
             JOIN surveys s ON u.survey_id = s.id
             LEFT JOIN survey_types st ON s.survey_type_id = st.id
-            WHERE u.file_type = 'Formal Report Excel'
+            WHERE " . RG_EXCEL_UPLOAD_SQL . "
             " . ($is_admin ? "" : "AND (s.surveyor_id = :uid OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = :uid2))") . "
             ORDER BY u.id DESC
         ";
@@ -109,11 +114,11 @@ if ($action === 'get_excel') {
         json_out(['success' => false, 'message' => 'No Excel selected.']);
     }
     try {
-        $stmt = $db->prepare("SELECT file_path FROM uploads WHERE id = ? AND file_type = 'Formal Report Excel'");
+        $stmt = $db->prepare("SELECT u.file_path FROM uploads u WHERE u.id = ? AND " . RG_EXCEL_UPLOAD_SQL);
         $stmt->execute([$upload_id]);
         $row = $stmt->fetch();
         if (!$row) {
-            json_out(['success' => false, 'message' => 'Excel not found.', 'debug' => "No uploads row with id=$upload_id and file_type='Formal Report Excel'."]);
+            json_out(['success' => false, 'message' => 'Excel not found.', 'debug' => "No Excel upload with id=$upload_id."]);
         }
         $expected_path = __DIR__ . '/../' . $row['file_path'];
         $full_path = realpath($expected_path);
