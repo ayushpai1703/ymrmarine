@@ -297,6 +297,7 @@ const RECOVERY_NOT_APPLICABLE_TYPES = [
     'P&I Survey', 'Hold Cleanliness Survey', 'BQS', 'Ultrasonic Thickness Survey',
     'Tally Survey', 'Discharge Supervision', 'Loading Supervision', 'Damage Survey',
     'Pre-Purchase Inspection', 'Unsealing of Hatches', 'Grab Inspection', 'Crane Inspection',
+    'Hold Inspection', 'Hold Inspection Survey',
 ];
 
 // Same id-resolution as getCombinedSurveyTypeNames() above, but returns the
