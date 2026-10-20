@@ -110,6 +110,14 @@ include 'includes/header.php';
 .prg-cat-btn.active { background: #1e3a8a; border-color: #1e3a8a; color: #fff; }
 .prg-cat-btn.active:hover { background: #1e3a8a; }
 .prg-cat-panel { display: none; }
+/* AI auto-select status (ajax/gemini_describe.php classification mode) */
+.prg-ai-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
+.prg-ai-tag.run { background: #eff6ff; color: #1e40af; }
+.prg-ai-tag.ok { background: #ecfdf5; color: #047857; }
+.prg-ai-tag.low { background: #fff7ed; color: #9a3412; }
+.prg-ai-tag.err { background: #fef2f2; color: #b91c1c; }
+.prg-ai-btn { border-color: #2563eb; color: #1e3a8a; }
+.prg-ai-btn:hover { background: #1e3a8a; color: #fff; }
 .prg-cat-panel.show { display: flex; }
 
 .prg-photo-thumb {
@@ -312,6 +320,9 @@ include 'includes/header.php';
             <div id="photoList"></div>
             <div id="photoControls" class="mt-2" style="display:none">
                 <button type="button" class="btn btn-outline-primary btn-sm me-1" onclick="sortPhotosForReport(); renderPhotos(); prgMarkDirty(); toast('Photos sorted by Ship / Hold / Deck structure order');"><i class="fa-solid fa-arrow-down-short-wide me-1"></i>Auto-sort order</button>
+                <?php if (AI_PHOTO_DESCRIPTION_ENABLED): ?>
+                <button type="button" class="btn btn-outline-primary btn-sm me-1" onclick="prgAiSelectUnpicked()" data-testid="prg-ai-all" title="AI looks at each photo and selects Category / Sub Category / Sub-Sub Category (photos not yet picked)"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>AI auto-select</button>
+                <?php endif; ?>
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearAllPhotos()"><i class="fa-solid fa-trash me-1"></i>Clear All</button>
             </div>
             <!-- Live estimated Word file size — Original / Compressed tabs -->
@@ -381,6 +392,9 @@ var PRG_DRAFT_KEY = 'prg_draft_v1_' + (PRG_SURVEY_ID > 0 ? String(PRG_SURVEY_ID)
 var PRG_AUTOSAVE_MS = 10000;
 
 var PRG_VESSEL_NAME = <?= json_encode($vesselName, JSON_UNESCAPED_UNICODE) ?>;
+var PRG_AI_ENABLED = <?= AI_PHOTO_DESCRIPTION_ENABLED ? 'true' : 'false' ?>;
+var PRG_AI_AUTO = <?= (AI_PHOTO_DESCRIPTION_ENABLED && AI_AUTO_DESCRIPTION) ? 'true' : 'false' ?>;
+var PRG_AI_CONCURRENCY = <?= (int)AI_MAX_CONCURRENT ?>;
 
 /* ===== Default description options (first = default selected) ===== */
 var DESC_OPTIONS = [
@@ -1713,6 +1727,7 @@ async function addPhotos(list) {
   var defaultDesc = isStructureCategory(cat) ? '' : DESC_OPTIONS[0];
   var saved = 0;
   var totalFiles = files.length;
+  var added = [];
   prgShowProgress('Uploading & compressing photos', '0 / ' + totalFiles + ' · please wait…');
   try {
     for (var i = 0; i < files.length; i++) {
@@ -1738,6 +1753,7 @@ async function addPhotos(list) {
         categoryName: '',
         holdNumber: isHoldCategory(cat) ? parseInt((String(cat).match(/\d+/) || [])[0], 10) : null
       });
+      added.push(photos[photos.length - 1]);
       // Update every photo (or every few for very large batches stays responsive enough)
       prgUpdateProgress(i + 1, totalFiles, (i + 1) + ' / ' + totalFiles + ' compressed · ' + cat);
     }
@@ -1759,6 +1775,7 @@ async function addPhotos(list) {
   }
   toast(msg);
   updateSizeEstimate();
+  if (PRG_AI_AUTO && isStructureCategory(cat)) prgAiEnqueue(added, false);
 }
 
 
@@ -1829,10 +1846,11 @@ function structureInfoHtml(p, idx) {
   if (p.holdMain) {
     bits.push(p.holdMain + (p.holdSub ? (' › ' + p.holdSub) : ''));
   }
+  var ai = prgAiTagHtml(p);
   // Always render the element (even empty) so updatePhotoCardUI can refresh it
   // in place by id; CSS hides it until there's something to show.
-  return '<div class="prg-classify-info' + (bits.length ? '' : ' empty') + '" id="classifyInfo_' + idx + '" title="Report section this photo will sort into — use the dropdown above to correct it">' +
-    (bits.length ? ('<i class="fa-solid fa-diagram-project"></i> ' + esc(bits.join(' · '))) : '') +
+  return '<div class="prg-classify-info' + (bits.length || ai ? '' : ' empty') + '" id="classifyInfo_' + idx + '" title="Report section this photo will sort into — use the dropdown above to correct it">' +
+    (bits.length ? ('<i class="fa-solid fa-diagram-project"></i> ' + esc(bits.join(' · '))) : '') + ai +
   '</div>';
 }
 
@@ -1982,6 +2000,7 @@ function onHoldNestPick(idx, btn) {
   if (!p) return;
   p.holdMain = main;
   p.holdSub = sub;
+  p.aiState = ''; // a manual pick replaces the AI's
   // Every pill click (Category/Sub Category/Sub-Sub Category) regenerates
   // the Description to match the new selection — even correcting an
   // earlier pick refreshes it, instead of leaving stale text from the
@@ -1993,6 +2012,156 @@ function onHoldNestPick(idx, btn) {
   prgUpdateCategoryCode(p); // category_code/sort_order must reflect the corrected value
   updatePhotoCardUI(idx);
   prgMarkDirty();
+}
+
+/* ===== AI auto-select: Category / Sub Category / Sub-Sub Category from the photo =====
+   Uses ajax/gemini_describe.php in classification mode: the photo plus this section's
+   own pill values as one numbered list ("Hull › Port Side › At Bow Section", …); the
+   server returns the list number it picked, so only an existing option can ever be set.
+   Upload runs it on photos with no pick yet; the AI button re-runs it on one photo. */
+function prgAiOptions(cat) {
+  var cfg = structCfg(cat), out = [];
+  cfg.main.forEach(function (main) {
+    var s = cfg.sub[main];
+    if (!s || (Array.isArray(s) && !s.length)) {
+      out.push({ label: main, main: main, sub: '' });
+    } else if (Array.isArray(s)) {
+      s.forEach(function (sub) { out.push({ label: main + ' › ' + sub, main: main, sub: sub }); });
+    } else {
+      Object.keys(s).forEach(function (mid) {
+        (s[mid] || []).forEach(function (leaf) {
+          out.push({ label: main + ' › ' + mid + ' › ' + leaf, main: main, sub: mid + ' › ' + leaf });
+        });
+      });
+    }
+  });
+  return out;
+}
+
+/** Photo as base64 JPEG, longest side 1024 px — plenty for recognising the structure. */
+function prgAiImageB64(p) {
+  return new Promise(function (resolve, reject) {
+    var img = new Image();
+    img.onload = function () {
+      var k = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight));
+      var c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.naturalWidth * k));
+      c.height = Math.max(1, Math.round(img.naturalHeight * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    };
+    img.onerror = function () { reject(new Error('Photo could not be read')); };
+    img.src = p.url;
+  });
+}
+
+function prgAiTagHtml(p) {
+  if (!PRG_AI_ENABLED || !p.aiState) return '';
+  if (p.aiState === 'queued' || p.aiState === 'running') {
+    return '<span class="prg-ai-tag run"><i class="fa-solid fa-spinner fa-spin"></i> AI analysing…</span>';
+  }
+  if (p.aiState === 'done') {
+    var low = p.aiConfidence !== null && p.aiConfidence < 60;
+    return '<span class="prg-ai-tag ' + (low ? 'low' : 'ok') + '" title="' + esc('Selected by AI' + (p.aiEvidence ? ': ' + p.aiEvidence : '') + (low ? ' — please check' : '')) + '">' +
+      '<i class="fa-solid fa-wand-magic-sparkles"></i> AI' + (p.aiConfidence !== null ? ' ' + p.aiConfidence + '%' : '') + (low ? ' · check' : '') + '</span>';
+  }
+  if (p.aiState === 'error') {
+    return '<span class="prg-ai-tag err" title="' + esc(p.aiError || '') + '"><i class="fa-solid fa-triangle-exclamation"></i> AI failed — click AI to retry</span>';
+  }
+  return '';
+}
+
+function prgAiRefresh(p) {
+  var idx = photos.indexOf(p);
+  if (idx >= 0) updatePhotoCardUI(idx);
+}
+
+var _prgAiQueue = [];
+var _prgAiActive = 0;
+
+/** force = false: leave photos the surveyor already picked untouched. */
+function prgAiEnqueue(list, force) {
+  if (!PRG_AI_ENABLED) return;
+  list.forEach(function (p) {
+    if (!p || !isStructureCategory(p.category)) return;
+    if (p.aiState === 'queued' || p.aiState === 'running') return;
+    if (!force && p.holdMain) return;
+    p.aiState = 'queued';
+    p.aiForce = !!force;
+    _prgAiQueue.push(p);
+    prgAiRefresh(p);
+  });
+  prgAiPump();
+}
+
+function prgAiPump() {
+  while (_prgAiActive < PRG_AI_CONCURRENCY && _prgAiQueue.length) {
+    var p = _prgAiQueue.shift();
+    if (photos.indexOf(p) < 0) continue; // deleted while waiting
+    _prgAiActive++;
+    prgAiClassify(p).then(function () {
+      _prgAiActive--;
+      prgAiPump();
+    });
+  }
+}
+
+async function prgAiClassify(p) {
+  var opts = prgAiOptions(p.category);
+  p.aiState = 'running';
+  prgAiRefresh(p);
+  try {
+    var b64 = await prgAiImageB64(p);
+    var body = JSON.stringify({
+      image: b64, mime: 'image/jpeg', survey_id: PRG_SURVEY_ID,
+      context: { category: p.category, vessel_name: PRG_VESSEL_NAME || '' },
+      options: opts.map(function (o) { return o.label; })
+    });
+    for (var attempt = 0; attempt < 3; attempt++) {
+      var res = await fetch('ajax/gemini_describe.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode(csrf_token()) ?> },
+        body: body
+      });
+      var data = await res.json().catch(function () { return { success: false, message: 'Unexpected server response (HTTP ' + res.status + ')' }; });
+      if (data.success) {
+        var pick = opts[(data.index | 0) - 1];
+        if (!pick) throw new Error('AI returned an unknown option');
+        if (!p.aiForce && p.holdMain) { p.aiState = ''; prgAiRefresh(p); return; } // picked by hand meanwhile
+        p.holdMain = pick.main;
+        p.holdSub = pick.sub;
+        if (!p.descManual) p.desc = buildHoldAutoDesc(pick.main, pick.sub, p.category);
+        p.aiState = 'done';
+        p.aiConfidence = (typeof data.confidence === 'number') ? data.confidence : null;
+        p.aiEvidence = data.evidence || '';
+        prgUpdateCategoryCode(p);
+        prgAiRefresh(p);
+        prgMarkDirty();
+        return;
+      }
+      if (res.status === 429 || res.status >= 500) {
+        await new Promise(function (r) { setTimeout(r, Math.min(30, data.retry_after || (attempt + 1) * 4) * 1000); });
+        continue;
+      }
+      throw new Error(data.message || ('AI request failed (HTTP ' + res.status + ')'));
+    }
+    throw new Error('AI is busy — please try again in a minute');
+  } catch (e) {
+    p.aiState = 'error';
+    p.aiError = e && e.message ? e.message : 'AI failed';
+    prgAiRefresh(p);
+  }
+}
+
+function prgAiOne(idx) {
+  prgAiEnqueue([photos[idx]], true);
+}
+
+function prgAiSelectUnpicked() {
+  var list = photos.filter(function (p) { return isStructureCategory(p.category) && !p.holdMain; });
+  if (!list.length) { toast('Every Ship / Hold / Deck photo already has a category — use the AI button on a photo to redo it'); return; }
+  prgAiEnqueue(list, false);
+  toast('AI is selecting categories for ' + list.length + ' photo(s)…');
 }
 
 
@@ -2216,6 +2385,7 @@ function renderPhotos() {
               '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveP(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + ' title="Move up"><i class="fa-solid fa-arrow-up"></i></button>' +
               '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveP(' + i + ',1)"' + (i === photos.length - 1 ? ' disabled' : '') + ' title="Move down"><i class="fa-solid fa-arrow-down"></i></button>' +
               '<button type="button" class="btn btn-sm btn-outline-danger" onclick="delP(' + i + ')" title="Delete"><i class="fa-solid fa-trash"></i></button>' +
+              (PRG_AI_ENABLED && isStructureCategory(p.category) ? '<button type="button" class="btn btn-sm prg-ai-btn" onclick="prgAiOne(' + i + ')" data-testid="prg-ai-one" title="AI: select Category / Sub Category / Sub-Sub Category from this photo"><i class="fa-solid fa-wand-magic-sparkles"></i> AI</button>' : '') +
               '<span class="badge prg-cat-badge bg-light text-dark border">' + esc(p.category) + '</span>' +
               (function () { var fn = p.fileName || (p.file && p.file.name) || ''; return fn ? '<span class="text-muted small ms-auto text-truncate" style="max-width:42%">' + esc(fn) + '</span>' : ''; })() +
             '</div>' +
