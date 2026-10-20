@@ -26,6 +26,7 @@ register_shutdown_function(function () {
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/login_activity_helpers.php';
+require_once __DIR__ . '/../includes/excel_export_helpers.php';
 checkAuth();
 
 $role = $_SESSION['role'] ?? '';
@@ -145,7 +146,7 @@ try {
         ];
     }
 
-    $baseName = 'Login_Activity_' . date('d_m_Y');
+    $baseName = exportFileName('Login Activity as on ' . date('d-m-Y'));
 
     if ($format === 'xlsx') {
         $autoload = __DIR__ . '/../vendor/autoload.php';

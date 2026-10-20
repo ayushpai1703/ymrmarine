@@ -91,7 +91,7 @@ try {
     $sheet->getStyle('J2:M' . $last)->getNumberFormat()->setFormatCode('0.000');
 
     while (ob_get_level() > 0) { ob_end_clean(); }
-    $fileName = 'Month_Summary_' . date('F_Y', strtotime($start)) . '.xlsx';
+    $fileName = exportFileName('Month Summary ' . date('F Y', strtotime($start))) . '.xlsx';
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     header('Content-Disposition: attachment; filename="' . $fileName . '"');
     header('Cache-Control: private, max-age=0, must-revalidate');

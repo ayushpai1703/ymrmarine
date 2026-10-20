@@ -95,6 +95,12 @@ function writeCountryGroupedSheet(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet 
  * entries with an empty value are skipped. $value is sanitized for safe
  * use in a filename (strips characters illegal on Windows/macOS/Linux).
  */
+/** Excel download file name style: capitals, words separated by single spaces, no underscores. */
+function exportFileName(string $name): string {
+    $name = str_replace('_', ' ', $name);
+    return mb_strtoupper(trim((string)preg_replace('/\s+/u', ' ', $name)), 'UTF-8');
+}
+
 function buildExportFileBaseName(string $noun, array $filters): string {
     $parts = [$noun];
     foreach ($filters as $f) {
@@ -106,5 +112,6 @@ function buildExportFileBaseName(string $noun, array $filters): string {
         $parts[] = trim((string)($f['label'] ?? '')) . ' ' . $clean;
     }
     $parts[] = 'as on ' . date('d-m-Y');
-    return str_replace(' ', '_', implode(' ', $parts));
+    // Plain capitals, no underscores: "PENDING VESSELS AS ON 20-10-2026"
+    return exportFileName(implode(' ', $parts));
 }
