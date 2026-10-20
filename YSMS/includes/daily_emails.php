@@ -28,6 +28,11 @@ const DAILY_EMAIL_JOBS = [
     'appointments'     => 'Daily Vessel Appointments Report',
 ];
 
+/** Fixed routing — not editable: the appointments report goes only from ops@ to survey@, and the
+ *  assigned-vessels report only to each surveyor's own profile email (no CC on either). */
+const DAILY_EMAIL_APPT_FROM = 'ops@ymrmarine.com';
+const DAILY_EMAIL_APPT_TO = 'survey@ymrmarine.com';
+
 const DAILY_EMAIL_DEFAULTS = [
     'surveyor_pending_enabled'    => '1',
     'surveyor_pending_time'       => '17:00',
@@ -117,6 +122,9 @@ function dailyEmailSettings(PDO $db): array {
     foreach ($db->query('SELECT name, value FROM daily_email_settings') as $r) {
         if (array_key_exists($r['name'], $s)) $s[$r['name']] = (string)$r['value'];
     }
+    $s['appointments_from'] = DAILY_EMAIL_APPT_FROM;
+    $s['appointments_to'] = DAILY_EMAIL_APPT_TO;
+    $s['surveyor_pending_cc'] = $s['appointments_cc'] = '';
     return $s;
 }
 
@@ -151,18 +159,10 @@ function dailyEmailSaveSettings(PDO $db, array $in): array {
         $time = trim((string)($in[$job . '_time'] ?? ''));
         if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $time)) $errors[] = $label . ': enter a valid time (HH:MM).';
         $new[$job . '_time'] = $time;
-        $from = trim((string)($in[$job . '_from'] ?? ''));
-        if (!filter_var($from, FILTER_VALIDATE_EMAIL)) $errors[] = $label . ': "From" must be one valid email address.';
-        $new[$job . '_from'] = $from;
-        $ccRaw = trim((string)($in[$job . '_cc'] ?? ''));
-        $cc = dailyEmailAddressList($ccRaw);
-        if ($ccRaw !== '' && count($cc) !== count(preg_split('/[\s,;]+/', $ccRaw, -1, PREG_SPLIT_NO_EMPTY))) $errors[] = $label . ': CC has an invalid email address.';
-        $new[$job . '_cc'] = implode(', ', $cc);
     }
-    $toRaw = trim((string)($in['appointments_to'] ?? ''));
-    $to = dailyEmailAddressList($toRaw);
-    if (!$to || count($to) !== count(preg_split('/[\s,;]+/', $toRaw, -1, PREG_SPLIT_NO_EMPTY))) $errors[] = DAILY_EMAIL_JOBS['appointments'] . ': "To" must be valid email address(es).';
-    $new['appointments_to'] = implode(', ', $to);
+    $from = trim((string)($in['surveyor_pending_from'] ?? ''));
+    if (!filter_var($from, FILTER_VALIDATE_EMAIL)) $errors[] = DAILY_EMAIL_JOBS['surveyor_pending'] . ': "From" must be one valid email address.';
+    $new['surveyor_pending_from'] = $from;
     if ($errors) return $errors;
 
     $old = dailyEmailSettings($db);
@@ -373,8 +373,7 @@ function dailyEmailJobSurveyorPending(PDO $db, array $s, int $runId, string $onl
                 ? '<b>' . $n . '</b> vessel' . ($n === 1 ? ' is' : 's are') . ' currently assigned to you (Pending Vessels) as on ' . $dateText . '. The details are below and attached as Excel.'
                 : 'No vessels are currently assigned to you as on ' . $dateText . '.'),
             DAILY_EMAIL_SURVEYOR_HEADERS, $rows);
-        $cc = $onlyTo !== '' ? [] : dailyEmailAddressList($s['surveyor_pending_cc']);
-        [$ok, $err] = dailyEmailSend([['email' => $to, 'name' => $u['name']]], $cc, $s['surveyor_pending_from'],
+        [$ok, $err] = dailyEmailSend([['email' => $to, 'name' => $u['name']]], [], $s['surveyor_pending_from'],
             'Daily Assigned Vessels Report – ' . $dateText, $html, DAILY_EMAIL_SURVEYOR_HEADERS, $rows,
             'Assigned Vessels ' . $u['name'] . ' as on ' . $dateText);
         dailyEmailRecordDelivery($db, $runId, $to, $u['name'], $n, $ok, $err);
@@ -396,7 +395,7 @@ function dailyEmailJobAppointments(PDO $db, array $s, int $runId, string $onlyTo
     $rows = dailyEmailAppointmentRows($db, date('Y-m-d'));
     // A test always sends, so the layout can be checked on a day without appointments too.
     if (!$rows && $s['appointments_send_empty'] !== '1' && $onlyTo === '') return ['ok' => true, 'summary' => 'No appointments today — not sent (option off)', 'nothing_sent' => true];
-    $to = $onlyTo !== '' ? [$onlyTo] : dailyEmailAddressList($s['appointments_to']);
+    $to = $onlyTo !== '' ? [$onlyTo] : [DAILY_EMAIL_APPT_TO];
     $key = implode(',', array_map('strtolower', $to));
     if (dailyEmailDeliveryStatus($db, $runId, $key) === 'sent') return ['ok' => true, 'summary' => 'Already sent earlier to ' . $key];
     $dateText = date('d-m-Y');
@@ -406,8 +405,7 @@ function dailyEmailJobAppointments(PDO $db, array $s, int $runId, string $onlyTo
              . ' The details are below and attached as Excel.'
            : '<b>No vessel appointments were received or scheduled for today (' . $dateText . ').</b>',
         DAILY_EMAIL_APPT_HEADERS, $rows);
-    $cc = $onlyTo !== '' ? [] : dailyEmailAddressList($s['appointments_cc']);
-    [$ok, $err] = dailyEmailSend($to, $cc, $s['appointments_from'],
+    [$ok, $err] = dailyEmailSend($to, [], DAILY_EMAIL_APPT_FROM,
         'Daily Vessel Appointments Report – ' . $dateText, $html, DAILY_EMAIL_APPT_HEADERS, $rows,
         'Vessel Appointments ' . $dateText);
     dailyEmailRecordDelivery($db, $runId, $key, 'Appointments report', $n, $ok, $err);

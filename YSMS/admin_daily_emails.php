@@ -120,7 +120,7 @@ include 'includes/header.php';
                     <div class="full"><label class="de-check"><input type="checkbox" name="surveyor_pending_enabled" value="1" <?= $s['surveyor_pending_enabled'] === '1' ? 'checked' : '' ?> data-testid="de-surveyor-enabled"> Send every day</label></div>
                     <div><label for="spt">Time (IST)</label><input type="time" id="spt" name="surveyor_pending_time" value="<?= sanitize($s['surveyor_pending_time']) ?>" required data-testid="de-surveyor-time"></div>
                     <div><label for="spf">From</label><input type="email" id="spf" name="surveyor_pending_from" value="<?= sanitize($s['surveyor_pending_from']) ?>" required data-testid="de-surveyor-from"></div>
-                    <div class="full"><label for="spc">CC (optional, comma separated)</label><input type="text" id="spc" name="surveyor_pending_cc" value="<?= sanitize($s['surveyor_pending_cc']) ?>" placeholder="e.g. ops@ymrmarine.com" data-testid="de-surveyor-cc"></div>
+                    <div class="full de-sub" data-testid="de-surveyor-to">To: each surveyor's own profile email only — no CC, no one else.</div>
                     <div class="full"><label class="de-check"><input type="checkbox" name="surveyor_pending_send_empty" value="1" <?= $s['surveyor_pending_send_empty'] === '1' ? 'checked' : '' ?>> Also email surveyors who have no assigned vessels</label></div>
                 </div>
             </div>
@@ -136,9 +136,7 @@ include 'includes/header.php';
                 <div class="de-grid">
                     <div class="full"><label class="de-check"><input type="checkbox" name="appointments_enabled" value="1" <?= $s['appointments_enabled'] === '1' ? 'checked' : '' ?> data-testid="de-appt-enabled"> Send every day</label></div>
                     <div><label for="apt">Time (IST)</label><input type="time" id="apt" name="appointments_time" value="<?= sanitize($s['appointments_time']) ?>" required data-testid="de-appt-time"></div>
-                    <div><label for="apf">From</label><input type="email" id="apf" name="appointments_from" value="<?= sanitize($s['appointments_from']) ?>" required data-testid="de-appt-from"></div>
-                    <div><label for="apto">To (comma separated)</label><input type="text" id="apto" name="appointments_to" value="<?= sanitize($s['appointments_to']) ?>" required data-testid="de-appt-to"></div>
-                    <div><label for="apc">CC (optional)</label><input type="text" id="apc" name="appointments_cc" value="<?= sanitize($s['appointments_cc']) ?>" data-testid="de-appt-cc"></div>
+                    <div class="full de-sub" data-testid="de-appt-route">From <b data-testid="de-appt-from"><?= sanitize(DAILY_EMAIL_APPT_FROM) ?></b> to <b data-testid="de-appt-to"><?= sanitize(DAILY_EMAIL_APPT_TO) ?></b> only — fixed, no CC.</div>
                     <div class="full"><label class="de-check"><input type="checkbox" name="appointments_send_empty" value="1" <?= $s['appointments_send_empty'] === '1' ? 'checked' : '' ?>> Send a "no appointments" email when there are none that day</label></div>
                 </div>
             </div>
