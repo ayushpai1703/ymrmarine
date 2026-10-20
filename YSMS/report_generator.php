@@ -8,7 +8,7 @@ include 'includes/header.php';
 
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.4/dist/pizzip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.44.0/build/docxtemplater.js"></script>
-<script src="assets/js/docx_ordinals.js?v=<?= @filemtime(__DIR__ . '/assets/js/docx_ordinals.js') ?: time() ?>"></script>
+<script src="assets/js/docx_report_polish.js?v=<?= @filemtime(__DIR__ . '/assets/js/docx_report_polish.js') ?: time() ?>"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
@@ -1196,7 +1196,7 @@ function triggerReportGeneration(sid) {
 
         doc.setData(exportData);
         doc.render();
-        superscriptDocxOrdinals(doc.getZip());   // 20th → 20 + superscript "th", whole report
+        polishDocxReport(doc.getZip());   // dates, M/V names, repeats, punctuation, superscript 20th — whole report
 
         let outputBlob = doc.getZip().generate({
             type: 'blob',
