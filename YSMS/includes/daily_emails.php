@@ -231,16 +231,27 @@ function dailyEmailSurveyors(PDO $db): array {
     return $out;
 }
 
+/** Test sample: id of the first surveyor (in $list) who has pending vessels, or the first one. */
+function dailyEmailSurveyorWithPending(PDO $db, array $list): int {
+    static $id = null;
+    if ($id === null) {
+        $id = $list ? $list[0]['id'] : 0;
+        foreach ($list as $u) { if (dailyEmailPendingRows($db, $u['id'])) { $id = $u['id']; break; } }
+    }
+    return $id;
+}
+
 /** @return array{ok:bool, summary:string} */
 function dailyEmailJobSurveyorPending(PDO $db, array $s, string $onlyTo = ''): array {
     $today = date('d-m-Y');
-    $sent = 0; $skipped = 0; $failed = []; $noEmail = 0;
+    $sent = 0; $skipped = 0; $failed = []; $noEmail = 0; $sample = '';
     $all = $db->query("SELECT COUNT(*) FROM users WHERE role_id = 2 AND (status = 'Active' OR status IS NULL)")->fetchColumn();
     $list = dailyEmailSurveyors($db);
     $noEmail = max(0, (int)$all - count($list));
     foreach ($list as $u) {
         $rows = dailyEmailPendingRows($db, $u['id']);
-        if (!$rows && $s['surveyor_pending_send_empty'] !== '1') { $skipped++; continue; }
+        if (!$rows && $s['surveyor_pending_send_empty'] !== '1' && $onlyTo === '') { $skipped++; continue; }
+        if (!$rows && $onlyTo !== '' && $sample === '' && dailyEmailSurveyorWithPending($db, $list) !== $u['id']) continue; // test: prefer a surveyor who has vessels
         $n = count($rows);
         $html = dailyEmailHtml('Pending Vessels — ' . $u['name'],
             'Dear ' . htmlspecialchars($u['name'], ENT_QUOTES, 'UTF-8') . ',<br>' . ($n
@@ -253,18 +264,20 @@ function dailyEmailJobSurveyorPending(PDO $db, array $s, string $onlyTo = ''): a
             'PENDING VESSELS — ' . mb_strtoupper($u['name']) . ' — AS ON ' . $today, $html, $rows,
             'Pending Vessels by ' . $u['name'] . ' as on ' . $today);
         if ($ok) $sent++; else $failed[] = $u['name'] . ' (' . $err . ')';
+        $sample = $u['name'] . ' — ' . $n . ' vessel' . ($n === 1 ? '' : 's');
         if ($onlyTo !== '') break; // test: one sample only
     }
-    $summary = $sent . ' sent';
+    $summary = $onlyTo !== '' ? ($sent ? 'sample sent (' . $sample . ')' : 'no surveyor with a profile email') : $sent . ' sent';
     if ($skipped) $summary .= ', ' . $skipped . ' skipped (no pending vessels)';
     if ($noEmail) $summary .= ', ' . $noEmail . ' surveyor(s) without a profile email';
     if ($failed) $summary .= '; failed: ' . implode('; ', $failed);
-    return ['ok' => !$failed, 'summary' => $summary];
+    return ['ok' => !$failed, 'summary' => $summary, 'nothing_sent' => !$sent && !$failed];
 }
 
 function dailyEmailJobAppointments(PDO $db, array $s, string $onlyTo = ''): array {
     $rows = dailyEmailPendingRows($db, 0, date('Y-m-d'));
-    if (!$rows && $s['appointments_send_empty'] !== '1') return ['ok' => true, 'summary' => 'No appointments today — not sent'];
+    // A test always sends, so the layout can be checked even on a day without appointments.
+    if (!$rows && $s['appointments_send_empty'] !== '1' && $onlyTo === '') return ['ok' => true, 'summary' => 'No appointments today — not sent', 'nothing_sent' => true];
     $today = date('d-m-Y');
     $n = count($rows);
     $html = dailyEmailHtml("Today's Appointments — " . date('d M Y'),
@@ -298,7 +311,7 @@ function dailyEmailRunJob(PDO $db, string $job, string $kind, ?int $userId = nul
     }
     if ($onlyTo !== '') $res['summary'] = 'Test to ' . $onlyTo . ': ' . $res['summary'];
     $db->prepare('UPDATE daily_email_runs SET status = ?, detail = ?, finished_at = ? WHERE id = ?')
-       ->execute([$res['ok'] ? 'sent' : 'failed', mb_substr($res['summary'], 0, 4000), date('Y-m-d H:i:s'), $runId]);
+       ->execute([!$res['ok'] ? 'failed' : (!empty($res['nothing_sent']) ? 'skipped' : 'sent'), mb_substr($res['summary'], 0, 4000), date('Y-m-d H:i:s'), $runId]);
     return $res + ['claimed' => true];
 }
 
