@@ -120,7 +120,7 @@ include 'includes/header.php';
                     <div class="full"><label class="de-check"><input type="checkbox" name="surveyor_pending_enabled" value="1" <?= $s['surveyor_pending_enabled'] === '1' ? 'checked' : '' ?> data-testid="de-surveyor-enabled"> Send every day</label></div>
                     <div><label for="spt">Time (IST)</label><input type="time" id="spt" name="surveyor_pending_time" value="<?= sanitize($s['surveyor_pending_time']) ?>" required data-testid="de-surveyor-time"></div>
                     <div><label for="spf">From</label><input type="email" id="spf" name="surveyor_pending_from" value="<?= sanitize($s['surveyor_pending_from']) ?>" required data-testid="de-surveyor-from"></div>
-                    <div class="full de-sub" data-testid="de-surveyor-to">To: each surveyor's own profile email only — no CC, no one else.</div>
+                    <div class="full de-sub" data-testid="de-surveyor-to">To: each surveyor's own profile email (only their own list) · CC: <b><?= sanitize(DAILY_EMAIL_SURVEYOR_CC) ?></b> — fixed.</div>
                     <div class="full"><label class="de-check"><input type="checkbox" name="surveyor_pending_send_empty" value="1" <?= $s['surveyor_pending_send_empty'] === '1' ? 'checked' : '' ?>> Also email surveyors who have no assigned vessels</label></div>
                 </div>
             </div>

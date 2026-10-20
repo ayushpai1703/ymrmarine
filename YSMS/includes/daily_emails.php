@@ -28,10 +28,11 @@ const DAILY_EMAIL_JOBS = [
     'appointments'     => 'Daily Vessel Appointments Report',
 ];
 
-/** Fixed routing — not editable: the appointments report goes only from ops@ to survey@, and the
- *  assigned-vessels report only to each surveyor's own profile email (no CC on either). */
+/** Fixed routing — not editable: the appointments report goes only from ops@ to survey@ (no CC);
+ *  the assigned-vessels report goes to each surveyor's own profile email with survey@ in CC. */
 const DAILY_EMAIL_APPT_FROM = 'ops@ymrmarine.com';
 const DAILY_EMAIL_APPT_TO = 'survey@ymrmarine.com';
+const DAILY_EMAIL_SURVEYOR_CC = 'survey@ymrmarine.com';
 
 const DAILY_EMAIL_DEFAULTS = [
     'surveyor_pending_enabled'    => '1',
@@ -92,6 +93,8 @@ function dailyEmailEnsureTables(PDO $db): void {
         UNIQUE KEY `uq_run_recipient` (`run_id`, `recipient`),
         KEY `idx_run` (`run_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $dcols = array_column($db->query('SHOW COLUMNS FROM daily_email_deliveries')->fetchAll(PDO::FETCH_ASSOC), 'Field');
+    if (!in_array('cc_sent', $dcols, true)) $db->exec("ALTER TABLE daily_email_deliveries ADD COLUMN `cc_sent` TINYINT(1) NOT NULL DEFAULT 0 AFTER `status`");
     $done = true;
     dailyEmailApply1700Schedule($db);
 }
@@ -329,18 +332,27 @@ function dailyEmailSend(array $to, array $cc, string $from, string $subject, str
 /* ---------- delivery log ---------- */
 
 function dailyEmailDeliveryStatus(PDO $db, int $runId, string $recipient): string {
-    $st = $db->prepare('SELECT status FROM daily_email_deliveries WHERE run_id = ? AND recipient = ?');
-    $st->execute([$runId, strtolower($recipient)]);
-    return (string)($st->fetchColumn() ?: '');
+    return (string)(dailyEmailDeliveryRow($db, $runId, $recipient)['status'] ?? '');
 }
 
-function dailyEmailRecordDelivery(PDO $db, int $runId, string $recipient, string $name, int $vessels, bool $ok, string $error): void {
+function dailyEmailDeliveryRow(PDO $db, int $runId, string $recipient): ?array {
+    $st = $db->prepare('SELECT status, cc_sent FROM daily_email_deliveries WHERE run_id = ? AND recipient = ?');
+    $st->execute([$runId, strtolower($recipient)]);
+    return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+/** A failed send where SMTP refused only some addresses still reached the others: did $cc get it? */
+function dailyEmailCcDelivered(bool $ok, string $error, string $cc): bool {
+    return $ok || (stripos($error, 'recipients failed') !== false && stripos($error, $cc) === false);
+}
+
+function dailyEmailRecordDelivery(PDO $db, int $runId, string $recipient, string $name, int $vessels, bool $ok, string $error, bool $ccSent = false): void {
     $now = date('Y-m-d H:i:s');
-    $db->prepare("INSERT INTO daily_email_deliveries (run_id, recipient, recipient_name, vessels, status, error, attempts, sent_at, updated_at)
-                  VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
-                  ON DUPLICATE KEY UPDATE vessels = VALUES(vessels), status = VALUES(status), error = VALUES(error),
+    $db->prepare("INSERT INTO daily_email_deliveries (run_id, recipient, recipient_name, vessels, status, cc_sent, error, attempts, sent_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                  ON DUPLICATE KEY UPDATE vessels = VALUES(vessels), status = VALUES(status), cc_sent = VALUES(cc_sent), error = VALUES(error),
                       attempts = attempts + 1, sent_at = VALUES(sent_at), updated_at = VALUES(updated_at)")
-       ->execute([$runId, strtolower($recipient), $name, $vessels, $ok ? 'sent' : 'failed', $ok ? null : mb_substr($error, 0, 1000), $ok ? $now : null, $now]);
+       ->execute([$runId, strtolower($recipient), $name, $vessels, $ok ? 'sent' : 'failed', $ccSent ? 1 : 0, $ok ? null : mb_substr($error, 0, 1000), $ok ? $now : null, $now]);
     if (!$ok) error_log(json_encode(['evt' => 'daily_email_delivery_failed', 'run_id' => $runId, 'recipient' => $recipient, 'error' => $error]));
 }
 
@@ -366,17 +378,21 @@ function dailyEmailJobSurveyorPending(PDO $db, array $s, int $runId, string $onl
         $rows = dailyEmailAssignedRows($db, $u['id']);
         if (!$rows && $s['surveyor_pending_send_empty'] !== '1' && $onlyTo === '') { $skipped++; continue; }
         $to = $onlyTo !== '' ? $onlyTo : $u['email'];
-        if (dailyEmailDeliveryStatus($db, $runId, $to) === 'sent') { $already++; continue; } // retry: never twice
+        $prev = dailyEmailDeliveryRow($db, $runId, $to);
+        if (($prev['status'] ?? '') === 'sent') { $already++; continue; } // retry: never twice
+        // survey@ in CC — but not again on a retry when the earlier attempt already reached it
+        $cc = ($onlyTo !== '' || !empty($prev['cc_sent'])) ? [] : [DAILY_EMAIL_SURVEYOR_CC];
         $n = count($rows);
         $html = dailyEmailHtml('Daily Assigned Vessels Report', $u['name'] . ' · ' . date('l, d F Y') . ' · 17:00 IST report',
             'Dear ' . htmlspecialchars($u['name'], ENT_QUOTES, 'UTF-8') . ',<br>' . ($n
                 ? '<b>' . $n . '</b> vessel' . ($n === 1 ? ' is' : 's are') . ' currently assigned to you (Pending Vessels) as on ' . $dateText . '. The details are below and attached as Excel.'
                 : 'No vessels are currently assigned to you as on ' . $dateText . '.'),
             DAILY_EMAIL_SURVEYOR_HEADERS, $rows);
-        [$ok, $err] = dailyEmailSend([['email' => $to, 'name' => $u['name']]], [], $s['surveyor_pending_from'],
+        [$ok, $err] = dailyEmailSend([['email' => $to, 'name' => $u['name']]], $cc, $s['surveyor_pending_from'],
             'Daily Assigned Vessels Report – ' . $dateText, $html, DAILY_EMAIL_SURVEYOR_HEADERS, $rows,
             'Assigned Vessels ' . $u['name'] . ' as on ' . $dateText);
-        dailyEmailRecordDelivery($db, $runId, $to, $u['name'], $n, $ok, $err);
+        dailyEmailRecordDelivery($db, $runId, $to, $u['name'], $n, $ok, $err,
+            !empty($prev['cc_sent']) || ($cc && dailyEmailCcDelivered($ok, $err, $cc[0])));
         if ($ok) $sent++; else $failed[] = $u['name'] . ' (' . $err . ')';
     }
     if ($onlyTo !== '') {

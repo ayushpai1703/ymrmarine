@@ -4,10 +4,10 @@ Two reports, each sent once a day at **17:00 Asia/Kolkata**:
 
 | Job key (`?job=`) | Email | From → To | Subject |
 |---|---|---|---|
-| `surveyor_pending` | **Daily Assigned Vessels Report** — one separate email per active surveyor, only the vessels currently assigned to that surveyor (status *Pending Vessel*, as primary surveyor or co-surveyor in `survey_surveyors`) | `ops@ymrmarine.com` → the surveyor's profile email (`users.email`) | `Daily Assigned Vessels Report – 21-10-2026` |
+| `surveyor_pending` | **Daily Assigned Vessels Report** — one separate email per active surveyor, only the vessels currently assigned to that surveyor (status *Pending Vessel*, as primary surveyor or co-surveyor in `survey_surveyors`) | `ops@ymrmarine.com` → the surveyor's profile email (`users.email`), CC `survey@ymrmarine.com` | `Daily Assigned Vessels Report – 21-10-2026` |
 | `appointments` | **Daily Vessel Appointments Report** — one consolidated email: every vessel whose Appointment Date is today **or** that was received (assigned, `assign_date`) today, any status; a clear "no appointments" notice when there are none | `ops@ymrmarine.com` → `survey@ymrmarine.com` | `Daily Vessel Appointments Report – 21-10-2026` |
 
-Both mails use the YMR Marine Solutions HTML template with a table of the vessels plus the same Excel layout as *Export Excel* attached. Recipients are fixed: the assigned-vessels report goes only to each surveyor's own profile email, the appointments report only from `ops@ymrmarine.com` to `survey@ymrmarine.com` — no CC on either. On/off, time and the "empty" behaviour can be changed in **Admin Controls → Daily Emails**. Surveyors with no assigned vessels get no mail (option to change that on the same page). The application stores no appointment *time*, only the Appointment Date, so none is shown.
+Both mails use the YMR Marine Solutions HTML template with a table of the vessels plus the same Excel layout as *Export Excel* attached. Recipients are fixed: the assigned-vessels report goes to each surveyor's own profile email with `survey@ymrmarine.com` in CC (a retry never CCs survey@ twice); the appointments report goes only from `ops@ymrmarine.com` to `survey@ymrmarine.com`, no CC. On/off, time and the "empty" behaviour can be changed in **Admin Controls → Daily Emails**. Surveyors with no assigned vessels get no mail (option to change that on the same page). The application stores no appointment *time*, only the Appointment Date, so none is shown.
 
 ## Code
 
