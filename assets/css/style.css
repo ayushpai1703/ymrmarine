@@ -678,6 +678,9 @@ text-align:justify;
   text-align: center;
   box-shadow: 0 2px 14px rgba(20,40,58,0.05);
   transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .team-card:hover {
   border-color: rgba(0,168,216,0.35);
@@ -711,8 +714,18 @@ text-align:justify;
   border-radius: 50px;
   margin-bottom: 0.85rem;
 }
-.team-bio { font-size: 0.85rem; color: var(--ink-soft); line-height: 1.6; }
-.team-social { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem; }
+.team-bio {
+  font-size: 0.85rem; color: var(--ink-soft); line-height: 1.6;
+  align-self: stretch;
+  flex-grow: 1;              /* icons line up at the bottom of every card */
+  margin: 0;
+  text-align: justify;
+  text-align-last: center;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  overflow-wrap: break-word;
+}
+.team-social { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1.25rem; }
 .team-social a {
   width: 32px; height: 32px;
   border-radius: 8px;
