@@ -14,6 +14,7 @@ error_reporting(0);
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/bulk_assign_helpers.php';
+require_once __DIR__ . '/../includes/excel_export_helpers.php';
 checkAuth();
 
 if (($_SESSION['role'] ?? '') !== 'Admin') {
@@ -72,7 +73,7 @@ foreach (['A','B','C','D','E','F','G'] as $col) {
     $sheet->getColumnDimension($col)->setAutoSize(true);
 }
 
-$baseName = 'Bulk_Assignment_Errors_' . $batchId . '_' . date('d_m_Y');
+$baseName = exportFileName('Bulk Assignment Errors ' . $batchId . ' as on ' . date('d-m-Y'));
 while (ob_get_level() > 0) { ob_end_clean(); }
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 header('Content-Disposition: attachment; filename="' . $baseName . '.xlsx"');

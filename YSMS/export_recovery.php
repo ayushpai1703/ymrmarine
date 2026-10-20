@@ -88,7 +88,7 @@ if (!empty($_GET['full'])) {
         $sheet->getStyle('J2:M' . $last)->getNumberFormat()->setFormatCode('0.000');
 
         while (ob_get_level() > 0) { ob_end_clean(); }
-        $fileName = 'Recovery_' . ($f['month'] !== '' ? date('F_Y', strtotime($f['month'] . '-01')) . '_' : '') . date('d_m_Y') . '.xlsx';
+        $fileName = exportFileName('Recovery ' . ($f['month'] !== '' ? date('F Y', strtotime($f['month'] . '-01')) . ' ' : '') . 'as on ' . date('d-m-Y')) . '.xlsx';
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header('Content-Disposition: attachment; filename="' . $fileName . '"');
         header('Cache-Control: private, max-age=0, must-revalidate');
@@ -190,8 +190,7 @@ try {
 
     while (ob_get_level() > 0) { ob_end_clean(); }
 
-    $fileNamePrefix = $period === 'month' ? 'This_Month_Recovery_' : 'Total_Recovery_';
-    $fileName = $fileNamePrefix . date('d_m_Y') . '.xlsx';
+    $fileName = exportFileName(($period === 'month' ? 'This Month Recovery' : 'Total Recovery') . ' as on ' . date('d-m-Y')) . '.xlsx';
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     header('Content-Disposition: attachment; filename="' . $fileName . '"');
     header('Content-Transfer-Encoding: binary');
