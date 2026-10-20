@@ -1014,7 +1014,7 @@ var FORM_FIELDS = [
   {id:'IMO',                  label:'IMO Number',          type:'text'},
   {id:'GRT',                  label:'GRT',                 type:'text'},
   {id:'PORT_OF_REGISTRY',     label:'Port of Registry',    type:'text'},
-  {id:'ALONGSIDE',            label:'Alongside',           type:'select', options:['allfast port side alongside to','allfast starboard side alongside to','Anchored at']},
+  {id:'ALONGSIDE',            label:'Alongside',           type:'select', options:['all fast port side alongside to','all fast starboard side alongside to','Anchored at']},
   {id:'HOLDS',                label:'No. of Holds',        type:'select', options:['1','2','3','4','5','6','7','8','9','10']},
   {id:'HOLDS_ALPHA',          label:'Holds (In Words)',    type:'text',   readonly:true},
   {id:'KEEL_LAID_MONTH',      label:'Keel Laid Month',     type:'text'},

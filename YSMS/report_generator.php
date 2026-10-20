@@ -252,7 +252,7 @@ const REPORT_FIELDS = [
     {id:'IMO',                  label:'IMO Number',          type:'text'},
     {id:'GRT',                  label:'GRT / NRT',           type:'text'},
     {id:'PORT_OF_REGISTRY',     label:'Port of Registry',    type:'text'},
-    {id:'ALONGSIDE',            label:'Alongside Position',  type:'select',  options:['allfast port side alongside to','allfast starboard side alongside to','Anchored at']},
+    {id:'ALONGSIDE',            label:'Alongside Position',  type:'select',  options:['all fast port side alongside to','all fast starboard side alongside to','Anchored at']},
     {id:'HOLDS',                label:'No. of Holds',        type:'select',  options:['1','2','3','4','5','6','7','8','9','10']},
     {id:'HOLDS_ALPHA',          label:'Holds (In Words)',    type:'text',    readonly:true},
     {id:'KEEL_LAID_MONTH',      label:'Keel Laid Month',     type:'text'},
@@ -680,6 +680,10 @@ function renderGroupedGrids(sid) {
         let isCalc = f.type === 'calc';
         let isReadonly = f.readonly || isCalc;
         let curVal = formValues[f.id] || "";
+        // older values / Excel cells written "allfast …" → the dropdown's "all fast …"
+        if (f.type === 'select' && /^allfast\b/i.test(curVal)) {
+            curVal = formValues[f.id] = curVal.replace(/^allfast\b/i, 'all fast');
+        }
 
         let isFilled = curVal.trim() !== "";
         let fieldClass = isCalc ? 'auto-calc' : (isFilled ? 'fc-valid' : 'fc-invalid');
