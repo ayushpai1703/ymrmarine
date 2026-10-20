@@ -74,6 +74,21 @@ $fab_user_role = $user_role ?? ($_SESSION['role'] ?? '');
 <script src="assets/js/app.js?v=<?= @filemtime(__DIR__ . '/../assets/js/app.js') ?: time() ?>"></script>
 <script src="assets/js/submit-feedback.js?v=<?= @filemtime(__DIR__ . '/../assets/js/submit-feedback.js') ?: time() ?>"></script>
 
+<?php if (!empty($_SESSION['user_id'])): ?>
+<script>
+// Daily automatic emails (Admin Controls → Daily Emails): ask the server to send any that are
+// due — at most every 10 minutes per browser; the server sends each one only once a day.
+(function () {
+    try {
+        var k = 'ysmsDailyEmailCheck', last = +localStorage.getItem(k) || 0, now = Date.now();
+        if (now - last < 600000) return;
+        localStorage.setItem(k, String(now));
+    } catch (e) { return; }
+    fetch('ajax/daily_emails_run.php', { method: 'POST', keepalive: true, headers: { 'X-CSRF-Token': <?= json_encode(csrf_token()) ?> } }).catch(function () {});
+})();
+</script>
+<?php endif; ?>
+
 <?php include __DIR__ . '/floating-notes.php'; ?>
 
 </body>

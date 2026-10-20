@@ -180,6 +180,9 @@ include 'includes/header.php';
         <a href="manage_templates.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-word-templates">
             <i class="fa-solid fa-file-word"></i> Word / Photo Templates
         </a>
+        <a href="admin_daily_emails.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-daily-emails">
+            <i class="fa-solid fa-envelope-circle-check"></i> Daily Emails
+        </a>
     </div>
 
     <?php foreach ($modules as $key => $mod): ?>
