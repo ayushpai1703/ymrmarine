@@ -41,12 +41,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $current_status = (string)$svStatus;
 
-// Ensure date columns hold time (DATETIME)
+// Ensure date columns hold time (DATETIME). Only ALTER a column that isn't DATETIME yet:
+// an ALTER on every upload needs an exclusive lock on surveys and waited behind any
+// running query on that table, which made uploads hang.
 try {
-    $db->exec("ALTER TABLE surveys MODIFY COLUMN assign_date DATETIME NULL");
-    $db->exec("ALTER TABLE surveys MODIFY COLUMN survey_completed_date DATETIME NULL");
-    $db->exec("ALTER TABLE surveys MODIFY COLUMN report_uploaded_date DATETIME NULL");
-} catch (Exception $e) { /* ignore if already datetime or no permission */ }
+    $dtCols = $db->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'surveys'
+        AND COLUMN_NAME IN ('assign_date','survey_completed_date','report_uploaded_date') AND DATA_TYPE <> 'datetime'")->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($dtCols as $dtCol) {
+        $db->exec("ALTER TABLE surveys MODIFY COLUMN `$dtCol` DATETIME NULL");
+    }
+} catch (Exception $e) { /* ignore if no permission */ }
 
 // 🌟 SAFETY NET: hsfo_recovery column (TABLES 54B!N20) alongside the
 // existing vlsfo_recovery/lsmgo_recovery columns.
@@ -123,7 +127,8 @@ require_once __DIR__ . '/../includes/notifications.php';
         if (move_uploaded_file($_FILES['excel_report']['tmp_name'], $full_target_path)) {
             
             // TABLES 54B tab: O21 total, M20 VLSFO, N20 HSFO, O20 LSMGO (see includes/recovery_excel.php).
-            $rec = extractRecoveryFromExcel($full_target_path);
+            // (not parsed at all when recovery doesn't apply — NULL is stored below anyway)
+            $rec = $recoveryNA ? [] : extractRecoveryFromExcel($full_target_path);
             $recovery_val = $rec['recovery'] ?? 0.00;
             $vlsfo_val = $rec['vlsfo'] ?? 0.00;
             $lsmgo_val = $rec['lsmgo'] ?? 0.00;
