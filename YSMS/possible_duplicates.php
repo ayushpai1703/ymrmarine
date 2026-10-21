@@ -25,7 +25,6 @@ foreach ($clusters as $c) {
 $shown = array_values(array_filter($clusters, fn($c) => ($kindFilter === '' || $c['kind'] === $kindFilter) && ($monthFilter === '' || $c['month'] === $monthFilter)));
 
 $fmtDate = fn($v) => (!empty($v) && strpos((string)$v, '0000') !== 0) ? date('d-m-Y', strtotime((string)$v)) : '—';
-$fmtMt = fn($v) => $v === null ? '—' : number_format((float)$v, 3);
 
 include 'includes/header.php';
 ?>
@@ -108,7 +107,7 @@ include 'includes/header.php';
                             <td><?= sanitize(getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? '')) ?></td>
                             <td><?= $fmtDate($r['survey_completed_date']) ?></td>
                             <td><?= $fmtDate($r['report_uploaded_date']) ?></td>
-                            <td class="num"><?= $fmtMt($r['recovery_amount']) ?></td>
+                            <td class="num"><?= $r['recovery_amount'] === null ? '—' : recoveryDisplay($r['recovery_amount'], isOnhireSurvey($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? ''))) ?></td>
                             <td class="num"><?= (int)$r['files'] ?></td>
                             <td>
                                 <a class="pd-btn" href="<?= $detail ?>" target="_blank" rel="noopener"><i class="fa-solid fa-up-right-from-square"></i> Open</a>

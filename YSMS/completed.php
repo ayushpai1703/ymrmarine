@@ -26,7 +26,9 @@ function recoveryDisplayParts(array $survey): array {
         && ($survey['hsfo_recovery'] ?? null) === null && ($survey['lsmgo_recovery'] ?? null) === null) {
         return ['na' => true, 'total' => RECOVERY_NA_LABEL, 'vlsfo' => '', 'hsfo' => '', 'lsmgo' => ''];
     }
-    $fmt = function ($v) { return $v !== null ? number_format((float)$v, 3) . ' MT' : '—'; };
+    // Onhire surveys show their recovery with a minus sign (display only; totals stay positive)
+    $onhire = isOnhireSurvey($db, (string)($survey['survey_type_ids'] ?? ''), (string)($survey['type_name'] ?? ''));
+    $fmt = function ($v) use ($onhire) { return $v !== null ? recoveryDisplay($v, $onhire) . ' MT' : '—'; };
     return [
         'na'    => false,
         'total' => $fmt($survey['recovery_amount'] ?? null),

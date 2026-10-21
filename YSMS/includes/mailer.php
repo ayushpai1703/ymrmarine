@@ -633,8 +633,9 @@ function notifyAdminsOfReportUpload(PDO $db, array $info): string {
 
     if (!$isFinalStage) {
         $recoveryNA = !empty($info['recovery_na']);
-        $fmtRec = static function ($v) {
-            return ($v !== null && $v !== '') ? number_format((float)$v, 3) : '0.000';
+        $onhire = !empty($info['recovery_onhire']); // Onhire survey: figures shown with a minus sign
+        $fmtRec = static function ($v) use ($onhire) {
+            return ($v !== null && $v !== '') ? (function_exists('recoveryDisplay') ? recoveryDisplay($v, $onhire) : number_format((float)$v, 3)) : '0.000';
         };
         $vlsfoCell = $fmtRec($info['vlsfo_recovery'] ?? null);
         $hsfoCell  = $fmtRec($info['hsfo_recovery'] ?? null);
@@ -842,6 +843,7 @@ function loadSurveyNotifyContext(PDO $db, int $surveyId): array {
             'hsfo_recovery'        => $row['hsfo_recovery'] ?? null,
             'lsmgo_recovery'       => $row['lsmgo_recovery'] ?? null,
             'recovery_na'          => $recoveryNA,
+            'recovery_onhire'      => function_exists('isOnhireSurvey') && isOnhireSurvey($db, (string)($row['survey_type_ids'] ?? ''), (string)($row['type_name'] ?? '')),
             'survey_completed_date' => $row['survey_completed_date'] ?? '',
         ];
     } catch (\Throwable $e) {

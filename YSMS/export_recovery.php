@@ -56,15 +56,15 @@ if (!empty($_GET['full'])) {
         $headers = ['Vessel Name', 'Report No', 'Client', 'Port', 'Survey Type', 'Surveyor', 'Status', 'Survey Completed', 'Report Completed', 'VLSFO', 'LSMGO', 'HSFO', 'Total Recovery'];
         $rows = [];
         $sum = ['vlsfo' => 0.0, 'lsmgo' => 0.0, 'hsfo' => 0.0, 'total' => 0.0];
-        $q = fn($v) => $v !== null ? $v : '';
+        $q = fn($v, bool $onhire) => $v !== null ? recoverySigned($v, $onhire) : ''; // Onhire cells negative; $sum stays positive
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $raw) {
             $r = recoveryListRow($db, $raw);
             foreach ($sum as $k => $_) { $sum[$k] += $r['na'] ? 0 : (float)$r[$k]; }
             $rows[] = ['country' => $r['country'], 'cells' => [
                 $r['vessel'], $r['report_no'], $r['client'], $r['port'], $r['type'], $r['surveyor'],
                 $r['status'] === 'Completed' ? 'Completed' : 'Report Pending', $r['completed'], $r['report'],
-                $r['na'] ? '' : $q($r['vlsfo']), $r['na'] ? '' : $q($r['lsmgo']), $r['na'] ? '' : $q($r['hsfo']),
-                $r['na'] ? RECOVERY_NA_LABEL : $q($r['total']),
+                $r['na'] ? '' : $q($r['vlsfo'], $r['onhire']), $r['na'] ? '' : $q($r['lsmgo'], $r['onhire']), $r['na'] ? '' : $q($r['hsfo'], $r['onhire']),
+                $r['na'] ? RECOVERY_NA_LABEL : $q($r['total'], $r['onhire']),
             ]];
         }
 
@@ -164,15 +164,17 @@ try {
             ];
             continue;
         }
+        // Onhire: shown negative (display only) — the Total row below adds them as positive
+        $onhire = isOnhireSurvey($db, (string)($row['survey_type_ids'] ?? ''), (string)($row['type_name'] ?? ''));
         $rows[] = [
             'country' => $row['country'] ?? 'India',
             'cells' => [
                 $row['vessel_name'] ?? '',
                 $typeLabel,
-                !empty($row['vlsfo_recovery']) ? (float)$row['vlsfo_recovery'] : 0,
-                !empty($row['lsmgo_recovery']) ? (float)$row['lsmgo_recovery'] : 0,
-                !empty($row['hsfo_recovery']) ? (float)$row['hsfo_recovery'] : 0,
-                !empty($row['recovery_amount']) ? (float)$row['recovery_amount'] : 0,
+                recoverySigned(!empty($row['vlsfo_recovery']) ? $row['vlsfo_recovery'] : 0, $onhire),
+                recoverySigned(!empty($row['lsmgo_recovery']) ? $row['lsmgo_recovery'] : 0, $onhire),
+                recoverySigned(!empty($row['hsfo_recovery']) ? $row['hsfo_recovery'] : 0, $onhire),
+                recoverySigned(!empty($row['recovery_amount']) ? $row['recovery_amount'] : 0, $onhire),
             ],
         ];
     }
@@ -180,7 +182,7 @@ try {
     // Total row — same figure as the Total / This Month Recovery card (NOT APPLICABLE rows count as 0).
     $sum = [0.0, 0.0, 0.0, 0.0];
     foreach ($rows as $r) {
-        foreach ([2, 3, 4, 5] as $i => $c) { $sum[$i] += is_numeric($r['cells'][$c]) ? (float)$r['cells'][$c] : 0; }
+        foreach ([2, 3, 4, 5] as $i => $c) { $sum[$i] += is_numeric($r['cells'][$c]) ? abs((float)$r['cells'][$c]) : 0; }
     }
     $last = $rows ? $sheet->getHighestRow() + 1 : 3;
     $sheet->setCellValue('A' . $last, 'Total — ' . count($rows) . ' vessel' . (count($rows) === 1 ? '' : 's'));

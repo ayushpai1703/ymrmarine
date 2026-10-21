@@ -33,6 +33,8 @@ if (!$survey) { die("Report asset not found."); }
 // 🌟 Recovery doesn't apply to some survey types (Draft Survey, BQS, etc.) —
 // see RECOVERY_NOT_APPLICABLE_TYPES in config/config.php.
 $recoveryNA = isRecoveryNotApplicable($db, (string)($survey['survey_type_ids'] ?? ''), (string)($survey['type_name'] ?? ''));
+// Onhire surveys show recovery with a minus sign (display only — stored and summed as positive)
+$recoveryOnhire = isOnhireSurvey($db, (string)($survey['survey_type_ids'] ?? ''), (string)($survey['type_name'] ?? ''));
 
 $current_user_id = $_SESSION['user_id'];
 $role = $_SESSION['role'];
@@ -487,10 +489,10 @@ include 'includes/header.php';
         <div class="info-row"><span class="info-label">Survey Type<?= aie('survey_type_ids') ?></span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
         <div class="info-row"><span class="info-label">Survey Completed<?= aie('survey_completed_date') ?></span><span class="info-value text-success fw-bold"><?= date('d M Y', strtotime($survey['survey_completed_date'])) ?></span></div>
         <?php if (!$recoveryNA): // Recovery rows are left out entirely for N/A survey types ?>
-        <div class="info-row"><span class="info-label">Total Recovery<?= aie('recovery') ?></span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></span></div>
+        <div class="info-row"><span class="info-label">Total Recovery<?= aie('recovery') ?></span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(recoveryDisplay($survey['recovery_amount'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
+        <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(recoveryDisplay($survey['vlsfo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
+        <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(recoveryDisplay($survey['lsmgo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
+        <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(recoveryDisplay($survey['hsfo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
         <?php else: ?>
         <div class="info-row" data-testid="recovery-na-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
         <?php endif; ?>
@@ -656,7 +658,7 @@ include 'includes/header.php';
                 <?php if (!$recoveryNA): ?>
                 <div class="vdd-hero-stats">
                     <div class="vdd-hero-stat">
-                        <div class="n"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 2)) : '—' ?></div>
+                        <div class="n"><?= $survey['recovery_amount'] !== null ? sanitize(recoveryDisplay($survey['recovery_amount'], $recoveryOnhire, 2)) : '—' ?></div>
                         <div class="l">Total MT</div>
                     </div>
                 </div>
@@ -726,28 +728,28 @@ include 'includes/header.php';
                             <div class="vdd-recovery-tile">
                                 <div class="vdd-recovery-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-droplet"></i></div>
                                 <div>
-                                    <div class="vdd-recovery-value"><?= $survey['recovery_amount'] !== null ? sanitize(number_format((float)$survey['recovery_amount'], 3)) . ' MT' : '—' ?></div>
+                                    <div class="vdd-recovery-value"><?= $survey['recovery_amount'] !== null ? sanitize(recoveryDisplay($survey['recovery_amount'], $recoveryOnhire, 3)) . ' MT' : '—' ?></div>
                                     <div class="vdd-recovery-label">Total</div>
                                 </div>
                             </div>
                             <div class="vdd-recovery-tile">
                                 <div class="vdd-recovery-icon" style="background:#EFF6FF;color:#1D4ED8;"><i class="fa-solid fa-droplet"></i></div>
                                 <div>
-                                    <div class="vdd-recovery-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(number_format((float)$survey['vlsfo_recovery'], 3)) . ' MT' : '—' ?></div>
+                                    <div class="vdd-recovery-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(recoveryDisplay($survey['vlsfo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></div>
                                     <div class="vdd-recovery-label">VLSFO</div>
                                 </div>
                             </div>
                             <div class="vdd-recovery-tile">
                                 <div class="vdd-recovery-icon" style="background:#D1FAE5;color:#047857;"><i class="fa-solid fa-droplet"></i></div>
                                 <div>
-                                    <div class="vdd-recovery-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(number_format((float)$survey['lsmgo_recovery'], 3)) . ' MT' : '—' ?></div>
+                                    <div class="vdd-recovery-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(recoveryDisplay($survey['lsmgo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></div>
                                     <div class="vdd-recovery-label">LSMGO</div>
                                 </div>
                             </div>
                             <div class="vdd-recovery-tile">
                                 <div class="vdd-recovery-icon" style="background:#FFF7ED;color:#EA580C;"><i class="fa-solid fa-droplet"></i></div>
                                 <div>
-                                    <div class="vdd-recovery-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(number_format((float)$survey['hsfo_recovery'], 3)) . ' MT' : '—' ?></div>
+                                    <div class="vdd-recovery-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(recoveryDisplay($survey['hsfo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></div>
                                     <div class="vdd-recovery-label">HSFO</div>
                                 </div>
                             </div>

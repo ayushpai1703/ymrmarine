@@ -47,7 +47,7 @@ try {
     $label = date('F Y', strtotime($start));
 
     $d = fn($v) => (!empty($v) && strpos((string)$v, '0000') !== 0) ? date('d-m-Y', strtotime((string)$v)) : '';
-    $q = fn($v) => $v !== null ? (float)$v : '';
+    $q = fn($v, bool $onhire = false) => $v !== null ? recoverySigned($v, $onhire) : ''; // Onhire cells negative; $total stays positive
     $headers = ['Vessel Name', 'Report No', 'Client', 'Port', 'Survey Type', 'Surveyor', 'Status', 'Survey Completed', 'Report Completed', 'VLSFO', 'HSFO', 'LSMGO', 'Total Recovery', 'Source', 'Check'];
     $rows = []; $ships = 0; $total = 0.0;
     $all = $st->fetchAll(PDO::FETCH_ASSOC);
@@ -59,6 +59,7 @@ try {
         $ships++;
         $na = isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? ''));
         $total += $na ? 0 : (float)$r['recovery_amount'];
+        $oh = isOnhireSurvey($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? ''));
         $rows[] = ['country' => $r['country'] ?? 'India', 'cells' => [
             $r['vessel_name'] ?? '', $r['report_number'] ?? '', $r['company_name'] ?? '', $r['port_name'] ?? '',
             getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? ''),
@@ -66,8 +67,8 @@ try {
             !empty($r['no_surveyor']) ? outsourcedCreditSurveyor($db)[1] : getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? ''),
             $r['status'] === 'Completed' ? 'Completed' : 'Report Pending',
             surveyCompletedDateText($r), $d($r['report_uploaded_date']),
-            $na ? '' : $q($r['vlsfo_recovery']), $na ? '' : $q($r['hsfo_recovery']), $na ? '' : $q($r['lsmgo_recovery']),
-            $na ? RECOVERY_NA_LABEL : $q($r['recovery_amount']),
+            $na ? '' : $q($r['vlsfo_recovery'], $oh), $na ? '' : $q($r['hsfo_recovery'], $oh), $na ? '' : $q($r['lsmgo_recovery'], $oh),
+            $na ? RECOVERY_NA_LABEL : $q($r['recovery_amount'], $oh),
             strpos((string)($r['notes'] ?? ''), 'Imported from Excel') === 0 ? 'Imported from Excel' : 'Entered in YSMS',
             ($n = $seen[$vkey($r)]) > 1 ? 'Same vessel + client listed ' . $n . ' times this month' : '',
         ]];

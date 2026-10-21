@@ -131,6 +131,8 @@ function recoveryListRow(PDO $db, array $r): array {
         'completed' => surveyCompletedDateText($r),
         'report'    => $d($r['report_uploaded_date'] ?? null),
         'na'        => isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')),
+        // Onhire: recovery shown with a minus sign; vlsfo/lsmgo/hsfo/total below stay positive for sums
+        'onhire'    => isOnhireSurvey($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')),
         'vlsfo'     => $n($r['vlsfo_recovery']),
         'lsmgo'     => $n($r['lsmgo_recovery']),
         'hsfo'      => $n($r['hsfo_recovery']),

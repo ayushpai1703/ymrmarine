@@ -51,7 +51,7 @@ $rows = array_map(fn($r) => recoveryListRow($db, $r), $st->fetchAll(PDO::FETCH_A
 
 $has_filters = recoveryListQs($f) !== '';
 $mt = fn($v) => number_format((float)$v, 3);
-$cell = fn($v) => $v !== null ? number_format($v, 3) : '—';
+$cell = fn($v, bool $onhire = false) => $v !== null ? recoveryDisplay($v, $onhire) : '—'; // Onhire rows show minus; totals stay positive
 
 include 'includes/header.php';
 ?>
@@ -184,10 +184,10 @@ include 'includes/header.php';
                         <?php if ($r['na']): ?>
                         <td colspan="4" class="rc-na"><?= RECOVERY_NA_LABEL ?></td>
                         <?php else: ?>
-                        <td class="num"><?= $cell($r['vlsfo']) ?></td>
-                        <td class="num"><?= $cell($r['lsmgo']) ?></td>
-                        <td class="num"><?= $cell($r['hsfo']) ?></td>
-                        <td class="num fw-bold"><?= $cell($r['total']) ?></td>
+                        <td class="num"><?= $cell($r['vlsfo'], $r['onhire']) ?></td>
+                        <td class="num"><?= $cell($r['lsmgo'], $r['onhire']) ?></td>
+                        <td class="num"><?= $cell($r['hsfo'], $r['onhire']) ?></td>
+                        <td class="num fw-bold"><?= $cell($r['total'], $r['onhire']) ?></td>
                         <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>

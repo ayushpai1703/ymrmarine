@@ -175,7 +175,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
 
 // 🌟 Recent Survey Recovery (latest vessel with recovery)
 if (in_array($role, ['Admin', 'Super Admin'], true)) {
-    $recent_row = $db->query("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " ORDER BY survey_completed_date DESC, id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    $recent_row = $db->query("SELECT vessel_name, survey_type_ids, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " ORDER BY survey_completed_date DESC, id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
     $avg_ships = $db->query("SELECT COUNT(*) FROM surveys WHERE status = 'Completed'")->fetchColumn();
     $months_span = $db->query("SELECT GREATEST(1, TIMESTAMPDIFF(MONTH, MIN(COALESCE(survey_completed_date, report_uploaded_date, assign_date)), CURDATE()) + 1) FROM surveys WHERE status IN ('Completed','Pending Report')")->fetchColumn();
     $avg_ships_per_month = $months_span > 0 ? round(((float)$avg_ships) / (float)$months_span, 1) : 0;
@@ -183,7 +183,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $avg_recovery_per_surveyor = $db->query("SELECT AVG(t.s) FROM (SELECT SUM(recovery_amount) AS s FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " GROUP BY surveyor_id) t")->fetchColumn();
     $avg_ships_per_surveyor = $db->query("SELECT AVG(t.cnt) FROM (SELECT COUNT(*) AS cnt FROM surveys WHERE status = 'Completed' GROUP BY surveyor_id) t")->fetchColumn();
 } elseif ($role === 'Client') {
-    $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND client_id = ? ORDER BY survey_completed_date DESC, id DESC LIMIT 1");
+    $stmt_recent = $db->prepare("SELECT vessel_name, survey_type_ids, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND client_id = ? ORDER BY survey_completed_date DESC, id DESC LIMIT 1");
     $stmt_recent->execute([$client_row_id]);
     $recent_row = $stmt_recent->fetch(PDO::FETCH_ASSOC);
     // (గతంలో ఇక్కడ avg_ships_per_month 0 హార్డ్‌కోడ్ చేయబడింది — బగ్ ఫిక్స్)
@@ -199,7 +199,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $avg_ships_per_surveyor = null;
 } else {
     $assignedSql = "(surveyor_id = ? OR id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))";
-    $stmt_recent = $db->prepare("SELECT vessel_name, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND $assignedSql ORDER BY survey_completed_date DESC, id DESC LIMIT 1");
+    $stmt_recent = $db->prepare("SELECT vessel_name, survey_type_ids, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND $assignedSql ORDER BY survey_completed_date DESC, id DESC LIMIT 1");
     $stmt_recent->execute([$user_id, $user_id]);
     $recent_row = $stmt_recent->fetch(PDO::FETCH_ASSOC);
     $stmt_avg = $db->prepare("SELECT COUNT(*) FROM surveys WHERE status = 'Completed' AND $assignedSql");
@@ -214,9 +214,11 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $avg_ships_per_surveyor = null;
 }
 $recent_vessel_name = $recent_row['vessel_name'] ?? '—';
-$recent_vlsfo = !empty($recent_row['vlsfo_recovery']) ? number_format((float)$recent_row['vlsfo_recovery'], 3) . ' MT' : '0.000 MT';
-$recent_lsmgo = !empty($recent_row['lsmgo_recovery']) ? number_format((float)$recent_row['lsmgo_recovery'], 3) . ' MT' : '0.000 MT';
-$recent_hsfo = !empty($recent_row['hsfo_recovery']) ? number_format((float)$recent_row['hsfo_recovery'], 3) . ' MT' : '0.000 MT';
+// Onhire survey → its recovery is shown with a minus sign (display only)
+$recent_onhire = !empty($recent_row) && isOnhireSurvey($db, (string)($recent_row['survey_type_ids'] ?? ''));
+$recent_vlsfo = !empty($recent_row['vlsfo_recovery']) ? recoveryDisplay($recent_row['vlsfo_recovery'], $recent_onhire) . ' MT' : '0.000 MT';
+$recent_lsmgo = !empty($recent_row['lsmgo_recovery']) ? recoveryDisplay($recent_row['lsmgo_recovery'], $recent_onhire) . ' MT' : '0.000 MT';
+$recent_hsfo = !empty($recent_row['hsfo_recovery']) ? recoveryDisplay($recent_row['hsfo_recovery'], $recent_onhire) . ' MT' : '0.000 MT';
 $avg_ships_per_month_disp = number_format((float)$avg_ships_per_month, 1);
 $avg_recovery_per_ship_disp = !empty($avg_recovery_per_ship) ? number_format((float)$avg_recovery_per_ship, 3) . ' MT' : '0.000 MT';
 $avg_recovery_per_surveyor_disp = !empty($avg_recovery_per_surveyor) ? number_format((float)$avg_recovery_per_surveyor, 3) . ' MT' : '0.000 MT';

@@ -123,7 +123,7 @@ try {
                 isRecoveryNotApplicable($db, (string)($row['survey_type_ids'] ?? ''), (string)($row['type_name'] ?? ''))
                   || $row['recovery_amount'] === null // nothing recorded for this completed vessel
                     ? RECOVERY_NA_LABEL
-                    : (float)$row['recovery_amount'],
+                    : recoverySigned($row['recovery_amount'], isOnhireSurvey($db, (string)($row['survey_type_ids'] ?? ''), (string)($row['type_name'] ?? ''))), // Onhire shown negative
                 !empty($row['report_uploaded_date']) ? date('d-m-Y', strtotime($row['report_uploaded_date'])) : '',
             ],
         ];
