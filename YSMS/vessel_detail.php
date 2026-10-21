@@ -494,6 +494,15 @@ include 'includes/header.php';
         </form>
     </div>
         </div><!-- /.detail-main-row -->
+
+        <?php
+        // Same vessel surveyed before (any client) — for the surveyor's reference. Admin / Super Admin / Surveyor only.
+        if (in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true)) {
+            require_once 'includes/vessel_history.php';
+            try { $vesselHistoryRows = vesselHistory($db, $survey); } catch (Throwable $e) { error_log('vessel history: ' . $e->getMessage()); $vesselHistoryRows = []; }
+            include 'includes/vessel_history_card.php';
+        }
+        ?>
         <?php if (!empty($remarks_full) && strlen($remarks_full) > 150): ?>
         <div class="modal fade" id="remarksModal" tabindex="-1" aria-hidden="true" data-testid="vessel-detail-remarks-modal">
             <div class="modal-dialog modal-dialog-centered">
