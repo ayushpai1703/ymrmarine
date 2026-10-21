@@ -45,6 +45,11 @@ try {
     $db = getDB();
     dailyEmailEnsureTables($db);
     if ($viaCron) dailyEmailSetMeta($db, 'last_scheduler_call' . ($job !== '' ? '_' . $job : ''), date('Y-m-d H:i:s'));
+    // Upload admin emails nobody sent (page closed) or that failed — includes/upload_email_outbox.php
+    try {
+        require_once dirname(__DIR__) . '/includes/upload_email_outbox.php';
+        uploadEmailSendOverdue($db);
+    } catch (Throwable $e) { error_log('upload email safety net: ' . $e->getMessage()); }
     $ran = dailyEmailRunDue($db, $viaCron ? 'scheduler' : 'page', $job);
     $failed = array_filter($ran, fn($r) => $r['status'] === 'failed');
     if ($failed) http_response_code(500);
