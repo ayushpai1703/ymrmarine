@@ -18,6 +18,55 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../includes/csrf.php';
 
+// 🌟 Uploads with a progress bar: assets/js/submit-feedback.js sends every file-upload form
+// with XMLHttpRequest (header X-YSMS-Upload) so it can show the % sent. The browser then has
+// to land on the same page a normal submit would have shown:
+//  - a redirect is answered as {"redirect": "<url>"} for the page to follow;
+//  - a page rendered straight from the POST is kept once in the session and answered as a
+//    redirect to the same URL + ?ysms_page=<token>, which shows exactly that page (once);
+//  - file downloads and error responses (4xx/5xx) pass through untouched.
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_SERVER['HTTP_X_YSMS_UPLOAD'] ?? '') === '1') {
+    $ysmsUploadObLevel = ob_get_level();
+    ob_start();
+    register_shutdown_function(function () use ($ysmsUploadObLevel) {
+        while (ob_get_level() > $ysmsUploadObLevel + 1) ob_end_flush();
+        if (ob_get_level() <= $ysmsUploadObLevel) return;
+        $body = (string)ob_get_clean();
+        $code = http_response_code() ?: 200;
+        $location = '';
+        $attachment = false;
+        foreach (headers_list() as $h) {
+            if (stripos($h, 'Location:') === 0) $location = trim(substr($h, 9));
+            if (stripos($h, 'Content-Disposition:') === 0 && stripos($h, 'attachment') !== false) $attachment = true;
+        }
+        if (headers_sent() || $attachment || ($code >= 400 && $location === '')) { echo $body; return; }
+        if ($location === '') {
+            $token = bin2hex(random_bytes(8));
+            if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
+            $type = 'text/html; charset=UTF-8';
+            foreach (headers_list() as $h) if (stripos($h, 'Content-Type:') === 0) $type = trim(substr($h, 13));
+            $_SESSION['ysms_upload_page'] = ['token' => $token, 'body' => $body, 'type' => $type];
+            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            $location = preg_replace('/([?&])ysms_page=[0-9a-f]+&?/', '$1', $uri);
+            $location = rtrim($location, '?&') . (strpos(rtrim($location, '?&'), '?') === false ? '?' : '&') . 'ysms_page=' . $token;
+        }
+        header_remove('Location');
+        http_response_code(200);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['redirect' => $location]);
+    });
+}
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && isset($_GET['ysms_page'])
+    && is_array($_SESSION['ysms_upload_page'] ?? null)
+    && hash_equals((string)$_SESSION['ysms_upload_page']['token'], (string)$_GET['ysms_page'])) {
+    $ysmsPage = $_SESSION['ysms_upload_page'];
+    unset($_SESSION['ysms_upload_page']);
+    header('Content-Type: ' . $ysmsPage['type']);
+    header('Cache-Control: no-store');
+    echo $ysmsPage['body'];
+    exit;
+}
+
 // 🔐 మీ లైవ్ సర్వర్ / cPanel డేటాబేస్ కనెక్షన్ వివరాలు
 // (env variable సెట్ చేసి ఉంటే దాన్ని వాడుతుంది, లేకపోతే కింద ఉన్న డిఫాల్ట్ విలువలనే వాడుతుంది —
 //  కాబట్టి ఇప్పుడు ఏమీ మారదు, కానీ future లో సర్వర్ env vars లో పెట్టి ఇక్కడి నుండి ప్లెయిన్‌టెక్స్ట్ తీసేయొచ్చు)

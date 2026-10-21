@@ -5,9 +5,13 @@
  *    "Uploading…" overlay; download forms reset themselves after a few seconds.
  *  - Any POST made with fetch / XMLHttpRequest (jQuery included): a thin
  *    progress bar across the top of the screen while it runs.
- *  - Report uploads (forms posting files to ajax/upload_handler.php) go up with
- *    XMLHttpRequest and show a progress bar with the % sent, then follow the
- *    handler's redirect (it answers {"redirect": …} for these requests).
+ *  - Every file upload shows a progress bar with the % sent:
+ *    · POST forms with files go up with XMLHttpRequest and then land on the page
+ *      a normal submit would have shown (config/config.php answers these
+ *      requests with {"redirect": …}); downloads are saved as files;
+ *    · AJAX uploads (XMLHttpRequest / jQuery / fetch with a FormData holding
+ *      files) get the same progress overlay while they run. Pages with their own
+ *      upload progress (team chat, document replace) are left alone.
  * Opt out per form with data-no-loading.
  */
 (function () {
@@ -65,11 +69,26 @@
         return String(method || 'GET').toUpperCase() !== 'GET' && !QUIET.test(String(url || ''));
     }
 
+    // AJAX uploads: a FormData body that holds a file gets the upload progress overlay
+    var OWN_PROGRESS = /team_chat\.php|document_replace\.php/;
+    function formDataHasFile(body) {
+        if (!window.FormData || !(body instanceof FormData) || !body.entries) return false;
+        var it = body.entries(), e;
+        while (!(e = it.next()).done) {
+            var v = e.value[1];
+            if (window.Blob && v instanceof Blob && v.size > 0) return true;
+        }
+        return false;
+    }
+
     if (window.fetch) {
         var origFetch = window.fetch;
         window.fetch = function (input, init) {
             var method = (init && init.method) || (input && input.method) || 'GET';
             var url = typeof input === 'string' ? input : (input && input.url) || '';
+            if (String(method).toUpperCase() === 'POST' && init && formDataHasFile(init.body) && !OWN_PROGRESS.test(url) && window.XMLHttpRequest) {
+                return fetchWithProgress(url, init);
+            }
             if (!tracked(method, url)) return origFetch.apply(this, arguments);
             busy(1);
             return origFetch.apply(this, arguments).then(
@@ -83,17 +102,52 @@
         var origOpen = XHR.open, origSend = XHR.send;
         XHR.open = function (method, url) {
             this.__ysmsTrack = tracked(method, url);
+            this.__ysmsUrl = String(url || '');
             return origOpen.apply(this, arguments);
         };
-        XHR.send = function () {
+        XHR.send = function (body) {
             if (this.__ysmsTrack && !this.__ysmsCounted) {
                 this.__ysmsCounted = true;
                 busy(1);
                 var self = this;
                 this.addEventListener('loadend', function () { busy(-1); self.__ysmsCounted = false; });
             }
+            if (!this.__ysmsOwnOverlay && !OWN_PROGRESS.test(this.__ysmsUrl) && formDataHasFile(body)) {
+                var ov = progressOverlay();
+                this.upload.addEventListener('progress', function (e) { if (e.lengthComputable) ov.progress(e.loaded, e.total); });
+                this.upload.addEventListener('load', ov.sent);
+                this.addEventListener('loadend', ov.close);
+            }
             return origSend.apply(this, arguments);
         };
+    }
+    // fetch() can't report upload progress: send that one request with XMLHttpRequest instead.
+    function fetchWithProgress(url, init) {
+        return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', url);
+            xhr.responseType = 'blob';
+            var h = init.headers;
+            if (h) {
+                if (window.Headers && h instanceof Headers) h.forEach(function (v, k) { xhr.setRequestHeader(k, v); });
+                else if (Array.isArray(h)) h.forEach(function (p) { xhr.setRequestHeader(p[0], p[1]); });
+                else Object.keys(h).forEach(function (k) { xhr.setRequestHeader(k, h[k]); });
+            }
+            if (init.credentials === 'include') xhr.withCredentials = true;
+            xhr.onload = function () {
+                var headers = new Headers();
+                xhr.getAllResponseHeaders().trim().split(/[\r\n]+/).forEach(function (line) {
+                    var i = line.indexOf(':');
+                    if (i > 0) { try { headers.append(line.slice(0, i).trim(), line.slice(i + 1).trim()); } catch (e) {} }
+                });
+                var nullBody = [101, 204, 205, 304].indexOf(xhr.status) !== -1;
+                resolve(new Response(nullBody ? null : xhr.response, { status: xhr.status, statusText: xhr.statusText, headers: headers }));
+            };
+            xhr.onerror = function () { reject(new TypeError('Failed to fetch')); };
+            xhr.onabort = function () { reject(new DOMException('The upload was aborted.', 'AbortError')); };
+            if (init.signal) init.signal.addEventListener('abort', function () { xhr.abort(); });
+            xhr.send(init.body);
+        });
     }
 
     // ---------------------------------------------------------- forms
@@ -164,18 +218,10 @@
         var o = document.getElementById('ysmsSubmitOverlay');
         if (o) o.remove();
     }
-    // ---------------------------------------------------------- report uploads with progress
-    var UPLOAD_ACTION = /(^|\/)ajax\/upload_handler\.php(\?|$)/;
-    function isProgressUpload(form) {
-        return UPLOAD_ACTION.test(form.getAttribute('action') || '') && hasFiles(form)
-            && !form.hasAttribute('data-no-loading') && !!window.FormData && !!window.XMLHttpRequest;
-    }
+    // ---------------------------------------------------------- upload progress
     function mbText(b) { return (b / 1048576).toFixed(b < 10485760 ? 1 : 0) + ' MB'; }
-    function uploadWithProgress(form, submitter) {
-        if (form.dataset.ysmsSubmitting === '1') return;
-        form.dataset.ysmsSubmitting = '1';
-        submitButtons(form, submitter).forEach(function (b) { setLoading(b, 'Uploading…'); });
-
+    // Full-screen "Uploading files… 45%" box; one at a time.
+    function progressOverlay() {
         hideOverlay();
         var o = document.createElement('div');
         o.className = 'ysms-submit-overlay';
@@ -190,62 +236,111 @@
         document.body.appendChild(o);
         var title = o.querySelector('[data-up-title]'), pct = o.querySelector('[data-up-pct]'), sub = o.querySelector('[data-up-sub]');
         var track = o.querySelector('.ysms-up-track'), fill = o.querySelector('.ysms-up-fill');
+        function leaveGuard(e) { e.preventDefault(); e.returnValue = ''; }
+        window.addEventListener('beforeunload', leaveGuard);
         function setPct(p) {
             p = Math.max(0, Math.min(100, Math.floor(p)));
             fill.style.width = p + '%';
             pct.textContent = p + '%';
             track.setAttribute('aria-valuenow', String(p));
         }
-        function leaveGuard(e) { e.preventDefault(); e.returnValue = ''; }
-        window.addEventListener('beforeunload', leaveGuard);
-        function fail(msg) {
-            window.removeEventListener('beforeunload', leaveGuard);
+        return {
+            progress: function (loaded, total) {
+                setPct(loaded / total * 100);
+                sub.textContent = mbText(loaded) + ' of ' + mbText(total) + ' — please don\'t close this page.';
+            },
+            sent: function () {
+                setPct(100);
+                title.textContent = 'Upload complete';
+                sub.textContent = 'Saving files…';
+            },
+            release: function () { window.removeEventListener('beforeunload', leaveGuard); },
+            close: function () { window.removeEventListener('beforeunload', leaveGuard); if (o.parentNode) o.remove(); },
+            fail: function (msg) {
+                window.removeEventListener('beforeunload', leaveGuard);
+                title.textContent = 'Upload failed';
+                title.className = 'ysms-up-err';
+                pct.style.display = 'none';
+                track.style.display = 'none';
+                sub.textContent = msg;
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'ysms-up-close';
+                btn.textContent = 'Close';
+                btn.addEventListener('click', function () { if (o.parentNode) o.remove(); });
+                o.firstChild.appendChild(btn);
+            }
+        };
+    }
+
+    function isProgressUpload(form) {
+        if ((form.getAttribute('method') || 'get').toLowerCase() !== 'post') return false;
+        if (form.hasAttribute('data-no-loading') || isDownloadForm(form)) return false;
+        var target = form.getAttribute('target');
+        if (target && target !== '_self') return false;
+        return hasFiles(form) && !!window.FormData && !!window.XMLHttpRequest && !!window.Blob;
+    }
+    function saveBlob(blob, disposition) {
+        var m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(disposition || '');
+        var name = m ? decodeURIComponent(m[1] || m[2]) : 'download';
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    }
+    function uploadWithProgress(form, submitter) {
+        if (form.dataset.ysmsSubmitting === '1') return;
+        form.dataset.ysmsSubmitting = '1';
+        submitButtons(form, submitter).forEach(function (b) { setLoading(b, 'Uploading…'); });
+        var ov = progressOverlay();
+        function unlock() {
             delete form.dataset.ysmsSubmitting;
             submitButtons(form, null).forEach(clearLoading);
-            title.textContent = 'Upload failed';
-            title.className = 'ysms-up-err';
-            pct.style.display = 'none';
-            track.style.display = 'none';
-            sub.textContent = msg;
-            var btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'ysms-up-close';
-            btn.textContent = 'Close';
-            btn.addEventListener('click', hideOverlay);
-            o.firstChild.appendChild(btn);
         }
+        function fail(msg) { unlock(); ov.fail(msg); }
 
         var fd;
         try { fd = new FormData(form, submitter || undefined); } catch (err) { fd = new FormData(form); }
         if (submitter && submitter.name && !fd.has(submitter.name)) fd.append(submitter.name, submitter.value || '');
-        var url = form.action;
+        var url = form.action || window.location.href;
         var xhr = new XMLHttpRequest();
+        xhr.__ysmsOwnOverlay = true;
         xhr.open('POST', url);
+        xhr.responseType = 'blob';
         xhr.setRequestHeader('X-YSMS-Upload', '1');
-        xhr.upload.addEventListener('progress', function (e) {
-            if (!e.lengthComputable) return;
-            setPct(e.loaded / e.total * 100);
-            sub.textContent = mbText(e.loaded) + ' of ' + mbText(e.total) + ' — please don\'t close this page.';
-        });
-        xhr.upload.addEventListener('load', function () {
-            setPct(100);
-            title.textContent = 'Upload complete';
-            sub.textContent = 'Saving files…';
-        });
+        xhr.upload.addEventListener('progress', function (e) { if (e.lengthComputable) ov.progress(e.loaded, e.total); });
+        xhr.upload.addEventListener('load', ov.sent);
         xhr.addEventListener('load', function () {
-            var data = null;
-            try { data = JSON.parse(xhr.responseText); } catch (err) {}
-            if (xhr.status === 200 && data && data.redirect) {
-                window.removeEventListener('beforeunload', leaveGuard);
-                var next = new URL(data.redirect, url);
-                var here = new URL(window.location.href);
-                window.location.href = next.href;
-                // Same page with only a #section: assigning href just scrolls — reload to show the result
-                if (next.hash && next.origin + next.pathname + next.search === here.origin + here.pathname + here.search) window.location.reload();
+            var disposition = xhr.getResponseHeader('Content-Disposition') || '';
+            if (xhr.status >= 200 && xhr.status < 300 && /attachment/i.test(disposition)) {
+                saveBlob(xhr.response, disposition);
+                unlock();
+                ov.close();
                 return;
             }
-            var text = (xhr.responseText || '').trim();
-            fail(text && text.length < 300 && text.charAt(0) !== '<' ? text : 'The server could not save the files (error ' + xhr.status + '). Please try again.');
+            xhr.response.text().then(function (text) {
+                var data = null;
+                try { data = JSON.parse(text); } catch (err) {}
+                if (xhr.status === 200 && data && data.redirect) {
+                    ov.release();
+                    var next = new URL(data.redirect, url);
+                    var here = new URL(window.location.href);
+                    window.location.href = next.href;
+                    // Same page with only a #section: assigning href just scrolls — reload to show the result
+                    if (next.hash && next.origin + next.pathname + next.search === here.origin + here.pathname + here.search) window.location.reload();
+                    return;
+                }
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    // A page without the server-side support: the upload went through — open the page it ended on
+                    ov.release();
+                    window.location.href = xhr.responseURL || url;
+                    return;
+                }
+                text = (text || '').trim();
+                fail(text && text.length < 300 && text.charAt(0) !== '<' ? text : 'The server could not save the files (error ' + xhr.status + '). Please try again.');
+            });
         });
         xhr.addEventListener('error', function () { fail('No connection to the server. Check your internet and try again.'); });
         xhr.addEventListener('abort', function () { fail('The upload was interrupted. Please try again.'); });
