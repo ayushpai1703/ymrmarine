@@ -115,7 +115,7 @@ function recoveryListQs(array $f, array $extra = []): string {
 /** One row ready for display/export: dates d-m-Y, recovery null / float, 'na' for types without Recovery. */
 function recoveryListRow(PDO $db, array $r): array {
     $d = fn($v) => (!empty($v) && strpos((string)$v, '0000') !== 0) ? date('d-m-Y', strtotime((string)$v)) : '';
-    $n = fn($v) => $v !== null ? (float)$v : null;
+    $n = fn($v) => $v !== null ? abs((float)$v) : null; // always positive; Onhire minus is added only for display
     return [
         'id'        => (int)$r['id'],
         'vessel'    => (string)($r['vessel_name'] ?? ''),
@@ -131,6 +131,8 @@ function recoveryListRow(PDO $db, array $r): array {
         'completed' => surveyCompletedDateText($r),
         'report'    => $d($r['report_uploaded_date'] ?? null),
         'na'        => isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')),
+        // Onhire: recovery shown with a minus sign; vlsfo/lsmgo/hsfo/total below stay positive for sums
+        'onhire'    => isOnhireSurvey($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')),
         'vlsfo'     => $n($r['vlsfo_recovery']),
         'lsmgo'     => $n($r['lsmgo_recovery']),
         'hsfo'      => $n($r['hsfo_recovery']),

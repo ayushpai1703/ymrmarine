@@ -324,6 +324,31 @@ function isRecoveryNotApplicable($db, $ids_csv, $fallback_name = '') {
     return true;
 }
 
+/**
+ * Onhire surveys (any spelling: Onhire / ONHIRE / On hire / On-Hire, alone or combined, e.g.
+ * "Onhire + BQS"): their recovery is SHOWN with a minus sign. Display only — the stored value
+ * stays positive and every total / sum / average keeps adding it as a positive number.
+ */
+function isOnhireSurvey($db, $ids_csv, $fallback_name = ''): bool {
+    foreach (getSurveyTypeNamesArray($db, (string)$ids_csv, (string)$fallback_name) as $n) {
+        if (preg_match('/(?<![a-z])on[\s\-]*hire/i', (string)$n)) return true;
+    }
+    return false;
+}
+
+/** Recovery figure for display: "12.500", or "-12.500" for an Onhire survey (0 stays "0.000"). */
+function recoveryDisplay($value, bool $onhire, int $decimals = 3): string {
+    $v = abs((float)$value);
+    return ($onhire && round($v, $decimals) != 0 ? '-' : '') . number_format($v, $decimals);
+}
+
+/** Numeric twin of recoveryDisplay() for Excel cells (negative for Onhire), null stays null. */
+function recoverySigned($value, bool $onhire): ?float {
+    if ($value === null || $value === '') return null;
+    $v = round(abs((float)$value), 3);
+    return $onhire && $v != 0.0 ? -$v : $v;
+}
+
 // SQL twin of isRecoveryNotApplicable(): true when recovery counts for the
 // survey row aliased $a (at least one selected type is outside
 // RECOVERY_NOT_APPLICABLE_TYPES; unresolved types count as applicable).
@@ -339,7 +364,8 @@ function recoveryAppliesSql(string $a = 's'): string {
 
 /** recovery_amount (or $col) counted in totals: NULL for NOT APPLICABLE survey types. */
 function recoveryCountedSql(string $a = 's', string $col = 'recovery_amount'): string {
-    return "(CASE WHEN " . recoveryAppliesSql($a) . " THEN $a.$col END)";
+    // ABS: recovery is always counted as a positive quantity (an Onhire value typed or imported with a minus sign must never reduce totals)
+    return "(CASE WHEN " . recoveryAppliesSql($a) . " THEN ABS($a.$col) END)";
 }
 
 // 🌟 ఒక సర్వేకి బహుళ Surveyors అసైన్ చేసినప్పుడు (survey_surveyors జంక్షన్ టేబుల్), వాటన్నింటినీ

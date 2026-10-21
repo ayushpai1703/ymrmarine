@@ -62,14 +62,15 @@ $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $data = [];
 foreach ($rows as $row) {
     $na = isRecoveryNotApplicable($db, (string)($row['survey_type_ids'] ?? ''), (string)($row['type_name'] ?? ''));
+    $onhire = isOnhireSurvey($db, (string)($row['survey_type_ids'] ?? ''), (string)($row['type_name'] ?? '')); // shown as minus
     $data[] = [
         'vessel_name'    => $row['vessel_name'] ?? '',
         'survey_type'    => getCombinedSurveyTypeNames($db, $row['survey_type_ids'] ?? '', $row['type_name'] ?? 'N/A'),
-        'vlsfo_recovery' => $na ? RECOVERY_NA_LABEL : ($row['vlsfo_recovery'] !== null ? number_format((float)$row['vlsfo_recovery'], 3) : '0.000'),
-        'lsmgo_recovery' => $na ? RECOVERY_NA_LABEL : ($row['lsmgo_recovery'] !== null ? number_format((float)$row['lsmgo_recovery'], 3) : '0.000'),
-        'hsfo_recovery'  => $na ? RECOVERY_NA_LABEL : ($row['hsfo_recovery'] !== null ? number_format((float)$row['hsfo_recovery'], 3) : '0.000'),
+        'vlsfo_recovery' => $na ? RECOVERY_NA_LABEL : ($row['vlsfo_recovery'] !== null ? recoveryDisplay($row['vlsfo_recovery'], $onhire) : '0.000'),
+        'lsmgo_recovery' => $na ? RECOVERY_NA_LABEL : ($row['lsmgo_recovery'] !== null ? recoveryDisplay($row['lsmgo_recovery'], $onhire) : '0.000'),
+        'hsfo_recovery'  => $na ? RECOVERY_NA_LABEL : ($row['hsfo_recovery'] !== null ? recoveryDisplay($row['hsfo_recovery'], $onhire) : '0.000'),
         'recovery_na'    => $na,
-        'total_recovery' => $na ? RECOVERY_NA_LABEL : ($row['recovery_amount'] !== null ? number_format((float)$row['recovery_amount'], 3) : '0.000'),
+        'total_recovery' => $na ? RECOVERY_NA_LABEL : ($row['recovery_amount'] !== null ? recoveryDisplay($row['recovery_amount'], $onhire) : '0.000'),
     ];
 }
 

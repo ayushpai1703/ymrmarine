@@ -67,7 +67,7 @@ function cvRecovery(array $r): float {
     global $db;
     if ($r['recovery_amount'] === null) return 0.0;
     // NOT APPLICABLE survey types count as 0 — same as the cards and the Excel export.
-    return isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')) ? 0.0 : (float)$r['recovery_amount'];
+    return isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')) ? 0.0 : abs((float)$r['recovery_amount']);
 }
 
 // Month filter ('YYYY-MM' => ['label' => 'October 2026', 'count' => 12]) —
@@ -176,8 +176,10 @@ function recoveryDisplayParts(array $survey): array {
             && ($survey['hsfo_recovery'] ?? null) === null && ($survey['lsmgo_recovery'] ?? null) === null)) {
         return ['na' => true, 'total' => RECOVERY_NA_LABEL, 'vlsfo' => '', 'hsfo' => '', 'lsmgo' => ''];
     }
-    $fmt = function ($v) {
-        return $v !== null ? number_format((float)$v, 3) . ' MT' : '—';
+    // Onhire surveys show their recovery with a minus sign (display only; totals stay positive)
+    $onhire = isOnhireSurvey($db, (string)($survey['survey_type_ids'] ?? ''), (string)($survey['type_name'] ?? ''));
+    $fmt = function ($v) use ($onhire) {
+        return $v !== null ? recoveryDisplay($v, $onhire) . ' MT' : '—';
     };
     return [
         'na' => false,
