@@ -86,6 +86,7 @@ try {
     require_once __DIR__ . '/../includes/recovery_excel.php';
     require_once __DIR__ . '/../../includes/upload_validation.php';
 require_once __DIR__ . '/../includes/notifications.php';
+require_once __DIR__ . '/../includes/upload_email_outbox.php'; // admin email sent after the redirect
     $files_uploaded = 0;
     $uploaded_labels = [];
     $uploaded_attachments = []; // full paths for email attachments
@@ -377,10 +378,7 @@ require_once __DIR__ . '/../includes/notifications.php';
                     }
                 } catch (Throwable $ignore) {}
             }
-            $note = notifyAdminsOfReportUpload($db, $ctx);
-            if ($note !== '') {
-                $_SESSION['flash_msg'] .= ' · ' . $note;
-            }
+            $_SESSION['flash_msg'] .= ' · ' . uploadEmailQueueOrSend($db, $survey_id, $ctx);
             try {
                 $v = $ctx['vessel_name'] ?? 'Vessel';
                 $who = $_SESSION['full_name'] ?? 'Surveyor';
@@ -438,10 +436,7 @@ require_once __DIR__ . '/../includes/notifications.php';
                     }
                 } catch (Throwable $ignore) {}
             }
-            $note = notifyAdminsOfReportUpload($db, $ctx);
-            if ($note !== '') {
-                $_SESSION['flash_msg'] .= ' · ' . $note;
-            }
+            $_SESSION['flash_msg'] .= ' · ' . uploadEmailQueueOrSend($db, $survey_id, $ctx);
             try {
                 $v = $ctx['vessel_name'] ?? 'Vessel';
                 $who = $_SESSION['full_name'] ?? 'Surveyor';

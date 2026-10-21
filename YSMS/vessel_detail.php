@@ -1358,7 +1358,7 @@ document.addEventListener('click', function (ev) {
 <script>
 // Upload PDF/Excel form: show a "please wait" overlay and lock the submit
 // button the instant Submit is pressed — the actual upload+email can still
-// take several seconds (admin notification email, Excel recovery parsing),
+// take several seconds on a slow connection (the admin email is sent after the redirect),
 // and with no feedback the page looked frozen, tempting a second tap that
 // re-submitted the same files. The browser's own "required" validation
 // still runs first, so this only fires once the form is really submitting.
@@ -1381,7 +1381,7 @@ document.addEventListener('submit', function (ev) {
     overlay.innerHTML =
         '<div class="ysms-upload-overlay-box">' +
             '<i class="fa-solid fa-spinner fa-spin"></i>' +
-            '<div>Uploading files and sending notifications…<br>This can take a few seconds, please don\'t close this page.</div>' +
+            '<div>Uploading files…<br>Please don\'t close this page until it finishes.</div>' +
         '</div>';
     document.body.appendChild(overlay);
 }, true);

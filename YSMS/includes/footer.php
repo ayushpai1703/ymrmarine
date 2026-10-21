@@ -74,6 +74,37 @@ $fab_user_role = $user_role ?? ($_SESSION['role'] ?? '');
 <script src="assets/js/app.js?v=<?= @filemtime(__DIR__ . '/../assets/js/app.js') ?: time() ?>"></script>
 <script src="assets/js/submit-feedback.js?v=<?= @filemtime(__DIR__ . '/../assets/js/submit-feedback.js') ?: time() ?>"></script>
 
+<?php if (!empty($_SESSION['upload_email_outbox'])): ?>
+<script>
+// Admin email for the upload just made (includes/upload_email_outbox.php): sent now, in its
+// own request, so the upload itself didn't wait for it. The toast reports what the mail
+// transport answered; anything not sent is retried automatically.
+(function () {
+    function toast(text, ok) {
+        var t = document.createElement('div');
+        t.setAttribute('role', ok ? 'status' : 'alert');
+        t.setAttribute('data-testid', 'upload-email-toast');
+        t.style.cssText = 'position:fixed;bottom:96px;left:50%;transform:translateX(-50%);width:min(520px,calc(100vw - 32px));z-index:100002;' +
+            'padding:12px 16px;border-radius:14px;color:#fff;font-size:13.5px;font-weight:600;line-height:1.4;box-shadow:0 14px 30px -6px rgba(15,23,42,.45);' +
+            'background:' + (ok ? '#166534' : '#b45309');
+        t.textContent = text;
+        document.body.appendChild(t);
+        setTimeout(function () { t.style.transition = 'opacity .4s'; t.style.opacity = '0'; setTimeout(function () { t.remove(); }, 400); }, ok ? 6000 : 10000);
+    }
+    fetch('ajax/upload_email_send.php', { method: 'POST', keepalive: true, credentials: 'same-origin', headers: { 'X-CSRF-Token': <?= json_encode(csrf_token()) ?> } })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (!d.success) { toast(d.message || 'Admin email will be retried automatically.', false); return; }
+            (d.results || []).forEach(function (r) {
+                if (r.status === 'sent') toast(r.message, true);
+                else if (r.status === 'failed') toast(r.message + ' — it will be retried automatically.', false);
+            });
+        })
+        .catch(function () {});
+})();
+</script>
+<?php endif; ?>
+
 <?php if (!empty($_SESSION['user_id'])): ?>
 <script>
 // Daily automatic emails (Admin Controls → Daily Emails): ask the server to send any that are
