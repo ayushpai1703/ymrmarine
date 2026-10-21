@@ -24,6 +24,9 @@ $vhIcon = fn($name) => match (strtolower(pathinfo((string)$name, PATHINFO_EXTENS
 .vh-pill.c { background: #DCFCE7; color: #166534; } .vh-pill.p { background: #FEF3C7; color: #92400E; }
 .vh-meta { font-size: 12.5px; color: #334155; margin-top: 4px; line-height: 1.55; }
 .vh-meta b { color: #0f172a; }
+.vh-rec { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12.5px; color: #334155; margin-top: 6px; }
+.vh-rec .fa-droplet { color: #2563eb; }
+.vh-rec-item { background: #EFF6FF; border-radius: 8px; padding: 2px 8px; }
 .vh-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .vh-file { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; border: 1px solid #e2e8f0; border-radius: 10px; padding: 5px 6px 5px 10px; font-size: 12px; background: #f8fafc; }
 .vh-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
@@ -37,7 +40,7 @@ $vhIcon = fn($name) => match (strtolower(pathinfo((string)$name, PATHINFO_EXTENS
         <div class="vh-head-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
         <div>
             <div class="vh-title">Previous surveys of this vessel (<?= count($vesselHistoryRows) ?>)</div>
-            <div class="vh-sub">For reference — when, where and for whom it was surveyed before, with the documents uploaded then.</div>
+            <div class="vh-sub">For reference — when, where and for whom it was surveyed before, recovery and the documents uploaded then.</div>
         </div>
     </div>
     <?php foreach ($vesselHistoryRows as $h): ?>
@@ -53,6 +56,20 @@ $vhIcon = fn($name) => match (strtolower(pathinfo((string)$name, PATHINFO_EXTENS
             · <i class="fa-solid fa-building"></i> <?= sanitize($h['company_name'] ?: '—') ?>
             · <i class="fa-solid fa-user"></i> <?= sanitize($h['surveyors'] ?: '—') ?>
             <?php if ($h['status'] === 'Completed'): ?> · Report <?= $vhDate($h['report_uploaded_date']) ?><?php endif; ?>
+        </div>
+        <?php
+        $vhRec = ['Total' => $h['recovery_amount'], 'VLSFO' => $h['vlsfo_recovery'], 'LSMGO' => $h['lsmgo_recovery'], 'HSFO' => $h['hsfo_recovery']];
+        $vhRecSet = array_filter($vhRec, fn($v) => $v !== null && $v !== '');
+        ?>
+        <div class="vh-rec" data-testid="vessel-history-recovery">
+            <i class="fa-solid fa-droplet"></i> <b>Recovery:</b>
+            <?php if ($h['recovery_na'] || (!$vhRecSet && $h['status'] === 'Completed')): ?>
+                <?= sanitize(RECOVERY_NA_LABEL) ?>
+            <?php elseif (!$vhRecSet): ?>
+                <span class="vh-sub">not entered yet</span>
+            <?php else: foreach ($vhRecSet as $lbl => $v): ?>
+                <span class="vh-rec-item"><?= $lbl ?> <b><?= sanitize(recoveryDisplay($v, (bool)$h['recovery_onhire'], 3)) ?> MT</b></span>
+            <?php endforeach; endif; ?>
         </div>
         <?php if ($h['files']): ?>
         <div class="vh-files">

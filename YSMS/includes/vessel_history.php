@@ -8,6 +8,8 @@
  * punctuation, or the same IMO number. Any client. Only surveys that were actually done
  * (Pending Report / Completed).
  *
+ * Each survey also carries its recovery (Total / VLSFO / LSMGO / HSFO).
+ *
  * Access: Admin / Super Admin, and a Surveyor for vessels currently assigned to them
  * (Pending Vessel / Pending Report) — download.php uses vesselHistorySurveyorMayOpen() so
  * those documents open for that surveyor too. Clients never see other surveys.
@@ -56,10 +58,13 @@ function vesselHistoryIds(PDO $db, string $vesselName, $imo, int $excludeId = 0)
 function vesselHistory(PDO $db, array $survey): array {
     $ids = vesselHistoryIds($db, (string)($survey['vessel_name'] ?? ''), $survey['imo_number'] ?? '', (int)$survey['id']);
     if (!$ids) return [];
+    $hasHsfo = false;
+    try { $hasHsfo = (bool)$db->query("SHOW COLUMNS FROM surveys LIKE 'hsfo_recovery'")->fetch(); } catch (Throwable $e) {}
     $in = implode(',', array_fill(0, count($ids), '?'));
     $st = $db->prepare("
         SELECT s.id, s.vessel_name, s.status, s.report_number, s.survey_type_ids, st.type_name, s.survey_completed_date,
-               s.report_uploaded_date, s.assign_date, c.company_name, p.port_name, p.country, u.full_name AS surveyor_name
+               s.report_uploaded_date, s.assign_date, s.recovery_amount, s.vlsfo_recovery, s.lsmgo_recovery,
+               " . ($hasHsfo ? 's.hsfo_recovery' : 'NULL AS hsfo_recovery') . ", c.company_name, p.port_name, p.country, u.full_name AS surveyor_name
         FROM surveys s
         LEFT JOIN clients c ON c.id = s.client_id
         LEFT JOIN ports p ON p.id = s.port_id
@@ -77,6 +82,9 @@ function vesselHistory(PDO $db, array $survey): array {
         $r['types'] = getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? '');
         $r['surveyors'] = getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? '');
         $r['files'] = $files[(int)$r['id']] ?? [];
+        // Recovery as on completed_detail.php: N/A types show the N/A label, Onhire shows minus
+        $r['recovery_na'] = isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? ''));
+        $r['recovery_onhire'] = isOnhireSurvey($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? ''));
     }
     unset($r);
     return $rows;

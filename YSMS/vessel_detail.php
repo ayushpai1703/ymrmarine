@@ -938,8 +938,8 @@ include 'includes/header.php';
     </div><!-- /.detail-desktop-view -->
 
     <?php
-    // Same vessel surveyed before (any client) — for the surveyor's reference. Not for Client logins.
-    if ($role !== 'Client') {
+    // Same vessel surveyed before (any client) — for the surveyor's reference. Admin / Super Admin / Surveyor only.
+    if (in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true)) {
         require_once 'includes/vessel_history.php';
         try { $vesselHistoryRows = vesselHistory($db, $survey); } catch (Throwable $e) { error_log('vessel history: ' . $e->getMessage()); $vesselHistoryRows = []; }
         include 'includes/vessel_history_card.php';
