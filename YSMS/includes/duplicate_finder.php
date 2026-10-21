@@ -42,7 +42,7 @@ function findPossibleDuplicates(PDO $db): array {
         for ($i = 0; $i < $n; $i++) {
             for ($j = $i + 1; $j < $n; $j++) {
                 $days = abs((strtotime(substr($g[$i]['survey_completed_date'], 0, 10)) - strtotime(substr($g[$j]['survey_completed_date'], 0, 10))) / 86400);
-                $ri = round((float)$g[$i]['recovery_amount'], 3); $rj = round((float)$g[$j]['recovery_amount'], 3);
+                $ri = round(abs((float)$g[$i]['recovery_amount']), 3); $rj = round(abs((float)$g[$j]['recovery_amount']), 3);
                 $same = $g[$i]['recovery_amount'] !== null && $ri != 0.0 && abs($ri - $rj) < 0.0005;
                 if (($same && $days <= DUP_SAME_RECOVERY_DAYS) || $days <= DUP_CHECK_DAYS) {
                     $a = $find($i); $b = $find($j); $parent[$b] = $a;
@@ -64,7 +64,7 @@ function findPossibleDuplicates(PDO $db): array {
             $records = array_map(fn($i) => $g[$i], $members);
             // MT counted more than once: every extra copy of the same recovery value
             $byRec = [];
-            foreach ($records as $r) if ($r['recovery_amount'] !== null && (float)$r['recovery_amount'] != 0.0) $byRec[number_format((float)$r['recovery_amount'], 3, '.', '')][] = 1;
+            foreach ($records as $r) if ($r['recovery_amount'] !== null && (float)$r['recovery_amount'] != 0.0) $byRec[number_format(abs((float)$r['recovery_amount']), 3, '.', '')][] = 1;
             foreach ($byRec as $v => $copies) { $extra += (count($copies) - 1) * (float)$v; $extraShips += count($copies) - 1; }
             usort($records, fn($a, $b) => strcmp((string)$a['survey_completed_date'], (string)$b['survey_completed_date']) ?: ((int)$a['id'] <=> (int)$b['id']));
             $clusters[] = ['kind' => $k, 'records' => $records, 'extra_mt' => round($extra, 3), 'extra_ships' => $extraShips,

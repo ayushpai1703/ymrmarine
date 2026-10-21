@@ -336,7 +336,7 @@ require_once __DIR__ . '/../includes/notifications.php';
         if (!$recoveryNA && !$excel_saved_this_request && !$has_excel_uploaded && isset($_POST['manual_recovery'])) {
             $num = function ($k) {
                 $v = str_replace([',', ' '], '', trim((string)($_POST[$k] ?? '')));
-                return ($v !== '' && is_numeric($v)) ? round((float)$v, 3) : null;
+                return ($v !== '' && is_numeric($v)) ? round(abs((float)$v), 3) : null; // stored positive (Onhire minus is display only)
             };
             $m_vlsfo = $num('manual_vlsfo'); $m_hsfo = $num('manual_hsfo'); $m_lsmgo = $num('manual_lsmgo'); $m_total = $num('manual_total');
             if ($m_total === null && ($m_vlsfo !== null || $m_hsfo !== null || $m_lsmgo !== null)) {

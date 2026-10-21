@@ -380,7 +380,8 @@ function recoveryAppliesSql(string $a = 's'): string {
 
 /** recovery_amount (or $col) counted in totals: NULL for NOT APPLICABLE survey types. */
 function recoveryCountedSql(string $a = 's', string $col = 'recovery_amount'): string {
-    return "(CASE WHEN " . recoveryAppliesSql($a) . " THEN $a.$col END)";
+    // ABS: recovery is always counted as a positive quantity (an Onhire value typed or imported with a minus sign must never reduce totals)
+    return "(CASE WHEN " . recoveryAppliesSql($a) . " THEN ABS($a.$col) END)";
 }
 
 // 🌟 ఒక సర్వేకి బహుళ Surveyors అసైన్ చేసినప్పుడు (survey_surveyors జంక్షన్ టేబుల్), వాటన్నింటినీ

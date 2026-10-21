@@ -117,13 +117,13 @@ function completedImportReadRows($spreadsheet): array {
 /** Parses a recovery cell. Returns [ok(bool), value(float|null)]. */
 function completedImportParseQty($raw): array {
     if ($raw === null) return [true, null];
-    if (is_int($raw) || is_float($raw)) return [true, round((float)$raw, 3)];
+    if (is_int($raw) || is_float($raw)) return [true, round(abs((float)$raw), 3)]; // stored positive (Onhire minus is display only)
     $s = trim((string)$raw);
     if ($s === '' || preg_match('/^(n\/?a|na|nil|-+|—|–)\b/i', $s)) return [true, null];
     $s = preg_replace('/\s*(mt|m\.t\.?)$/i', '', $s);
     $s = str_replace(',', '', $s);
     if (!is_numeric($s)) return [false, null];
-    return [true, round((float)$s, 3)];
+    return [true, round(abs((float)$s), 3)];
 }
 
 // ─────────────────────────────────────────────────────────────────────────

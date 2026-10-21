@@ -58,7 +58,7 @@ try {
     foreach ($all as $r) {
         $ships++;
         $na = isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? ''));
-        $total += $na ? 0 : (float)$r['recovery_amount'];
+        $total += $na ? 0 : abs((float)$r['recovery_amount']);
         $oh = isOnhireSurvey($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? ''));
         $rows[] = ['country' => $r['country'] ?? 'India', 'cells' => [
             $r['vessel_name'] ?? '', $r['report_number'] ?? '', $r['company_name'] ?? '', $r['port_name'] ?? '',

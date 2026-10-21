@@ -102,7 +102,7 @@ function cvRecovery(array $r): float {
     global $db;
     if ($r['recovery_amount'] === null) return 0.0;
     // NOT APPLICABLE survey types count as 0 — same as the cards and the Excel export.
-    return isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')) ? 0.0 : (float)$r['recovery_amount'];
+    return isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')) ? 0.0 : abs((float)$r['recovery_amount']);
 }
 
 // Month filter ('YYYY-MM' => ['label' => 'October 2026', 'count' => 12]) —

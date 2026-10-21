@@ -83,15 +83,15 @@ if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_r
     $parseRecovery = function ($v) {
         $v = trim((string)$v);
         if ($v === '') return null;
-        if (!is_numeric($v) || (float)$v < 0) return false;
-        return round((float)$v, 3);
+        if (!is_numeric($v)) return false;
+        return round(abs((float)$v), 3); // stored positive (an Onhire minus is display only)
     };
     $totalVal = $parseRecovery($_POST['recovery_amount'] ?? '');
     $vlsfoVal = $parseRecovery($_POST['vlsfo_recovery'] ?? '');
     $lsmgoVal = $parseRecovery($_POST['lsmgo_recovery'] ?? '');
     $hsfoVal = $parseRecovery($_POST['hsfo_recovery'] ?? '');
     if ($totalVal === false || $vlsfoVal === false || $lsmgoVal === false || $hsfoVal === false) {
-        $recovery_error = 'Recovery values must be zero or a positive number.';
+        $recovery_error = 'Recovery values must be numbers.';
     } else {
         try {
             $upd = $db->prepare("UPDATE surveys SET recovery_amount = ?, vlsfo_recovery = ?, lsmgo_recovery = ?, hsfo_recovery = ? WHERE id = ?");
@@ -506,19 +506,19 @@ include 'includes/header.php';
         <form method="POST"><?= csrf_field() ?>
             <div class="mb-2">
                 <label class="form-label fw-bold text-secondary" style="font-size:11px;">Total Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="recovery_amount" class="form-control form-control-sm" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)$survey['recovery_amount']) : '' ?>" data-testid="recovery-field-total">
+                <input type="number" step="0.001" min="0" name="recovery_amount" class="form-control form-control-sm" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)abs((float)$survey['recovery_amount'])) : '' ?>" data-testid="recovery-field-total">
             </div>
             <div class="mb-2">
                 <label class="form-label fw-bold text-secondary" style="font-size:11px;">VLSFO Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="vlsfo_recovery" class="form-control form-control-sm" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)$survey['vlsfo_recovery']) : '' ?>" data-testid="recovery-field-vlsfo">
+                <input type="number" step="0.001" min="0" name="vlsfo_recovery" class="form-control form-control-sm" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['vlsfo_recovery'])) : '' ?>" data-testid="recovery-field-vlsfo">
             </div>
             <div class="mb-2">
                 <label class="form-label fw-bold text-secondary" style="font-size:11px;">LSMGO Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)$survey['lsmgo_recovery']) : '' ?>" data-testid="recovery-field-lsmgo">
+                <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)abs((float)$survey['lsmgo_recovery'])) : '' ?>" data-testid="recovery-field-lsmgo">
             </div>
             <div class="mb-2">
                 <label class="form-label fw-bold text-secondary" style="font-size:11px;">HSFO Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="hsfo_recovery" class="form-control form-control-sm" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)$survey['hsfo_recovery']) : '' ?>" data-testid="recovery-field-hsfo">
+                <input type="number" step="0.001" min="0" name="hsfo_recovery" class="form-control form-control-sm" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['hsfo_recovery'])) : '' ?>" data-testid="recovery-field-hsfo">
             </div>
             <button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
         </form>
@@ -816,19 +816,19 @@ include 'includes/header.php';
                                 <?= csrf_field() ?>
                                 <div class="vdd-field">
                                     <label>Total Recovery (MT)</label>
-                                    <input type="number" step="0.001" min="0" name="recovery_amount" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)$survey['recovery_amount']) : '' ?>" data-testid="recovery-field-total-desktop">
+                                    <input type="number" step="0.001" min="0" name="recovery_amount" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)abs((float)$survey['recovery_amount'])) : '' ?>" data-testid="recovery-field-total-desktop">
                                 </div>
                                 <div class="vdd-field">
                                     <label>VLSFO Recovery (MT)</label>
-                                    <input type="number" step="0.001" min="0" name="vlsfo_recovery" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)$survey['vlsfo_recovery']) : '' ?>" data-testid="recovery-field-vlsfo-desktop">
+                                    <input type="number" step="0.001" min="0" name="vlsfo_recovery" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['vlsfo_recovery'])) : '' ?>" data-testid="recovery-field-vlsfo-desktop">
                                 </div>
                                 <div class="vdd-field">
                                     <label>LSMGO Recovery (MT)</label>
-                                    <input type="number" step="0.001" min="0" name="lsmgo_recovery" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)$survey['lsmgo_recovery']) : '' ?>" data-testid="recovery-field-lsmgo-desktop">
+                                    <input type="number" step="0.001" min="0" name="lsmgo_recovery" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)abs((float)$survey['lsmgo_recovery'])) : '' ?>" data-testid="recovery-field-lsmgo-desktop">
                                 </div>
                                 <div class="vdd-field">
                                     <label>HSFO Recovery (MT)</label>
-                                    <input type="number" step="0.001" min="0" name="hsfo_recovery" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)$survey['hsfo_recovery']) : '' ?>" data-testid="recovery-field-hsfo-desktop">
+                                    <input type="number" step="0.001" min="0" name="hsfo_recovery" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['hsfo_recovery'])) : '' ?>" data-testid="recovery-field-hsfo-desktop">
                                 </div>
                                 <button type="submit" name="update_recovery" class="vdd-save-btn" data-testid="save-recovery-button-desktop">Save Recovery</button>
                             </form>

@@ -87,7 +87,7 @@ function aieData(PDO $db, array $survey): array {
     $types = array_values(array_filter(array_map('intval', explode(',', (string)($survey['survey_type_ids'] ?? '')))));
     if (!$types && !empty($survey['survey_type_id'])) $types = [(int)$survey['survey_type_id']];
     $d = fn($v) => (!empty($v) && strpos((string)$v, '0000') !== 0) ? substr((string)$v, 0, 10) : '';
-    $q = fn($v) => $v === null ? '' : rtrim(rtrim(number_format((float)$v, 3, '.', ''), '0'), '.');
+    $q = fn($v) => $v === null ? '' : rtrim(rtrim(number_format(abs((float)$v), 3, '.', ''), '0'), '.');
     $svIn = $sv ? implode(',', $sv) : '0';
     $typeRows = $db->query('SELECT id, type_name FROM survey_types ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
     foreach ($typeRows as &$t) { $t['id'] = (int)$t['id']; $t['na'] = isRecoveryNotApplicable($db, (string)$t['id']); }
@@ -210,7 +210,7 @@ function aieWithTime(string $date, $old): ?string {
 function aieQty(string $v) {
     $v = str_replace([',', ' '], '', trim($v));
     if ($v === '') return null;
-    return is_numeric($v) ? round((float)$v, 3) : false;
+    return is_numeric($v) ? round(abs((float)$v), 3) : false; // quantities are stored positive (Onhire minus is display only)
 }
 
 /**
