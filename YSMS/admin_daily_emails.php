@@ -44,6 +44,7 @@ $runs = dailyEmailRecentRuns($db, 25);
 $surveyors = dailyEmailSurveyors($db);
 $allSurveyors = dailyEmailActiveSurveyorCount($db);
 $apptToday = count(dailyEmailAppointmentRows($db, date('Y-m-d')));
+$pendingNow = count(dailyEmailAllPendingRows($db));
 $today = [];
 foreach (array_keys(DAILY_EMAIL_JOBS) as $j) {
     $run = dailyEmailTodayRun($db, $j);
@@ -93,7 +94,7 @@ include 'includes/header.php';
         <?php if ($cronReady): ?>
             <div class="de-note ok" data-testid="de-scheduler">
                 <i class="fa-solid fa-clock me-1"></i> Scheduler connected (YSMS_CRON_TOKEN is set). Last scheduler call —
-                Assigned Vessels: <b><?= $fmt($lastCall['surveyor_pending']) ?></b> · Appointments: <b><?= $fmt($lastCall['appointments']) ?></b>.
+                By Surveyor: <b><?= $fmt($lastCall['surveyor_pending']) ?></b> · Full list: <b><?= $fmt($lastCall['all_pending']) ?></b><?= $lastCall['all_pending'] ? '' : ' <span title="Create the third Cloud Scheduler job (docs/daily-emails.md)">(no scheduler job yet)</span>' ?> · Appointments: <b><?= $fmt($lastCall['appointments']) ?></b>.
                 Times are India time (IST).
             </div>
         <?php else: ?>
@@ -110,8 +111,8 @@ include 'includes/header.php';
             <div class="de-card" data-testid="de-card-surveyor">
                 <div class="de-card-head">
                     <div>
-                        <div class="de-title"><i class="fa-solid fa-user-gear me-1"></i> Daily Assigned Vessels Report — each surveyor</div>
-                        <div class="de-sub">Each active surveyor receives only the vessels currently assigned to them (Pending Vessels, as surveyor or co-surveyor) at their profile email, in the mail and as Excel.
+                        <div class="de-title"><i class="fa-solid fa-user-gear me-1"></i> Pending Vessels by Surveyor — each surveyor</div>
+                        <div class="de-sub">Each active surveyor receives only their own Pending Vessels (as surveyor or co-surveyor) — the Pending Vessels export filtered by that surveyor, attached as Excel, plus a table in the mail.
                             <?= count($surveyors) ?> of <?= $allSurveyors ?> active surveyors have a profile email.</div>
                     </div>
                     <span class="de-pill <?= $s['surveyor_pending_enabled'] === '1' ? 'on' : 'off' ?>"><?= $s['surveyor_pending_enabled'] === '1' ? 'ON' : 'OFF' ?></span>
@@ -120,8 +121,24 @@ include 'includes/header.php';
                     <div class="full"><label class="de-check"><input type="checkbox" name="surveyor_pending_enabled" value="1" <?= $s['surveyor_pending_enabled'] === '1' ? 'checked' : '' ?> data-testid="de-surveyor-enabled"> Send every day</label></div>
                     <div><label for="spt">Time (IST)</label><input type="time" id="spt" name="surveyor_pending_time" value="<?= sanitize($s['surveyor_pending_time']) ?>" required data-testid="de-surveyor-time"></div>
                     <div><label for="spf">From</label><input type="email" id="spf" name="surveyor_pending_from" value="<?= sanitize($s['surveyor_pending_from']) ?>" required data-testid="de-surveyor-from"></div>
-                    <div class="full de-sub" data-testid="de-surveyor-to">To: each surveyor's own profile email (only their own list) · CC: <b><?= sanitize(DAILY_EMAIL_SURVEYOR_CC) ?></b> — fixed.</div>
+                    <div class="full de-sub" data-testid="de-surveyor-to">To: each surveyor's own profile email only — their own list, no CC (fixed).</div>
                     <div class="full"><label class="de-check"><input type="checkbox" name="surveyor_pending_send_empty" value="1" <?= $s['surveyor_pending_send_empty'] === '1' ? 'checked' : '' ?>> Also email surveyors who have no assigned vessels</label></div>
+                </div>
+            </div>
+
+            <div class="de-card" data-testid="de-card-all-pending">
+                <div class="de-card-head">
+                    <div>
+                        <div class="de-title"><i class="fa-solid fa-ship me-1"></i> Pending Vessels — full list</div>
+                        <div class="de-sub">The complete Pending Vessels list (all surveyors) — same as Pending Vessels → Export Excel without filters, attached, plus a table in the mail. Now: <?= $pendingNow ?> vessel<?= $pendingNow === 1 ? '' : 's' ?>.</div>
+                    </div>
+                    <span class="de-pill <?= $s['all_pending_enabled'] === '1' ? 'on' : 'off' ?>"><?= $s['all_pending_enabled'] === '1' ? 'ON' : 'OFF' ?></span>
+                </div>
+                <div class="de-grid">
+                    <div class="full"><label class="de-check"><input type="checkbox" name="all_pending_enabled" value="1" <?= $s['all_pending_enabled'] === '1' ? 'checked' : '' ?> data-testid="de-all-enabled"> Send every day</label></div>
+                    <div><label for="alt">Time (IST)</label><input type="time" id="alt" name="all_pending_time" value="<?= sanitize($s['all_pending_time']) ?>" required data-testid="de-all-time"></div>
+                    <div class="full de-sub" data-testid="de-all-route">From <b><?= sanitize(DAILY_EMAIL_APPT_FROM) ?></b> to <b><?= sanitize(DAILY_EMAIL_ALL_PENDING_TO) ?></b> only — fixed, no CC.</div>
+                    <div class="full"><label class="de-check"><input type="checkbox" name="all_pending_send_empty" value="1" <?= $s['all_pending_send_empty'] === '1' ? 'checked' : '' ?>> Send a "no pending vessels" email when the list is empty</label></div>
                 </div>
             </div>
 

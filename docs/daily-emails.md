@@ -1,13 +1,14 @@
 # YSMS daily emails — 17:00 IST
 
-Two reports, each sent once a day at **17:00 Asia/Kolkata**:
+Three reports, each sent once a day at **17:00 Asia/Kolkata**, all from `ops@ymrmarine.com`, recipients fixed (not editable), no CC:
 
-| Job key (`?job=`) | Email | From → To | Subject |
-|---|---|---|---|
-| `surveyor_pending` | **Daily Assigned Vessels Report** — one separate email per active surveyor, only the vessels currently assigned to that surveyor (status *Pending Vessel*, as primary surveyor or co-surveyor in `survey_surveyors`) | `ops@ymrmarine.com` → the surveyor's profile email (`users.email`), CC `survey@ymrmarine.com` | `Daily Assigned Vessels Report – 21-10-2026` |
-| `appointments` | **Daily Vessel Appointments Report** — one consolidated email: every vessel whose Appointment Date is today **or** that was received (assigned, `assign_date`) today, any status; a clear "no appointments" notice when there are none | `ops@ymrmarine.com` → `survey@ymrmarine.com` | `Daily Vessel Appointments Report – 21-10-2026` |
+| Job key (`?job=`) | Cloud Scheduler job | Email | To | Subject |
+|---|---|---|---|---|
+| `surveyor_pending` | `ysms-daily-assigned-vessels` | **Pending Vessels by Surveyor** — one separate email per active surveyor with only that surveyor's Pending Vessels (as primary surveyor or co-surveyor). Attachment = Pending Vessels → Export Excel filtered by that surveyor (`PENDING VESSELS BY <NAME> AS ON <date>.xlsx`) | the surveyor's profile email (`users.email`) | `Pending Vessels by <Name> – 21-10-2026` |
+| `all_pending` | `ysms-daily-all-pending` | **Pending Vessels — full list** (all surveyors). Attachment = the unfiltered Export Excel (`PENDING VESSELS AS ON <date>.xlsx`) | `survey@ymrmarine.com` | `Pending Vessels – Full List – 21-10-2026` |
+| `appointments` | `ysms-daily-appointments` | **Daily Vessel Appointments Report** — every vessel whose Appointment Date is today **or** that was received (assigned) today, any status; a clear "no appointments" notice when there are none | `gaurav@ymrmarine.com` | `Daily Vessel Appointments Report – 21-10-2026` |
 
-Both mails use the YMR Marine Solutions HTML template with a table of the vessels plus the same Excel layout as *Export Excel* attached. Recipients are fixed: the assigned-vessels report goes to each surveyor's own profile email with `survey@ymrmarine.com` in CC (a retry never CCs survey@ twice); the appointments report goes only from `ops@ymrmarine.com` to `survey@ymrmarine.com`, no CC. On/off, time and the "empty" behaviour can be changed in **Admin Controls → Daily Emails**. Surveyors with no assigned vessels get no mail (option to change that on the same page). The application stores no appointment *time*, only the Appointment Date, so none is shown.
+Each mail also has the vessels as a table in the YMR Marine Solutions HTML template. On/off, time and the "empty" behaviour can be changed in **Admin Controls → Daily Emails**. Surveyors with no pending vessels get no mail (option to change that on the same page). The application stores no appointment *time*, only the Appointment Date, so none is shown.
 
 ## Code
 
@@ -61,13 +62,14 @@ gcloud run services update ymrmarine --project=$PROJECT --region=$REGION --updat
 # 4. Cloud Scheduler — one job per email, 17:00 IST, retries on HTTP 500
 URL=$(gcloud run services describe ymrmarine --project=$PROJECT --region=$REGION --format='value(status.url)')
 TOKEN=$(gcloud secrets versions access latest --secret=YSMS_CRON_TOKEN --project=$PROJECT)
-for JOB in surveyor_pending appointments; do
-  gcloud scheduler jobs create http "ysms-daily-${JOB//_/-}" --project=$PROJECT --location=$REGION \
+for PAIR in assigned-vessels:surveyor_pending all-pending:all_pending appointments:appointments; do
+  gcloud scheduler jobs create http "ysms-daily-${PAIR%%:*}" --project=$PROJECT --location=$REGION \
     --schedule="0 17 * * *" --time-zone="Asia/Kolkata" \
-    --uri="${URL}/YSMS/ajax/daily_emails_run.php?job=${JOB}" --http-method=POST \
+    --uri="${URL}/YSMS/ajax/daily_emails_run.php?job=${PAIR#*:}" --http-method=POST \
     --headers="X-Cron-Token=${TOKEN}" \
-    --attempt-deadline=300s --max-retry-attempts=4 --min-backoff=120s --max-backoff=900s
+    --attempt-deadline=300s --max-retry-attempts=4 --min-backoff=120s --max-backoff=900s --format='value(name)'
 done
+unset TOKEN
 ```
 
 If the Cloud Run URL is not reachable directly (ingress restricted to the load balancer), use `https://<your YSMS domain>/YSMS/ajax/daily_emails_run.php?job=...` instead. Cloud Run's request timeout (default 300 s) covers the 280 s the job allows itself.
@@ -78,7 +80,8 @@ Also required in production (already used by the existing assign/upload emails):
 
 ```bash
 # Run the scheduler jobs once now (outside 17:00 they answer "not due": {"ran":{}})
-gcloud scheduler jobs run ysms-daily-surveyor-pending --project=$PROJECT --location=$REGION
+gcloud scheduler jobs run ysms-daily-assigned-vessels --project=$PROJECT --location=$REGION
+gcloud scheduler jobs run ysms-daily-all-pending --project=$PROJECT --location=$REGION
 gcloud scheduler jobs run ysms-daily-appointments --project=$PROJECT --location=$REGION
 gcloud logging read 'resource.type="cloud_run_revision" AND textPayload:"daily_email"' --project=$PROJECT --limit=20
 ```
