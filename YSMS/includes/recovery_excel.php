@@ -33,6 +33,12 @@ function recoveryNumber($v): ?float {
 
 /** @return array{recovery: ?float, vlsfo: ?float, hsfo: ?float, lsmgo: ?float} */
 function extractRecoveryFromExcel(string $path): array {
+    // Fast path: the saved cell values of the recovery tab, read straight from the .xlsx
+    // (milliseconds). PhpSpreadsheet loads the whole workbook — seconds on big sheets, which
+    // made the Pending Vessel upload slow — so it only runs when this can't give all values.
+    $xmlRank = 0;
+    $out = recoveryReadCellsFromXlsxXml($path, $xmlRank);
+    if ($xmlRank > 0 && !in_array(null, $out, true)) return $out;
     $out = array_fill_keys(array_keys(RECOVERY_EXCEL_CELLS), null);
 
     if (class_exists('\PhpOffice\PhpSpreadsheet\IOFactory')) {
@@ -76,7 +82,7 @@ function extractRecoveryFromExcel(string $path): array {
 }
 
 /** Fallback for .xlsx/.xlsm without PhpSpreadsheet: reads the saved cell values of the TABLES 54B tab straight from the file. */
-function recoveryReadCellsFromXlsxXml(string $path): array {
+function recoveryReadCellsFromXlsxXml(string $path, int &$sheetRank = 0): array {
     $out = array_fill_keys(array_keys(RECOVERY_EXCEL_CELLS), null);
     if (!class_exists('ZipArchive')) return $out;
     $zip = new ZipArchive();
@@ -105,6 +111,7 @@ function recoveryReadCellsFromXlsxXml(string $path): array {
                 }
             }
         }
+        $sheetRank = max(0, $best);
         $xml = $sheetFile !== null ? (string)$zip->getFromName($sheetFile) : '';
         if ($xml === '') return $out;
 

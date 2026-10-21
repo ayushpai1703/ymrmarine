@@ -133,12 +133,15 @@ function gmailApiSendRaw(string $subjectEmail, string $rawMime): bool {
         return false;
     }
 
-    $sendUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
-    $payload = json_encode(['raw' => gmailBase64UrlEncode($rawMime)]);
-    $resp = ysmsHttpPostJson($sendUrl, $payload, [
+    // Media upload endpoint: the MIME goes as-is (message/rfc822) instead of base64 inside
+    // JSON (a third bigger), and the timeout grows with the size — the old fixed 15 s
+    // timed out on report PDFs, then the SMTP fallback uploaded everything a second time.
+    $sendUrl = 'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=media';
+    $timeout = (int)min(180, 30 + ceil(strlen($rawMime) / 1048576) * 6);
+    $resp = ysmsHttpPostJson($sendUrl, $rawMime, [
         'Authorization: Bearer ' . $accessToken,
-        'Content-Type: application/json',
-    ]);
+        'Content-Type: message/rfc822',
+    ], $timeout);
     if (!$resp['ok']) {
         $GLOBALS['ysms_last_mail_error'] = 'Gmail API send failed: ' . $resp['body'];
         error_log($GLOBALS['ysms_last_mail_error']);
