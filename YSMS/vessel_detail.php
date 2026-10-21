@@ -937,6 +937,15 @@ include 'includes/header.php';
         </div>
     </div><!-- /.detail-desktop-view -->
 
+    <?php
+    // Same vessel surveyed before (any client) — for the surveyor's reference. Not for Client logins.
+    if ($role !== 'Client') {
+        require_once 'includes/vessel_history.php';
+        try { $vesselHistoryRows = vesselHistory($db, $survey); } catch (Throwable $e) { error_log('vessel history: ' . $e->getMessage()); $vesselHistoryRows = []; }
+        include 'includes/vessel_history_card.php';
+    }
+    ?>
+
     <script>
     // 🌟 File-input "chosen" confirmation for the desktop Upload Required
     // Reports card — purely a display confirmation (small text under the

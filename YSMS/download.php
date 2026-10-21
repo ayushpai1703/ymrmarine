@@ -58,6 +58,12 @@ $userId = (int)($_SESSION['user_id'] ?? 0);
 $hasFullAccess = in_array($role, ['Admin', 'Super Admin'], true);
 $isOwnClient = ($role === 'Client') && (int)$upload['client_id'] === getClientIdForUser($db, $userId);
 $authorized = $hasFullAccess || isSurveyorAssignedToSurvey($db, $upload['survey_id'], $userId) || $isOwnClient;
+// A surveyor may also open the documents of earlier surveys of a vessel currently assigned to
+// them (vessel_detail.php "Previous surveys of this vessel"). Report uploads only.
+if (!$authorized && $role === 'Surveyor' && $remarkAttachmentId <= 0) {
+    require_once __DIR__ . '/includes/vessel_history.php';
+    $authorized = vesselHistorySurveyorMayOpen($db, (int)$upload['survey_id'], $userId);
+}
 
 if (!$authorized) {
     http_response_code(403);
