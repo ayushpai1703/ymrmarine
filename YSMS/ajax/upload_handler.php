@@ -1,5 +1,22 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
+
+// Upload with a progress bar (assets/js/submit-feedback.js sends it with XMLHttpRequest):
+// every redirect below is answered as {"redirect": "…"} for the page to follow instead,
+// so the browser doesn't load the next page inside the request.
+if (($_SERVER['HTTP_X_YSMS_UPLOAD'] ?? '') === '1') {
+    register_shutdown_function(function () {
+        foreach (headers_list() as $h) {
+            if (stripos($h, 'Location:') === 0 && !headers_sent()) {
+                header_remove('Location');
+                http_response_code(200);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['redirect' => trim(substr($h, 9))]);
+                return;
+            }
+        }
+    });
+}
 checkAuth();
 
 // Only Admin and Surveyor may upload survey/report files (matches the UI, which
