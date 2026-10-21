@@ -45,6 +45,7 @@ $surveyors = dailyEmailSurveyors($db);
 $allSurveyors = dailyEmailActiveSurveyorCount($db);
 $apptToday = count(dailyEmailAppointmentRows($db, date('Y-m-d')));
 $pendingNow = count(dailyEmailAllPendingRows($db));
+$reportsNow = count(dailyEmailReportRows($db));
 $today = [];
 foreach (array_keys(DAILY_EMAIL_JOBS) as $j) {
     $run = dailyEmailTodayRun($db, $j);
@@ -94,7 +95,8 @@ include 'includes/header.php';
         <?php if ($cronReady): ?>
             <div class="de-note ok" data-testid="de-scheduler">
                 <i class="fa-solid fa-clock me-1"></i> Scheduler connected (YSMS_CRON_TOKEN is set). Last scheduler call —
-                By Surveyor: <b><?= $fmt($lastCall['surveyor_pending']) ?></b> · Full list: <b><?= $fmt($lastCall['all_pending']) ?></b><?= $lastCall['all_pending'] ? '' : ' <span title="Create the third Cloud Scheduler job (docs/daily-emails.md)">(no scheduler job yet)</span>' ?> · Appointments: <b><?= $fmt($lastCall['appointments']) ?></b>.
+                By Surveyor: <b><?= $fmt($lastCall['surveyor_pending']) ?></b> · Full list: <b><?= $fmt($lastCall['all_pending']) ?></b><?= $lastCall['all_pending'] ? '' : ' <span title="Create the third Cloud Scheduler job (docs/daily-emails.md)">(no scheduler job yet)</span>' ?> · Appointments: <b><?= $fmt($lastCall['appointments']) ?></b>
+                · Reports by Surveyor (Fri): <b><?= $fmt($lastCall['surveyor_reports']) ?></b> · Reports full list (Fri): <b><?= $fmt($lastCall['all_reports']) ?></b>.
                 Times are India time (IST).
             </div>
         <?php else: ?>
@@ -158,6 +160,38 @@ include 'includes/header.php';
                 </div>
             </div>
 
+            <div class="de-card" data-testid="de-card-surveyor-reports">
+                <div class="de-card-head">
+                    <div>
+                        <div class="de-title"><i class="fa-solid fa-file-circle-exclamation me-1"></i> Pending Reports by Surveyor — every Friday</div>
+                        <div class="de-sub">Each active surveyor receives only their own Pending Reports (as surveyor or co-surveyor) — the Pending Reports export filtered by that surveyor, attached as Excel, plus a table in the mail.</div>
+                    </div>
+                    <span class="de-pill <?= $s['surveyor_reports_enabled'] === '1' ? 'on' : 'off' ?>"><?= $s['surveyor_reports_enabled'] === '1' ? 'ON' : 'OFF' ?></span>
+                </div>
+                <div class="de-grid">
+                    <div class="full"><label class="de-check"><input type="checkbox" name="surveyor_reports_enabled" value="1" <?= $s['surveyor_reports_enabled'] === '1' ? 'checked' : '' ?> data-testid="de-sr-enabled"> Send every Friday</label></div>
+                    <div><label for="srt">Time (IST)</label><input type="time" id="srt" name="surveyor_reports_time" value="<?= sanitize($s['surveyor_reports_time']) ?>" required data-testid="de-sr-time"></div>
+                    <div class="full de-sub" data-testid="de-sr-route">From <b><?= sanitize(DAILY_EMAIL_APPT_FROM) ?></b> to each surveyor's own profile email only — their own list, no CC (fixed).</div>
+                    <div class="full"><label class="de-check"><input type="checkbox" name="surveyor_reports_send_empty" value="1" <?= $s['surveyor_reports_send_empty'] === '1' ? 'checked' : '' ?>> Also email surveyors who have no pending reports</label></div>
+                </div>
+            </div>
+
+            <div class="de-card" data-testid="de-card-all-reports">
+                <div class="de-card-head">
+                    <div>
+                        <div class="de-title"><i class="fa-solid fa-file-lines me-1"></i> Pending Reports — full list, every Friday</div>
+                        <div class="de-sub">The complete Pending Reports list (all surveyors) — same as Pending Reports → Export Excel without filters, attached, plus a table in the mail. Now: <?= $reportsNow ?> report<?= $reportsNow === 1 ? '' : 's' ?>.</div>
+                    </div>
+                    <span class="de-pill <?= $s['all_reports_enabled'] === '1' ? 'on' : 'off' ?>"><?= $s['all_reports_enabled'] === '1' ? 'ON' : 'OFF' ?></span>
+                </div>
+                <div class="de-grid">
+                    <div class="full"><label class="de-check"><input type="checkbox" name="all_reports_enabled" value="1" <?= $s['all_reports_enabled'] === '1' ? 'checked' : '' ?> data-testid="de-ar-enabled"> Send every Friday</label></div>
+                    <div><label for="art">Time (IST)</label><input type="time" id="art" name="all_reports_time" value="<?= sanitize($s['all_reports_time']) ?>" required data-testid="de-ar-time"></div>
+                    <div class="full de-sub" data-testid="de-ar-route">From <b><?= sanitize(DAILY_EMAIL_APPT_FROM) ?></b> to <b><?= sanitize(implode(' and ', DAILY_EMAIL_ALL_REPORTS_TO)) ?></b> only — fixed, no CC.</div>
+                    <div class="full"><label class="de-check"><input type="checkbox" name="all_reports_send_empty" value="1" <?= $s['all_reports_send_empty'] === '1' ? 'checked' : '' ?>> Send a "no pending reports" email when the list is empty</label></div>
+                </div>
+            </div>
+
             <div class="de-actions">
                 <button type="submit" class="de-btn primary" data-testid="de-save"><i class="fa-solid fa-floppy-disk"></i> Save settings</button>
             </div>
@@ -169,7 +203,7 @@ include 'includes/header.php';
                 <div class="mt-2" data-testid="de-today-<?= $job ?>">
                     <b style="font-size:13.5px;"><?= sanitize($label) ?></b> —
                     <?php if (!$run): ?>
-                        <span class="de-sub">not sent yet (due at <?= sanitize($s[$job . '_time']) ?> IST)</span>
+                        <span class="de-sub"><?= dailyEmailRunsToday($job) ? 'not sent yet (due at ' . sanitize($s[$job . '_time']) . ' IST)' : 'not due today — Fridays only' ?></span>
                     <?php else: ?>
                         <span class="de-pill <?= sanitize($run['status']) ?>"><?= sanitize($run['status']) ?></span>
                         <span class="de-sub"><?= sanitize((string)$run['detail']) ?> · attempt <?= (int)$run['attempts'] ?> · <?= sanitize((string)$run['via']) ?></span>

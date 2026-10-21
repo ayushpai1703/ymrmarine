@@ -1,12 +1,14 @@
 # YSMS daily emails — 17:00 IST
 
-Three reports, each sent once a day at **17:00 Asia/Kolkata**, all from `ops@ymrmarine.com`, recipients fixed (not editable), no CC:
+Three daily reports at **17:00 Asia/Kolkata** and two weekly reports every **Friday 17:00**, all from `ops@ymrmarine.com`, recipients fixed (not editable), no CC:
 
 | Job key (`?job=`) | Cloud Scheduler job | Email | To | Subject |
 |---|---|---|---|---|
 | `surveyor_pending` | `ysms-daily-assigned-vessels` | **Pending Vessels by Surveyor** — one separate email per active surveyor with only that surveyor's Pending Vessels (as primary surveyor or co-surveyor). Attachment = Pending Vessels → Export Excel filtered by that surveyor (`PENDING VESSELS BY <NAME> AS ON <date>.xlsx`) | the surveyor's profile email (`users.email`) | `Pending Vessels by <Name> – 21-10-2026` |
 | `all_pending` | `ysms-daily-all-pending` | **Pending Vessels — full list** (all surveyors). Attachment = the unfiltered Export Excel (`PENDING VESSELS AS ON <date>.xlsx`) | `survey@ymrmarine.com` | `Pending Vessels – Full List – 21-10-2026` |
 | `appointments` | `ysms-daily-appointments` | **Daily Vessel Appointments Report** — every vessel whose Appointment Date is today **or** that was received (assigned) today, any status; a clear "no appointments" notice when there are none | `gaurav@ymrmarine.com` | `Daily Vessel Appointments Report – 21-10-2026` |
+| `surveyor_reports` | `ysms-weekly-surveyor-reports` (Fri) | **Pending Reports by Surveyor** — each surveyor's own Pending Reports (primary or co-surveyor). Attachment = Pending Reports → Export Excel filtered by that surveyor (`PENDING REPORTS BY <NAME> AS ON <date>.xlsx`) | the surveyor's profile email | `Pending Reports by <Name> – 23-10-2026` |
+| `all_reports` | `ysms-weekly-all-reports` (Fri) | **Pending Reports — full list** (all surveyors). Attachment = the unfiltered Export Excel (`PENDING REPORTS AS ON <date>.xlsx`) | `survey@ymrmarine.com` and `rakesh@ymrmarine.com` (one mail) | `Pending Reports – Full List – 23-10-2026` |
 
 Each mail also has the vessels as a table in the YMR Marine Solutions HTML template. On/off, time and the "empty" behaviour can be changed in **Admin Controls → Daily Emails**. Surveyors with no pending vessels get no mail (option to change that on the same page). The application stores no appointment *time*, only the Appointment Date, so none is shown.
 
@@ -65,6 +67,14 @@ TOKEN=$(gcloud secrets versions access latest --secret=YSMS_CRON_TOKEN --project
 for PAIR in assigned-vessels:surveyor_pending all-pending:all_pending appointments:appointments; do
   gcloud scheduler jobs create http "ysms-daily-${PAIR%%:*}" --project=$PROJECT --location=$REGION \
     --schedule="0 17 * * *" --time-zone="Asia/Kolkata" \
+    --uri="${URL}/YSMS/ajax/daily_emails_run.php?job=${PAIR#*:}" --http-method=POST \
+    --headers="X-Cron-Token=${TOKEN}" \
+    --attempt-deadline=300s --max-retry-attempts=4 --min-backoff=120s --max-backoff=900s --format='value(name)'
+done
+# Weekly (Fridays 17:00 IST) Pending Reports jobs
+for PAIR in surveyor-reports:surveyor_reports all-reports:all_reports; do
+  gcloud scheduler jobs create http "ysms-weekly-${PAIR%%:*}" --project=$PROJECT --location=$REGION \
+    --schedule="0 17 * * 5" --time-zone="Asia/Kolkata" \
     --uri="${URL}/YSMS/ajax/daily_emails_run.php?job=${PAIR#*:}" --http-method=POST \
     --headers="X-Cron-Token=${TOKEN}" \
     --attempt-deadline=300s --max-retry-attempts=4 --min-backoff=120s --max-backoff=900s --format='value(name)'

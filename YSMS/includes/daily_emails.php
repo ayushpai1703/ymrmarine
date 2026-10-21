@@ -10,7 +10,10 @@
  *  appointments     — "Daily Vessel Appointments Report": every vessel whose Appointment Date is
  *                     today or that was received (assigned) today, to gaurav@ymrmarine.com; a
  *                     "no appointments" notice when there are none.
- * All three are sent from ops@ymrmarine.com; recipients are fixed (not editable).
+ *  surveyor_reports — every Friday: "Pending Reports by <surveyor>" — each surveyor's own Pending
+ *                     Reports (the Pending Reports export filtered by that surveyor), no CC.
+ *  all_reports      — every Friday: the full Pending Reports list to survey@ and rakesh@.
+ * All are sent from ops@ymrmarine.com; recipients are fixed (not editable).
  *
  * Trigger: Cloud Scheduler → ajax/daily_emails_run.php?job=<job> with the X-Cron-Token header
  * (YSMS_CRON_TOKEN from Secret Manager), "0 17 * * *" Asia/Kolkata; a throttled check from
@@ -29,7 +32,17 @@ const DAILY_EMAIL_JOBS = [
     'surveyor_pending' => 'Pending Vessels by Surveyor (each surveyor)',
     'all_pending'      => 'Pending Vessels — full list',
     'appointments'     => 'Daily Vessel Appointments Report',
+    'surveyor_reports' => 'Pending Reports by Surveyor (each surveyor, Fridays)',
+    'all_reports'      => 'Pending Reports — full list (Fridays)',
 ];
+
+/** Weekly jobs: ISO weekday they run on (5 = Friday); every other job runs daily. */
+const DAILY_EMAIL_WEEKDAY = ['surveyor_reports' => 5, 'all_reports' => 5];
+const DAILY_EMAIL_ALL_REPORTS_TO = ['survey@ymrmarine.com', 'rakesh@ymrmarine.com'];
+
+function dailyEmailRunsToday(string $job): bool {
+    return !isset(DAILY_EMAIL_WEEKDAY[$job]) || (int)date('N') === DAILY_EMAIL_WEEKDAY[$job];
+}
 
 /** Fixed routing — not editable. Surveyor lists go to each surveyor's own profile email (no CC). */
 const DAILY_EMAIL_APPT_FROM = 'ops@ymrmarine.com';
@@ -51,6 +64,12 @@ const DAILY_EMAIL_DEFAULTS = [
     'all_pending_enabled'         => '1',
     'all_pending_time'            => '17:00',
     'all_pending_send_empty'      => '1',
+    'surveyor_reports_enabled'    => '1',
+    'surveyor_reports_time'       => '17:00',
+    'surveyor_reports_send_empty' => '0',
+    'all_reports_enabled'         => '1',
+    'all_reports_time'            => '17:00',
+    'all_reports_send_empty'      => '1',
 ];
 
 /** A scheduled run stays 'running' at most this long before a retry may take it over. */
@@ -111,10 +130,10 @@ function dailyEmailEnsureTables(PDO $db): void {
  */
 function dailyEmailApply1700Schedule(PDO $db): void {
     // Jobs added later get the same one-time treatment under their own flag.
-    foreach (['all_pending'] as $job) {
+    foreach (['all_pending', 'surveyor_reports', 'all_reports'] as $job) {
         $ins = $db->prepare("INSERT IGNORE INTO daily_email_settings (name, value) VALUES (?, ?)");
         $ins->execute(['job_added_' . $job, date('Y-m-d H:i:s')]);
-        if ($ins->rowCount() === 1 && date('H:i') >= '17:00') dailyEmailSkipToday($db, $job, 'Added after 17:00 today — first email at the next 17:00.');
+        if ($ins->rowCount() === 1 && date('H:i') >= '17:00' && dailyEmailRunsToday($job)) dailyEmailSkipToday($db, $job, 'Added after 17:00 today — first email at the next 17:00.');
     }
     $ins = $db->prepare("INSERT IGNORE INTO daily_email_settings (name, value) VALUES ('schedule_1700_applied', ?)");
     $ins->execute([date('Y-m-d H:i:s')]);
@@ -122,7 +141,7 @@ function dailyEmailApply1700Schedule(PDO $db): void {
     foreach (array_keys(DAILY_EMAIL_JOBS) as $job) {
         dailyEmailSetMeta($db, $job . '_enabled', '1');
         dailyEmailSetMeta($db, $job . '_time', '17:00');
-        if (date('H:i') >= '17:00') {
+        if (date('H:i') >= '17:00' && dailyEmailRunsToday($job)) {
             $db->prepare("INSERT IGNORE INTO daily_email_runs (job, run_date, kind, via, auto_key, status, detail, started_at, finished_at)
                           VALUES (?, ?, 'auto', 'setup', ?, 'skipped', ?, ?, ?)")
                ->execute([$job, date('Y-m-d'), $job . '|' . date('Y-m-d'), '17:00 schedule switched on after 17:00 today — first email at the next 17:00.', date('Y-m-d H:i:s'), date('Y-m-d H:i:s')]);
@@ -192,7 +211,7 @@ function dailyEmailSaveSettings(PDO $db, array $in): array {
     // day instead of sending straight away — "Send now" is there for today.
     foreach (array_keys(DAILY_EMAIL_JOBS) as $job) {
         $changed = $new[$job . '_enabled'] === '1' && ($old[$job . '_enabled'] !== '1' || $old[$job . '_time'] !== $new[$job . '_time']);
-        if ($changed && date('H:i') >= $new[$job . '_time']) {
+        if ($changed && date('H:i') >= $new[$job . '_time'] && dailyEmailRunsToday($job)) {
             $db->prepare("INSERT IGNORE INTO daily_email_runs (job, run_date, kind, via, auto_key, status, detail, started_at, finished_at)
                           VALUES (?, ?, 'auto', 'admin', ?, 'skipped', ?, ?, ?)")
                ->execute([$job, date('Y-m-d'), $job . '|' . date('Y-m-d'), 'Time had already passed when the schedule was saved — first email goes tomorrow.', date('Y-m-d H:i:s'), date('Y-m-d H:i:s')]);
@@ -466,6 +485,124 @@ function dailyEmailJobSurveyorPending(PDO $db, array $s, int $runId, string $onl
     return ['ok' => !$failed, 'summary' => $summary, 'nothing_sent' => !$sent && !$already && !$failed];
 }
 
+/* ---------- Pending Reports (weekly) ---------- */
+
+const DAILY_EMAIL_REPORT_HEADERS = ['Vessel Name', 'Report No', 'Client', 'Agent', 'Port', 'Country', 'Survey Type', 'Surveyor(s)', 'Survey Completed', 'Days Pending', 'Latest Update'];
+const DAILY_EMAIL_REPORT_EXPORT_HEADERS = ['Vessel Name', 'Client', 'Agent', 'Port', 'Country', 'Survey Type', 'Surveyor', 'Survey Completed Date'];
+
+/** Pending Reports for the mail table (one surveyor as primary or co-surveyor, or all). */
+function dailyEmailReportRows(PDO $db, int $surveyorId = 0): array {
+    $where = "s.status = 'Pending Report'";
+    $params = [];
+    if ($surveyorId > 0) {
+        $where .= ' AND (s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))';
+        $params = [$surveyorId, $surveyorId];
+    }
+    $st = $db->prepare(str_replace('s.custom_live_status,', 's.custom_live_status, s.survey_completed_date,', DAILY_EMAIL_SELECT) . " WHERE $where ORDER BY s.survey_completed_date, s.id");
+    $st->execute($params);
+    $rows = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $country = $r['country'] ?: 'India';
+        $done = dailyEmailDate($r['survey_completed_date'], 'Y-m-d');
+        $rows[] = ['country' => $country, 'cells' => [
+            (string)$r['vessel_name'], (string)($r['report_number'] ?? ''), (string)($r['company_name'] ?? ''),
+            (string)($r['agent_name'] ?: 'N/A'), (string)($r['port_name'] ?: 'N/A'), $country,
+            getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? 'N/A'),
+            getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? 'N/A'),
+            dailyEmailDate($r['survey_completed_date'], 'd M Y'),
+            $done !== '' ? (string)max(0, (int)floor((strtotime(date('Y-m-d')) - strtotime($done)) / 86400)) : '',
+            trim(strip_tags((string)($r['custom_live_status'] ?? ''))),
+        ]];
+    }
+    return $rows;
+}
+
+/** Pending Reports rows exactly as export_reports.php writes them (same columns and order). */
+function dailyEmailReportExportRows(PDO $db, int $surveyorId = 0): array {
+    $where = "s.status = 'Pending Report'";
+    $params = [];
+    if ($surveyorId > 0) {
+        $where .= ' AND (s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))';
+        $params = [$surveyorId, $surveyorId];
+    }
+    $st = $db->prepare(str_replace('s.custom_live_status,', 's.custom_live_status, s.survey_completed_date,', DAILY_EMAIL_SELECT) . " WHERE $where ORDER BY s.id DESC");
+    $st->execute($params);
+    $rows = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $country = $r['country'] ?? 'India';
+        $rows[] = ['country' => $country, 'cells' => [
+            $r['vessel_name'] ?? '', $r['company_name'] ?? '', $r['agent_name'] ?? 'N/A', $r['port_name'] ?? 'N/A', $country,
+            getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? 'N/A'),
+            getCombinedSurveyorNames($db, (int)$r['id'], $r['surveyor_name'] ?? 'N/A'),
+            $r['survey_completed_date'] ?? '',
+        ]];
+    }
+    return $rows;
+}
+
+/** Fridays: each surveyor's own Pending Reports (filtered Pending Reports export), no CC. */
+function dailyEmailJobSurveyorReports(PDO $db, array $s, int $runId, string $onlyTo = ''): array {
+    $dateText = date('d-m-Y');
+    $sent = 0; $already = 0; $skipped = 0; $failed = [];
+    $list = dailyEmailSurveyors($db);
+    $noEmail = max(0, dailyEmailActiveSurveyorCount($db) - count($list));
+    if ($onlyTo !== '') {
+        $sample = null;
+        foreach ($list as $u) { if (dailyEmailReportRows($db, $u['id'])) { $sample = $u; break; } }
+        $sample = $sample ?? ($list[0] ?? null);
+        $list = $sample ? [$sample] : [];
+    }
+    foreach ($list as $u) {
+        $rows = dailyEmailReportRows($db, $u['id']);
+        if (!$rows && $s['surveyor_reports_send_empty'] !== '1' && $onlyTo === '') { $skipped++; continue; }
+        $to = $onlyTo !== '' ? $onlyTo : $u['email'];
+        if (dailyEmailDeliveryStatus($db, $runId, $to) === 'sent') { $already++; continue; } // retry: never twice
+        $n = count($rows);
+        $html = dailyEmailHtml('Pending Reports by ' . $u['name'], date('l, d F Y') . ' · weekly report (Fridays 17:00 IST)',
+            'Dear ' . htmlspecialchars($u['name'], ENT_QUOTES, 'UTF-8') . ',<br>' . ($n
+                ? '<b>' . $n . '</b> report' . ($n === 1 ? ' is' : 's are') . ' pending from you (Pending Reports) as on ' . $dateText . '. Please complete and upload them. The list is below and attached as Excel.'
+                : 'You have no pending reports as on ' . $dateText . '.'),
+            DAILY_EMAIL_REPORT_HEADERS, $rows);
+        [$ok, $err] = dailyEmailSend([['email' => $to, 'name' => $u['name']]], [], DAILY_EMAIL_APPT_FROM,
+            'Pending Reports by ' . $u['name'] . ' – ' . $dateText, $html, DAILY_EMAIL_REPORT_HEADERS, $rows,
+            buildExportFileBaseName('Pending Reports', [['label' => 'by', 'value' => $u['name']]]),
+            [DAILY_EMAIL_REPORT_EXPORT_HEADERS, dailyEmailReportExportRows($db, $u['id']), 'Pending Reports']);
+        dailyEmailRecordDelivery($db, $runId, $to, $u['name'], $n, $ok, $err);
+        if ($ok) $sent++; else $failed[] = $u['name'] . ' (' . $err . ')';
+    }
+    if ($onlyTo !== '') {
+        $summary = $list ? ($sent ? 'sample (' . $list[0]['name'] . "'s list) sent" : 'sample failed') : 'no surveyor has a profile email';
+    } else {
+        $summary = $sent . ' sent';
+        if ($already) $summary .= ', ' . $already . ' already sent earlier';
+        if ($skipped) $summary .= ', ' . $skipped . ' skipped (no pending reports)';
+        if ($noEmail) $summary .= ', ' . $noEmail . ' active surveyor(s) without a profile email';
+    }
+    if ($failed) $summary .= '; failed: ' . implode('; ', $failed);
+    return ['ok' => !$failed, 'summary' => $summary, 'nothing_sent' => !$sent && !$already && !$failed];
+}
+
+/** Fridays: the full Pending Reports list (unfiltered export) to survey@ and rakesh@ in one mail. */
+function dailyEmailJobAllReports(PDO $db, array $s, int $runId, string $onlyTo = ''): array {
+    $rows = dailyEmailReportRows($db);
+    if (!$rows && $s['all_reports_send_empty'] !== '1' && $onlyTo === '') return ['ok' => true, 'summary' => 'No pending reports — not sent (option off)', 'nothing_sent' => true];
+    $to = $onlyTo !== '' ? [$onlyTo] : DAILY_EMAIL_ALL_REPORTS_TO;
+    $key = implode(',', array_map('strtolower', $to));
+    if (dailyEmailDeliveryStatus($db, $runId, $key) === 'sent') return ['ok' => true, 'summary' => 'Already sent earlier to ' . $key];
+    $dateText = date('d-m-Y');
+    $n = count($rows);
+    $html = dailyEmailHtml('Pending Reports — Full List', date('l, d F Y') . ' · weekly report (Fridays 17:00 IST)',
+        $n ? '<b>' . $n . '</b> report' . ($n === 1 ? ' is' : 's are') . ' pending as on ' . $dateText . ' (all surveyors). The list is below and attached as Excel (same as Pending Reports → Export Excel).'
+           : '<b>There are no pending reports as on ' . $dateText . '.</b>',
+        DAILY_EMAIL_REPORT_HEADERS, $rows);
+    [$ok, $err] = dailyEmailSend($to, [], DAILY_EMAIL_APPT_FROM,
+        'Pending Reports – Full List – ' . $dateText, $html, DAILY_EMAIL_REPORT_HEADERS, $rows,
+        buildExportFileBaseName('Pending Reports', []),
+        [DAILY_EMAIL_REPORT_EXPORT_HEADERS, dailyEmailReportExportRows($db), 'Pending Reports']);
+    dailyEmailRecordDelivery($db, $runId, $key, 'Pending Reports — full list', $n, $ok, $err);
+    return ['ok' => $ok, 'summary' => $ok ? ($n . ' pending report(s), sent to ' . implode(', ', $to)) : 'Failed: ' . $err];
+}
+
 /** The full Pending Vessels list (unfiltered export) to survey@. */
 function dailyEmailJobAllPending(PDO $db, array $s, int $runId, string $onlyTo = ''): array {
     $rows = dailyEmailAllPendingRows($db);
@@ -552,6 +689,8 @@ function dailyEmailRunJob(PDO $db, string $job, string $kind, ?int $userId = nul
         $res = match ($job) {
             'surveyor_pending' => dailyEmailJobSurveyorPending($db, $s, $runId, $onlyTo),
             'all_pending'      => dailyEmailJobAllPending($db, $s, $runId, $onlyTo),
+            'surveyor_reports' => dailyEmailJobSurveyorReports($db, $s, $runId, $onlyTo),
+            'all_reports'      => dailyEmailJobAllReports($db, $s, $runId, $onlyTo),
             default            => dailyEmailJobAppointments($db, $s, $runId, $onlyTo),
         };
     } catch (Throwable $e) {
@@ -578,7 +717,7 @@ function dailyEmailRunDue(PDO $db, string $via, string $onlyJob = ''): array {
     @ignore_user_abort(true);
     foreach (array_keys(DAILY_EMAIL_JOBS) as $job) {
         if ($onlyJob !== '' && $job !== $onlyJob) continue;
-        if ($s[$job . '_enabled'] !== '1' || $now < $s[$job . '_time']) continue;
+        if ($s[$job . '_enabled'] !== '1' || $now < $s[$job . '_time'] || !dailyEmailRunsToday($job)) continue;
         try {
             $res = dailyEmailRunJob($db, $job, 'auto', null, '', $via);
         } catch (Throwable $e) {
