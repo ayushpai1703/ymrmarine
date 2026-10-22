@@ -461,8 +461,10 @@ function getAssignedSurveyorNamesArray($db, $surveyId): array {
                 LEFT JOIN users u ON u.id = ss.surveyor_id
                 ORDER BY s.id, ss.id
             ")->fetchAll(PDO::FETCH_NUM);
+            $known = $cache; // surveys already looked up singly keep their list (don't append twice)
             foreach ($rows as [$sid, $name]) {
                 $sid = (int)$sid;
+                if (array_key_exists($sid, $known)) continue;
                 if (!isset($cache[$sid])) $cache[$sid] = [];
                 if ($name !== null) $cache[$sid][] = $name;
             }
