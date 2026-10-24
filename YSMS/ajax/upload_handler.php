@@ -211,23 +211,29 @@ require_once __DIR__ . '/../includes/upload_email_outbox.php'; // admin email se
     // script content check (upload_validate).
     $extra_allowed = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'xlsm', 'csv', 'txt', 'rtf', 'ppt', 'pptx', 'odt', 'ods',
         'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'tif', 'tiff', 'bmp', 'zip', 'rar', '7z', 'msg', 'eml'];
-    if (isset($_FILES['extra_files']) && is_array($_FILES['extra_files']['name'])) {
-        foreach ($_FILES['extra_files']['name'] as $key => $name) {
-            if ($_FILES['extra_files']['error'][$key] == 0 && !$isAllowedExt($name, $extra_allowed)) {
+    // extra_files[] = Pending Report / Completed forms; additional_files[] = the Pending Vessel
+    // form's "Additional Files" (was never read, so those files were silently dropped).
+    $extraInputs = [];
+    foreach (['extra_files', 'additional_files'] as $extraField) {
+        if (isset($_FILES[$extraField]) && is_array($_FILES[$extraField]['name'])) $extraInputs[] = $_FILES[$extraField];
+    }
+    foreach ($extraInputs as $ef) {
+        foreach ($ef['name'] as $key => $name) {
+            if ($ef['error'][$key] == 0 && !$isAllowedExt($name, $extra_allowed)) {
                 $extra_rejected[] = basename($name);
                 continue;
             }
-            if ($_FILES['extra_files']['error'][$key] == 0 && upload_validate([
-                    'name' => $name, 'type' => $_FILES['extra_files']['type'][$key] ?? '',
-                    'tmp_name' => $_FILES['extra_files']['tmp_name'][$key], 'error' => 0,
-                    'size' => $_FILES['extra_files']['size'][$key]], [], 30 * 1024 * 1024) !== '') {
+            if ($ef['error'][$key] == 0 && upload_validate([
+                    'name' => $name, 'type' => $ef['type'][$key] ?? '',
+                    'tmp_name' => $ef['tmp_name'][$key], 'error' => 0,
+                    'size' => $ef['size'][$key]], [], 30 * 1024 * 1024) !== '') {
                 $extra_rejected[] = basename($name);
                 continue;
             }
-            if ($_FILES['extra_files']['error'][$key] == 0 && $isAllowedExt($name, $extra_allowed)) {
+            if ($ef['error'][$key] == 0 && $isAllowedExt($name, $extra_allowed)) {
                 $extra_orig = basename($name);
                 $extra_name = time() . "_" . preg_replace('/[^A-Za-z0-9._-]/', '_', $extra_orig);
-                if (move_uploaded_file($_FILES['extra_files']['tmp_name'][$key], $target_dir . $extra_name)) {
+                if (move_uploaded_file($ef['tmp_name'][$key], $target_dir . $extra_name)) {
                     $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Field Report', ?, '512 KB')");
                     $stmt->execute([$survey_id, $extra_orig, "uploads/" . $extra_name]);
                     $uploaded_labels[] = 'Extra: ' . $extra_orig;
@@ -359,6 +365,10 @@ require_once __DIR__ . '/../includes/upload_email_outbox.php'; // admin email se
         $_SESSION['flash_msg'] = "Pending vessel is uploaded and moved to pending report";
         if ($excel_failed_this_request) {
             $_SESSION['flash_msg'] .= ' (Calculation Sheet could not be saved — must be .xlsx/.xls; you can add it later.)';
+        }
+        if ($extra_rejected) {
+            $_SESSION['flash_msg'] .= ' · Not saved (file type not allowed): ' . implode(', ', $extra_rejected) . '.';
+            $_SESSION['flash_type'] = 'warning';
         }
         try {
             $ctx = loadSurveyNotifyContext($db, $survey_id);
