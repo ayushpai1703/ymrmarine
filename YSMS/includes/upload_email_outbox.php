@@ -92,6 +92,10 @@ function uploadEmailSend(PDO $db, int $id): array {
     }
     // notifyAdminsOfReportUpload() answers "Admin notified by email (…)" only after the transport accepted it
     $ok = strpos($note, 'Admin notified by email') === 0;
+    // An SMTP error can carry raw bytes from the server; saving those made the UPDATE fail and
+    // left the row stuck in 'sending'. Keep readable text only.
+    $note = preg_replace('/\s*SMTP server error: QUIT command failed.*$/s', '', $note); // the server's garbled reply to QUIT
+    $note = mb_substr(trim(preg_replace('/[\p{C}\x{FFFD}]+/u', ' ', mb_scrub($note, 'UTF-8'))), 0, 500);
     $db->prepare("UPDATE upload_email_outbox SET status = ?, result = ?, sent_at = IF(? = 'sent', NOW(), sent_at) WHERE id = ?")
        ->execute([$ok ? 'sent' : 'failed', $note, $ok ? 'sent' : 'failed', $id]);
     return ['status' => $ok ? 'sent' : 'failed', 'message' => $note];
