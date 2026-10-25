@@ -12,15 +12,11 @@
  */
 
 require_once __DIR__ . '/survey_form.php';
+require_once __DIR__ . '/gemini_json.php';
 
 const SF_AI_MAX_IMAGES = 8;
 const SF_AI_MAX_BYTES = 18 * 1024 * 1024; // Gemini inline request limit is 20 MB
 const SF_AI_CONFIDENT = 0.8;              // below this the field is marked "check"
-
-function sfAiApiKey(): string {
-    if (defined('GEMINI_API_KEY') && GEMINI_API_KEY !== '') return (string)GEMINI_API_KEY;
-    return (string)(getenv('YSMS_GEMINI_API_KEY') ?: getenv('GEMINI_API_KEY') ?: '');
-}
 
 function sfAiPrompt(string $key): string {
     $info = sfTemplateInfo($key);
@@ -52,8 +48,7 @@ function sfAiPrompt(string $key): string {
  * ['ok' => false, 'message' => ...]. $images: list of ['path' => ..., 'mime' => ...].
  */
 function sfAiExtract(string $key, array $images): array {
-    $apiKey = sfAiApiKey();
-    if ($apiKey === '') return ['ok' => false, 'message' => 'AI reading is not set up on this server (Gemini API key missing). Fill the form by hand.'];
+    if (geminiApiKey() === '') return ['ok' => false, 'message' => 'AI reading is not set up on this server (Gemini API key missing). Fill the form by hand.'];
     $parts = [['text' => sfAiPrompt($key)]];
     $bytes = 0;
     $used = 0;
@@ -66,33 +61,9 @@ function sfAiExtract(string $key, array $images): array {
         $used++;
     }
     if ($used === 0) return ['ok' => false, 'message' => 'No photo small enough to send to the AI (18 MB total limit).'];
-    $model = getenv('YSMS_GEMINI_MODEL') ?: (defined('GEMINI_MODEL') ? GEMINI_MODEL : 'gemini-3.6-flash');
-    $base = rtrim(getenv('YSMS_GEMINI_BASE_URL') ?: 'https://generativelanguage.googleapis.com', '/');
-    $url = $base . '/v1beta/models/' . rawurlencode($model) . ':generateContent';
-    $payload = json_encode([
-        'contents' => [['role' => 'user', 'parts' => $parts]],
-        'generationConfig' => ['temperature' => 0, 'responseMimeType' => 'application/json', 'maxOutputTokens' => 8192],
-    ]);
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'x-goog-api-key: ' . $apiKey], CURLOPT_TIMEOUT => 120, CURLOPT_CONNECTTIMEOUT => 15]);
-    $body = curl_exec($ch);
-    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $err = curl_error($ch);
-    curl_close($ch);
-    if ($body === false || $code < 200 || $code >= 300) {
-        error_log('survey form AI: HTTP ' . $code . ' ' . ($err ?: substr((string)$body, 0, 300)));
-        return ['ok' => false, 'message' => 'The AI service did not answer (' . ($code ?: 'no connection') . '). Try again, or fill the form by hand.'];
-    }
-    $resp = json_decode((string)$body, true);
-    $text = '';
-    foreach ((array)($resp['candidates'][0]['content']['parts'] ?? []) as $p) $text .= (string)($p['text'] ?? '');
-    $text = trim(preg_replace('/^```(?:json)?|```$/m', '', trim($text)));
-    $raw = json_decode($text, true);
-    if (!is_array($raw)) {
-        error_log('survey form AI: unreadable reply ' . substr($text, 0, 300));
-        return ['ok' => false, 'message' => 'The AI reply could not be read. Try again, or fill the form by hand.'];
-    }
+    $res = geminiJson($parts, 120, 'survey form');
+    if (!$res['ok']) return ['ok' => false, 'message' => $res['message']];
+    $raw = $res['data'];
     return ['ok' => true, 'raw' => $raw, 'images_used' => $used];
 }
 

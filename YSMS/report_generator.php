@@ -212,6 +212,9 @@ include 'includes/header.php';
     <div id="sectionsRoot"></div>
 </div>
 
+<!-- PDF input source (in addition to Excel): assets/js/report_pdf_source.js, ajax/report_pdf.php -->
+<script>window.RG_CSRF = <?= json_encode(csrf_token()) ?>;</script>
+<script src="assets/js/report_pdf_source.js?v=<?= @filemtime(__DIR__ . '/assets/js/report_pdf_source.js') ?: time() ?>"></script>
 <script>
 /* ============================================================
    🌟 6 రిపోర్ట్ టైప్‌ల టాబ్ కాన్ఫిగ్ — ప్రతి టాబ్ లాజిక్ index (1).html లో ఇచ్చిన
@@ -448,6 +451,7 @@ function buildSectionBlock(sid) {
     let wrap = document.createElement('div');
     wrap.className = 'report-section-block';
     wrap.id = 'sectionBlock_' + sid;
+    wrap.setAttribute('data-source', 'excel'); // Excel (existing) or PDF input source
 
     let html = '';
     html += `<div style="margin:15px 15px 0;font-size:15px;font-weight:800;color:#0f172a;display:flex;align-items:center;flex-wrap:wrap">
@@ -455,6 +459,7 @@ function buildSectionBlock(sid) {
               </div>`;
     html += `<div class="calc-info-pro ${calcClass}" style="margin-top:10px">${calcFormula} &nbsp;(all three fuel types)</div>`;
 
+    html += rgSourceHtml(sid);
     html += `<div class="upload-box-grid">
         <div class="upload-zone-pro" id="excelZone_${sid}">
             <div style="font-size:24px;">📊</div>
@@ -477,6 +482,7 @@ function buildSectionBlock(sid) {
             <div class="text-muted" id="excelName_${sid}" style="font-size:11px; margin-top:3px;">Auto-fill form fields from "REPORT" sheet</div>
             <button type="button" class="zone-load-btn" id="excelLoadBtn_${sid}" onclick="loadSelectedExcel('${sid}')" data-testid="excel-upload-button-${sid}">Upload</button>
         </div>
+        ${rgPdfZoneHtml(sid)}
         <div class="upload-zone-pro" id="wordZone_${sid}">
             <div style="font-size:24px;">📄</div>
             <div class="fw-bold text-dark mt-1" style="font-size:13px;">Select Word Template <span class="badge bg-danger" style="font-size:9px;">REQUIRED</span></div>
@@ -727,6 +733,7 @@ function renderGroupedGrids(sid) {
             <div class="form-group" id="container_${sid}_${f.id}">
                 <label class="control-label">${effectiveLabel}</label>
                 ${inputHtml}
+                ${rgPdfBadge(sid, f.id)}
             </div>
         `;
 
@@ -747,6 +754,7 @@ function renderGroupedGrids(sid) {
 
 function handleLiveTyping(sid, id, val) {
     sectionState[sid].formValues[id] = val;
+    rgPdfManual(sid, id);
     let el = document.getElementById(`input_${sid}_${id}`);
     if (el) {
         if (val.trim() !== "") {
@@ -765,6 +773,7 @@ function handleLiveTyping(sid, id, val) {
 
 function handleDropdownInput(sid, id, val) {
     sectionState[sid].formValues[id] = val;
+    rgPdfManual(sid, id);
     if (id === 'HOLDS') {
         sectionState[sid].formValues['HOLDS_ALPHA'] = NUMS_TO_WORDS[val] || '';
     }
@@ -773,6 +782,7 @@ function handleDropdownInput(sid, id, val) {
 
 function handleDateTimeChange(sid, id, val) {
     sectionState[sid].formValues[id] = val;
+    rgPdfManual(sid, id);
     let el = document.getElementById(`input_${sid}_${id}`);
     if (el && (el.type === 'date' || el.type === 'time')) {
         renderGroupedGrids(sid);
