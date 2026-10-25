@@ -9,6 +9,7 @@
     'use strict';
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
     var FUELS = { vlsfo: 'VLSFO', hsfo: 'HSFO', lsmgo: 'LSMGO' };
+    var PROFILE_FIELDS = { SURVEYOR_NAME: 1, SURVEYOR_SIGN: 1 }; // filled from the user's profile
     var MAX_MB = 14;
     var P = {}; // per section: { source, files: [], meta: {}, tankNote }
     function st(sid) { return P[sid] || (P[sid] = { source: 'excel', files: [], meta: {}, tankNote: '' }); }
@@ -30,6 +31,8 @@
         + '.rg-b{display:block;font-size:11.5px;line-height:1.35;margin-top:4px;border-radius:8px;padding:4px 7px}'
         + '.rg-b-ok{background:#ecfdf5;color:#166534}.rg-b-review,.rg-b-calc{background:#fffbeb;color:#92400e}.rg-b-conflict{background:#fef2f2;color:#991b1b}'
         + '.rg-b-edit{background:#f1f5f9;color:#475569}.rg-b-none{background:#f8fafc;color:#64748b}'
+        + '.rg-xxx-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 15px 0;font-size:12px;color:#475569}'
+        + '.rg-xxx-btn{min-height:42px;padding:6px 16px;border-radius:10px;border:1.5px solid #f59e0b;background:#fffbeb;color:#92400e;font-weight:800}'
         + '.rg-b button{margin:4px 6px 0 0;min-height:32px;padding:2px 10px;border-radius:8px;border:1px solid currentColor;background:#fff;color:inherit;font-weight:700;font-size:11.5px}';
     var s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
 
@@ -100,7 +103,7 @@
     }
     function readOne(sid, it) {
         return new Promise(function (resolve) {
-            var fields = REPORT_FIELDS.filter(function (f) { return f.type !== 'calc' && !f.readonly; }).map(function (f) {
+            var fields = REPORT_FIELDS.filter(function (f) { return f.type !== 'calc' && !f.readonly && !PROFILE_FIELDS[f.id]; }).map(function (f) {
                 var label = (!isOffhireSection(sid) && ONHIRE_LABEL_OVERRIDES[f.id]) ? ONHIRE_LABEL_OVERRIDES[f.id] : f.label;
                 return { id: f.id, label: label, type: f.type, options: f.options || [], precision: f.precision };
             }).concat((SECTION_EXTRA_FIELDS[sid] || []).map(function (f) { return { id: f.id, label: f.label, type: 'text' }; }));
@@ -168,7 +171,7 @@
             if (calc && calc.problems) Object.keys(calc.problems).forEach(function (fu) { notes.push(FUELS[fu] + ' tank total not calculated: ' + calc.problems[fu].length + ' reading(s) missing or not in the Excel format\'s precision — check the sounding sheet.'); });
             S.tankNote = notes.join(' ');
             var fv = sectionState[sid].formValues, ask = [];
-            var ids = REPORT_FIELDS.filter(function (f) { return f.type !== 'calc' && !f.readonly; }).map(function (f) { return f.id; });
+            var ids = REPORT_FIELDS.filter(function (f) { return f.type !== 'calc' && !f.readonly && !PROFILE_FIELDS[f.id]; }).map(function (f) { return f.id; });
             ids.forEach(function (id) {
                 var cands = [];
                 done.forEach(function (it) {
