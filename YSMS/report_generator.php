@@ -2,6 +2,18 @@
 require_once 'config/config.php';
 checkAuth();
 
+// Surveyor Name / Sign in the report = whoever opens this page: profile full name in
+// capitals, first name in small letters.
+$rgProfileName = trim((string)($_SESSION['full_name'] ?? ''));
+try {
+    $rgU = getDB()->prepare('SELECT full_name FROM users WHERE id = ?');
+    $rgU->execute([(int)($_SESSION['user_id'] ?? 0)]);
+    $rgProfileName = trim((string)($rgU->fetchColumn() ?: $rgProfileName));
+} catch (Throwable $e) { error_log('report_generator profile name: ' . $e->getMessage()); }
+$rgProfileName = preg_replace('/\s+/u', ' ', $rgProfileName);
+$rgSurveyorName = mb_strtoupper($rgProfileName, 'UTF-8');
+$rgSurveyorSign = mb_strtolower(explode(' ', $rgProfileName)[0] ?? '', 'UTF-8');
+
 // మన గ్లోబల్ కలర్‌ఫుల్ హెడర్ (టాప్ ప్రొఫైల్ ఐకాన్ తో సహా లోడ్ అవుతుంది)
 include 'includes/header.php';
 ?>
@@ -297,6 +309,15 @@ const REPORT_FIELDS = [
 
 const NUMS_TO_WORDS = {'1':'ONE','2':'TWO','3':'THREE','4':'FOUR','5':'FIVE','6':'SIX','7':'SEVEN','8':'EIGHT','9':'NINE','10':'TEN'};
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const RG_SURVEYOR_NAME = <?= json_encode($rgSurveyorName) ?>;
+const RG_SURVEYOR_SIGN = <?= json_encode($rgSurveyorSign) ?>;
+// "Fill XXX": redelivery not known yet — these placeholders go into the report as they are.
+const RG_XXX_VALUES = {
+    REDELIVERY_DATE_LT: 'XX-XX-XXXX', REDELIVERY_TIME_LT: 'XX:XX',
+    REDELIVERY_DATE_UTC: 'XX-XX-XXXX', REDELIVERY_TIME_UTC: 'XX:XX',
+    REDELIVERY_VLSFO: 'XXX.XXX', REDELIVERY_LSMGO: 'XXX.XXX', REDELIVERY_HSFO: 'XXX.XXX'
+};
+const isXXX = v => /^X[X:.\-]*$/i.test(String(v || '').trim());
 const PRESELECT_SURVEY_ID = <?= isset($_GET['id']) ? (int)$_GET['id'] : 'null' ?>;
 
 function sectionDef(sid) { return SECTIONS.find(s => s.id === sid); }
@@ -349,9 +370,28 @@ function showTab(sid) {
     block.classList.add('active');
 }
 
+function applySurveyorProfile(sid) {
+    if (RG_SURVEYOR_NAME) sectionState[sid].formValues['SURVEYOR_NAME'] = RG_SURVEYOR_NAME;
+    if (RG_SURVEYOR_SIGN) sectionState[sid].formValues['SURVEYOR_SIGN'] = RG_SURVEYOR_SIGN;
+}
+
+function fillRedeliveryXXX(sid) {
+    let fv = sectionState[sid].formValues;
+    let apply = function () {
+        Object.keys(RG_XXX_VALUES).forEach(id => { fv[id] = RG_XXX_VALUES[id]; rgPdfManual(sid, id); });
+        calculateConsumption(sid);
+        renderGroupedGrids(sid);
+    };
+    let own = Object.keys(RG_XXX_VALUES).filter(id => (fv[id] || '').trim() !== '' && !isXXX(fv[id]));
+    if (!own.length) return apply();
+    Swal.fire({ icon: 'question', title: 'Replace with XXX?', text: own.length + ' of these fields already have a value. Replace them with XXX?',
+        showCancelButton: true, confirmButtonText: 'Fill XXX', cancelButtonText: 'Keep values' }).then(r => { if (r.isConfirmed) apply(); });
+}
+
 function initSectionDefaults(sid) {
     let today = new Date().toISOString().slice(0, 10);
     sectionState[sid].formValues['REPORT_DATE'] = today;
+    applySurveyorProfile(sid);
     sectionState[sid].formValues['HOLDS_ALPHA'] = sectionState[sid].formValues['HOLDS_ALPHA'] || "";
     renderGroupedGrids(sid);
     preselectExcelForSection(sid);
@@ -506,6 +546,10 @@ function buildSectionBlock(sid) {
         </div>
     </div>`;
 
+    html += `<div class="rg-xxx-row">
+        <button type="button" class="rg-xxx-btn" onclick="fillRedeliveryXXX('${sid}')" data-testid="fill-xxx-${sid}">Fill XXX</button>
+        <span>${isOffhire ? 'Redelivery' : 'Delivery'} not known yet: date XX-XX-XXXX, time XX:XX, VLSFO / LSMGO / HSFO XXX.XXX</span>
+    </div>`;
     html += `<div class="accordion-group-card">
         <div class="accordion-header-bar" onclick="toggleAccordion('missingSection_${sid}', 'arrow1_${sid}')">
             <span class="accordion-header-title text-danger"><i class="fa-solid fa-circle-exclamation"></i> 1. Missing Details (<span id="missingBadge_${sid}">0</span>)</span>
@@ -716,6 +760,7 @@ function renderGroupedGrids(sid) {
             `;
         } else {
             let inputType = (f.id === 'SURVEY_DATE') ? 'text' : (effectiveType === 'time' ? 'time' : (effectiveType === 'date' ? 'date' : 'text'));
+            if (isXXX(curVal)) inputType = 'text'; // "Fill XXX" placeholder (clear it to get the date / time picker back)
             inputHtml = `
                 <input type="${inputType}"
                        id="input_${sid}_${f.id}"
@@ -815,6 +860,13 @@ function calculateConsumption(sid) {
     const types = ['VLSFO', 'LSMGO', 'HSFO'];
     types.forEach(type => {
         let sv = parseFloat(fv[`SURVEY_${type}`]) || 0;
+        // Redelivery quantity still XXX.XXX → the consumption isn't known either
+        if (isXXX(fv[`REDELIVERY_${type}`])) {
+            fv[`CONS_${type}`] = 'XXX.XXX';
+            let el = document.getElementById(`input_${sid}_CONS_${type}`);
+            if (el) el.value = 'XXX.XXX';
+            return;
+        }
         let rd = parseFloat(fv[`REDELIVERY_${type}`]) || 0;
         let result = isOffhire ? (sv - rd).toFixed(3) : (rd - sv).toFixed(3);
         fv[`CONS_${type}`] = result;
@@ -927,6 +979,7 @@ function applyExcelArrayBuffer(sid, arrayBuffer, label) {
             }
         });
 
+        applySurveyorProfile(sid); // the person generating the report, not whoever filled the Excel
         let holdsVal = formValues['HOLDS'];
         if (holdsVal) formValues['HOLDS_ALPHA'] = NUMS_TO_WORDS[holdsVal] || '';
 
