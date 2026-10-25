@@ -476,6 +476,7 @@ include 'includes/header.php';
 
 <div class="scroll-content">
     <?php $page_title = 'Pending Report Details'; $back_url = 'reports.php'; $page_testid = 'report-detail'; include 'includes/top_app_bar.php'; ?>
+    <?php $overdueAlertKind = 'report'; include 'includes/overdue_alert.php'; // Report Overdue (4+ days since survey completion) ?>
 
     <div class="detail-mobile-view">
     <div class="detail-bottom-row">
