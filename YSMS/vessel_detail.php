@@ -306,6 +306,7 @@ include 'includes/header.php';
 
 <div class="scroll-content">
     <?php $page_title = 'Vessel Survey Details'; $back_url = 'vessels.php'; $page_testid = 'vessel-detail'; include 'includes/top_app_bar.php'; ?>
+    <?php $overdueAlertKind = 'survey'; include 'includes/overdue_alert.php'; // Survey Pending (7+ days since appointment) ?>
 
     <?php if($success): ?><div class="alert alert-success mx-3 mt-3 py-2" style="font-size:12px;"><?= $success ?></div><?php endif; ?>
     <?php if($error): ?><div class="alert alert-danger mx-3 mt-3 py-2" style="font-size:12px;"><?= $error ?></div><?php endif; ?>
