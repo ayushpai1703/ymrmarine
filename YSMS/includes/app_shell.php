@@ -35,6 +35,12 @@ if (ysmsIsApp()):
 ?>
     <meta name="theme-color" content="#0b1e46">
     <script>
+    // Inside the app, Home and sign-in are the app's own screens (app.php).
+    (function () {
+        var pg = (location.pathname.split('/').pop() || 'index.php').toLowerCase();
+        if (pg === 'index.php') location.replace('app.php#/home');
+        else if (pg === 'login.php') location.replace('app.php');
+    })();
     document.documentElement.classList.add('ysms-app');
     // Page transitions (assets/css/app-shell.css): slide back on Back, fade between bottom tabs.
     (function () {

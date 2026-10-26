@@ -5,7 +5,7 @@
   "backgroundColor": "#0b1e46",
   "appendUserAgent": "YSMSApp/1.0",
   "server": {
-    "url": "https://ymrmarine-staging-23712461887.asia-south1.run.app/YSMS/index.php",
+    "url": "https://ymrmarine-staging-23712461887.asia-south1.run.app/YSMS/app.php",
     "errorPath": "offline.html",
     "cleartext": false
   },

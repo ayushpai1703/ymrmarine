@@ -38,32 +38,48 @@
     // which has to run before the page's first paint.
     var NAV_KEY = 'ysmsNavType';
 
-    /* ---------- Launch splash ---------- */
-    function splash() {
-        var first = !storage('ysmsSplashDone');
-        storage('ysmsSplashDone', '1');
-        if (!first || reduceMotion) { hideNativeSplash(); return; }
-        var logo = 'assets/images/logo.png';
-        var s = el('div', { id: 'ysms-splash', 'aria-hidden': 'true' },
-            '<svg class="ysms-splash-waves" viewBox="0 0 390 260" preserveAspectRatio="none" fill="none">' +
-            '<path d="M-30 120 C 70 95, 130 145, 195 120 S 320 95, 420 120" stroke="#fff" stroke-opacity=".08" stroke-width="2"/>' +
-            '<path d="M-30 170 C 70 145, 130 195, 195 170 S 320 145, 420 170" stroke="#fff" stroke-opacity=".06" stroke-width="2"/>' +
-            '<path d="M-30 220 C 70 195, 130 245, 195 220 S 320 195, 420 220" stroke="#fff" stroke-opacity=".05" stroke-width="2"/></svg>' +
-            '<div class="ysms-splash-mark"><img src="' + logo + '" alt=""></div>' +
-            '<div class="ysms-splash-text"><b>YMR MARINE</b><span>Survey Management System</span></div>' +
-            '<div class="ysms-splash-bar"><i></i></div>');
-        document.body.appendChild(s);
+    /* ---------- Full pages opened from the app screens (app.php) ---------- */
+    // The app has its own Home / lists / profile; a full page is a sub-screen of it: no
+    // website tab bar or menu, a Back button instead. Home and sign-in go to the app screens.
+    function subPage() {
+        if (page === 'index.php' || page === '') { location.replace('app.php#/home'); return false; }
+        if (page === 'login.php') { location.replace('app.php'); return false; }
+        document.documentElement.classList.add('ysms-sub');
         hideNativeSplash();
-        var started = Date.now();
-        function out() {
-            setTimeout(function () {
-                s.classList.add('ysms-splash-out');
-                setTimeout(function () { s.remove(); }, 600);
-            }, Math.max(0, 1100 - (Date.now() - started)));
+        var backSvg = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
+        var hb = document.querySelector('.hamburger-menu-btn');
+        var btn = el('button', { type: 'button', 'class': 'ysms-back-btn', 'aria-label': 'Back' }, backSvg);
+        btn.addEventListener('click', goBack);
+        if (hb) {
+            hb.parentNode.insertBefore(btn, hb);
+            var oldBack = hb.parentNode.querySelector('.detail-back-btn');
+            if (oldBack) oldBack.remove();
+        } else {
+            btn.classList.add('floating');
+            document.body.appendChild(btn);
         }
-        if (document.readyState === 'complete') out(); else window.addEventListener('load', out, { once: true });
-        setTimeout(function () { if (s.isConnected) s.remove(); }, 6000);
+        jumpTo(location.hash.slice(1));
+        return true;
     }
+    // app.php links to a part of a full page: #upload (Upload Required Reports), #vessel-history.
+    function jumpTo(part) {
+        var target = null;
+        var visible = function (n) { return n && n.offsetParent !== null; };
+        if (part === 'vessel-history') {
+            target = Array.prototype.filter.call(document.querySelectorAll('[data-testid="vessel-history"]'), visible)[0];
+        } else if (part === 'upload') {
+            target = Array.prototype.filter.call(document.querySelectorAll('div'), function (n) {
+                return n.children.length <= 2 && /^\s*Upload Required Reports\s*$/.test(n.textContent) && visible(n);
+            })[0];
+            if (target) target = target.closest('.card, [class*="card"], section') || target;
+        }
+        if (target) setTimeout(function () { target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' }); }, 350);
+    }
+    function goBack() {
+        haptic();
+        if (history.length > 1) history.back(); else location.href = 'app.php';
+    }
+
     function hideNativeSplash() {
         try { if (isNative && plugins.SplashScreen) plugins.SplashScreen.hide({ fadeOutDuration: 200 }); } catch (e) { /* none */ }
     }
@@ -280,9 +296,8 @@
         if (!isNative || !plugins.App) return;
         plugins.App.addListener('backButton', function (ev) {
             if (closeTopLayer()) return;
-            if (page === 'index.php' || page === 'login.php' || page === '') { plugins.App.minimizeApp(); return; }
             if (ev && ev.canGoBack) { history.back(); return; }
-            location.href = 'index.php';
+            location.href = 'app.php';
         });
     }
 
@@ -355,7 +370,7 @@
     }
 
     function init() {
-        splash();
+        if (!subPage()) return;
         entrance();
         countUp();
         pullToRefresh();
