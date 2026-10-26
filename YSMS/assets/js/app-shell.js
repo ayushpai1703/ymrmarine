@@ -121,7 +121,7 @@
 
     /* ---------- Touch ripple ---------- */
     var RIPPLE = '.btn, .nav-item-btn, .ov-card, .stat-card, .vessel-card, .recovery-row-card, .fab-option-item, ' +
-        '.login-submit-btn, .btn-primary-glow, .center-fab-btn, .profile-dropdown-item, .sf-entry';
+        '.login-submit-btn, .btn-primary-glow, .center-fab-btn, .profile-dropdown-item';
     document.addEventListener('pointerdown', function (e) {
         if (reduceMotion || e.button !== 0) return;
         var t = e.target.closest && e.target.closest(RIPPLE);
@@ -142,7 +142,7 @@
 
     /* ---------- Card entrance as cards come into view ---------- */
     var ENTER = '.ov-card, .stat-card, .recovery-row-card, .vessel-card, .overview-section > .search-input-wrapper, ' +
-        '.detail-header-card, .info-card, .vd-table-card, .pv-card, .sf-entry, .vh-card, .inbox-item, .doc-card';
+        '.detail-header-card, .info-card, .vd-table-card, .pv-card, .vh-card, .inbox-item, .doc-card';
     function entrance() {
         if (reduceMotion || !('IntersectionObserver' in window)) return;
         var items = Array.prototype.slice.call(document.querySelectorAll(ENTER));

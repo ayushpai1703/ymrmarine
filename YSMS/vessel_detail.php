@@ -529,10 +529,6 @@ include 'includes/header.php';
 <div class="scroll-content">
     <?php $page_title = 'Vessel Survey Details'; $back_url = 'vessels.php'; $page_testid = 'vessel-detail'; include 'includes/top_app_bar.php'; ?>
     <?php $overdueAlertKind = 'survey'; include 'includes/overdue_alert.php'; // Survey Pending (7+ days since appointment) ?>
-    <?php if (in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true)): // Image → bunker survey form (survey_form.php) ?>
-    <a class="sf-entry" href="survey_form.php?survey_id=<?= (int)$survey['id'] ?>" data-testid="survey-form-entry"><i class="fa-solid fa-camera"></i><span>Bunker survey form from photos</span><i class="fa-solid fa-chevron-right"></i></a>
-    <style>.sf-entry { display: flex; align-items: center; gap: 10px; margin: 12px 16px 0; padding: 12px 14px; min-height: 48px; border-radius: 12px; background: #EEF2FF; border: 1px solid #C7D2FE; color: #1e3a8a; font-weight: 700; font-size: 14px; text-decoration: none; } .sf-entry span { flex: 1; } @media (min-width: 992px) { .sf-entry { margin: 16px 24px 0; } }</style>
-    <?php endif; ?>
 
     <?php if($success): ?><div class="alert alert-success mx-3 mt-3 py-2" style="font-size:12px;"><?= $success ?></div><?php endif; ?>
     <?php if($error): ?><div class="alert alert-danger mx-3 mt-3 py-2" style="font-size:12px;"><?= $error ?></div><?php endif; ?>

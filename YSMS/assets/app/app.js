@@ -1,8 +1,9 @@
 /*
  * YSMS Android app screens (app.php). A small single-page app:
- *   #/login, #/home, #/vessels, #/reports, #/completed, #/profile (tabs), #/v/<id>, #/search
+ *   #/login, #/home, #/vessels, #/reports, #/completed, #/profile (tabs), #/v/<id>, #/up/<id> (upload),
+ *   #/search, #/inbox, #/recovery, #/cancelled, #/formats, #/me (edit profile)
  * Data: app_api.php (read-only). Sign in / out, the latest-update form and the full tools
- * (uploads, survey form, report generator, admin pages) use the existing pages, so every
+ * (team chat, report generator, admin pages) use the existing pages, so every
  * server check stays where it is.
  */
 (function () {
@@ -173,14 +174,14 @@
     var current = null; // { route, depth, node }
     function parse(hash) {
         var h = (hash || location.hash || '').replace(/^#\/?/, '');
-        var m = h.match(/^v\/(\d+)$/);
-        if (m) return { name: 'vessel', id: +m[1] };
-        if (h === 'search') return { name: 'search' };
-        if (h === 'login') return { name: 'login' };
+        var m = h.match(/^(v|up)\/(\d+)$/);
+        if (m) return { name: m[1] === 'v' ? 'vessel' : 'upload', id: +m[2] };
+        if (PUSHED.indexOf(h) !== -1 || h === 'login') return { name: h };
         if (TABS.indexOf(h) !== -1) return { name: h };
         return { name: 'home' };
     }
-    function hashFor(name, id) { return '#/' + (name === 'vessel' ? 'v/' + id : name); }
+    var PUSHED = ['search', 'inbox', 'recovery', 'cancelled', 'formats', 'me'];
+    function hashFor(name, id) { return '#/' + (name === 'vessel' ? 'v/' + id : name === 'upload' ? 'up/' + id : name); }
 
     // go('vessel', {id}) pushes a screen; tabs replace; login/home after sign-in replace.
     function go(name, opt) {
@@ -338,14 +339,14 @@
             '<header class="hdr-navy"><div class="hdr-row">' +
             '<button type="button" class="who press" data-go="profile" style="border:0;background:transparent;color:inherit;padding:0;text-align:left">' +
             '<span class="avatar">' + avatar + '</span><span style="min-width:0"><small>' + esc(me.greeting) + '</small><b>' + esc(me.name) + '</b></span></button>' +
-            (me.can.inbox ? '<button type="button" class="icon-btn glass press" data-web="inbox.php" aria-label="Inbox' + (me.unread ? ', ' + me.unread + ' unread' : '') + '">' + icon('bell') + (me.unread ? '<span class="dot"></span>' : '') + '</button>' : '') +
+            (me.can.inbox ? '<button type="button" class="icon-btn glass press" data-go="inbox" aria-label="Inbox' + (me.unread ? ', ' + me.unread + ' unread' : '') + '">' + icon('bell') + (me.unread ? '<span class="dot"></span>' : '') + '</button>' : '') +
             '</div></header>' +
             '<button type="button" class="search lift press" data-go="search" style="border:0;text-align:left;width:calc(100% - 32px)">' + icon('search') + '<span style="flex:1">Search vessel, port, client…</span></button>' +
             '<div class="scr-pad">' +
             '<div class="stats">' +
             statTile('vessels', 'ship', 'blue', 'Pending Vessels') + statTile('reports', 'file', 'orange', 'Pending Reports') +
             statTile('completed', 'check', 'green', 'Completed') +
-            '<button type="button" class="stat press" data-rise' + (me.can.recovery ? ' data-web="recovery.php"' : '') + '><span class="ic sky">' + icon('chart') + '</span><span class="n" data-n="rec">–</span><span class="l">Recovery this month (MT)</span></button>' +
+            '<button type="button" class="stat press" data-rise' + (me.can.recovery ? ' data-go="recovery"' : '') + '><span class="ic sky">' + icon('chart') + '</span><span class="n" data-n="rec">–</span><span class="l">Recovery this month (MT)</span></button>' +
             '</div><div data-attention></div>' +
             '<div class="section-title" data-rise>Quick actions</div><div class="quick" data-rise>' + quickActions(me) + '</div>' +
             '<div data-month></div>' +
@@ -380,20 +381,22 @@
         var all = [
             me.can.assign && [me.role === 'Client' ? 'Request survey' : 'Assign vessel', 'plus', 'assign_vessel.php', true],
             me.can.report_generator && ['Word report', 'file', 'report_generator.php'],
-            me.can.recovery && ['Recovery', 'fuel', 'recovery.php'],
+            me.can.recovery && ['Recovery', 'fuel', '#recovery'],
             me.can.chat && ['Team chat', 'chat', 'team_chat.php'],
-            me.role !== 'Client' && ['Formats', 'folder', 'formats_download.php'],
-            ['Cancelled', 'ban', 'cancelled.php']
+            me.role !== 'Client' && ['Formats', 'folder', '#formats'],
+            ['Cancelled', 'ban', '#cancelled']
         ].filter(Boolean).slice(0, 4);
         return all.map(function (a, i) {
-            return '<button type="button" class="qa" data-web="' + a[2] + '"><span class="q press' + (i === 0 ? ' solid' : '') + '">' + icon(a[1]) + '</span>' + esc(a[0]) + '</button>';
+            var target = a[2].charAt(0) === '#' ? 'data-go="' + a[2].slice(1) + '"' : 'data-web="' + a[2] + '"';
+            return '<button type="button" class="qa" ' + target + '><span class="q press' + (i === 0 ? ' solid' : '') + '">' + icon(a[1]) + '</span>' + esc(a[0]) + '</button>';
         }).join('');
     }
 
     var LISTS = {
         vessels: { status: 'pending_vessel', title: 'Pending Vessels', empty: 'No pending vessels', overdue: 'Overdue' },
         reports: { status: 'pending_report', title: 'Pending Reports', empty: 'No pending reports', overdue: 'Report overdue' },
-        completed: { status: 'completed', title: 'Completed', empty: 'No completed vessels' }
+        completed: { status: 'completed', title: 'Completed', empty: 'No completed vessels' },
+        cancelled: { status: 'cancelled', title: 'Cancelled', empty: 'No cancelled vessels', pushed: true }
     };
 
     function vcard(v) {
@@ -419,8 +422,9 @@
     function listScreen(key) {
         var cfg = LISTS[key], me = state.me;
         var showOverdue = cfg.overdue && ['Admin', 'Super Admin', 'Surveyor'].indexOf(me.role) !== -1;
-        var scr = el('<section class="scr has-tabs" aria-label="' + cfg.title + '">' +
-            '<header class="hdr-white"><div class="hdr-title-row"><div><h1>' + cfg.title + '</h1><div class="hdr-sub" data-total>&nbsp;</div></div></div>' +
+        var scr = el('<section class="scr' + (cfg.pushed ? '' : ' has-tabs') + '" aria-label="' + cfg.title + '">' +
+            '<header class="hdr-white"><div class="hdr-title-row">' + (cfg.pushed ? '<button type="button" class="icon-btn plain press" data-back aria-label="Back" style="margin-left:-8px">' + icon('back') + '</button>' : '') +
+            '<div style="flex:1"><h1>' + cfg.title + '</h1><div class="hdr-sub" data-total>&nbsp;</div></div></div>' +
             '<label class="search flat">' + icon('search') + '<span class="sr">Search</span><input type="search" placeholder="Search vessel, port, client" enterkeyhint="search"></label>' +
             (showOverdue ? '<div class="chips"><button type="button" class="chip" aria-pressed="true" data-f="">All</button><button type="button" class="chip warn" aria-pressed="false" data-f="1">' + cfg.overdue + '</button></div>' : '') +
             '</header><div class="scr-body"><div class="scr-pad"><div class="list">' + skeletons(4) + '</div><div class="more-loader" hidden><span class="spin dark"></span></div></div></div>' +
@@ -471,6 +475,7 @@
     SCREENS.vessels = function () { return listScreen('vessels'); };
     SCREENS.reports = function () { return listScreen('reports'); };
     SCREENS.completed = function () { return listScreen('completed'); };
+    SCREENS.cancelled = function () { return listScreen('cancelled'); };
 
     SCREENS.search = function () {
         var scr = el('<section class="scr" aria-label="Search">' +
@@ -551,8 +556,7 @@
             var sheet = scr.querySelector('.sheet');
             sheet.innerHTML = html;
             var acts = [];
-            if (v.can_survey_form) acts.push('<button type="button" class="btn outline press" data-web="survey_form.php?survey_id=' + v.id + '">' + icon('camera') + 'Survey form</button>');
-            if (v.can_upload) acts.push('<button type="button" class="btn primary press" data-web="' + esc(v.web) + '#upload">' + icon('upload') + 'Upload report</button>');
+            if (v.can_upload) acts.push('<button type="button" class="btn primary press" data-upload="' + v.id + '">' + icon('upload') + (v.upload.kind === 'report' ? 'Upload final report' : 'Upload report') + '</button>');
             var old = scr.querySelector('.actions'); if (old) old.remove();
             if (acts.length) scr.appendChild(el('<div class="actions' + (acts.length === 1 ? ' one' : '') + '">' + acts.join('') + '</div>'));
             else sheet.style.paddingBottom = '32px';
@@ -561,7 +565,6 @@
             more.onclick = function () {
                 openSheet('<h2>' + esc(v.vessel) + '</h2>' +
                     '<button type="button" class="menu-item press" data-web="' + esc(v.web) + '">' + icon('globe') + 'Open full page</button>' +
-                    (v.can_survey_form ? '<button type="button" class="menu-item press" data-web="survey_form.php?survey_id=' + v.id + '">' + icon('camera') + 'Bunker survey form from photos</button>' : '') +
                     (state.me.can.report_generator && v.status !== 'Pending Vessel' ? '<button type="button" class="menu-item press" data-web="report_generator.php?id=' + v.id + '">' + icon('file') + 'Word report generator</button>' : '') +
                     '<button type="button" class="menu-item press" data-refresh>' + icon('refresh') + 'Refresh</button>');
             };
@@ -608,15 +611,16 @@
         var me = state.me;
         var avatar = me.avatar ? '<img src="' + esc(me.avatar) + '" alt="">' : esc(me.initials);
         function item(label, ic, cls, url, extra) {
-            return '<button type="button" class="menu-item press" data-web="' + url + '"><span class="ic ' + cls + '">' + icon(ic) + '</span><span class="grow">' + label + '</span>' + (extra || '') + icon('chev', 'chev') + '</button>';
+            var target = url.charAt(0) === '#' ? 'data-go="' + url.slice(1) + '"' : 'data-web="' + url + '"';
+            return '<button type="button" class="menu-item press" ' + target + '><span class="ic ' + cls + '">' + icon(ic) + '</span><span class="grow">' + label + '</span>' + (extra || '') + icon('chev', 'chev') + '</button>';
         }
         var work = [
-            me.can.inbox && item('Inbox', 'inbox', 'blue', 'inbox.php', me.unread ? '<span class="count">' + (me.unread > 99 ? '99+' : me.unread) + '</span>' : ''),
+            me.can.inbox && item('Inbox', 'inbox', 'blue', '#inbox', me.unread ? '<span class="count">' + (me.unread > 99 ? '99+' : me.unread) + '</span>' : ''),
             me.can.chat && item('Team chat', 'chat', 'purple', 'team_chat.php'),
-            me.can.recovery && item('Recovery', 'fuel', 'sky', 'recovery.php'),
+            me.can.recovery && item('Recovery', 'fuel', 'sky', '#recovery'),
             me.can.report_generator && item('Word report generator', 'file', 'orange', 'report_generator.php'),
-            me.role !== 'Client' && item('Formats', 'folder', 'green', 'formats_download.php'),
-            item('Cancelled vessels', 'ban', 'red', 'cancelled.php')
+            me.role !== 'Client' && item('Formats', 'folder', 'green', '#formats'),
+            item('Cancelled vessels', 'ban', 'red', '#cancelled')
         ].filter(Boolean).join('');
         var admin = me.role === 'Admin' ? [
             item('Assign vessel', 'plus', 'blue', 'assign_vessel.php'), item('Add surveyor', 'user', 'orange', 'add_surveyor.php'),
@@ -631,7 +635,7 @@
             '<div class="scr-pad">' +
             '<div class="section-title" data-rise>Work</div><div class="menu-card" data-rise>' + work + '</div>' +
             (admin ? '<div class="section-title" data-rise>' + (me.role === 'Client' ? 'Client' : 'Admin') + '</div><div class="menu-card" data-rise>' + admin + '</div>' : '') +
-            '<div class="section-title" data-rise>Account</div><div class="menu-card" data-rise>' + item('My profile', 'user', 'blue', 'profile.php') +
+            '<div class="section-title" data-rise>Account</div><div class="menu-card" data-rise>' + item('My profile', 'user', 'blue', '#me') +
             '<button type="button" class="menu-item press" data-logout style="color:#b91c1c"><span class="ic red">' + icon('logout') + '</span><span class="grow">Log out</span></button></div>' +
             '</div></div></section>');
         scr.querySelector('[data-logout]').addEventListener('click', function () {
@@ -649,9 +653,451 @@
         return scr;
     };
 
+    /* ---------------- shared: pushed screen header, posting to the existing pages ---------------- */
+    function barHeader(title, sub, right) {
+        return '<header class="hdr-bar"><button type="button" class="icon-btn plain press" data-back aria-label="Back">' + icon('back') + '</button>' +
+            '<div class="t"><b>' + esc(title) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</div>' + (right || '') + '</header>';
+    }
+    // POST a form to an existing page; resolves with the page's own success / error message.
+    function postPage(url, data) {
+        var body = data instanceof FormData ? data : new URLSearchParams(data);
+        if (body.set) body.set('csrf_token', state.me.csrf);
+        return fetch(url, { method: 'POST', credentials: 'same-origin', body: body }).then(function (r) {
+            if (r.status === 403) throw new Error('Your session expired. Please sign in again.');
+            return r.text();
+        }).then(function (html) {
+            var doc = new DOMParser().parseFromString(html, 'text/html');
+            // The page's own message: an inline alert, or the flash toast after a save-and-redirect.
+            var ok = doc.querySelector('.alert-success, .ysms-toast-success'), bad = doc.querySelector('.alert-danger, .ysms-toast-error');
+            var box = bad || ok, text = box ? (box.querySelector('.ysms-toast-text') || box).textContent : '';
+            return { ok: !!ok && !bad, message: text.replace(/\s+/g, ' ').replace(/\s*×\s*$/, '').trim() };
+        });
+    }
+    function mb(b) { return b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
+
+    /* ---------------- Upload (Pending Vessel → Pending Report, Pending Report → Completed) ---------------- */
+    var MAX_TOTAL = 31 * 1024 * 1024, MAX_ZIP = 30 * 1024 * 1024;
+    function picker(key, label, hint, accept, multiple, required) {
+        return '<div class="pick" data-pick="' + key + '">' +
+            '<input type="file" id="pk-' + key + '" accept="' + accept + '"' + (multiple ? ' multiple' : '') + ' hidden>' +
+            '<label class="pick-box press" for="pk-' + key + '"><span class="pick-ic">' + icon('upload') + '</span><span class="t"><b>' + label + (required ? ' <i class="req">*</i>' : '') + '</b><small>' + hint + '</small></span>' + icon('plus', 'chev') + '</label>' +
+            '<div class="pick-files"></div></div>';
+    }
+    SCREENS.upload = function (route) {
+        var scr = el('<section class="scr" aria-label="Upload">' + barHeader('Upload', '') +
+            '<div class="scr-body"><div class="scr-pad" data-form><div class="skel-card" style="height:300px"></div></div></div></section>');
+        var pad = scr.querySelector('[data-form]');
+        api('survey', { id: route.id }).then(function (v) {
+            if (!v.upload) { pad.innerHTML = '<div class="empty"><span class="ic red">' + icon('alert') + '</span><b>Uploading is not available for this vessel.</b></div>'; return; }
+            build(v);
+        }).catch(function (e) { if (e.message !== 'login') pad.innerHTML = '<div class="empty"><span class="ic red">' + icon('alert') + '</span><b>Could not load this vessel</b></div>'; });
+
+        function build(v) {
+            var u = v.upload, isVessel = u.kind === 'vessel';
+            scr.querySelector('.hdr-bar .t').innerHTML = '<b>' + (isVessel ? 'Upload report' : 'Upload final report') + '</b><small>' + esc(v.vessel) + '</small>';
+            var files = { main: [], second: [], extra: [] };
+            pad.innerHTML =
+                '<div class="info-note" data-rise>' + icon(isVessel ? 'file' : 'done') + '<span>' + (isVessel
+                    ? 'The PDF report moves this vessel to <b>Pending Reports</b>' + (u.has_pdf ? ' (a PDF is already uploaded).' : '.')
+                    : 'The final PDF moves this vessel to <b>Completed</b>.') + '</span></div>' +
+                (isVessel
+                    ? picker('main', '1. Formal report (PDF)', u.has_pdf ? 'Already uploaded — add another only if needed' : 'Required · PDF', '.pdf,application/pdf', false, !u.has_pdf) +
+                      picker('second', '2. Calculation sheet (Excel)', u.has_excel ? 'Already uploaded · optional' : 'Optional · .xlsx / .xls', '.xlsx,.xls,.xlsm', false, false)
+                    : picker('main', '1. Final report (PDF)', 'PDF', '.pdf,application/pdf', false, false) +
+                      picker('second', '2. ZIP folder', 'Optional · photos / supporting documents, max 30 MB', '.zip,application/zip,application/x-zip-compressed', false, false)) +
+                picker('extra', 'Additional files', 'Optional · Excel, Word, PDF — you can pick several', '.pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.txt,.ppt,.pptx,.zip,.rar,.7z,image/*', true, false) +
+                '<section class="card card-pad" data-rise><div class="field"><label for="up-date">' + (isVessel ? 'Survey completed date' : 'Report completed date') + ' <i class="req">*</i></label>' +
+                '<div class="inp"><input type="date" id="up-date" value="' + u.today + '" max="' + u.today + '"' + (u.min_date ? ' min="' + u.min_date + '"' : '') + '></div>' +
+                (u.min_date ? '<small class="hint">Survey completed on ' + esc(v.completed_on) + '.</small>' : '') + '</div>' +
+                (isVessel && !u.recovery_na ? '<div data-rec' + (u.has_excel ? ' hidden' : '') + '><div class="field-h">Recovery (MT) <i class="req">*</i></div><div class="rec-grid">' +
+                    ['VLSFO', 'HSFO', 'LSMGO'].map(function (k) { return '<label class="mini"><span>' + k + '</span><input type="number" step="0.001" inputmode="decimal" data-part="' + k.toLowerCase() + '"></label>'; }).join('') +
+                    '<label class="mini total"><span>Total</span><input type="number" step="0.001" inputmode="decimal" data-total></label></div>' +
+                    '<small class="hint">Total fills in from VLSFO + HSFO + LSMGO; enter 0 if there was no recovery.</small></div>' +
+                    '<div class="ok-note" data-excel-note' + (u.has_excel ? '' : ' hidden') + '>' + icon('check') + 'Recovery will be read from the Calculation Sheet.</div>' : '') +
+                '</section><div class="err" hidden role="alert">' + icon('alert') + '<span></span></div>' +
+                '<div style="height:84px"></div>';
+            scr.appendChild(el('<div class="actions one"><button type="button" class="btn primary press" data-send>' + icon('upload') + (isVessel ? 'Submit &amp; Send' : 'Complete &amp; Move') + '</button></div>'));
+            stagger(scr);
+
+            var rec = pad.querySelector('[data-rec]'), exNote = pad.querySelector('[data-excel-note]'), err = pad.querySelector('.err');
+            var totalIn = pad.querySelector('[data-total]'), totalTouched = false;
+            if (totalIn) {
+                pad.querySelectorAll('[data-part]').forEach(function (p) {
+                    p.addEventListener('input', function () {
+                        if (totalTouched) return;
+                        var any = false, sum = 0;
+                        pad.querySelectorAll('[data-part]').forEach(function (x) { if (x.value !== '') { any = true; sum += parseFloat(x.value) || 0; } });
+                        totalIn.value = any ? String(Math.round(sum * 1000) / 1000) : '';
+                    });
+                });
+                totalIn.addEventListener('input', function () { totalTouched = totalIn.value !== ''; });
+            }
+            function showErr(m) { err.hidden = !m; err.querySelector('span').textContent = m || ''; if (m) { haptic('HEAVY'); err.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }
+            function renderFiles(key) {
+                var box = pad.querySelector('[data-pick="' + key + '"] .pick-files');
+                box.innerHTML = files[key].map(function (f, i) {
+                    return '<div class="pf"><span class="ft ' + docType({ name: f.name })[0] + '">' + docType({ name: f.name })[1] + '</span><span class="t"><b>' + esc(f.name) + '</b><small>' + mb(f.size) + '</small></span>' +
+                        '<button type="button" class="icon-btn plain" data-rm="' + key + ':' + i + '" aria-label="Remove ' + esc(f.name) + '">' + icon('x') + '</button></div>';
+                }).join('');
+                pad.querySelector('[data-pick="' + key + '"]').classList.toggle('has', files[key].length > 0);
+                if (rec) {
+                    var excel = u.has_excel || (isVessel && files.second.length > 0);
+                    rec.hidden = excel; exNote.hidden = !excel;
+                }
+            }
+            pad.querySelectorAll('[data-pick] input[type=file]').forEach(function (inp) {
+                inp.addEventListener('change', function () {
+                    var key = inp.closest('[data-pick]').getAttribute('data-pick');
+                    var picked = Array.prototype.slice.call(inp.files);
+                    inp.value = '';
+                    showErr('');
+                    if (key === 'main' && picked[0] && !/\.pdf$/i.test(picked[0].name)) return showErr('The report must be a PDF (.pdf) file.');
+                    if (key === 'second' && picked[0] && isVessel && !/\.(xlsx|xls|xlsm)$/i.test(picked[0].name)) return showErr('The Calculation Sheet must be an Excel file (.xlsx / .xls).');
+                    if (key === 'second' && picked[0] && !isVessel) {
+                        if (!/\.zip$/i.test(picked[0].name)) return showErr('Please choose a .zip file for the ZIP folder.');
+                        if (picked[0].size > MAX_ZIP) return showErr(picked[0].name + ' is ' + mb(picked[0].size) + '. The maximum is 30 MB.');
+                    }
+                    files[key] = key === 'extra' ? files.extra.concat(picked) : picked.slice(0, 1);
+                    haptic();
+                    renderFiles(key);
+                });
+            });
+            pad.addEventListener('click', function (e) {
+                var b = e.target.closest('[data-rm]');
+                if (!b) return;
+                var p = b.getAttribute('data-rm').split(':');
+                files[p[0]].splice(+p[1], 1);
+                renderFiles(p[0]);
+            });
+
+            scr.querySelector('[data-send]').addEventListener('click', function () {
+                showErr('');
+                var date = pad.querySelector('#up-date').value;
+                if (!date) return showErr('Please choose the ' + (isVessel ? 'Survey' : 'Report') + ' Completed date.');
+                if (date > u.today) return showErr('The date cannot be in the future.');
+                if (u.min_date && date < u.min_date) return showErr('Report Completed date cannot be before the Survey Completed date.');
+                if (isVessel && !u.has_pdf && !files.main.length) return showErr('Please choose the PDF report.');
+                var needRec = rec && !rec.hidden;
+                if (needRec && totalIn.value === '') return showErr('Please enter the recovery (enter 0 if none).');
+                var total = 0;
+                ['main', 'second', 'extra'].forEach(function (k) { files[k].forEach(function (f) { total += f.size; }); });
+                if (total > MAX_TOTAL) return showErr('The files add up to ' + mb(total) + ' (limit 31 MB per upload). Please upload them in smaller batches.');
+
+                var fd = new FormData();
+                fd.append('csrf_token', state.me.csrf);
+                fd.append('survey_id', String(v.id));
+                fd.append('current_status', v.status);
+                if (isVessel) {
+                    if (files.main[0]) fd.append('pdf_report', files.main[0]);
+                    if (files.second[0]) fd.append('excel_report', files.second[0]);
+                    files.extra.forEach(function (f) { fd.append('additional_files[]', f); });
+                    fd.append('survey_completed_date', date);
+                    if (needRec) {
+                        fd.append('manual_recovery', '1');
+                        pad.querySelectorAll('[data-part]').forEach(function (x) { fd.append('manual_' + x.getAttribute('data-part'), x.value); });
+                        fd.append('manual_total', totalIn.value);
+                    }
+                    send(fd);
+                } else {
+                    if (files.main[0]) fd.append('final_report_pdf', files.main[0]);
+                    if (files.second[0]) fd.append('zip_folder', files.second[0]);
+                    files.extra.forEach(function (f) { fd.append('extra_files[]', f); });
+                    fd.append('report_completed_date', date);
+                    if (files.main[0]) { fd.append('no_report_confirmed', '0'); send(fd); return; }
+                    // Same question report_detail.php asks when no Final Report is attached.
+                    openSheet('<h2>Complete without the final report?</h2><p class="sheet-p">No Final Report (PDF) is attached. The vessel will move to Completed without it.</p>' +
+                        '<div class="sheet-actions"><button type="button" class="btn primary press" data-yes>Continue without report</button><button type="button" class="btn ghost" data-no>Go back</button></div>',
+                    function (sh) {
+                        sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
+                        sh.querySelector('[data-yes]').onclick = function () { closeSheet(true); fd.append('no_report_confirmed', '1'); send(fd); };
+                    });
+                }
+            });
+
+            function send(fd) {
+                var R = 52, C = 2 * Math.PI * R;
+                var ov = el('<div class="upload-ov" role="status" aria-live="polite"><div class="upload-card">' +
+                    '<svg viewBox="0 0 120 120" class="ring" aria-hidden="true"><circle cx="60" cy="60" r="' + R + '" class="bg"/><circle cx="60" cy="60" r="' + R + '" class="fg" stroke-dasharray="' + C + '" stroke-dashoffset="' + C + '"/></svg>' +
+                    '<b data-pct>0%</b><span data-msg>Uploading…</span></div></div>');
+                document.body.appendChild(ov);
+                var fg = ov.querySelector('.fg'), pct = ov.querySelector('[data-pct]'), msg = ov.querySelector('[data-msg]');
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', 'ajax/upload_handler.php');
+                xhr.setRequestHeader('X-YSMS-Upload', '1');
+                xhr.upload.onprogress = function (e) {
+                    if (!e.lengthComputable) return;
+                    var k = e.loaded / e.total;
+                    fg.setAttribute('stroke-dashoffset', String(C * (1 - k)));
+                    pct.textContent = Math.round(k * 100) + '%';
+                    if (k >= 1) msg.textContent = 'Saving and sending the email…';
+                };
+                xhr.onload = function () {
+                    if (xhr.status === 403) { finish(false, 'Your session expired. Please sign in again.'); return; }
+                    if (xhr.status === 413) { finish(false, 'The files are too large to upload together.'); return; }
+                    if (xhr.status >= 400) { finish(false, 'The upload did not go through (error ' + xhr.status + ').'); return; }
+                    api('flash').then(function (f) {
+                        if (f.email_queued) sendQueuedEmail();
+                        finish(f.type !== 'error', f.message || 'Uploaded.', f.type === 'warning');
+                    }).catch(function () { finish(true, 'Uploaded.'); });
+                };
+                xhr.onerror = function () { finish(false, 'No connection — the files were not uploaded. Try again.'); };
+                xhr.send(fd);
+                function finish(ok, text, warn) {
+                    ov.classList.add(ok ? 'done' : 'fail');
+                    pct.innerHTML = ok ? icon('check') : icon('x');
+                    msg.textContent = text;
+                    haptic(ok ? 'MEDIUM' : 'HEAVY');
+                    setTimeout(function () {
+                        ov.remove();
+                        if (ok) { toast(text, warn ? '' : 'ok'); history.back(); }
+                        else showErr(text);
+                    }, ok ? 1300 : 1800);
+                }
+            }
+        }
+        return scr;
+    };
+
+    // Admin email for the upload just made: sent in its own request (same as includes/footer.php);
+    // the toast says what the mail transport answered.
+    function sendQueuedEmail() {
+        fetch('ajax/upload_email_send.php', { method: 'POST', keepalive: true, credentials: 'same-origin', headers: { 'X-CSRF-Token': state.me.csrf } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                setTimeout(function () {
+                    if (!d.success) { toast(d.message || 'Admin email will be retried automatically.', 'bad'); return; }
+                    (d.results || []).forEach(function (r) {
+                        if (r.status === 'sent') toast(r.message, 'ok');
+                        else if (r.status === 'failed') toast(r.message + ' — it will be retried automatically.', 'bad');
+                    });
+                }, 3000);
+            }).catch(function () {});
+    }
+
+    /* ---------------- Inbox ---------------- */
+    var NOTIF_IC = { assign: 'ship', edit: 'edit', cancel: 'ban', delete: 'x', format: 'folder', surveyor: 'user', status: 'chat', card: 'user', upload: 'upload', report: 'file', expense: 'file' };
+    SCREENS.inbox = function () {
+        var scr = el('<section class="scr" aria-label="Inbox">' + barHeader('Inbox', '', '<button type="button" class="link-btn" data-allread>Mark all read</button>') +
+            '<div class="hdr-white" style="padding-top:8px"><div class="chips"><button type="button" class="chip" aria-pressed="true" data-f="">All</button><button type="button" class="chip" aria-pressed="false" data-f="1">Unread</button></div></div>' +
+            '<div class="scr-body"><div class="scr-pad"><div class="list">' + skeletons(4) + '</div><div class="more-loader" hidden><span class="spin dark"></span></div></div></div></section>');
+        var body = scr.querySelector('.scr-body'), list = scr.querySelector('.list'), loader = scr.querySelector('.more-loader');
+        var unread = '', page = 1, more = false, loading = false, seq = 0;
+        function row(n) {
+            return '<button type="button" class="notif press' + (n.read ? '' : ' unread') + '" data-rise data-notif="' + n.id + '" data-sid="' + n.survey_id + '" data-link="' + esc(n.link || '') + '">' +
+                '<span class="ic ' + (n.read ? 'blue' : 'purple') + '">' + icon(NOTIF_IC[n.type] || 'bell') + '</span>' +
+                '<span class="t"><b>' + esc(n.title) + '</b><span>' + esc(n.message) + '</span><small>' + esc(n.from ? n.from + ' · ' : '') + esc(n.ago) + '</small></span>' +
+                (n.read ? '' : '<i class="udot" aria-label="Unread"></i>') + '</button>';
+        }
+        function load(reset) {
+            if (reset) { page = 1; more = false; }
+            var my = ++seq; loading = true;
+            var params = { page: page };
+            if (unread) params.unread = 1;
+            return api('inbox', params).then(function (d) {
+                if (my !== seq) return;
+                scr.querySelector('.hdr-bar .t').innerHTML = '<b>Inbox</b><small>' + (d.unread ? d.unread + ' unread' : 'All caught up') + '</small>';
+                if (state.me) state.me.unread = d.unread;
+                var html = d.items.map(row).join('');
+                if (reset) list.innerHTML = html || '<div class="empty"><span class="ic blue">' + icon('inbox') + '</span><b>' + (unread ? 'No unread notifications' : 'No notifications yet') + '</b></div>';
+                else list.insertAdjacentHTML('beforeend', html);
+                more = d.more; loader.hidden = !more;
+                stagger(list);
+            }).catch(function (e) { if (e.message !== 'login') toast('Could not load the inbox', 'bad'); })
+              .then(function () { if (my === seq) loading = false; });
+        }
+        scr.querySelectorAll('[data-f]').forEach(function (c) {
+            c.addEventListener('click', function () {
+                haptic();
+                scr.querySelectorAll('[data-f]').forEach(function (x) { x.setAttribute('aria-pressed', x === c ? 'true' : 'false'); });
+                unread = c.getAttribute('data-f'); list.innerHTML = skeletons(3); body.scrollTop = 0; load(true);
+            });
+        });
+        scr.querySelector('[data-allread]').addEventListener('click', function () {
+            postPage('inbox.php', { action: 'mark_all_read' }).then(function () { toast('All notifications marked as read', 'ok'); load(true); })
+                .catch(function () { toast('Could not mark them read', 'bad'); });
+        });
+        list.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-notif]');
+            if (!b) return;
+            haptic();
+            // inbox.php?open= marks it read (same as tapping it on the website).
+            fetch('inbox.php?open=' + b.getAttribute('data-notif'), { credentials: 'same-origin', redirect: 'manual' }).catch(function () {});
+            b.classList.remove('unread');
+            var sid = +b.getAttribute('data-sid'), link = b.getAttribute('data-link');
+            if (sid) go('vessel', { id: sid });
+            else if (/^recovery\.php/.test(link)) go('recovery');
+            else if (/^formats_download\.php/.test(link)) go('formats');
+            else if (/^cancelled\.php/.test(link)) go('cancelled');
+            else if (link) openWeb(link);
+        });
+        if ('IntersectionObserver' in window) {
+            new IntersectionObserver(function (en) { if (en[0].isIntersecting && more && !loading) { page++; load(false); } }, { root: body, rootMargin: '300px' }).observe(loader);
+        }
+        pullToRefresh(scr, body, function () { return load(true); });
+        load(true);
+        return scr;
+    };
+
+    /* ---------------- Recovery ---------------- */
+    SCREENS.recovery = function () {
+        var scr = el('<section class="scr" aria-label="Recovery">' + barHeader('Recovery', 'Pending Report + Completed') +
+            '<div class="scr-body"><div class="scr-pad">' +
+            '<section class="rec-hero" data-rise><div class="l">Total recovery</div><div class="n" data-tot>–</div><div class="rec-split">' +
+            '<div><small>VLSFO</small><b data-k="vlsfo">–</b></div><div><small>LSMGO</small><b data-k="lsmgo">–</b></div><div><small>HSFO</small><b data-k="hsfo">–</b></div><div><small>Vessels</small><b data-k="count">–</b></div></div></section>' +
+            '<label class="search flat">' + icon('search') + '<span class="sr">Search</span><input type="search" placeholder="Search vessel, report no., port" enterkeyhint="search"></label>' +
+            '<div class="chips" data-months><button type="button" class="chip" aria-pressed="true" data-m="">All months</button></div>' +
+            '<div class="list">' + skeletons(4) + '</div><div class="more-loader" hidden><span class="spin dark"></span></div></div></div></section>');
+        var body = scr.querySelector('.scr-body'), list = scr.querySelector('.list'), loader = scr.querySelector('.more-loader');
+        var input = scr.querySelector('input'), monthsEl = scr.querySelector('[data-months]');
+        var q = '', month = '', page = 1, more = false, loading = false, seq = 0, monthsDone = false;
+        function card(r) {
+            return '<button type="button" class="rcard press" data-rise data-vessel="' + r.id + '"><span class="t"><b>' + esc(r.vessel) + '</b>' +
+                '<span>' + esc([r.client, r.port].filter(Boolean).join(' · ')) + '</span><small>' + esc(r.type) + (r.completed ? ' · ' + esc(r.completed) : '') + '</small></span>' +
+                '<span class="amt' + (r.na || r.total === null ? ' na' : '') + '"><b>' + esc(r.total_text) + '</b>' + (r.na || r.total === null ? '' : '<small>MT</small>') + '</span></button>';
+        }
+        function load(reset) {
+            if (reset) { page = 1; more = false; }
+            var my = ++seq; loading = true;
+            var params = { page: page };
+            if (q) params.q = q;
+            if (month) params.month = month;
+            return api('recovery', params).then(function (d) {
+                if (my !== seq) return;
+                countUp(scr.querySelector('[data-tot]'), d.total, 3, ' <small>MT</small>');
+                ['vlsfo', 'lsmgo', 'hsfo'].forEach(function (k) { scr.querySelector('[data-k=' + k + ']').textContent = fmtMt(d[k]); });
+                scr.querySelector('[data-k=count]').textContent = d.count;
+                if (!monthsDone) {
+                    monthsDone = true;
+                    monthsEl.insertAdjacentHTML('beforeend', d.months.map(function (m) { return '<button type="button" class="chip" aria-pressed="false" data-m="' + m.value + '">' + esc(m.label) + '</button>'; }).join(''));
+                }
+                var html = d.items.map(card).join('');
+                if (reset) list.innerHTML = html || '<div class="empty"><span class="ic sky">' + icon('fuel') + '</span><b>Nothing matches</b></div>';
+                else list.insertAdjacentHTML('beforeend', html);
+                more = d.more; loader.hidden = !more;
+                stagger(list);
+            }).catch(function (e) { if (e.message !== 'login') toast('Could not load recovery', 'bad'); })
+              .then(function () { if (my === seq) loading = false; });
+        }
+        var t = null;
+        input.addEventListener('input', function () {
+            clearTimeout(t);
+            t = setTimeout(function () { q = input.value.trim(); list.innerHTML = skeletons(3); load(true); }, 300);
+        });
+        monthsEl.addEventListener('click', function (e) {
+            var c = e.target.closest('[data-m]');
+            if (!c) return;
+            haptic();
+            monthsEl.querySelectorAll('[data-m]').forEach(function (x) { x.setAttribute('aria-pressed', x === c ? 'true' : 'false'); });
+            month = c.getAttribute('data-m'); list.innerHTML = skeletons(3); load(true);
+        });
+        if ('IntersectionObserver' in window) {
+            new IntersectionObserver(function (en) { if (en[0].isIntersecting && more && !loading) { page++; load(false); } }, { root: body, rootMargin: '300px' }).observe(loader);
+        }
+        pullToRefresh(scr, body, function () { return load(true); });
+        load(true);
+        return scr;
+    };
+
+    /* ---------------- Formats ---------------- */
+    SCREENS.formats = function () {
+        var scr = el('<section class="scr" aria-label="Formats">' + barHeader('Formats', 'Approved survey formats') +
+            '<div class="scr-body"><div class="scr-pad"><div class="list">' + skeletons(3) + '</div></div></div></section>');
+        var list = scr.querySelector('.list');
+        function load() {
+            return api('formats').then(function (d) {
+                list.innerHTML = d.items.length ? d.items.map(function (f) {
+                    return '<a class="fcard press" data-rise href="' + esc(f.path) + '" download><span class="ft xls">XLS</span><span class="t"><b>' + esc(f.name) + '</b><small>Updated ' + esc(f.updated) + '</small></span>' +
+                        (f.recent ? '<span class="tag green">New</span>' : '') + '<span class="dl">' + icon('download') + '</span></a>';
+                }).join('') : '<div class="empty"><span class="ic green">' + icon('folder') + '</span><b>No formats uploaded yet</b></div>';
+                stagger(list);
+            }).catch(function (e) { if (e.message !== 'login') toast('Could not load the formats', 'bad'); });
+        }
+        pullToRefresh(scr, scr.querySelector('.scr-body'), load);
+        load();
+        return scr;
+    };
+
+    /* ---------------- My profile (edit) ---------------- */
+    SCREENS.me = function () {
+        var scr = el('<section class="scr" aria-label="My profile">' + barHeader('My profile', '') +
+            '<div class="scr-body"><div class="scr-pad" data-form><div class="skel-card" style="height:320px"></div></div></div></section>');
+        var pad = scr.querySelector('[data-form]');
+        function field(id, label, value, type, extra) {
+            return '<div class="field"><label for="' + id + '">' + label + '</label><div class="inp"><input id="' + id + '" name="' + id + '" type="' + (type || 'text') + '" value="' + esc(value || '') + '"' + (extra || '') + '></div></div>';
+        }
+        function load() {
+            return api('profile').then(function (p) {
+                var avatar = p.avatar ? '<img src="' + esc(p.avatar) + '?t=' + Date.now() + '" alt="">' : esc(state.me.initials);
+                pad.innerHTML =
+                    '<div class="me-photo" data-rise><span class="avatar big">' + avatar + '</span>' +
+                    '<label class="cam press" for="me-photo" aria-label="Change photo">' + icon('camera') + '</label><input type="file" id="me-photo" accept="image/jpeg,image/png,image/webp" hidden>' +
+                    '<b>' + esc(p.full_name) + '</b><small>@' + esc(p.username) + '</small></div>' +
+                    '<form class="card card-pad" data-rise data-details><div class="card-h">Details</div>' +
+                    (p.surveyor_form
+                        ? field('first_name', 'First name', p.first_name, 'text', ' required autocomplete="given-name"') + field('last_name', 'Last name', p.last_name, 'text', ' required autocomplete="family-name"') + field('dob', 'Date of birth', p.dob, 'date')
+                        : field('full_name', 'Full name', p.full_name, 'text', ' required autocomplete="name"') + field('email', 'Email', p.email, 'email', ' required autocomplete="email"') + field('phone', 'Mobile number', p.phone, 'tel', ' autocomplete="tel"')) +
+                    '<button type="submit" class="btn primary press">Save details</button></form>' +
+                    '<form class="card card-pad" data-rise data-pass><div class="card-h">Change password</div>' +
+                    field('current_password', 'Current password', '', 'password', ' required autocomplete="current-password"') +
+                    field('new_password', 'New password', '', 'password', ' required minlength="6" autocomplete="new-password"') +
+                    field('confirm_password', 'Confirm new password', '', 'password', ' required autocomplete="new-password"') +
+                    '<button type="submit" class="btn outline press">Update password</button></form>';
+                stagger(pad);
+                var details = pad.querySelector('[data-details]');
+                details.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    var data = { update_profile: '1' };
+                    Array.prototype.forEach.call(details.querySelectorAll('input'), function (i) { data[i.name] = i.value.trim(); });
+                    if (p.surveyor_form && (!data.first_name || !data.last_name)) { toast('First name and last name are required.', 'bad'); return; }
+                    if (!p.surveyor_form && !data.full_name) { toast('Full name is required.', 'bad'); return; }
+                    busy(details, true);
+                    postPage('profile.php', data).then(function (r) {
+                        toast(r.message || (r.ok ? 'Saved' : 'Could not save'), r.ok ? 'ok' : 'bad');
+                        if (r.ok) return loadMe().then(load);
+                    }).catch(function (x) { toast(x.message || 'Could not save', 'bad'); }).then(function () { busy(details, false); });
+                });
+                var pass = pad.querySelector('[data-pass]');
+                pass.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    var data = { change_password: '1' };
+                    Array.prototype.forEach.call(pass.querySelectorAll('input'), function (i) { data[i.name] = i.value; });
+                    if (data.new_password.length < 6) { toast('The new password needs at least 6 characters.', 'bad'); return; }
+                    if (data.new_password !== data.confirm_password) { toast('New password and confirm password do not match.', 'bad'); return; }
+                    busy(pass, true);
+                    postPage('profile.php', data).then(function (r) {
+                        toast(r.message || (r.ok ? 'Password updated' : 'Could not update the password'), r.ok ? 'ok' : 'bad');
+                        if (r.ok) pass.reset();
+                    }).catch(function (x) { toast(x.message || 'Could not update the password', 'bad'); }).then(function () { busy(pass, false); });
+                });
+                pad.querySelector('#me-photo').addEventListener('change', function () {
+                    var f = this.files[0];
+                    this.value = '';
+                    if (!f) return;
+                    var fd = new FormData();
+                    fd.append('update_profile', '1');
+                    fd.append('profile_image', f);
+                    // profile.php's own photo form: Surveyors send the photo alone; others re-send their details.
+                    if (!p.surveyor_form) { fd.append('full_name', p.full_name); fd.append('email', p.email); fd.append('phone', p.phone); }
+                    toast('Uploading photo…');
+                    postPage('profile.php', fd).then(function (r) {
+                        toast(r.message || (r.ok ? 'Photo updated' : 'Could not update the photo'), r.ok ? 'ok' : 'bad');
+                        if (r.ok) return loadMe().then(load);
+                    }).catch(function (x) { toast(x.message || 'Could not update the photo', 'bad'); });
+                });
+            }).catch(function (e) { if (e.message !== 'login') toast('Could not load your profile', 'bad'); });
+        }
+        function busy(form, on) {
+            var b = form.querySelector('[type=submit]');
+            if (on) { b.dataset.label = b.textContent; b.disabled = true; b.innerHTML = '<span class="spin' + (b.classList.contains('outline') ? ' dark' : '') + '"></span> Saving…'; }
+            else { b.disabled = false; b.textContent = b.dataset.label || 'Save'; }
+        }
+        load();
+        return scr;
+    };
+
     /* ---------------- global taps ---------------- */
     document.addEventListener('click', function (e) {
-        var t = e.target.closest('[data-web],[data-go],[data-vessel],[data-back],[data-refresh]');
+        var t = e.target.closest('[data-web],[data-go],[data-vessel],[data-upload],[data-back],[data-refresh]');
         if (!t) return;
         if (t.hasAttribute('data-web')) {
             e.preventDefault();
@@ -659,6 +1105,7 @@
             closeSheet(true); openWeb(url); return;
         }
         if (t.hasAttribute('data-vessel')) { haptic(); go('vessel', { id: +t.getAttribute('data-vessel') }); return; }
+        if (t.hasAttribute('data-upload')) { haptic(); go('upload', { id: +t.getAttribute('data-upload') }); return; }
         if (t.hasAttribute('data-go')) { haptic(); go(t.getAttribute('data-go')); return; }
         if (t.hasAttribute('data-back')) { back(); return; }
         if (t.hasAttribute('data-refresh')) { closeSheet(); location.reload(); }
@@ -669,7 +1116,7 @@
         var r = current && current.route;
         if (current && current.depth > 0) { history.back(); return; }
         if (r && r.name !== 'home' && r.name !== 'login' && TABS.indexOf(r.name) !== -1) { go('home'); return; }
-        if (r && (r.name === 'vessel' || r.name === 'search')) { go('home'); return; }
+        if (r && TABS.indexOf(r.name) === -1 && r.name !== 'login') { go('home'); return; }
         if (NATIVE && P.App) P.App.minimizeApp();
     }
     if (NATIVE && P.App) P.App.addListener('backButton', function () { back(); });
@@ -708,7 +1155,7 @@
         ready = loadMe().then(function () {
             if (route.name === 'login') route = { name: 'home' };
             var d = (history.state && history.state.d) || 0;
-            if (!history.state) history.replaceState({ d: route.name === 'vessel' || route.name === 'search' ? 1 : 0 }, '', hashFor(route.name, route.id));
+            if (!history.state) history.replaceState({ d: 0 }, '', hashFor(route.name, route.id));
             show(route, 'fade', d);
         }).catch(function () {});
     }

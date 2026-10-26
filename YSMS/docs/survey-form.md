@@ -1,7 +1,9 @@
 # Bunker survey form from photos
 
-Opened from **Vessel details** (Pending Vessel) and **Pending Report details** →
-"Bunker survey form from photos". Admin / Super Admin, and the surveyor assigned to the vessel.
+**Not linked anywhere at the moment** — the "Bunker survey form from photos" entry was removed
+from Vessel details, Pending Report details and the Android app. The page (`survey_form.php?survey_id=<id>`)
+and its engine stay in place; the engine is also used by the Word Report Generator's PDF source.
+Admin / Super Admin, and the surveyor assigned to the vessel.
 
 1. **Photos** — take photos or pick images / PDF scans (15 MB each). The originals are kept
    unchanged in `uploads/survey_forms/<form id>/`.

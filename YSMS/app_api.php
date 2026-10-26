@@ -9,8 +9,13 @@
  *
  *   GET app_api.php?a=me
  *   GET app_api.php?a=dashboard
- *   GET app_api.php?a=list&status=pending_vessel|pending_report|completed[&q=text][&overdue=1][&page=1]
+ *   GET app_api.php?a=list&status=pending_vessel|pending_report|completed|cancelled[&q=text][&overdue=1][&page=1]
  *   GET app_api.php?a=survey&id=<id>
+ *   GET app_api.php?a=flash                      the message the last form post left (read once)
+ *   GET app_api.php?a=inbox[&unread=1][&page=1]  Admin / Surveyor
+ *   GET app_api.php?a=recovery[&q=][&month=YYYY-MM][&status=][&page=1]
+ *   GET app_api.php?a=formats
+ *   GET app_api.php?a=profile
  */
 require_once 'config/config.php';
 require_once 'includes/notifications.php';
@@ -35,12 +40,23 @@ $role = (string)($_SESSION['role'] ?? '');
 $fullAccess = in_array($role, ['Admin', 'Super Admin'], true);
 $clientId = $role === 'Client' ? getClientIdForUser($db, $userId) : 0;
 $csrf = csrf_token(); // the app sends it with forms it posts to the existing pages
+if (($_GET['a'] ?? '') === 'flash') {
+    // Upload / form pages leave their result in the session for the next page; the app shows it.
+    $flash = ['message' => (string)($_SESSION['flash_msg'] ?? ''), 'type' => (string)($_SESSION['flash_type'] ?? 'success'),
+        // An upload queued the admin email (includes/upload_email_outbox.php); the app asks
+        // ajax/upload_email_send.php to send it, as the website's footer does.
+        'email_queued' => !empty($_SESSION['upload_email_outbox'])];
+    unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+    session_write_close();
+    appOut($flash);
+}
 session_write_close();
 
 const APP_STATUSES = [
     'pending_vessel' => 'Pending Vessel',
     'pending_report' => 'Pending Report',
     'completed' => 'Completed',
+    'cancelled' => 'Cancelled',
 ];
 
 /** [sql, params] limiting `surveys s` to what this user may see. */
@@ -137,7 +153,6 @@ if ($a === 'me') {
             'inbox' => in_array($role, ['Admin', 'Surveyor'], true),
             'chat' => in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true),
             'recovery' => $role !== 'Client',
-            'survey_form' => in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true),
             'report_generator' => in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true),
         ],
     ]);
@@ -218,10 +233,15 @@ if ($a === 'list') {
         elseif ($key === 'pending_report') { $where[] = 'YEAR(s.survey_completed_date) > 0 AND DATE(s.survey_completed_date) <= ?'; $params[] = date('Y-m-d', strtotime('-4 days')); }
         else $where[] = '1=0';
     }
+    if ($key === 'cancelled' && $role === 'Super Admin') {
+        // cancelled.php shows every cancelled vessel to Admin only; others see their own.
+        $where[1] = '(s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))';
+        $params = array_merge([APP_STATUSES[$key]], [$userId, $userId], array_slice($params, 1 + count($scopeParams)));
+    }
     $whereSql = implode(' AND ', $where);
     $from = "FROM surveys s
         JOIN clients c ON s.client_id = c.id
-        JOIN users u ON s.surveyor_id = u.id
+        " . ($key === 'cancelled' ? 'LEFT JOIN' : 'JOIN') . " users u ON s.surveyor_id = u.id
         LEFT JOIN users uu ON s.status_updated_by = uu.id
         LEFT JOIN survey_types st ON s.survey_type_id = st.id
         LEFT JOIN ports p ON s.port_id = p.id";
@@ -267,6 +287,13 @@ if ($a === 'survey') {
 
     $page = ['Pending Vessel' => 'vessel_detail.php', 'Pending Report' => 'report_detail.php', 'Completed' => 'completed_detail.php'][$s['status']] ?? 'vessel_detail.php';
     $assigned = $role === 'Surveyor' && isSurveyorAssignedToSurvey($db, $id, $userId);
+    // What the upload screen needs (rules of ajax/upload_handler.php and the detail pages' popups).
+    $types = array_column($docs, 'type');
+    $uploadKind = null;
+    if ($role === 'Admin' || $assigned) {
+        if ($s['status'] === 'Pending Vessel') $uploadKind = 'vessel';
+        elseif ($s['status'] === 'Pending Report') $uploadKind = 'report';
+    }
     $card += [
         'report_no' => (string)($s['report_number'] ?? ''),
         'imo' => (string)($s['imo_number'] ?? ''),
@@ -274,13 +301,116 @@ if ($a === 'survey') {
         'remarks' => (string)($s['remarks'] ?? ''),
         'docs' => $docs,
         'web' => $page . '?id=' . $id,
-        'can_upload' => $s['status'] === 'Pending Vessel' && ($role === 'Admin' || $assigned),
+        'can_upload' => $uploadKind !== null,
+        'upload' => $uploadKind === null ? null : [
+            'kind' => $uploadKind,
+            'has_pdf' => in_array('Formal Report PDF', $types, true),
+            'has_excel' => in_array('Formal Report Excel', $types, true),
+            'recovery_na' => isRecoveryNotApplicable($db, (string)($s['survey_type_ids'] ?? ''), (string)($s['type_name'] ?? '')),
+            'today' => date('Y-m-d'),
+            'min_date' => ($uploadKind === 'report' && ($d = appDate($s['survey_completed_date'] ?? '', 'Y-m-d')) !== '') ? $d : '',
+        ],
         // Same as the Latest Update form on vessel_detail.php (shown to everyone who can open it).
         'can_update' => $s['status'] === 'Pending Vessel',
-        'can_survey_form' => in_array($s['status'], ['Pending Vessel', 'Pending Report'], true) && ($fullAccess || $assigned),
         'can_history' => $fullAccess || $assigned,
     ];
     appOut($card);
+}
+
+if ($a === 'inbox') {
+    if (!in_array($role, ['Admin', 'Surveyor'], true)) appOut(['error' => 'not_allowed'], 403);
+    $unreadOnly = !empty($_GET['unread']);
+    $page = max(1, (int)($_GET['page'] ?? 1));
+    $per = 30;
+    $rows = getInboxNotifications($db, $userId, $per, ($page - 1) * $per, $unreadOnly);
+    $total = $unreadOnly ? getUnreadNotificationCount($db, $userId) : getNotificationCount($db, $userId);
+    $items = [];
+    foreach ($rows as $n) {
+        $link = safeNotificationLink($n['link'] ?? null);
+        $sid = ($link && preg_match('~^(vessel_detail|report_detail|completed_detail)\.php\?id=(\d+)$~', $link, $m)) ? (int)$m[2] : 0;
+        $items[] = ['id' => (int)$n['id'], 'type' => (string)$n['type'], 'title' => (string)$n['title'], 'message' => (string)$n['message'],
+            'read' => (bool)$n['is_read'], 'ago' => notificationTimeAgo($n['created_at'] ?? null), 'from' => (string)($n['creator_name'] ?? ''),
+            'link' => $link, 'survey_id' => $sid];
+    }
+    appOut(['total' => $total, 'unread' => getUnreadNotificationCount($db, $userId), 'more' => ($page * $per) < $total, 'items' => $items]);
+}
+
+if ($a === 'recovery') {
+    require_once 'includes/recovery_list.php';
+    $f = recoveryListFilters($_GET, $fullAccess);
+    $f['sort'] = 'newest';
+    [$whereSql, $params, $orderSql] = recoveryListWhere($role, $userId, $clientId, $f, outsourcedCreditSurveyor($db)[0]);
+    $st = $db->prepare("SELECT COUNT(*) AS n, COALESCE(SUM(" . recoveryCountedSql('s', 'vlsfo_recovery') . "),0) AS vlsfo,
+        COALESCE(SUM(" . recoveryCountedSql('s', 'lsmgo_recovery') . "),0) AS lsmgo, COALESCE(SUM(" . recoveryCountedSql('s', 'hsfo_recovery') . "),0) AS hsfo,
+        COALESCE(SUM(" . recoveryCountedSql('s') . "),0) AS total " . RECOVERY_LIST_FROM . " WHERE $whereSql");
+    $st->execute($params);
+    $tot = $st->fetch(PDO::FETCH_ASSOC);
+    $page = max(1, (int)($_GET['page'] ?? 1));
+    $per = 30;
+    $offset = ($page - 1) * $per;
+    $st = $db->prepare("SELECT " . RECOVERY_LIST_COLUMNS . " " . RECOVERY_LIST_FROM . " WHERE $whereSql ORDER BY $orderSql LIMIT $per OFFSET $offset");
+    $st->execute($params);
+    $rows = array_map(function ($r) use ($db) {
+        $x = recoveryListRow($db, $r);
+        $x['total_text'] = $x['na'] ? 'N/A' : ($x['total'] !== null ? recoveryDisplay($x['total'], $x['onhire']) : '—');
+        foreach (['vlsfo', 'lsmgo', 'hsfo'] as $k) $x[$k . '_text'] = $x['na'] ? 'N/A' : ($x[$k] !== null ? recoveryDisplay($x[$k], $x['onhire']) : '—');
+        return $x;
+    }, $st->fetchAll(PDO::FETCH_ASSOC));
+    [$scopeWhere, $scopeP] = recoveryListScope($role, $userId, $clientId);
+    $cd = surveyCompletedDateSql('s');
+    $st = $db->prepare("SELECT DATE_FORMAT($cd, '%Y-%m') AS m " . RECOVERY_LIST_FROM . " WHERE " . implode(' AND ', $scopeWhere) . " AND $cd IS NOT NULL GROUP BY m ORDER BY m DESC");
+    $st->execute($scopeP);
+    $months = [];
+    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $m) {
+        if (preg_match('/^\d{4}-\d{2}$/', (string)$m) && strpos((string)$m, '0000') !== 0) $months[] = ['value' => $m, 'label' => date('M Y', strtotime($m . '-01'))];
+    }
+    appOut([
+        'count' => (int)$tot['n'], 'vlsfo' => round((float)$tot['vlsfo'], 3), 'lsmgo' => round((float)$tot['lsmgo'], 3),
+        'hsfo' => round((float)$tot['hsfo'], 3), 'total' => round((float)$tot['total'], 3),
+        'months' => $months, 'more' => $offset + count($rows) < (int)$tot['n'], 'items' => $rows,
+    ]);
+}
+
+if ($a === 'formats') {
+    // Same files and order as formats_download.php (formats/ folder, newest of each name, recent first).
+    $files = [];
+    $dir = __DIR__ . '/formats';
+    foreach (is_dir($dir) ? scandir($dir) : [] as $file) {
+        if (!in_array(strtolower(pathinfo($file, PATHINFO_EXTENSION)), ['xls', 'xlsx', 'xlsm'], true)) continue;
+        $mtime = (int)@filemtime($dir . '/' . $file);
+        $name = trim(preg_replace('/\s+/', ' ', str_replace(['_', '-'], ' ', preg_replace('/^\d+_/', '', pathinfo($file, PATHINFO_FILENAME)))));
+        $key = strtolower($name);
+        if (!isset($files[$key]) || $mtime >= $files[$key]['mtime']) {
+            $files[$key] = ['name' => $name, 'path' => 'formats/' . $file, 'mtime' => $mtime];
+        }
+    }
+    $week = time() - 7 * 86400;
+    $out = [];
+    foreach ($files as $f) {
+        $out[] = ['name' => $f['name'], 'path' => $f['path'], 'updated' => $f['mtime'] ? date('d M Y, h:i A', $f['mtime']) : '', 'recent' => $f['mtime'] >= $week];
+    }
+    usort($out, function ($x, $y) { return ($y['recent'] <=> $x['recent']) ?: strcasecmp($x['name'], $y['name']); });
+    appOut(['items' => $out]);
+}
+
+if ($a === 'profile') {
+    $st = $db->prepare('SELECT username, full_name, first_name, last_name, dob, email, phone FROM users WHERE id = ?');
+    $st->execute([$userId]);
+    $u = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+    $full = (string)($u['full_name'] ?? '');
+    $parts = preg_split('/\s+/', trim($full), 2) ?: [''];
+    appOut([
+        'username' => (string)($u['username'] ?? ''),
+        'full_name' => $full,
+        'first_name' => (string)($u['first_name'] ?? '') !== '' ? (string)$u['first_name'] : ($parts[0] ?? ''),
+        'last_name' => (string)($u['last_name'] ?? '') !== '' ? (string)$u['last_name'] : ($parts[1] ?? ''),
+        'dob' => appDate($u['dob'] ?? '', 'Y-m-d'),
+        'email' => (string)($u['email'] ?? ''),
+        'phone' => (string)($u['phone'] ?? ''),
+        'avatar' => appAvatar($db, $userId),
+        // profile.php: Surveyors edit first / last name and date of birth; everyone else full name, email, phone.
+        'surveyor_form' => $role === 'Surveyor',
+    ]);
 }
 
 appOut(['error' => 'unknown'], 400);
