@@ -1,0 +1,71 @@
+# Builds the YSMS Android test app (mobile/) and attaches the APK to the run.
+# Download: GitHub → Actions → "Android test APK" → latest run → Artifacts.
+# It only builds a file; nothing is deployed and no server or database is touched.
+name: Android test APK
+
+on:
+  push:
+    branches: [staging]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/android-apk.yml'
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: 'Page the app opens (empty = staging, from mobile/capacitor.config.json)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install Capacitor
+        working-directory: mobile
+        run: npm ci
+
+      - name: Copy web files and plugins into the Android project
+        working-directory: mobile
+        env:
+          YSMS_SERVER_URL: ${{ inputs.server_url }}
+        run: npm run sync
+
+      - name: Build test APK
+        working-directory: mobile/android
+        env:
+          YSMS_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk "../YMR-YSMS-test-${{ github.run_number }}.apk"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: YMR-YSMS-test-apk-${{ github.run_number }}
+          path: mobile/YMR-YSMS-test-*.apk
+          retention-days: 30
+          if-no-files-found: error

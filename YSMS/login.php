@@ -267,6 +267,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .showcase-headline h2 { font-size: 38px; }
         }
     </style>
+    <?php include __DIR__ . '/includes/app_shell.php'; ?>
 </head>
 <body>
     <div class="split-shell">

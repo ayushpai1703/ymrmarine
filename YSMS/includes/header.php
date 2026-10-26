@@ -1310,6 +1310,7 @@ input, select, textarea, .form-control { font-size: 16px; } /* prevents iOS auto
     .btn, button:not(.profile-menu-trigger):not(.hamburger-menu-btn) { min-height: 44px; }
 }
     </style>
+    <?php include __DIR__ . '/app_shell.php'; ?>
 </head>
 <body>
 <div class="mobile-container">

@@ -113,6 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .back-link:hover { color:#fff; }
     .alert { border-radius:12px; font-size:13px; }
 </style>
+    <?php include __DIR__ . '/includes/app_shell.php'; ?>
 </head>
 <body>
     <div class="bg-glow one"></div>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YMR YSMS</title>
+<script src="app-config.js"></script>
+<style>
+  :root { --navy: #0b1e46; --primary: #1e3a8a; --accent: #22b0e6; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--navy); color: #fff;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 32px 28px; text-align: center; overflow: hidden;
+  }
+  .waves { position: fixed; left: 0; right: 0; bottom: 0; height: 240px; pointer-events: none; }
+  .waves path { animation: drift 7s ease-in-out infinite alternate; }
+  .waves path:nth-child(2) { animation-duration: 9s; }
+  .waves path:nth-child(3) { animation-duration: 11s; }
+  @keyframes drift { from { transform: translateX(-24px); } to { transform: translateX(24px); } }
+  .mark {
+    width: 104px; height: 104px; border-radius: 30px; background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 18px 40px rgba(0,0,0,.35);
+    animation: bob 3.2s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
+  h1 { font-size: 22px; margin: 28px 0 8px; font-weight: 800; }
+  p { margin: 0 0 28px; color: #c7d2fe; font-size: 15px; line-height: 1.5; max-width: 300px; }
+  .actions { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 320px; position: relative; }
+  button {
+    height: 52px; border-radius: 14px; border: 0; font: inherit; font-size: 16px; font-weight: 700;
+    -webkit-tap-highlight-color: transparent; transition: transform .15s ease;
+  }
+  button:active { transform: scale(.97); }
+  .primary { background: var(--accent); color: var(--navy); }
+  .ghost { background: rgba(255,255,255,.1); color: #fff; }
+  .spin { display: inline-block; width: 18px; height: 18px; border: 2.5px solid rgba(11,30,70,.35); border-top-color: var(--navy); border-radius: 50%; vertical-align: -3px; margin-right: 8px; animation: rot .8s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .waves path, .mark { animation: none; } }
+</style>
+</head>
+<body>
+  <svg class="waves" viewBox="0 0 390 240" preserveAspectRatio="none" aria-hidden="true" fill="none">
+    <path d="M-30 110 C 60 85, 130 135, 195 110 S 330 85, 420 110" stroke="#fff" stroke-opacity=".08" stroke-width="2"/>
+    <path d="M-30 155 C 60 130, 130 180, 195 155 S 330 130, 420 155" stroke="#fff" stroke-opacity=".06" stroke-width="2"/>
+    <path d="M-30 200 C 60 175, 130 225, 195 200 S 330 175, 420 200" stroke="#fff" stroke-opacity=".05" stroke-width="2"/>
+  </svg>
+  <div class="mark" aria-hidden="true">
+    <svg width="52" height="58" viewBox="0 0 24 27" fill="none" stroke="#22b0e6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="4" r="2.6"/><path d="M12 6.6V25"/><path d="M7.5 10h9"/><path d="M3 16c0 5 4 9 9 9s9-4 9-9"/><path d="M1.5 18l1.5-3 2.6 2"/><path d="M22.5 18L21 15l-2.6 2"/>
+    </svg>
+  </div>
+  <h1 id="title">No internet connection</h1>
+  <p id="msg">YSMS needs the internet to load your surveys. Check Wi-Fi or mobile data and try again.</p>
+  <div class="actions">
+    <button type="button" class="primary" id="retry">Try again</button>
+    <button type="button" class="ghost" id="home">Go to Home</button>
+  </div>
+<script>
+  (function () {
+    var start = window.YSMS_START_URL || '';
+    var retry = document.getElementById('retry');
+    if (navigator.onLine) {
+      // Online but the page failed (server error or a page that could not be opened).
+      document.getElementById('title').textContent = 'This page could not be opened';
+      document.getElementById('msg').textContent = 'The server did not answer properly. Try again, or go back to Home.';
+    }
+    try { window.Capacitor && Capacitor.Plugins.SplashScreen && Capacitor.Plugins.SplashScreen.hide(); } catch (e) {}
+    retry.addEventListener('click', function () {
+      retry.innerHTML = '<span class="spin" aria-hidden="true"></span>Connecting…';
+      retry.disabled = true;
+      if (history.length > 1) { history.back(); setTimeout(function () { location.href = start; }, 2500); }
+      else location.href = start;
+    });
+    document.getElementById('home').addEventListener('click', function () { location.href = start; });
+    window.addEventListener('online', function () { if (!navigator.onLine) return; location.href = start; });
+  })();
+</script>
+</body>
+</html>

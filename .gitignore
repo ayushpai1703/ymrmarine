@@ -68,3 +68,7 @@ dump/
 *.swo
 .vscode/
 .idea/
+
+# Gradle wrapper of the Android app must be committed
+!mobile/android/gradle/wrapper/gradle-wrapper.jar
+!mobile/package-lock.json

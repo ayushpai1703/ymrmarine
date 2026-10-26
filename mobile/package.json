@@ -1,0 +1,23 @@
+{
+  "name": "ysms-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "YMR Marine YSMS Android app (Capacitor shell around the YSMS web app)",
+  "scripts": {
+    "prepare-config": "node scripts/prepare.js",
+    "sync": "node scripts/prepare.js && cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/haptics": "8.0.2",
+    "@capacitor/splash-screen": "8.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

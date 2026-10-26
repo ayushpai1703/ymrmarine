@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">YMR YSMS</string>
+    <string name="title_activity_main">YMR YSMS</string>
+    <string name="package_name">com.ymrmarine.ysms</string>
+    <string name="custom_url_scheme">com.ymrmarine.ysms</string>
+</resources>

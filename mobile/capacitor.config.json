@@ -1,0 +1,32 @@
+{
+  "appId": "com.ymrmarine.ysms",
+  "appName": "YMR YSMS",
+  "webDir": "www",
+  "backgroundColor": "#0b1e46",
+  "appendUserAgent": "YSMSApp/1.0",
+  "server": {
+    "url": "https://ymrmarine-staging-23712461887.asia-south1.run.app/YSMS/index.php",
+    "errorPath": "offline.html",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 4000,
+      "launchAutoHide": true,
+      "launchFadeOutDuration": 300,
+      "backgroundColor": "#0b1e46",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_INSIDE",
+      "splashFullScreen": false,
+      "splashImmersive": false
+    },
+    "SystemBars": {
+      "insetsHandling": "native",
+      "style": "DARK"
+    }
+  }
+}

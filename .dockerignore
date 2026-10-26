@@ -9,3 +9,7 @@
 .vscode
 *.log
 YSMS/vendor
+
+# Android app project and CI (not part of the web server image)
+mobile
+.github
