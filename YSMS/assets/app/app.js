@@ -52,6 +52,7 @@
         ban: '<circle cx="12" cy="12" r="9"/><path d="m5.7 5.7 12.6 12.6"/>',
         folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
         shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+        trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/>',
         users: '<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-2-5-5-6"/>',
         inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/>',
         fuel: '<path d="M3 22V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v17"/><path d="M2 22h14"/><path d="M15 10h2a2 2 0 0 1 2 2v4a2 2 0 0 0 4 0V8l-3-3"/><path d="M6 8h6"/>',
@@ -182,7 +183,7 @@
         if (TABS.indexOf(h) !== -1) return { name: h };
         return { name: 'home' };
     }
-    var PUSHED = ['forgot', 'search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign', 'admin', 'addclient', 'addadmin', 'surveyor', 'activity', 'duplicates', 'templates'];
+    var PUSHED = ['forgot', 'search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign', 'admin', 'addclient', 'addadmin', 'surveyor', 'activity', 'duplicates', 'templates', 'sacontrols'];
     var ROUTE_IDS = { v: 'vessel', up: 'upload', h: 'history', c: 'room', e: 'assign', sv: 'surveyor', m: 'module' };
     function hashFor(name, id) {
         if (id) for (var k in ROUTE_IDS) if (ROUTE_IDS[k] === name) return '#/' + k + '/' + id;
@@ -355,7 +356,7 @@
             '<button type="button" class="stat press" data-rise' + (me.can.recovery ? ' data-go="recovery"' : '') + '><span class="ic sky">' + icon('chart') + '</span><span class="n" data-n="rec">–</span><span class="l">Recovery this month (MT)</span></button>' +
             '</div><div data-attention></div>' +
             '<div class="section-title qa-head" data-rise>Quick actions<button type="button" class="link-btn press" data-qa-edit>' + icon('edit') + 'Edit</button></div><div class="quick" data-rise data-quick>' + quickActions(me) + '</div>' +
-            '<div data-month></div>' +
+            '<div data-month></div><div data-insights></div>' +
             '</div></div></section>');
         var body = scr.querySelector('.scr-body');
         scr.querySelector('[data-qa-edit]').addEventListener('click', function () { editQuickActions(me, scr.querySelector('[data-quick]')); });
@@ -372,17 +373,104 @@
                             (a.kind === 'survey' ? 'Survey pending · ' + a.days + ' days since appointment' : 'Report overdue · ' + a.days + ' days since survey') +
                             '</small></span>' + icon('chev', 'chev') + '</button>';
                     }).join('') + '</section>' : '';
-                scr.querySelector('[data-month]').innerHTML = '<div class="month-card" data-rise><div class="h">' + icon('calendar') + esc(d.month) + '</div>' +
-                    '<div><div class="n">' + d.ships_month + '</div><div class="l">Ships surveyed</div></div>' +
-                    '<div><div class="n">' + fmtMt(d.recovery_month) + ' MT</div><div class="l">Recovery</div></div>' +
-                    '<div><div class="n">' + fmtMt(d.recovery_total) + ' MT</div><div class="l">Total recovery</div></div></div>';
+                var now = new Date();
+                monthCard(scr.querySelector('[data-month]'), { y: now.getFullYear(), m: now.getMonth() + 1, label: d.month, ships: d.ships_month, recovery: d.recovery_month }, d.recovery_total);
                 stagger(scr);
             });
         }
+        function loadInsights() {
+            return api('insights').then(function (d) { insightsHtml(scr.querySelector('[data-insights]'), d, me); }).catch(function () {});
+        }
         load().catch(function (e) { if (e.message !== 'login') toast('Could not load the dashboard', 'bad'); });
-        pullToRefresh(scr, body, function () { return Promise.all([loadMe(), load()]); });
+        loadInsights();
+        pullToRefresh(scr, body, function () { return Promise.all([loadMe(), load(), loadInsights()]); });
         return scr;
     };
+
+    /* ---------------- Home: the website dashboard's extra cards (index.php) ---------------- */
+    var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    // Month summary: pick any month / year; Download = the website's export_month_summary.php.
+    function monthCard(box, dm, total) {
+        if (total != null) box.dataset.total = total;
+        total = box.dataset.total;
+        box.innerHTML = '<div class="month-card" data-rise><div class="h"><button type="button" class="mc-pick press" data-mc-pick aria-label="Choose month">' + icon('calendar') + esc(dm.label) + icon('chev', 'down') + '</button>' +
+            '<a class="mc-dl press" href="export_month_summary.php?y=' + dm.y + '&m=' + dm.m + '" aria-label="Download month summary">' + icon('download') + 'Excel</a></div>' +
+            '<div><div class="n">' + dm.ships + '</div><div class="l">Ships surveyed</div></div>' +
+            '<div><div class="n">' + fmtMt(dm.recovery) + ' MT</div><div class="l">Recovery</div></div>' +
+            (total != null ? '<div><div class="n">' + fmtMt(+total) + ' MT</div><div class="l">Total recovery</div></div>' : '') + '</div>';
+        box.querySelector('[data-mc-pick]').onclick = function () { pickMonth(box, dm); };
+    }
+    function pickMonth(box, dm) {
+        api('month', { y: dm.y, m: dm.m }).then(function (r) {
+            var y = dm.y;
+            var sh = openSheet('<h2>Month summary</h2><div class="chips" data-years>' + r.years.map(function (x) { return '<button type="button" class="chip" aria-pressed="' + (x === y) + '" data-y="' + x + '">' + x + '</button>'; }).join('') + '</div>' +
+                '<div class="mc-grid" data-ms></div>');
+            function draw() {
+                var now = new Date(), maxM = y === now.getFullYear() ? now.getMonth() + 1 : 12;
+                sh.querySelector('[data-ms]').innerHTML = MONTHS.map(function (n, i) {
+                    var on = y === dm.y && i + 1 === dm.m;
+                    return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-mm="' + (i + 1) + '"' + (i + 1 > maxM ? ' disabled' : '') + '>' + n.slice(0, 3) + '</button>';
+                }).join('');
+            }
+            draw();
+            sh.querySelector('[data-years]').addEventListener('click', function (e) {
+                var c = e.target.closest('[data-y]'); if (!c) return;
+                y = +c.getAttribute('data-y'); haptic();
+                sh.querySelectorAll('[data-y]').forEach(function (x) { x.setAttribute('aria-pressed', x === c ? 'true' : 'false'); });
+                draw();
+            });
+            sh.querySelector('[data-ms]').addEventListener('click', function (e) {
+                var c = e.target.closest('[data-mm]'); if (!c || c.disabled) return;
+                haptic(); closeSheet();
+                api('month', { y: y, m: +c.getAttribute('data-mm') }).then(function (n) { monthCard(box, n); stagger(box); })
+                    .catch(function () { toast('Could not load that month', 'bad'); });
+            });
+        }).catch(function () { toast('Could not load months', 'bad'); });
+    }
+    function tile(ic, cls, n, l) {
+        return '<div class="stat mini" data-rise><span class="ic ' + cls + '">' + icon(ic) + '</span><span class="n">' + n + '</span><span class="l">' + l + '</span></div>';
+    }
+    function topList(title, ic, rows, unit) {
+        var max = rows.reduce(function (a, r) { return Math.max(a, r.value); }, 0) || 1;
+        return '<section class="card card-pad top-card" data-rise><div class="card-h">' + title + '</div>' + (rows.length ? rows.map(function (r, i) {
+            return '<div class="top-row"><span class="rk">' + (i + 1) + '</span><span class="t"><b>' + esc(r.name) + '</b><span class="bar"><i style="width:' + Math.max(4, Math.round(r.value / max * 100)) + '%"></i></span></span>' +
+                '<span class="v">' + (unit === 'MT' ? fmtMt(r.value) + ' <small>MT</small>' : r.value) + '</span></div>';
+        }).join('') : '<small class="hint">No data yet</small>') + '</section>';
+    }
+    function insightsHtml(box, d, me) {
+        var h = '';
+        if (d.recent) {
+            h += '<div class="section-title" data-rise>Recent survey recovery</div>' +
+                '<button type="button" class="card card-pad recent-card press" data-rise data-vessel="' + d.recent.id + '"><div class="card-h">' + esc(d.recent.vessel) + icon('chev', 'chev') + '</div>' +
+                '<div class="rec-3"><div><small>VLSFO</small><b>' + esc(d.recent.vlsfo) + '</b></div><div><small>LSMGO</small><b>' + esc(d.recent.lsmgo) + '</b></div><div><small>HSFO</small><b>' + esc(d.recent.hsfo) + '</b></div></div></button>';
+        }
+        h += '<div class="section-title" data-rise>Averages</div><div class="stats">' + tile('ship', 'blue', d.avg_ships_month.toFixed(1), 'Ships per month') +
+            (d.avg_rec_ship != null ? tile('fuel', 'sky', fmtMt(d.avg_rec_ship) + '<small>MT</small>', 'Recovery per ship') + tile('user', 'purple', fmtMt(d.avg_rec_surveyor) + '<small>MT</small>', 'Recovery per surveyor') : '') +
+            (d.sa ? tile('calendar', 'blue', d.sa.avg_year.toFixed(1), 'Ships per year') + tile('clock', 'orange', d.sa.avg_day.toFixed(1), 'Ships per day') + tile('users', 'green', d.sa.avg_surveyor.toFixed(1), 'Ships per surveyor') : '') + '</div>';
+        if (d.surveyors) {
+            var t = d.surveyors_total;
+            h += '<div class="section-title" data-rise>Surveyor report' + (me.can.recovery ? '<button type="button" class="link-btn press" data-go="recovery">Recovery details</button>' : '') + '</div>' +
+                '<section class="card sfr" data-rise><div class="sfr-head"><span>Surveyor</span><span>Ships<br><small>total · month</small></span><span>Recovery MT<br><small>total · month</small></span></div>' +
+                d.surveyors.map(function (r) {
+                    return '<button type="button" class="sfr-row press" data-sfr="' + r.id + '" data-name="' + esc(r.name) + '"><span class="t"><b>' + esc(r.name) + '</b>' + (r.inactive ? '<small>Inactive</small>' : '') + '</span>' +
+                        '<span>' + r.ships_total + ' · ' + r.ships_month + '</span><span>' + fmtMt(r.recovery_total) + '<small>' + fmtMt(r.recovery_month) + '</small></span></button>';
+                }).join('') +
+                '<div class="sfr-row total"><span class="t"><b>Total</b><small>each vessel once</small></span><span>' + t.ships_total + ' · ' + t.ships_month + '</span><span>' + fmtMt(t.recovery_total) + '<small>' + fmtMt(t.recovery_month) + '</small></span></div></section>';
+        }
+        if (d.sa) {
+            h += '<div class="section-title" data-rise>Super Admin analytics</div>' +
+                topList('Recovery by surveyor · top 10', 'user', d.sa.rec_surveyor, 'MT') + topList('Recovery by port · top 5', 'pin', d.sa.rec_port, 'MT') +
+                topList('Recovery by country · top 5', 'pin', d.sa.rec_country, 'MT') + topList('Recovery by client · top 5', 'users', d.sa.rec_client, 'MT') +
+                topList('Completed ships by country · top 5', 'ship', d.sa.ships_country) + topList('Completed ships by port · top 5', 'ship', d.sa.ships_port);
+        }
+        box.innerHTML = h;
+        box.onclick = function (e) {
+            var r = e.target.closest('[data-sfr]');
+            if (!r || !me.can.recovery) return;
+            haptic(); state.recSurveyor = { id: r.getAttribute('data-sfr'), name: r.getAttribute('data-name') }; go('recovery');
+        };
+        stagger(box);
+    }
 
     // Home quick actions: every shortcut this role can use; the user picks up to 4 (saved on this phone).
     var QA_MAX = 4;
@@ -401,6 +489,7 @@
             ['Admin', 'Super Admin'].indexOf(me.role) !== -1 && { k: 'addclient', label: 'Add client', ic: 'users', to: '#addclient' },
             me.role === 'Admin' && { k: 'admin', label: 'Admin controls', ic: 'shield', to: '#admin' },
             me.role === 'Admin' && { k: 'duplicates', label: 'Duplicates', ic: 'folder', to: '#duplicates' },
+            me.role === 'Super Admin' && { k: 'sacontrols', label: 'Data cleanup', ic: 'alert', to: '#sacontrols' },
             ['Admin', 'Super Admin'].indexOf(me.role) !== -1 && { k: 'activity', label: 'Login activity', ic: 'shield', to: '#activity' },
             { k: 'profile', label: 'My profile', ic: 'user', to: '#me' }
         ].filter(Boolean);
@@ -768,7 +857,8 @@
             item('Possible duplicates', 'folder', 'orange', '#duplicates')
         ].join('') : me.role === 'Super Admin' ? [
             item('Add client', 'users', 'green', '#addclient'), item('Add admin', 'shield', 'purple', '#addadmin'),
-            item('Manage clients', 'users', 'blue', '#admin'), item('Login activity', 'shield', 'red', '#activity')
+            item('Manage clients', 'users', 'blue', '#admin'), item('Login activity', 'shield', 'red', '#activity'),
+            item('Data cleanup', 'alert', 'red', '#sacontrols')
         ].join('') : me.role === 'Client' ? item('Request survey', 'plus', 'blue', '#assign') : '';
         var scr = el('<section class="scr has-tabs" aria-label="Profile"><div class="scr-body">' +
             '<header class="profile-hdr"><span class="avatar">' + avatar + '</span><b>' + esc(me.name) + '</b><small>' + esc(me.role) + '</small></header>' +
@@ -1076,7 +1166,7 @@
             var page = (link || '').split(/[?#]/)[0];
             var to = { 'recovery.php': 'recovery', 'formats_download.php': 'formats', 'cancelled.php': 'cancelled', 'team_chat.php': 'chat', 'profile.php': 'me',
                 'vessels.php': 'vessels', 'reports.php': 'reports', 'completed.php': 'completed', 'index.php': 'home', 'inbox.php': 'inbox',
-                'login_activity.php': 'activity', 'possible_duplicates.php': 'duplicates', 'manage_templates.php': 'templates', 'admin_controls.php': 'admin' }[page];
+                'login_activity.php': 'activity', 'possible_duplicates.php': 'duplicates', 'manage_templates.php': 'templates', 'admin_controls.php': 'admin', 'super_admin_controls.php': 'sacontrols' }[page];
             if (to) go(to);
             else if (link) openWeb(link);
         });
@@ -1090,7 +1180,10 @@
 
     /* ---------------- Recovery ---------------- */
     SCREENS.recovery = function () {
-        var scr = el('<section class="scr" aria-label="Recovery">' + barHeader('Recovery', 'Pending Report + Completed') +
+        // From the home Surveyor report: one surveyor's recovery (Admin / Super Admin), as recovery.php?surveyor=.
+        var sv = state.recSurveyor || null; state.recSurveyor = null;
+        var scr = el('<section class="scr" aria-label="Recovery">' + barHeader('Recovery', sv ? sv.name : 'Pending Report + Completed',
+                '<a class="icon-btn plain press" href="export_recovery.php?full=1" data-dl aria-label="Download Excel">' + icon('download') + '</a>') +
             '<div class="scr-body"><div class="scr-pad">' +
             '<section class="rec-hero" data-rise><div class="l">Total recovery</div><div class="n" data-tot>–</div><div class="rec-split">' +
             '<div><small>VLSFO</small><b data-k="vlsfo">–</b></div><div><small>LSMGO</small><b data-k="lsmgo">–</b></div><div><small>HSFO</small><b data-k="hsfo">–</b></div><div><small>Vessels</small><b data-k="count">–</b></div></div></section>' +
@@ -1100,17 +1193,23 @@
         var body = scr.querySelector('.scr-body'), list = scr.querySelector('.list'), loader = scr.querySelector('.more-loader');
         var input = scr.querySelector('input'), monthsEl = scr.querySelector('[data-months]');
         var q = '', month = '', page = 1, more = false, loading = false, seq = 0, monthsDone = false;
+        // Download Excel = the website's export_recovery.php with the same search / month filter.
+        function syncDownload() {
+            var qs = 'full=1' + (q ? '&q=' + encodeURIComponent(q) : '') + (month ? '&month=' + encodeURIComponent(month) : '') + (sv ? '&surveyor=' + encodeURIComponent(sv.id) : '');
+            scr.querySelector('[data-dl]').setAttribute('href', 'export_recovery.php?' + qs);
+        }
         function card(r) {
             return '<button type="button" class="rcard press" data-rise data-vessel="' + r.id + '"><span class="t"><b>' + esc(r.vessel) + '</b>' +
                 '<span>' + esc([r.client, r.port].filter(Boolean).join(' · ')) + '</span><small>' + esc(r.type) + (r.completed ? ' · ' + esc(r.completed) : '') + '</small></span>' +
                 '<span class="amt' + (r.na || r.total === null ? ' na' : '') + '"><b>' + esc(r.total_text) + '</b>' + (r.na || r.total === null ? '' : '<small>MT</small>') + '</span></button>';
         }
         function load(reset) {
-            if (reset) { page = 1; more = false; }
+            if (reset) { page = 1; more = false; syncDownload(); }
             var my = ++seq; loading = true;
             var params = { page: page };
             if (q) params.q = q;
             if (month) params.month = month;
+            if (sv) params.surveyor = sv.id;
             return api('recovery', params).then(function (d) {
                 if (my !== seq) return;
                 countUp(scr.querySelector('[data-tot]'), d.total, 3, ' <small>MT</small>');
@@ -2163,6 +2262,88 @@
                 .then(function (r) { return r.json(); }).then(function (r) { if (!r.success) throw new Error(r.message); toast(r.message || 'Deleted', 'ok'); load(); })
                 .catch(function (x) { toast(x.message || 'Could not delete', 'bad'); });
         });
+        pullToRefresh(scr, scr.querySelector('.scr-body'), load);
+        load();
+        return scr;
+    };
+
+    /* ---------------- Super Admin controls (super_admin_controls.php, Super Admin) ---------------- */
+    // Merge duplicate client companies, and the "Delete all" danger zones. Both post to the page itself,
+    // which re-checks the role and needs MERGE / DELETE typed exactly, same as on the website.
+    SCREENS.sacontrols = function () {
+        var LABEL = { pending_vessel: 'Pending Vessels', pending_report: 'Pending Reports', cancelled: 'Cancelled Vessels', completed: 'Completed Vessels' };
+        var scr = el('<section class="scr" aria-label="Super Admin controls">' + barHeader('Super Admin controls', 'Data cleanup') +
+            '<div class="scr-body"><div class="scr-pad"><div class="info-note warn">' + icon('alert') + '<span>Temporary tool — for clearing test data before go-live only. Delete actions permanently remove every record in that category, with no way to undo.</span></div>' +
+            '<div data-body>' + skeletons(3) + '</div></div></div></section>');
+        var box = scr.querySelector('[data-body]');
+        function draw(d) {
+            var merge = d.groups.length ? '<div class="section-title" data-rise>Duplicate client companies</div>' +
+                '<p class="sheet-p" data-rise>The same company appears more than once. Keep the row with the vessels; the other row\'s login moves onto it, its vessels are reassigned and the empty duplicate is removed.</p>' +
+                d.groups.map(function (g, gi) {
+                    var keep = g.rows.reduce(function (a, r) { return r.surveys > a.surveys ? r : a; }, g.rows[0]).id;
+                    return '<section class="card card-pad" data-rise data-group="' + gi + '"><div class="card-h">' + esc(g.rows[0].company) + '<span class="tag orange">' + g.rows.length + ' rows</span></div>' +
+                        g.rows.map(function (r) {
+                            return '<label class="radio-row press"><input type="radio" name="keep-' + gi + '" value="' + r.id + '"' + (r.id === keep ? ' checked' : '') + '><span class="t"><b>Client #' + r.id + (r.contact ? ' — ' + esc(r.contact) : '') + '</b>' +
+                                '<small>' + r.surveys + ' vessel(s)/survey(s) · ' + (r.login ? 'login: ' + esc(r.login) : 'no login') + '</small></span></label>';
+                        }).join('') +
+                        '<button type="button" class="btn primary press" style="margin-top:10px" data-merge="' + gi + '">' + icon('users') + 'Merge selected</button></section>';
+                }).join('') : '<section class="card card-pad" data-rise><div class="card-h">Duplicate client companies</div><small class="hint">No duplicate client companies found.</small></section>';
+            var danger = '<div class="section-title" data-rise style="color:#b91c1c">Danger zone</div>' + Object.keys(LABEL).map(function (k) {
+                return '<section class="card card-pad danger-card" data-rise><div class="title-row"><span class="t"><b>Delete all ' + LABEL[k] + '</b><small>' + d.counts[k] + ' record(s) now · with their uploaded files. Cannot be undone.</small></span>' +
+                    '<button type="button" class="btn danger press" style="height:40px;flex:0 0 auto" data-wipe="' + k + '"' + (d.counts[k] ? '' : ' disabled') + '>' + icon('trash') + 'Delete all</button></div></section>';
+            }).join('');
+            box.innerHTML = merge + danger;
+            stagger(box);
+            box.onclick = function (e) {
+                var m = e.target.closest('[data-merge]'), w = e.target.closest('[data-wipe]');
+                if (m) {
+                    var g = d.groups[+m.getAttribute('data-merge')], keepEl = box.querySelector('[data-group="' + m.getAttribute('data-merge') + '"] input:checked');
+                    var keepId = keepEl.value;
+                    typed('Merge ' + g.rows[0].company + '?', 'Keeps client #' + keepId + ' and removes the other ' + (g.rows.length - 1) + ' row(s).', 'MERGE', 'Merge', function (txt) {
+                        // The page shows its merge message inside the duplicate group, which is gone after a
+                        // successful merge — so check the data again: group gone + kept row there = merged.
+                        return postPage('super_admin_controls.php', { merge_action: '1', group_norm_name: g.norm, keep_id: keepId, confirm_text: txt }).then(function (r) {
+                            if (r.message) return r;
+                            return api('sa_controls').then(function (n) {
+                                var still = n.groups.some(function (x) { return x.norm === g.norm; });
+                                return still ? { ok: false, message: 'Could not merge these records. Please refresh and try again.' }
+                                    : { ok: true, message: 'Merged into client #' + keepId + '. Its vessels/surveys and login (if any) are now on this one row.' };
+                            });
+                        });
+                    });
+                }
+                if (w && !w.disabled) {
+                    var k = w.getAttribute('data-wipe');
+                    typed('Delete all ' + LABEL[k] + '?', 'Permanently deletes ' + d.counts[k] + ' ' + LABEL[k].toLowerCase() + ' record(s) and their uploaded files. This cannot be undone.', 'DELETE', 'Delete all', function (txt) {
+                        return postPage('super_admin_controls.php', { delete_target: k, confirm_text: txt });
+                    });
+                }
+            };
+        }
+        // Confirmation sheet: the word must be typed exactly, as on the website.
+        function typed(title, text, word, btn, send) {
+            openSheet('<h2>' + esc(title) + '</h2><p class="sheet-p">' + esc(text) + '</p>' +
+                '<div class="field"><label for="sac-confirm">Type <b>' + word + '</b> to confirm</label><div class="inp"><input id="sac-confirm" autocomplete="off" autocapitalize="characters" placeholder="' + word + '"></div></div>' +
+                '<div class="err" hidden role="alert">' + icon('alert') + '<span></span></div>' +
+                '<div class="sheet-actions"><button type="button" class="btn danger press" data-yes disabled>' + esc(btn) + '</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
+            function (sh) {
+                var inp = sh.querySelector('input'), yes = sh.querySelector('[data-yes]'), er = sh.querySelector('.err');
+                inp.addEventListener('input', function () { yes.disabled = inp.value.trim() !== word; });
+                sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
+                yes.onclick = function () {
+                    yes.disabled = true; yes.innerHTML = '<span class="spin"></span> Working…';
+                    send(inp.value.trim()).then(function (r) {
+                        if (!r.ok) throw new Error(r.message || 'Could not complete this action.');
+                        haptic('MEDIUM'); closeSheet(); toast(r.message, 'ok'); load();
+                    }).catch(function (x) {
+                        er.hidden = false; er.querySelector('span').textContent = x.message; yes.disabled = false; yes.textContent = btn;
+                    });
+                };
+            });
+        }
+        function load() {
+            return api('sa_controls').then(draw).catch(function (e) { if (e.message !== 'login') box.innerHTML = '<div class="empty"><span class="ic red">' + icon('alert') + '</span><b>Not available</b></div>'; });
+        }
         pullToRefresh(scr, scr.querySelector('.scr-body'), load);
         load();
         return scr;

@@ -22,6 +22,10 @@
  *   GET app_api.php?a=surveyor&id=<id>              Admin: a surveyor's details for the edit form (add_surveyor.php)
  *   GET app_api.php?a=templates                     Admin: Word templates + Photo Report template (manage_templates.php)
  *   GET app_api.php?a=duplicates                    Admin: possible duplicate vessels (possible_duplicates.php)
+ *   GET app_api.php?a=insights                      dashboard extras as on index.php: recent recovery, averages,
+ *                                                   surveyor report (Admin/Super Admin), analytics (Super Admin)
+ *   GET app_api.php?a=month&y=<yyyy>&m=<1-12>       month summary (ships surveyed + recovery), as the dashboard card
+ *   GET app_api.php?a=sa_controls                   Super Admin: record counts + duplicate client groups (super_admin_controls.php)
  */
 require_once 'config/config.php';
 require_once 'includes/notifications.php';
@@ -268,6 +272,118 @@ if ($a === 'dashboard') {
         'attention' => $attention,
         'today' => date('d M Y'),
     ]);
+}
+
+if ($a === 'month') {
+    require_once 'includes/recovery_list.php';
+    require_once 'includes/dashboard_month.php';
+    $y = (int)($_GET['y'] ?? date('Y'));
+    $m = (int)($_GET['m'] ?? date('n'));
+    if ($y < 2000 || $y > 2100 || $m < 1 || $m > 12) appOut(['error' => 'month'], 400);
+    $dm = dashboardMonthStats($db, $role, $userId, $clientId, $y, $m);
+    appOut(['y' => $y, 'm' => $m, 'label' => $dm['label'], 'ships' => $dm['ships'], 'recovery' => round($dm['recovery'], 3),
+        'years' => dashboardMonthYears($db)]);
+}
+
+if ($a === 'insights') {
+    // The website dashboard's (index.php) extra cards, same queries and the same role scope.
+    require_once 'includes/recovery_list.php';
+    $applies = recoveryAppliesSql('s');
+    $out = [];
+    // Recent survey recovery: the latest vessel with recovery.
+    $st = $db->prepare("SELECT s.id, s.vessel_name, s.survey_type_ids, s.vlsfo_recovery, s.lsmgo_recovery, s.hsfo_recovery, s.recovery_amount
+        FROM surveys s WHERE s.status IN ('Pending Report','Completed') AND s.recovery_amount IS NOT NULL AND $applies AND $scopeSql
+        ORDER BY s.survey_completed_date DESC, s.id DESC LIMIT 1");
+    $st->execute($scopeParams);
+    $r = $st->fetch(PDO::FETCH_ASSOC);
+    if ($r) {
+        $on = isOnhireSurvey($db, (string)($r['survey_type_ids'] ?? ''));
+        $fmt = function ($v) use ($on) { return !empty($v) ? recoveryDisplay($v, $on) : '0.000'; };
+        $out['recent'] = ['id' => (int)$r['id'], 'vessel' => (string)$r['vessel_name'], 'vlsfo' => $fmt($r['vlsfo_recovery']),
+            'lsmgo' => $fmt($r['lsmgo_recovery']), 'hsfo' => $fmt($r['hsfo_recovery'])];
+    } else {
+        $out['recent'] = null;
+    }
+    // Average ships per month: completed ships over the months since the first one.
+    $st = $db->prepare("SELECT COUNT(*) FROM surveys s WHERE s.status = 'Completed' AND $scopeSql");
+    $st->execute($scopeParams);
+    $ships = (float)$st->fetchColumn();
+    $st = $db->prepare("SELECT GREATEST(1, TIMESTAMPDIFF(MONTH, MIN(COALESCE(s.survey_completed_date, s.report_uploaded_date, s.assign_date)), CURDATE()) + 1)
+        FROM surveys s WHERE s.status IN ('Completed','Pending Report') AND $scopeSql");
+    $st->execute($scopeParams);
+    $span = (float)$st->fetchColumn();
+    $out['avg_ships_month'] = $span > 0 ? round($ships / $span, 1) : 0;
+    if ($fullAccess) {
+        $out['avg_rec_ship'] = round((float)$db->query("SELECT AVG(ABS(s.recovery_amount)) FROM surveys s WHERE s.status IN ('Pending Report','Completed') AND s.recovery_amount IS NOT NULL AND $applies AND ABS(s.recovery_amount) > 0")->fetchColumn(), 3);
+        $out['avg_rec_surveyor'] = round((float)$db->query("SELECT AVG(t.v) FROM (SELECT SUM(ABS(s.recovery_amount)) AS v FROM surveys s WHERE s.status IN ('Pending Report','Completed') AND s.recovery_amount IS NOT NULL AND $applies GROUP BY s.surveyor_id) t")->fetchColumn(), 3);
+
+        // Surveyor full report: ships attended + recovery, as of now and this month.
+        $cmStart = date('Y-m-01');
+        $cmEnd = date('Y-m-01', strtotime('first day of next month'));
+        $rec = recoveryCountedSql('s');
+        $done = "s.status IN ('Pending Report','Completed')";
+        $cd = surveyCompletedDateSql('s');
+        $inMonth = "$cd >= '$cmStart' AND $cd < '$cmEnd'";
+        $rows = $db->query("SELECT u.id, u.full_name, u.status AS user_status,
+                COUNT(DISTINCT CASE WHEN $done THEN s.id END) AS ships_total,
+                COUNT(DISTINCT CASE WHEN $done AND $inMonth THEN s.id END) AS ships_month,
+                COALESCE(SUM(CASE WHEN $done THEN $rec END), 0) AS recovery_total,
+                COALESCE(SUM(CASE WHEN $done AND $inMonth THEN $rec END), 0) AS recovery_month
+            FROM users u
+            LEFT JOIN surveys s ON (s.surveyor_id = u.id OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = u.id))
+            WHERE u.role_id = 2 GROUP BY u.id, u.full_name, u.status ORDER BY u.full_name ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $noSv = RECOVERY_NO_SURVEYOR_SQL;
+        $un = $db->query("SELECT COUNT(*) AS ships_total, COUNT(CASE WHEN $inMonth THEN 1 END) AS ships_month,
+                COALESCE(SUM($rec), 0) AS recovery_total, COALESCE(SUM(CASE WHEN $inMonth THEN $rec END), 0) AS recovery_month
+            FROM surveys s WHERE $done AND $noSv")->fetch(PDO::FETCH_ASSOC);
+        [$creditId, $creditName] = outsourcedCreditSurveyor($db);
+        if ($creditId === -1) {
+            $rows[] = ['id' => -1, 'full_name' => $creditName, 'user_status' => 'Active', 'ships_total' => 0, 'ships_month' => 0, 'recovery_total' => 0, 'recovery_month' => 0];
+            usort($rows, function ($x, $y) { return strcasecmp($x['full_name'], $y['full_name']); });
+        }
+        $k4 = ['ships_total', 'ships_month', 'recovery_total', 'recovery_month'];
+        $out['surveyors'] = array_map(function ($row) use ($creditId, $un, $k4) {
+            if ((int)$row['id'] === $creditId) foreach ($k4 as $k) $row[$k] += $un[$k];
+            return ['id' => (int)$row['id'], 'name' => (string)$row['full_name'], 'inactive' => ($row['user_status'] ?? '') === 'Inactive',
+                'ships_total' => (int)$row['ships_total'], 'ships_month' => (int)$row['ships_month'],
+                'recovery_total' => round((float)$row['recovery_total'], 3), 'recovery_month' => round((float)$row['recovery_month'], 3)];
+        }, $rows);
+        $t = $db->query("SELECT COUNT(*) AS ships_total, COUNT(CASE WHEN $inMonth THEN 1 END) AS ships_month,
+                COALESCE(SUM($rec), 0) AS recovery_total, COALESCE(SUM(CASE WHEN $inMonth THEN $rec END), 0) AS recovery_month
+            FROM surveys s WHERE $done")->fetch(PDO::FETCH_ASSOC);
+        $out['surveyors_total'] = ['ships_total' => (int)$t['ships_total'], 'ships_month' => (int)$t['ships_month'],
+            'recovery_total' => round((float)$t['recovery_total'], 3), 'recovery_month' => round((float)$t['recovery_month'], 3)];
+    }
+    if ($role === 'Super Admin') {
+        // Super Admin analytics: top lists and average ships per year / month / day / surveyor.
+        ensurePortsCountryColumn($db);
+        $base = "s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed') AND $applies";
+        $top = function (string $sql) use ($db) {
+            return array_map(function ($r) { return ['name' => (string)$r['name'], 'value' => round((float)$r['value'], 3)]; }, $db->query($sql)->fetchAll(PDO::FETCH_ASSOC));
+        };
+        $country = "COALESCE(NULLIF(p.country, ''), 'India')";
+        $sa = [
+            'rec_surveyor' => $top("SELECT u.full_name AS name, SUM(ABS(s.recovery_amount)) AS value FROM surveys s JOIN users u ON s.surveyor_id = u.id WHERE $base GROUP BY s.surveyor_id, u.full_name ORDER BY value DESC LIMIT 10"),
+            'rec_port' => $top("SELECT p.port_name AS name, SUM(ABS(s.recovery_amount)) AS value FROM surveys s JOIN ports p ON s.port_id = p.id WHERE $base GROUP BY s.port_id, p.port_name ORDER BY value DESC LIMIT 5"),
+            'rec_country' => $top("SELECT $country AS name, SUM(ABS(s.recovery_amount)) AS value FROM surveys s JOIN ports p ON s.port_id = p.id WHERE $base GROUP BY $country ORDER BY value DESC LIMIT 5"),
+            'rec_client' => $top("SELECT c.company_name AS name, SUM(ABS(s.recovery_amount)) AS value FROM surveys s JOIN clients c ON s.client_id = c.id WHERE $base GROUP BY s.client_id, c.company_name ORDER BY value DESC LIMIT 5"),
+            'ships_country' => $top("SELECT $country AS name, COUNT(*) AS value FROM surveys s JOIN ports p ON s.port_id = p.id WHERE s.status = 'Completed' GROUP BY $country ORDER BY value DESC LIMIT 5"),
+            'ships_port' => $top("SELECT p.port_name AS name, COUNT(*) AS value FROM surveys s JOIN ports p ON s.port_id = p.id WHERE s.status = 'Completed' GROUP BY s.port_id, p.port_name ORDER BY value DESC LIMIT 5"),
+        ];
+        $span = $db->query("SELECT COUNT(*) AS cnt, MIN(COALESCE(survey_completed_date, report_uploaded_date)) AS min_d,
+                MAX(COALESCE(survey_completed_date, report_uploaded_date)) AS max_d FROM surveys WHERE status = 'Completed'")->fetch(PDO::FETCH_ASSOC);
+        $n = (int)($span['cnt'] ?? 0);
+        $sa['avg_year'] = $sa['avg_month'] = $sa['avg_day'] = 0;
+        if ($n > 0 && !empty($span['min_d']) && !empty($span['max_d'])) {
+            $lo = strtotime($span['min_d']); $hi = strtotime($span['max_d']);
+            $sa['avg_day'] = round($n / max(1, (int)round(($hi - $lo) / 86400) + 1), 1);
+            $sa['avg_month'] = round($n / max(1, ((int)date('Y', $hi) - (int)date('Y', $lo)) * 12 + ((int)date('n', $hi) - (int)date('n', $lo)) + 1), 1);
+            $sa['avg_year'] = round($n / max(1, (int)date('Y', $hi) - (int)date('Y', $lo) + 1), 1);
+        }
+        $sa['avg_surveyor'] = round((float)$db->query("SELECT AVG(t.cnt) FROM (SELECT COUNT(*) AS cnt FROM surveys WHERE status = 'Completed' GROUP BY surveyor_id) t")->fetchColumn(), 1);
+        $out['sa'] = $sa;
+    }
+    appOut($out);
 }
 
 if ($a === 'list') {
@@ -593,6 +709,35 @@ if ($a === 'templates') {
             'when' => appDate(is_array($meta) && !empty($meta['updated_at']) ? $meta['updated_at'] : date('Y-m-d H:i:s', filemtime($pf)), 'd M Y, h:i A')];
     }
     appOut(['items' => $rows, 'photo' => $photo]);
+}
+
+if ($a === 'sa_controls') {
+    // Read-only view for the app's Super Admin controls screen; the merge / delete actions post to
+    // super_admin_controls.php itself, so its confirmations and checks apply unchanged.
+    if ($role !== 'Super Admin') appOut(['error' => 'not_allowed'], 403);
+    $counts = [];
+    foreach (['pending_vessel' => 'Pending Vessel', 'pending_report' => 'Pending Report', 'cancelled' => 'Cancelled', 'completed' => 'Completed'] as $k => $status) {
+        $st = $db->prepare('SELECT COUNT(*) FROM surveys WHERE status = ?');
+        $st->execute([$status]);
+        $counts[$k] = (int)$st->fetchColumn();
+    }
+    $groups = [];
+    try {
+        $dup = $db->query('SELECT LOWER(TRIM(company_name)) AS norm_name FROM clients GROUP BY LOWER(TRIM(company_name)) HAVING COUNT(*) > 1');
+        $rowsSt = $db->prepare('SELECT c.id, c.company_name, c.contact_person, u.username,
+                (SELECT COUNT(*) FROM surveys s WHERE s.client_id = c.id) AS survey_count
+            FROM clients c LEFT JOIN users u ON u.id = c.user_id WHERE LOWER(TRIM(c.company_name)) = ? ORDER BY c.id');
+        foreach ($dup->fetchAll(PDO::FETCH_COLUMN) as $norm) {
+            $rowsSt->execute([$norm]);
+            $groups[] = ['norm' => (string)$norm, 'rows' => array_map(function ($r) {
+                return ['id' => (int)$r['id'], 'company' => (string)$r['company_name'], 'contact' => (string)($r['contact_person'] ?? ''),
+                    'login' => (string)($r['username'] ?? ''), 'surveys' => (int)$r['survey_count']];
+            }, $rowsSt->fetchAll(PDO::FETCH_ASSOC))];
+        }
+    } catch (Throwable $e) {
+        error_log('app_api sa_controls dup scan: ' . $e->getMessage());
+    }
+    appOut(['counts' => $counts, 'groups' => $groups]);
 }
 
 if ($a === 'duplicates') {

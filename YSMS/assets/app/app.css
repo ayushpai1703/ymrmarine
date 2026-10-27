@@ -546,3 +546,53 @@ svg.i { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none;
 .rm-h small { flex: 1; font-size: 12px; color: var(--muted); }
 .rm-t { font-size: 14px; margin: 4px 0; -webkit-user-select: text; user-select: text; }
 a.menu-item { text-decoration: none; }
+
+/* Super Admin controls */
+.info-note.warn { background: #fffbeb; color: #92400e; }
+.radio-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid #eef1f6; }
+.radio-row input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--primary); flex: 0 0 auto; }
+.radio-row .t, .danger-card .t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.radio-row small, .danger-card small { color: var(--muted); font-size: 12.5px; }
+.danger-card { border: 1px solid #fecaca; }
+.danger-card .title-row { align-items: center; }
+.danger-card { margin-bottom: 12px; }
+
+/* Home: month picker, averages, surveyor report, analytics */
+.month-card .h { justify-content: space-between; }
+.mc-pick { border: 0; background: #f5f3ff; color: var(--purple); font: inherit; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 12px; }
+.mc-pick svg.down { width: 14px; height: 14px; transform: rotate(90deg); }
+.mc-dl { display: inline-flex; align-items: center; gap: 5px; color: #15803d; background: #f0fdf4; border-radius: 12px; padding: 6px 10px; font-size: 12.5px; font-weight: 700; text-decoration: none; }
+.mc-dl svg { width: 15px; height: 15px; }
+.mc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0 8px; }
+.mc-grid .chip { justify-content: center; }
+.mc-grid .chip.on { background: var(--primary); color: #fff; }
+.mc-grid .chip:disabled { opacity: .35; }
+.stat.mini { padding: 14px; gap: 8px; }
+.stat.mini .n { font-size: 22px; }
+.recent-card { width: 100%; border: 0; text-align: left; color: var(--text); display: block; }
+.recent-card .card-h svg { width: 18px; height: 18px; color: var(--muted); }
+.rec-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.rec-3 div { background: #f8fafc; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 3px; }
+.rec-3 small { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.rec-3 b { font-size: 15px; }
+.sfr { overflow: hidden; }
+.sfr-head, .sfr-row { display: grid; grid-template-columns: 1.4fr .9fr 1.1fr; gap: 8px; align-items: center; padding: 11px 14px; font-size: 13.5px; }
+.sfr-head { font-size: 11.5px; font-weight: 700; color: var(--muted); background: #f8fafc; }
+.sfr-head small { font-weight: 500; }
+.sfr-head span:not(:first-child), .sfr-row > span:not(.t) { text-align: right; }
+.sfr-row { width: 100%; border: 0; border-top: 1px solid #eef1f6; background: #fff; color: var(--text); font: inherit; font-size: 13.5px; text-align: left; }
+.sfr-row .t { display: flex; flex-direction: column; min-width: 0; }
+.sfr-row .t b { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sfr-row small { display: block; font-size: 11.5px; color: var(--muted); }
+.sfr-row > span:last-child { font-weight: 700; }
+.sfr-row.total { background: #f8fafc; font-weight: 700; }
+.top-card { margin-bottom: 12px; }
+.top-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid #eef1f6; }
+.top-row:first-of-type { border-top: 0; }
+.top-row .rk { font-size: 12px; font-weight: 800; color: var(--muted); text-align: center; }
+.top-row .t { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.top-row .t b { font-size: 13.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-row .bar { height: 6px; background: #eef2ff; border-radius: 4px; overflow: hidden; }
+.top-row .bar i { display: block; height: 100%; background: var(--primary); border-radius: 4px; }
+.top-row .v { font-size: 13.5px; font-weight: 700; text-align: right; }
+.top-row .v small { font-size: 11px; color: var(--muted); }
