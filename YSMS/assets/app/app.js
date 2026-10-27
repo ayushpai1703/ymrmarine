@@ -182,7 +182,7 @@
         if (TABS.indexOf(h) !== -1) return { name: h };
         return { name: 'home' };
     }
-    var PUSHED = ['search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign', 'admin', 'addclient', 'addadmin', 'surveyor'];
+    var PUSHED = ['search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign', 'admin', 'addclient', 'addadmin', 'surveyor', 'activity', 'duplicates', 'templates'];
     var ROUTE_IDS = { v: 'vessel', up: 'upload', h: 'history', c: 'room', e: 'assign', sv: 'surveyor', m: 'module' };
     function hashFor(name, id) {
         if (id) for (var k in ROUTE_IDS) if (ROUTE_IDS[k] === name) return '#/' + k + '/' + id;
@@ -632,10 +632,11 @@
         var admin = me.role === 'Admin' ? [
             item('Assign vessel', 'plus', 'blue', '#assign'), item('Add surveyor', 'user', 'orange', '#surveyor'),
             item('Add client', 'users', 'green', '#addclient'), item('Admin controls', 'shield', 'purple', '#admin'),
-            item('Manage templates', 'file', 'sky', 'manage_templates.php'), item('Login activity', 'shield', 'red', 'login_activity.php')
+            item('Manage templates', 'file', 'sky', '#templates'), item('Login activity', 'shield', 'red', '#activity'),
+            item('Possible duplicates', 'folder', 'orange', '#duplicates')
         ].join('') : me.role === 'Super Admin' ? [
             item('Add client', 'users', 'green', '#addclient'), item('Add admin', 'shield', 'purple', '#addadmin'),
-            item('Manage clients', 'users', 'blue', '#admin'), item('Login activity', 'shield', 'red', 'login_activity.php')
+            item('Manage clients', 'users', 'blue', '#admin'), item('Login activity', 'shield', 'red', '#activity')
         ].join('') : me.role === 'Client' ? item('Request survey', 'plus', 'blue', '#assign') : '';
         var scr = el('<section class="scr has-tabs" aria-label="Profile"><div class="scr-body">' +
             '<header class="profile-hdr"><span class="avatar">' + avatar + '</span><b>' + esc(me.name) + '</b><small>' + esc(me.role) + '</small></header>' +
@@ -676,6 +677,11 @@
             var doc = new DOMParser().parseFromString(html, 'text/html');
             // The page's own message: an inline alert, or the flash toast after a save-and-redirect.
             var ok = doc.querySelector('.alert-success, .vdd-alert-success, .ysms-toast-success'), bad = doc.querySelector('.alert-danger, .vdd-alert-danger, .ysms-toast-error');
+            if (!ok && !bad) {
+                // Some pages confirm an upload with a SweetAlert instead of an inline message.
+                var sw = html.match(/Swal\.fire\(\{\s*icon:\s*'success',\s*title:\s*'([^']+)'/);
+                if (sw) return { ok: true, message: sw[1] };
+            }
             var box = bad || ok, text = box ? (box.querySelector('.ysms-toast-text') || box).textContent : '';
             return { ok: !!ok && !bad, message: text.replace(/\s+/g, ' ').replace(/\s*×\s*$/, '').trim() };
         });
@@ -1007,17 +1013,57 @@
 
     /* ---------------- Formats ---------------- */
     SCREENS.formats = function () {
+        var admin = state.me.role === 'Admin', items = [];
         var scr = el('<section class="scr" aria-label="Formats">' + barHeader('Formats', 'Approved survey formats') +
-            '<div class="scr-body"><div class="scr-pad"><div class="list">' + skeletons(3) + '</div></div></div></section>');
+            '<div class="scr-body"><div class="scr-pad"><div class="list">' + skeletons(3) + '</div></div></div>' +
+            (admin ? '<button type="button" class="fab press" style="bottom:24px" data-add aria-label="Upload format">' + icon('upload') + '</button>' : '') + '</section>');
         var list = scr.querySelector('.list');
         function load() {
             return api('formats').then(function (d) {
-                list.innerHTML = d.items.length ? d.items.map(function (f) {
-                    return '<a class="fcard press" data-rise href="' + esc(f.path) + '" download><span class="ft xls">XLS</span><span class="t"><b>' + esc(f.name) + '</b><small>Updated ' + esc(f.updated) + '</small></span>' +
-                        (f.recent ? '<span class="tag green">New</span>' : '') + '<span class="dl">' + icon('download') + '</span></a>';
+                items = d.items;
+                list.innerHTML = d.items.length ? d.items.map(function (f, i) {
+                    return '<div class="fcard" data-rise><span class="ft xls">XLS</span><span class="t"><b>' + esc(f.name) + '</b><small>Updated ' + esc(f.updated) + '</small></span>' +
+                        (f.recent ? '<span class="tag green">New</span>' : '') +
+                        (admin ? '<button type="button" class="icon-btn plain press" data-manage="' + i + '" aria-label="Replace or delete ' + esc(f.name) + '">' + icon('edit') + '</button>' : '') +
+                        '<a class="dl press" href="' + esc(f.path) + '" download aria-label="Download ' + esc(f.name) + '">' + icon('download') + '</a></div>';
                 }).join('') : '<div class="empty"><span class="ic green">' + icon('folder') + '</span><b>No formats uploaded yet</b></div>';
                 stagger(list);
             }).catch(function (e) { if (e.message !== 'login') toast('Could not load the formats', 'bad'); });
+        }
+        // Admin: the same upload / replace / delete forms formats_download.php has.
+        function pickExcel(cb) {
+            var i = document.createElement('input'); i.type = 'file'; i.accept = '.xls,.xlsx,.xlsm';
+            i.onchange = function () { if (i.files[0]) cb(i.files[0]); };
+            i.click();
+        }
+        function send(data, file, field) {
+            var fd = new FormData();
+            Object.keys(data).forEach(function (k) { fd.append(k, data[k]); });
+            if (file) fd.append(field, file);
+            toast('Saving…');
+            return postPage('formats_download.php', fd).then(function (r) {
+                if (!r.ok) throw new Error(r.message || 'Could not save.');
+                closeSheet(true); toast(r.message || 'Saved', 'ok'); load();
+            }).catch(function (x) { toast(x.message, 'bad'); });
+        }
+        if (admin) {
+            scr.querySelector('[data-add]').addEventListener('click', function () { pickExcel(function (f) { send({ upload_format: '1' }, f, 'format_file'); }); });
+            list.addEventListener('click', function (e) {
+                var b = e.target.closest('[data-manage]');
+                if (!b) return;
+                var f = items[+b.getAttribute('data-manage')];
+                openSheet('<h2>' + esc(f.name) + '</h2><p class="sheet-p">Surveyors are told when a format is replaced.</p>' +
+                    '<div class="sheet-actions"><button type="button" class="btn primary press" data-rep>Replace with a new file</button><button type="button" class="btn danger press" data-del>Delete format</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
+                function (sh) {
+                    sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
+                    sh.querySelector('[data-rep]').onclick = function () { pickExcel(function (file) { send({ modify_format: '1', old_file_path: f.path }, file, 'modify_format_file'); }); };
+                    var del = sh.querySelector('[data-del]');
+                    del.onclick = function () {
+                        if (del.dataset.sure !== '1') { del.dataset.sure = '1'; del.textContent = 'Tap again to delete'; haptic('HEAVY'); return; }
+                        send({ delete_format: '1', file_path: f.path });
+                    };
+                });
+            });
         }
         pullToRefresh(scr, scr.querySelector('.scr-body'), load);
         load();
@@ -1635,7 +1681,10 @@
             (admin ? adminItem('Add surveyor', 'user', 'orange', 'surveyor') : '') +
             adminItem('Add client', 'users', 'green', 'addclient') +
             (!admin ? adminItem('Add admin', 'shield', 'purple', 'addadmin') : '') +
-            '</div><div data-more-tools></div></div></div></section>');
+            '</div><div class="section-title" data-rise>Tools</div><div class="menu-card" data-rise>' +
+            adminItem('Login activity', 'shield', 'red', 'activity') +
+            (admin ? adminItem('Manage templates', 'file', 'sky', 'templates') + adminItem('Possible duplicates', 'folder', 'orange', 'duplicates') + adminItem('Formats', 'folder', 'green', 'formats') : '') +
+            '</div></div></div></section>');
         function adminItem(label, ic, cls, go2) {
             return '<button type="button" class="menu-item press" data-go="' + go2 + '"><span class="ic ' + cls + '">' + icon(ic) + '</span><span class="grow">' + label + '</span>' + icon('chev', 'chev') + '</button>';
         }
@@ -1848,6 +1897,211 @@
             { name: 'password', label: 'Password', type: 'password', required: true }, { name: 'confirm_password', label: 'Confirm password', type: 'password', required: true },
             { name: 'is_super_admin', label: 'Make this a Super Admin login', type: 'checkbox' }
         ], null, 'Create login');
+    };
+
+    /* ---------------- Login activity (ajax/login_activity_*.php, Admin / Super Admin) ---------------- */
+    function fmtWhen(dt) {
+        if (!dt) return '';
+        var d = new Date(String(dt).replace(' ', 'T'));
+        return isNaN(d) ? dt : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    }
+    function getJson(url) {
+        return fetch(url, { credentials: 'same-origin', cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.success === false) throw new Error(d.message || 'Not available');
+            return d;
+        });
+    }
+    SCREENS.activity = function () {
+        var scr = el('<section class="scr" aria-label="Login activity">' + barHeader('Login activity', '') +
+            '<div class="scr-body"><div class="scr-pad">' +
+            '<div class="stats" data-sum><div class="skel-card" style="height:96px"></div><div class="skel-card" style="height:96px"></div></div>' +
+            '<label class="search flat">' + icon('search') + '<span class="sr">Search</span><input type="search" placeholder="Search name, username, email" enterkeyhint="search"></label>' +
+            '<div class="chips"><button type="button" class="chip" aria-pressed="true" data-st="All">All</button><button type="button" class="chip" aria-pressed="false" data-st="Successful">Successful</button><button type="button" class="chip warn" aria-pressed="false" data-st="Failed">Failed</button>' +
+            '<button type="button" class="chip" aria-pressed="false" data-dr="today">Today</button><button type="button" class="chip" aria-pressed="false" data-dr="last7">7 days</button></div>' +
+            '<div class="list">' + skeletons(4) + '</div><div class="more-loader" hidden><span class="spin dark"></span></div></div></div></section>');
+        var body = scr.querySelector('.scr-body'), list = scr.querySelector('.list'), loader = scr.querySelector('.more-loader');
+        var input = scr.querySelector('input'), st = 'All', dr = '', page = 1, more = false, loading = false, seq = 0;
+        getJson('ajax/login_activity_summary.php').then(function (d) {
+            var s = d.summary;
+            scr.querySelector('[data-sum]').innerHTML = [
+                ['Users', s.total_users, 'users', 'blue'], ['Logged in today', s.logged_in_today, 'check', 'green'],
+                ['Active sessions', s.active_sessions, 'clock', 'sky'], ['Failed today', s.failed_today, 'alert', 'red']
+            ].map(function (c) { return '<div class="stat" data-rise><span class="ic ' + c[3] + '">' + icon(c[2]) + '</span><span class="n">' + c[1] + '</span><span class="l">' + c[0] + '</span></div>'; }).join('');
+            stagger(scr);
+        }).catch(function () {});
+        function row(r) {
+            var ok = r.login_status === 'SUCCESS';
+            return '<button type="button" class="mrow press" data-rise data-user="' + r.user_id + '"><span class="ic ' + (ok ? 'green' : 'red') + '" style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex:none">' + icon(ok ? 'check' : 'x') + '</span>' +
+                '<span class="t"><b>' + esc(r.user_name || r.username) + '</b><small>' + esc([r.role, r.device_type, r.browser].filter(Boolean).join(' · ')) + '</small>' +
+                '<small>' + esc(fmtWhen(r.login_time)) + ' · ' + esc(r.ip_address || '') + (r.country && r.country !== 'Unknown' ? ' · ' + esc(r.country) : '') + (ok ? '' : ' · ' + esc(r.failure_reason || 'Failed')) + '</small></span></button>';
+        }
+        function load(reset) {
+            if (reset) { page = 1; more = false; }
+            var my = ++seq; loading = true;
+            var q = { page: page, per_page: 30, search: input.value.trim(), status: st };
+            if (dr) q.date_range = dr;
+            return getJson('ajax/login_activity_list.php?' + new URLSearchParams(q)).then(function (d) {
+                if (my !== seq) return;
+                scr.querySelector('.hdr-bar .t').innerHTML = '<b>Login activity</b><small>' + d.total + ' logins</small>';
+                var html = d.rows.map(row).join('');
+                if (reset) list.innerHTML = html || '<div class="empty"><b>Nothing matches</b></div>'; else list.insertAdjacentHTML('beforeend', html);
+                more = d.page * d.per_page < d.total; loader.hidden = !more;
+                stagger(list);
+            }).catch(function (e) { list.innerHTML = '<div class="empty"><b>' + esc(e.message) + '</b></div>'; }).then(function () { if (my === seq) loading = false; });
+        }
+        var t = null;
+        input.addEventListener('input', function () { clearTimeout(t); t = setTimeout(function () { load(true); }, 300); });
+        scr.querySelectorAll('[data-st]').forEach(function (c) { c.addEventListener('click', function () {
+            scr.querySelectorAll('[data-st]').forEach(function (x) { x.setAttribute('aria-pressed', x === c ? 'true' : 'false'); });
+            st = c.getAttribute('data-st'); haptic(); load(true);
+        }); });
+        scr.querySelectorAll('[data-dr]').forEach(function (c) { c.addEventListener('click', function () {
+            var on = c.getAttribute('aria-pressed') !== 'true';
+            scr.querySelectorAll('[data-dr]').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+            c.setAttribute('aria-pressed', on ? 'true' : 'false'); dr = on ? c.getAttribute('data-dr') : ''; haptic(); load(true);
+        }); });
+        list.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-user]');
+            if (!b || !+b.getAttribute('data-user')) return;
+            getJson('ajax/login_activity_user_history.php?user_id=' + b.getAttribute('data-user')).then(function (d) {
+                var u = d.user;
+                openSheet('<h2>' + esc(u.user_name) + '</h2><p class="sheet-p">' + esc([u.role, u.username, u.user_email].filter(Boolean).join(' · ')) + '</p>' +
+                    '<div class="hist-rec" style="margin-bottom:10px"><div><small>Successful</small><b>' + u.total_success + '</b></div><div><small>Failed</small><b>' + u.total_failed + '</b></div><div><small>Latest</small><b style="font-size:12px">' + esc(fmtWhen(u.latest_login)) + '</b></div><div><small>Device</small><b style="font-size:12px">' + esc(u.latest_device || '—') + '</b></div></div>' +
+                    '<div class="pick-list">' + d.history.slice(0, 50).map(function (h) {
+                        var ok = h.login_status === 'SUCCESS';
+                        return '<div class="pick-row"><span class="t"><b style="color:' + (ok ? '#15803d' : '#b91c1c') + '">' + (ok ? 'Signed in' : 'Failed') + ' · ' + esc(fmtWhen(h.login_time)) + '</b><small>' +
+                            esc([h.device_type, h.browser, h.ip_address, h.session_duration_label].filter(Boolean).join(' · ')) + '</small></span></div>';
+                    }).join('') + '</div>');
+            }).catch(function (x) { toast(x.message, 'bad'); });
+        });
+        if ('IntersectionObserver' in window) new IntersectionObserver(function (en) { if (en[0].isIntersecting && more && !loading) { page++; load(false); } }, { root: body, rootMargin: '300px' }).observe(loader);
+        pullToRefresh(scr, body, function () { return load(true); });
+        load(true);
+        return scr;
+    };
+
+    /* ---------------- Possible duplicates (Admin) ---------------- */
+    SCREENS.duplicates = function () {
+        var scr = el('<section class="scr" aria-label="Possible duplicates">' + barHeader('Possible duplicates', 'Same vessel + client counted twice?') +
+            '<div class="scr-body"><div class="scr-pad"><div class="info-note">' + icon('alert') + '<span><b>Duplicate</b>: same recovery within 31 days. <b>Check</b>: within 15 days, recovery different — you decide.</span></div>' +
+            '<div class="chips"><button type="button" class="chip" aria-pressed="true" data-k="">All</button><button type="button" class="chip warn" aria-pressed="false" data-k="duplicate">Duplicate</button><button type="button" class="chip" aria-pressed="false" data-k="check">Check</button></div>' +
+            '<div class="list">' + skeletons(3) + '</div></div></div></section>');
+        var list = scr.querySelector('.list'), clusters = [], kind = '';
+        function draw() {
+            var shown = clusters.filter(function (c) { return !kind || c.kind === kind; });
+            list.innerHTML = shown.length ? shown.map(function (c) {
+                return '<section class="card card-pad" data-rise><div class="title-row"><b class="hn">' + esc(c.records[0].vessel) + '</b><span class="tag ' + (c.kind === 'duplicate' ? 'red' : 'orange') + '">' + (c.kind === 'duplicate' ? 'Duplicate' : 'Check') + '</span></div>' +
+                    (c.extra_mt ? '<small class="hint" style="color:#b91c1c">' + fmtMt(c.extra_mt) + ' MT counted ' + (c.extra_ships + 1) + ' times</small>' : '') +
+                    c.records.map(function (r) {
+                        return '<div class="dup" data-dup="' + r.id + '"><span class="t"><b>' + esc(r.report_no || '#' + r.id) + ' · ' + esc(r.status) + '</b><small>' + esc([r.completed_on, r.type, r.surveyor].filter(Boolean).join(' · ')) + '</small>' +
+                            '<small>' + esc(r.recovery) + ' MT · ' + r.files + ' file' + (r.files === 1 ? '' : 's') + ' · ' + esc(r.source) + '</small></span>' +
+                            '<button type="button" class="link-btn" data-open="' + r.id + '">Open</button><button type="button" class="link-btn" style="color:#b91c1c" data-del="' + r.id + '" data-list="' + r.list + '">Delete</button></div>';
+                    }).join('') + '</section>';
+            }).join('') : '<div class="empty"><span class="ic green">' + icon('check') + '</span><b>No possible duplicates</b></div>';
+            stagger(list);
+        }
+        function load() { return api('duplicates').then(function (d) { clusters = d.clusters; draw(); }).catch(function () { list.innerHTML = '<div class="empty"><b>Not available</b></div>'; }); }
+        scr.querySelectorAll('[data-k]').forEach(function (c) { c.addEventListener('click', function () {
+            scr.querySelectorAll('[data-k]').forEach(function (x) { x.setAttribute('aria-pressed', x === c ? 'true' : 'false'); });
+            kind = c.getAttribute('data-k'); haptic(); draw();
+        }); });
+        list.addEventListener('click', function (e) {
+            var o = e.target.closest('[data-open]'), d = e.target.closest('[data-del]');
+            if (o) { go('vessel', { id: +o.getAttribute('data-open') }); return; }
+            if (!d) return;
+            if (d.dataset.sure !== '1') { d.dataset.sure = '1'; d.textContent = 'Tap to confirm'; haptic('HEAVY'); return; }
+            // Same delete as Admin Controls (ajax/admin_surveys.php, Admin only).
+            var fd = new FormData(); fd.append('type', d.getAttribute('data-list')); fd.append('action', 'delete'); fd.append('id', d.getAttribute('data-del'));
+            fetch('ajax/admin_surveys.php', { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF-Token': state.me.csrf } })
+                .then(function (r) { return r.json(); }).then(function (r) { if (!r.success) throw new Error(r.message); toast(r.message || 'Deleted', 'ok'); load(); })
+                .catch(function (x) { toast(x.message || 'Could not delete', 'bad'); });
+        });
+        pullToRefresh(scr, scr.querySelector('.scr-body'), load);
+        load();
+        return scr;
+    };
+
+    /* ---------------- Word templates + Photo Report template (manage_templates.php, Admin) ---------------- */
+    SCREENS.templates = function () {
+        var scr = el('<section class="scr" aria-label="Templates">' + barHeader('Manage templates', 'Word report templates') +
+            '<div class="scr-body"><div class="scr-pad"><div data-photo></div><div class="section-title">Word templates</div><div class="list">' + skeletons(3) + '</div></div></div>' +
+            '<button type="button" class="fab press" style="bottom:24px" data-add aria-label="Upload template">' + icon('upload') + '</button></section>');
+        var list = scr.querySelector('.list'), items = [];
+        function load() {
+            return api('templates').then(function (d) {
+                items = d.items;
+                scr.querySelector('[data-photo]').innerHTML = '<div class="section-title">Photo Report template</div><section class="fcard" data-rise><span class="ft doc">DOC</span><span class="t"><b>' +
+                    esc(d.photo ? d.photo.name : 'Not uploaded') + '</b><small>' + (d.photo ? 'Updated ' + esc(d.photo.when) : 'Used by the Photo Report Generator') + '</small></span>' +
+                    '<button type="button" class="link-btn" data-photo-up>' + (d.photo ? 'Replace' : 'Upload') + '</button>' + (d.photo ? '<button type="button" class="link-btn" style="color:#b91c1c" data-photo-del>Delete</button>' : '') + '</section>';
+                list.innerHTML = items.length ? items.map(function (t, i) {
+                    return '<button type="button" class="mrow press" data-rise data-t="' + i + '"><span class="ft doc" style="width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex:none">DOC</span>' +
+                        '<span class="t"><b>' + esc(t.name) + '</b><small>' + esc([t.type || 'Any survey type', t.when].filter(Boolean).join(' · ')) + '</small></span>' + icon('chev', 'chev') + '</button>';
+                }).join('') : '<div class="empty"><span class="ic blue">' + icon('file') + '</span><b>No Word templates yet</b></div>';
+                stagger(scr);
+            }).catch(function () { list.innerHTML = '<div class="empty"><b>Not available</b></div>'; });
+        }
+        function send(data, file, fileField) {
+            var fd = new FormData();
+            Object.keys(data).forEach(function (k) { fd.append(k, data[k]); });
+            if (file) fd.append(fileField, file);
+            toast('Saving…');
+            return postPage('manage_templates.php', fd).then(function (r) {
+                if (!r.ok) throw new Error(r.message || 'Could not save.');
+                closeSheet(true); toast(r.message || 'Saved', 'ok'); load();
+            }).catch(function (x) { toast(x.message, 'bad'); });
+        }
+        function filePick(accept, cb) {
+            var i = document.createElement('input'); i.type = 'file'; i.accept = accept;
+            i.onchange = function () { if (i.files[0]) cb(i.files[0]); };
+            i.click();
+        }
+        scr.querySelector('[data-add]').addEventListener('click', function () {
+            openSheet('<h2>Upload Word template</h2>' + fieldsHtml([{ name: 'template_name', label: 'Template name', required: true }, { name: 'survey_type', label: 'Survey type (optional)' }], {}) +
+                '<div class="pick" style="margin:6px 0 4px" data-pick="tpl"><input type="file" id="pk-tpl" accept=".docx" hidden><label class="pick-box press" for="pk-tpl"><span class="pick-ic">' + icon('upload') + '</span><span class="t"><b data-fn>Choose .docx file</b><small>Word template</small></span></label></div>' +
+                '<div class="sheet-actions"><button type="button" class="btn primary press" data-save>Upload</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
+            function (sh) {
+                var file = null;
+                sh.querySelector('#pk-tpl').onchange = function () { file = this.files[0]; sh.querySelector('[data-fn]').textContent = file ? file.name : 'Choose .docx file'; };
+                sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
+                sh.querySelector('[data-save]').onclick = function () {
+                    var d = collect(sh);
+                    if (!d.template_name) { toast('Please enter a template name.', 'bad'); return; }
+                    if (!file) { toast('Please choose a .docx file.', 'bad'); return; }
+                    send({ upload_template: '1', template_name: d.template_name, survey_type: d.survey_type || '' }, file, 'template_file');
+                };
+            });
+        });
+        list.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-t]');
+            if (!b) return;
+            var t = items[+b.getAttribute('data-t')];
+            openSheet('<h2>' + esc(t.name) + '</h2>' + fieldsHtml([{ name: 'new_template_name', label: 'Template name', required: true }, { name: 'new_survey_type', label: 'Survey type (optional)' }], { new_template_name: t.name, new_survey_type: t.type }) +
+                '<div class="sheet-actions"><button type="button" class="btn primary press" data-save>Save</button><button type="button" class="btn danger press" data-del>Delete</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
+            function (sh) {
+                sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
+                sh.querySelector('[data-save]').onclick = function () {
+                    var d = collect(sh);
+                    if (!d.new_template_name) { toast('Please enter a template name.', 'bad'); return; }
+                    send({ rename_template: '1', template_id: t.id, new_template_name: d.new_template_name, new_survey_type: d.new_survey_type || '' });
+                };
+                var del = sh.querySelector('[data-del]');
+                del.onclick = function () {
+                    if (del.dataset.sure !== '1') { del.dataset.sure = '1'; del.textContent = 'Tap again to delete'; haptic('HEAVY'); return; }
+                    send({ delete_template: '1', template_id: t.id });
+                };
+            });
+        });
+        scr.addEventListener('click', function (e) {
+            if (e.target.closest('[data-photo-up]')) filePick('.docx', function (f) { send({ upload_photo_report_template: '1' }, f, 'photo_template_file'); });
+            var pd = e.target.closest('[data-photo-del]');
+            if (pd) {
+                if (pd.dataset.sure !== '1') { pd.dataset.sure = '1'; pd.textContent = 'Tap to confirm'; haptic('HEAVY'); return; }
+                send({ delete_photo_report_template: '1' });
+            }
+        });
+        pullToRefresh(scr, scr.querySelector('.scr-body'), load);
+        load();
+        return scr;
     };
 
     /* ---------------- global taps ---------------- */

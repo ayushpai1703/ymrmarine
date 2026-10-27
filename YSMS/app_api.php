@@ -20,6 +20,8 @@
  *   GET app_api.php?a=assign_form[&edit_id=<id>]   choices for Assign Vessel / Request Survey (assign_vessel.php)
  *   GET app_api.php?a=admin_modules                 Admin Controls modules (config/admin_modules.php) for this role
  *   GET app_api.php?a=surveyor&id=<id>              Admin: a surveyor's details for the edit form (add_surveyor.php)
+ *   GET app_api.php?a=templates                     Admin: Word templates + Photo Report template (manage_templates.php)
+ *   GET app_api.php?a=duplicates                    Admin: possible duplicate vessels (possible_duplicates.php)
  */
 require_once 'config/config.php';
 require_once 'includes/notifications.php';
@@ -515,6 +517,43 @@ if ($a === 'surveyor') {
         'phone' => (string)($u['phone'] ?? ''), 'email' => (string)($u['email'] ?? ''), 'status' => (string)($u['status'] ?? 'Active'),
         'avatar' => appAvatar($db, (int)$u['id']),
     ]);
+}
+
+if ($a === 'templates') {
+    if ($role !== 'Admin') appOut(['error' => 'not_allowed'], 403);
+    $rows = [];
+    try {
+        foreach ($db->query('SELECT id, template_name, survey_type, file_name, created_at FROM word_templates ORDER BY template_name ASC')->fetchAll(PDO::FETCH_ASSOC) as $t) {
+            $rows[] = ['id' => (int)$t['id'], 'name' => (string)$t['template_name'], 'type' => (string)($t['survey_type'] ?? ''),
+                'file' => (string)$t['file_name'], 'when' => appDate($t['created_at'] ?? '')];
+        }
+    } catch (Throwable $e) { $rows = []; }
+    $photo = null;
+    $pf = __DIR__ . '/uploads/photo_report_templates/YMR_Photo_Report_Template.docx';
+    if (is_file($pf)) {
+        $meta = json_decode((string)@file_get_contents(dirname($pf) . '/meta.json'), true);
+        $photo = ['name' => is_array($meta) && !empty($meta['name']) ? $meta['name'] : basename($pf),
+            'when' => appDate(is_array($meta) && !empty($meta['updated_at']) ? $meta['updated_at'] : date('Y-m-d H:i:s', filemtime($pf)), 'd M Y, h:i A')];
+    }
+    appOut(['items' => $rows, 'photo' => $photo]);
+}
+
+if ($a === 'duplicates') {
+    if ($role !== 'Admin') appOut(['error' => 'not_allowed'], 403);
+    require_once 'includes/duplicate_finder.php';
+    $out = [];
+    foreach (findPossibleDuplicates($db) as $c) {
+        $out[] = ['kind' => $c['kind'], 'month' => $c['month'], 'extra_mt' => $c['extra_mt'], 'extra_ships' => $c['extra_ships'],
+            'records' => array_map(function ($r) use ($db) {
+                return ['id' => (int)$r['id'], 'vessel' => (string)$r['vessel_name'], 'report_no' => (string)($r['report_number'] ?? ''),
+                    'status' => (string)$r['status'], 'type' => getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', (string)($r['type_name'] ?? '')),
+                    'surveyor' => (string)($r['surveyor_name'] ?? ''), 'completed_on' => appDate($r['survey_completed_date'] ?? ''),
+                    'recovery' => $r['recovery_amount'] !== null ? number_format(abs((float)$r['recovery_amount']), 3) : '—',
+                    'files' => (int)($r['files'] ?? 0), 'source' => duplicateRecordSource($r),
+                    'list' => $r['status'] === 'Completed' ? 'completed_surveys' : 'pending_reports'];
+            }, $c['records'])];
+    }
+    appOut(['clusters' => $out]);
 }
 
 appOut(['error' => 'unknown'], 400);

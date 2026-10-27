@@ -517,3 +517,8 @@ svg.i { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none;
 .inp select { border: 0; outline: 0; flex: 1; min-width: 0; font-size: 16px; color: var(--text); background: transparent; height: 100%; }
 .inp.ro { background: #f8fafc; }
 .bsheet .field { margin-bottom: 12px; }
+.dup { display: flex; align-items: center; gap: 6px; border-top: 1px solid #f1f5f9; padding: 8px 0; }
+.dup .t { flex: 1; min-width: 0; }
+.dup .t b { display: block; font-size: 13.5px; }
+.dup .t small { display: block; font-size: 12px; color: var(--muted); }
+.fcard .dl { text-decoration: none; }
