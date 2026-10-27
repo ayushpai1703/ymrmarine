@@ -46,6 +46,8 @@
         x: '<path d="M18 6 6 18M6 6l12 12"/>',
         eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
         eyeOff: '<path d="m3 3 18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6C3.9 8.3 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+        'wifi-off': '<path d="M2 8.8a15 15 0 0 1 4.2-2.6M10.7 5.1A15 15 0 0 1 22 8.8M5 12.6a10 10 0 0 1 5.2-2.6M16.8 10.8A10 10 0 0 1 19 12.6M8.5 16.4a5 5 0 0 1 7 0M12 20h.01M2 2l20 20"/>',
+        moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
         lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
         refresh: '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
         sparkle: '<path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2z"/>',
@@ -76,6 +78,8 @@
     function haptic(style) { try { if (NATIVE && P.Haptics) P.Haptics.impact({ style: style || 'LIGHT' }); } catch (e) { /* none */ } }
     function fmtMt(v) { return Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
     function toast(msg, kind) {
+        // Any failure while there is no connection: say so, rather than a generic error.
+        if (kind === 'bad' && navigator.onLine === false) msg = 'You are offline. Connect to the internet and try again.';
         var t = el('<div class="toast ' + (kind || '') + '" role="status">' + esc(msg) + '</div>');
         document.body.appendChild(t);
         setTimeout(function () { t.classList.add('out'); setTimeout(function () { t.remove(); }, 320); }, 2600);
@@ -83,12 +87,56 @@
 
     var state = { me: null };
 
+    // Offline: every screen's data is kept on the phone (per user) when it loads; without a
+    // connection the screens show that saved copy under an "Offline" banner. Changes need a connection.
+    var CACHE_KEY = 'ysmsC:';
+    function cacheKey(q) { return CACHE_KEY + ((state.me && state.me.id) || window.YSMS_APP.uid || 0) + ':' + q; }
+    function cachePut(q, d) {
+        var v = JSON.stringify({ t: Date.now(), d: d });
+        try { localStorage.setItem(cacheKey(q), v); } catch (e) {
+            clearCache(); try { localStorage.setItem(cacheKey(q), v); } catch (x) {}
+        }
+    }
+    function cacheGet(q) { try { return JSON.parse(localStorage.getItem(cacheKey(q)) || 'null'); } catch (e) { return null; } }
+    function clearCache() {
+        try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf(CACHE_KEY) === 0) localStorage.removeItem(k); }); } catch (e) {}
+    }
+    var offlineBar = null;
+    function setOffline(on, savedAt) {
+        if (on && !offlineBar) {
+            offlineBar = el('<div class="offline-bar" role="status">' + icon('wifi-off') + '<span></span></div>');
+            document.body.appendChild(offlineBar);
+        }
+        if (offlineBar) {
+            offlineBar.hidden = !on;
+            if (on) offlineBar.querySelector('span').textContent = 'Offline' + (savedAt ? ' · saved ' + timeAgo(savedAt) : ' · no saved copy yet');
+        }
+        document.documentElement.classList.toggle('is-offline', !!on);
+    }
+    function timeAgo(t) {
+        var m = Math.round((Date.now() - t) / 60000);
+        return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : new Date(t).toLocaleDateString();
+    }
+    window.addEventListener('online', function () {
+        setOffline(false);
+        if (current && state.me) { toast('Back online', 'ok'); show(current.route, 'fade', current.depth); }
+    });
+    window.addEventListener('offline', function () { setOffline(true, null); });
     function api(action, params) {
-        var q = new URLSearchParams(Object.assign({ a: action }, params || {}));
-        return fetch('app_api.php?' + q.toString(), { credentials: 'same-origin', headers: { Accept: 'application/json' }, cache: 'no-store' })
+        var q = new URLSearchParams(Object.assign({ a: action }, params || {})).toString();
+        return fetch('app_api.php?' + q, { credentials: 'same-origin', headers: { Accept: 'application/json' }, cache: 'no-store' })
             .then(function (r) {
-                if (r.status === 401) { state.me = null; go('login', { replace: true, anim: 'fade' }); throw new Error('login'); }
-                return r.json().then(function (d) { if (!r.ok) { var e = new Error(d.error || 'error'); e.status = r.status; throw e; } return d; });
+                if (r.status === 401) { state.me = null; clearCache(); go('login', { replace: true, anim: 'fade' }); throw new Error('login'); }
+                return r.json().then(function (d) {
+                    if (!r.ok) { var e = new Error(d.error || 'error'); e.status = r.status; throw e; }
+                    cachePut(q, d); setOffline(false);
+                    return d;
+                });
+            }, function () {
+                var c = cacheGet(q);
+                setOffline(true, c && c.t);
+                if (c) return c.d;
+                var e = new Error('offline'); e.offline = true; throw e;
             });
     }
     function loadMe() { return api('me').then(function (m) { state.me = m; return m; }); }
@@ -260,6 +308,24 @@
         go(b.getAttribute('data-tab'));
     });
 
+    /* ---------------- Appearance: system / light / dark (applied first in app.php) ---------------- */
+    var THEMES = { system: 'System default', light: 'Light', dark: 'Dark' };
+    function themePref() { try { return localStorage.getItem('ysmsTheme') || 'system'; } catch (e) { return 'system'; } }
+    var darkMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+    function applyTheme() {
+        var p = themePref(), dark = p === 'dark' || (p === 'system' && !!darkMq && darkMq.matches);
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    }
+    if (darkMq && darkMq.addEventListener) darkMq.addEventListener('change', applyTheme);
+    function pickTheme(after) {
+        pickSheet('Appearance', Object.keys(THEMES).map(function (k) { return { value: k, label: THEMES[k], sub: k === 'system' ? 'Follows the phone setting' : '' }; }), { selected: [themePref()] })
+            .then(function (v) {
+                if (v === null) return;
+                try { localStorage.setItem('ysmsTheme', v); } catch (e) {}
+                applyTheme(); haptic(); if (after) after(v);
+            });
+    }
+
     /* ---------------- bottom sheet ---------------- */
     var sheetOpen = null;
     function openSheet(html, onReady) {
@@ -362,7 +428,9 @@
             '<button type="button" class="stat press" data-rise' + (me.can.recovery ? ' data-go="recovery"' : '') + '><span class="ic sky">' + icon('chart') + '</span><span class="n" data-n="rec">–</span><span class="l">Recovery this month (MT)</span></button>' +
             '</div><div data-attention></div>' +
             '<div class="section-title qa-head" data-rise>Quick actions<button type="button" class="link-btn press" data-qa-edit>' + icon('edit') + 'Edit</button></div><div class="quick" data-rise data-quick>' + quickActions(me) + '</div>' +
-            '<div data-month></div><div data-insights></div>' +
+            '<div data-month><div class="skel-card" style="height:150px"><div class="skel" style="height:16px;width:40%"></div><div class="skel" style="height:28px;width:55%"></div><div class="skel" style="height:12px;width:35%"></div></div></div>' +
+            '<div data-insights><div class="skel" style="height:18px;width:45%;margin:6px 2px"></div><div class="skel-card" style="height:120px"><div class="skel" style="height:16px;width:50%"></div><div class="skel" style="height:44px"></div></div>' +
+            '<div class="stats" style="margin-top:12px"><div class="skel-card" style="height:120px"></div><div class="skel-card" style="height:120px"></div></div></div>' +
             '</div></div></section>');
         var body = scr.querySelector('.scr-body');
         scr.querySelector('[data-qa-edit]').addEventListener('click', function () { editQuickActions(me, scr.querySelector('[data-quick]')); });
@@ -682,21 +750,21 @@
                     over.days + ' days since the ' + (over.kind === 'survey' ? 'appointment date' : 'survey was completed') + '.</div></div>' : '') +
                 '<section class="card rows" data-rise><div class="rows-h"><b>Details</b>' +
                 (state.me.role === 'Admin' ? '<button type="button" class="link-btn press" data-inline-edit>' + icon('edit') + 'Edit</button>' : '') + '</div>' + rows.map(function (r) { return '<div class="kv"><span>' + r[0] + '</span><b>' + esc(r[1]) + '</b></div>'; }).join('') +
-                (v.remarks ? '<div class="kv"><span style="color:#c2410c">Admin remarks</span><b>' + esc(v.remarks) + '</b></div>' : '') +
+                (v.remarks ? '<div class="kv"><span style="color:var(--orange-text)">Admin remarks</span><b>' + esc(v.remarks) + '</b></div>' : '') +
                 (v.agent_email ? '<div class="kv"><span>Agent update</span><b><button type="button" class="link-btn" style="min-height:32px;padding:0" data-agent-mail>' + (v.agent_email.sent ? 'Send again' : 'Send email to agent') + '</button>' +
-                    (v.agent_email.sent ? '<small style="display:block;font-weight:500;color:#64748b">Sent ' + esc(v.agent_email.sent) + '</small>' : '') + '</b></div>' : '') + '</section>' +
+                    (v.agent_email.sent ? '<small style="display:block;font-weight:500;color:var(--muted)">Sent ' + esc(v.agent_email.sent) + '</small>' : '') + '</b></div>' : '') + '</section>' +
                 (v.recovery ? '<section class="card card-pad" data-rise><div class="card-h">Recovery (MT)' + (v.recovery.can_edit ? '<button type="button" class="link-btn" data-rec-edit>Edit</button>' : '') + '</div>' +
-                    (v.recovery.na ? '<div style="font-size:13px;color:#64748b">Not applicable for this survey type.</div>'
+                    (v.recovery.na ? '<div style="font-size:13px;color:var(--muted)">Not applicable for this survey type.</div>'
                         : '<div class="hist-rec"><div><small>Total</small><b>' + esc(v.recovery.total || '—') + '</b></div><div><small>VLSFO</small><b>' + esc(v.recovery.vlsfo || '—') + '</b></div><div><small>LSMGO</small><b>' + esc(v.recovery.lsmgo || '—') + '</b></div><div><small>HSFO</small><b>' + esc(v.recovery.hsfo || '—') + '</b></div></div>') + '</section>' : '') +
                 '<section class="card card-pad" data-rise><div class="card-h">Latest update' + (v.can_update ? '<button type="button" class="link-btn" data-update>' + (v.update ? 'Edit' : 'Add') + '</button>' : '') + '</div>' +
-                (v.update ? '<div style="font-size:14px">' + esc(v.update) + '</div><div style="font-size:12px;color:#64748b">' + esc(v.update_when) + (v.update_by ? ' · by ' + esc(v.update_by) : '') + '</div>'
-                    : '<div style="font-size:13px;color:#64748b">No updates recorded yet.</div>') + '</section>' +
-                '<section class="card card-pad" data-rise><div class="card-h">Documents<span style="font-size:12px;color:#64748b;font-weight:500">' + v.docs.length + '</span></div>' +
+                (v.update ? '<div style="font-size:14px">' + esc(v.update) + '</div><div style="font-size:12px;color:var(--muted)">' + esc(v.update_when) + (v.update_by ? ' · by ' + esc(v.update_by) : '') + '</div>'
+                    : '<div style="font-size:13px;color:var(--muted)">No updates recorded yet.</div>') + '</section>' +
+                '<section class="card card-pad" data-rise><div class="card-h">Documents<span style="font-size:12px;color:var(--muted);font-weight:500">' + v.docs.length + '</span></div>' +
                 (v.docs.length ? v.docs.map(function (d) {
                     var t = docType(d);
                     return '<div class="doc-row"><a class="doc press" href="download.php?upload_id=' + d.id + '"><span class="ft ' + t[0] + '">' + t[1] + '</span><span class="t"><b>' + esc(d.name) + '</b><small>' + esc(d.type) + (d.when ? ' · ' + esc(d.when) : '') + '</small></span>' + icon('download', 'chev') + '</a>' +
                         (v.can_replace ? '<button type="button" class="icon-btn plain press" data-replace="' + d.id + '" aria-label="Replace ' + esc(d.name) + '">' + icon('refresh') + '</button>' : '') + '</div>';
-                }).join('') : '<div style="font-size:13px;color:#64748b">No documents uploaded yet.</div>') + '</section>' +
+                }).join('') : '<div style="font-size:13px;color:var(--muted)">No documents uploaded yet.</div>') + '</section>' +
                 (v.remarks_list ? remarksHtml(v) : '') +
                 (v.can_history ? '<button type="button" class="row-link press" data-rise data-history="' + v.id + '"><span class="ic purple" style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center">' + icon('history') + '</span><span class="t"><b>Previous surveys of this vessel</b><small>Documents and recovery</small></span>' + icon('chev', 'chev') + '</button>' : '') +
                 '';
@@ -727,15 +795,15 @@
         }
         function remarksHtml(v) {
             var r = v.remarks_list;
-            return '<section class="card card-pad" data-rise><div class="card-h">Remarks<span style="font-size:12px;color:#64748b;font-weight:500">' + r.items.length + '</span></div>' +
+            return '<section class="card card-pad" data-rise><div class="card-h">Remarks<span style="font-size:12px;color:var(--muted);font-weight:500">' + r.items.length + '</span></div>' +
                 (r.can_add ? '<div class="rm-add"><textarea class="ta" rows="2" placeholder="Add a remark" data-rm-text></textarea>' +
                     '<div class="rm-bar"><label class="link-btn press" for="rm-files">' + icon('plus') + '<span data-rm-count>Attach files</span></label><input type="file" id="rm-files" multiple hidden>' +
                     '<button type="button" class="btn primary press" style="height:40px" data-rm-save>Save remark</button></div></div>' : '') +
                 (r.items.length ? r.items.map(function (m) {
-                    return '<div class="rm"><div class="rm-h"><b>' + esc(m.by) + '</b><small>' + esc(m.when) + '</small>' + (r.can_delete ? '<button type="button" class="link-btn" style="color:#b91c1c;min-height:32px" data-rm-del="' + m.id + '">Delete</button>' : '') + '</div>' +
+                    return '<div class="rm"><div class="rm-h"><b>' + esc(m.by) + '</b><small>' + esc(m.when) + '</small>' + (r.can_delete ? '<button type="button" class="link-btn" style="color:var(--red-text);min-height:32px" data-rm-del="' + m.id + '">Delete</button>' : '') + '</div>' +
                         (m.text ? '<div class="rm-t">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '') +
                         m.files.map(function (f) { return '<a class="att-file" href="download.php?remark_attachment_id=' + f.id + '"><span class="ft other">FILE</span><span class="t"><b>' + esc(f.name) + '</b></span>' + icon('download') + '</a>'; }).join('') + '</div>';
-                }).join('') : '<div style="font-size:13px;color:#64748b">No remarks yet.</div>') + '</section>';
+                }).join('') : '<div style="font-size:13px;color:var(--muted)">No remarks yet.</div>') + '</section>';
         }
         // Edit the details card in place (Admin). Saves through assign_vessel.php's edit, like the
         // Assign vessel form; vessel name, client and port are sent unchanged (⋮ > Edit vessel has them).
@@ -759,7 +827,7 @@
                         pickRow('types', 'Survey type', d.types) + pickRow('surveyors', 'Surveyor', d.surveyors) +
                         '<div class="kv ed"><span>Agent</span><input type="text" data-ie="agent" autocapitalize="characters" value="' + esc(f.agent != null ? f.agent : e.agent) + '"></div>' +
                         lock('Report no.', v.report_no) + lock('Assigned on', v.assigned_on) + lock('Survey completed', v.completed_on) + lock('Report completed', v.report_on) +
-                        '<div class="kv ed col"><span style="color:#c2410c">Admin remarks</span><textarea class="ta" rows="2" data-ie="remarks" placeholder="Any specific instructions or notes">' + esc(f.remarks != null ? f.remarks : e.remarks) + '</textarea></div>' +
+                        '<div class="kv ed col"><span style="color:var(--orange-text)">Admin remarks</span><textarea class="ta" rows="2" data-ie="remarks" placeholder="Any specific instructions or notes">' + esc(f.remarks != null ? f.remarks : e.remarks) + '</textarea></div>' +
                         '<div class="err" hidden role="alert">' + icon('alert') + '<span></span></div>';
                 }
                 function keep() { ['date', 'agent', 'remarks'].forEach(function (k) { var i = card.querySelector('[data-ie=' + k + ']'); if (i) f[k] = i.value; }); }
@@ -949,15 +1017,22 @@
             '<div class="scr-pad">' +
             '<div class="section-title" data-rise>Work</div><div class="menu-card" data-rise>' + work + '</div>' +
             (admin ? '<div class="section-title" data-rise>' + (me.role === 'Client' ? 'Client' : 'Admin') + '</div><div class="menu-card" data-rise>' + admin + '</div>' : '') +
-            '<div class="section-title" data-rise>Account</div><div class="menu-card" data-rise>' + item('My profile', 'user', 'blue', '#me') + item('Support', 'chat', 'green', 'coming_soon.php?feature=Support') +
-            '<button type="button" class="menu-item press" data-logout style="color:#b91c1c"><span class="ic red">' + icon('logout') + '</span><span class="grow">Log out</span></button></div>' +
+            '<div class="section-title" data-rise>Account</div><div class="menu-card" data-rise>' + item('My profile', 'user', 'blue', '#me') +
+            '<button type="button" class="menu-item press" data-theme-pick><span class="ic purple">' + icon('moon') + '</span><span class="grow">Appearance</span><span class="count soft" data-theme-now>' + THEMES[themePref()] + '</span>' + icon('chev', 'chev') + '</button>' +
+            item('Support', 'chat', 'green', 'coming_soon.php?feature=Support') +
+            '<button type="button" class="menu-item press" data-logout style="color:var(--red-text)"><span class="ic red">' + icon('logout') + '</span><span class="grow">Log out</span></button></div>' +
             '</div></div></section>');
+        scr.querySelector('[data-theme-pick]').addEventListener('click', function () {
+            pickTheme(function (v) { scr.querySelector('[data-theme-now]').textContent = THEMES[v]; });
+        });
         scr.querySelector('[data-logout]').addEventListener('click', function () {
-            openSheet('<h2>Log out?</h2><p style="margin:0 0 6px;color:#64748b">You will need your username and password to sign in again.</p>' +
+            openSheet('<h2>Log out?</h2><p style="margin:0 0 6px;color:var(--muted)">You will need your username and password to sign in again.</p>' +
                 '<div class="sheet-actions"><button type="button" class="btn danger press" data-yes>Log out</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
             function (sh) {
                 sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
                 sh.querySelector('[data-yes]').onclick = function () {
+                    clearCache();
+                    if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('clear');
                     fetch('logout.php', { credentials: 'same-origin', redirect: 'manual' }).catch(function () {}).then(function () {
                         closeSheet(true); state.me = null; go('login', { anim: 'fade' });
                     });
@@ -976,7 +1051,9 @@
     function postPage(url, data) {
         var body = data instanceof FormData ? data : new URLSearchParams(data);
         if (body.set) body.set('csrf_token', state.me.csrf);
-        return fetch(url, { method: 'POST', credentials: 'same-origin', body: body }).then(function (r) {
+        return fetch(url, { method: 'POST', credentials: 'same-origin', body: body }).catch(function () {
+            throw new Error('You are offline. Connect to the internet and try again.');
+        }).then(function (r) {
             if (r.status === 403) throw new Error('Your session expired. Please sign in again.');
             return r.text();
         }).then(function (html) {
@@ -1574,7 +1651,8 @@
     SCREENS.room = function (route) {
         var gid = route.id;
         var scr = el('<section class="scr room" aria-label="Chat">' + barHeader('Chat', '', '<button type="button" class="icon-btn plain press" data-members aria-label="Members">' + icon('users') + '</button>') +
-            '<div class="scr-body msgs" aria-live="polite"><div class="older" hidden><button type="button" class="link-btn" data-older>Load earlier messages</button></div><div class="thread"></div></div>' +
+            '<div class="scr-body msgs" aria-live="polite"><div class="older" hidden><button type="button" class="link-btn" data-older>Load earlier messages</button></div><div class="thread"><div class="msg-skel">' +
+            [62, 40, 70, 48, 55].map(function (w, i) { return '<div class="skel" style="height:' + (i % 2 ? 38 : 52) + 'px;width:' + w + '%;border-radius:16px;' + (i % 2 ? 'margin-left:auto' : '') + '"></div>'; }).join('') + '</div></div></div>' +
             '<form class="composer" hidden><input type="file" id="tc-file" hidden>' +
             '<label class="icon-btn plain press" for="tc-file" aria-label="Attach a file">' + icon('plus') + '</label>' +
             '<div class="att-chip" hidden></div>' +
@@ -1610,6 +1688,7 @@
         }
         function render(msgs, where) {
             var html = '', day = where === 'top' ? '' : lastDay;
+            var sk = thread.querySelector('.msg-skel'); if (sk) sk.remove();
             msgs.forEach(function (m) {
                 var dl = dayLabel(m.ts);
                 if (dl !== day) { html += '<div class="day"><span>' + dl + '</span></div>'; day = dl; }
@@ -1636,6 +1715,7 @@
             gid = d.group.id;
             scr.querySelector('.hdr-bar .t').innerHTML = '<b>' + esc(d.group.name) + '</b><small>' + d.members.length + ' members</small>';
             if (!me.is_member) {
+                thread.innerHTML = '';
                 var nm = scr.querySelector('.not-member');
                 nm.hidden = false;
                 nm.innerHTML = '<div class="empty"><span class="ic purple">' + icon('users') + '</span><b>You are not a member of this group.</b>' + (me.can_manage ? '<span>Add yourself from Members to read and write here.</span>' : '') + '</div>';
@@ -1733,7 +1813,7 @@
                 var manage = me && me.can_manage;
                 openSheet('<h2>Members</h2><div class="pick-list">' + r[0].members.map(function (m) {
                     return '<div class="pick-row"><span class="gav sm">' + esc(initials(m.name)) + '</span><span class="t"><b>' + esc(m.name) + '</b><small>' + esc(m.role) + '</small></span>' +
-                        (manage ? '<button type="button" class="link-btn" style="color:#b91c1c" data-rm-member="' + m.user_id + '">Remove</button>' : '') + '</div>';
+                        (manage ? '<button type="button" class="link-btn" style="color:var(--red-text)" data-rm-member="' + m.user_id + '">Remove</button>' : '') + '</div>';
                 }).join('') + '</div>' +
                     (manage && r[1].candidates.length ? '<div class="field-h">Add people</div><div class="pick-list">' + r[1].candidates.map(function (c) {
                         return '<div class="pick-row"><span class="gav sm">' + esc(initials(c.name)) + '</span><span class="t"><b>' + esc(c.name) + '</b><small>' + esc(c.role) + '</small></span><button type="button" class="link-btn" data-add-member="' + c.user_id + '">Add</button></div>';
@@ -1921,7 +2001,7 @@
                     if (!r.exists) { go2(); return; }
                     var x = r.entry;
                     openSheet('<h2>Already in Pending Vessels</h2><p class="sheet-p">A vessel named <b>' + esc(x.vessel_name) + '</b> is already pending:</p>' +
-                        '<div class="card rows" style="box-shadow:none;background:#f8fafc"><div class="kv"><span>Report no.</span><b>' + esc(x.report_number) + '</b></div><div class="kv"><span>Client</span><b>' + esc(x.client_name) + '</b></div><div class="kv"><span>Port</span><b>' + esc(x.port_name) + '</b></div><div class="kv"><span>Assigned</span><b>' + esc(x.assign_date) + '</b></div></div>' +
+                        '<div class="card rows" style="box-shadow:none;background:var(--soft)"><div class="kv"><span>Report no.</span><b>' + esc(x.report_number) + '</b></div><div class="kv"><span>Client</span><b>' + esc(x.client_name) + '</b></div><div class="kv"><span>Port</span><b>' + esc(x.port_name) + '</b></div><div class="kv"><span>Assigned</span><b>' + esc(x.assign_date) + '</b></div></div>' +
                         '<div class="sheet-actions"><button type="button" class="btn primary press" data-yes>Yes, add it anyway</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
                     function (sh) { sh.querySelector('[data-no]').onclick = function () { closeSheet(); }; sh.querySelector('[data-yes]').onclick = function () { closeSheet(true); go2(); }; });
                 }).catch(go2);
@@ -2321,11 +2401,11 @@
             var shown = clusters.filter(function (c) { return !kind || c.kind === kind; });
             list.innerHTML = shown.length ? shown.map(function (c) {
                 return '<section class="card card-pad" data-rise><div class="title-row"><b class="hn">' + esc(c.records[0].vessel) + '</b><span class="tag ' + (c.kind === 'duplicate' ? 'red' : 'orange') + '">' + (c.kind === 'duplicate' ? 'Duplicate' : 'Check') + '</span></div>' +
-                    (c.extra_mt ? '<small class="hint" style="color:#b91c1c">' + fmtMt(c.extra_mt) + ' MT counted ' + (c.extra_ships + 1) + ' times</small>' : '') +
+                    (c.extra_mt ? '<small class="hint" style="color:var(--red-text)">' + fmtMt(c.extra_mt) + ' MT counted ' + (c.extra_ships + 1) + ' times</small>' : '') +
                     c.records.map(function (r) {
                         return '<div class="dup" data-dup="' + r.id + '"><span class="t"><b>' + esc(r.report_no || '#' + r.id) + ' · ' + esc(r.status) + '</b><small>' + esc([r.completed_on, r.type, r.surveyor].filter(Boolean).join(' · ')) + '</small>' +
                             '<small>' + esc(r.recovery) + ' MT · ' + r.files + ' file' + (r.files === 1 ? '' : 's') + ' · ' + esc(r.source) + '</small></span>' +
-                            '<button type="button" class="link-btn" data-open="' + r.id + '">Open</button><button type="button" class="link-btn" style="color:#b91c1c" data-del="' + r.id + '" data-list="' + r.list + '">Delete</button></div>';
+                            '<button type="button" class="link-btn" data-open="' + r.id + '">Open</button><button type="button" class="link-btn" style="color:var(--red-text)" data-del="' + r.id + '" data-list="' + r.list + '">Delete</button></div>';
                     }).join('') + '</section>';
             }).join('') : '<div class="empty"><span class="ic green">' + icon('check') + '</span><b>No possible duplicates</b></div>';
             stagger(list);
@@ -2381,7 +2461,7 @@
                         }).join('') +
                         '<button type="button" class="btn primary press" style="margin-top:10px" data-merge="' + gi + '">' + icon('users') + 'Merge selected</button></section>';
                 }).join('') : '<section class="card card-pad" data-rise><div class="card-h">Duplicate client companies</div><small class="hint">No duplicate client companies found.</small></section>';
-            var danger = '<div class="section-title" data-rise style="color:#b91c1c">Danger zone</div>' + Object.keys(LABEL).map(function (k) {
+            var danger = '<div class="section-title" data-rise style="color:var(--red-text)">Danger zone</div>' + Object.keys(LABEL).map(function (k) {
                 return '<section class="card card-pad danger-card" data-rise><div class="title-row"><span class="t"><b>Delete all ' + LABEL[k] + '</b><small>' + d.counts[k] + ' record(s) now · with their uploaded files. Cannot be undone.</small></span>' +
                     '<button type="button" class="btn danger press" style="height:40px;flex:0 0 auto" data-wipe="' + k + '"' + (d.counts[k] ? '' : ' disabled') + '>' + icon('trash') + 'Delete all</button></div></section>';
             }).join('');
@@ -2453,7 +2533,7 @@
                 items = d.items;
                 scr.querySelector('[data-photo]').innerHTML = '<div class="section-title">Photo Report template</div><section class="fcard" data-rise><span class="ft doc">DOC</span><span class="t"><b>' +
                     esc(d.photo ? d.photo.name : 'Not uploaded') + '</b><small>' + (d.photo ? 'Updated ' + esc(d.photo.when) : 'Used by the Photo Report Generator') + '</small></span>' +
-                    '<button type="button" class="link-btn" data-photo-up>' + (d.photo ? 'Replace' : 'Upload') + '</button>' + (d.photo ? '<button type="button" class="link-btn" style="color:#b91c1c" data-photo-del>Delete</button>' : '') + '</section>';
+                    '<button type="button" class="link-btn" data-photo-up>' + (d.photo ? 'Replace' : 'Upload') + '</button>' + (d.photo ? '<button type="button" class="link-btn" style="color:var(--red-text)" data-photo-del>Delete</button>' : '') + '</section>';
                 list.innerHTML = items.length ? items.map(function (t, i) {
                     return '<button type="button" class="mrow press" data-rise data-t="' + i + '"><span class="ft doc" style="width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex:none">DOC</span>' +
                         '<span class="t"><b>' + esc(t.name) + '</b><small>' + esc([t.type || 'Any survey type', t.when].filter(Boolean).join(' · ')) + '</small></span>' + icon('chev', 'chev') + '</button>';
@@ -2604,6 +2684,10 @@
         });
         setTimeout(function () { if (s.isConnected) s.remove(); }, 7000);
     }
+
+    // Offline start: keeps the app's page and files (app-sw.js, which leaves the website's pages alone).
+    if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('app-sw.js').catch(function () {});
+    if (navigator.onLine === false) setOffline(true, null);
 
     var route = parse(location.hash);
     var ready;
