@@ -174,14 +174,18 @@
     var current = null; // { route, depth, node }
     function parse(hash) {
         var h = (hash || location.hash || '').replace(/^#\/?/, '');
-        var m = h.match(/^(v|up)\/(\d+)$/);
-        if (m) return { name: m[1] === 'v' ? 'vessel' : 'upload', id: +m[2] };
+        var m = h.match(/^(v|up|h|c)\/(\d+)$/);
+        if (m) return { name: ROUTE_IDS[m[1]], id: +m[2] };
         if (PUSHED.indexOf(h) !== -1 || h === 'login') return { name: h };
         if (TABS.indexOf(h) !== -1) return { name: h };
         return { name: 'home' };
     }
-    var PUSHED = ['search', 'inbox', 'recovery', 'cancelled', 'formats', 'me'];
-    function hashFor(name, id) { return '#/' + (name === 'vessel' ? 'v/' + id : name === 'upload' ? 'up/' + id : name); }
+    var PUSHED = ['search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat'];
+    var ROUTE_IDS = { v: 'vessel', up: 'upload', h: 'history', c: 'room' };
+    function hashFor(name, id) {
+        for (var k in ROUTE_IDS) if (ROUTE_IDS[k] === name) return '#/' + k + '/' + id;
+        return '#/' + name;
+    }
 
     // go('vessel', {id}) pushes a screen; tabs replace; login/home after sign-in replace.
     function go(name, opt) {
@@ -382,7 +386,7 @@
             me.can.assign && [me.role === 'Client' ? 'Request survey' : 'Assign vessel', 'plus', 'assign_vessel.php', true],
             me.can.report_generator && ['Word report', 'file', 'report_generator.php'],
             me.can.recovery && ['Recovery', 'fuel', '#recovery'],
-            me.can.chat && ['Team chat', 'chat', 'team_chat.php'],
+            me.can.chat && ['Team chat', 'chat', '#chat'],
             me.role !== 'Client' && ['Formats', 'folder', '#formats'],
             ['Cancelled', 'ban', '#cancelled']
         ].filter(Boolean).slice(0, 4);
@@ -551,7 +555,7 @@
                     var t = docType(d);
                     return '<a class="doc press" href="download.php?upload_id=' + d.id + '"><span class="ft ' + t[0] + '">' + t[1] + '</span><span class="t"><b>' + esc(d.name) + '</b><small>' + esc(d.type) + (d.when ? ' · ' + esc(d.when) : '') + '</small></span>' + icon('download', 'chev') + '</a>';
                 }).join('') : '<div style="font-size:13px;color:#64748b">No documents uploaded yet.</div>') + '</section>' +
-                (v.can_history ? '<button type="button" class="row-link press" data-rise data-web="' + esc(v.web) + '#vessel-history"><span class="ic purple" style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center">' + icon('history') + '</span><span class="t"><b>Previous surveys of this vessel</b><small>Documents and recovery</small></span>' + icon('chev', 'chev') + '</button>' : '') +
+                (v.can_history ? '<button type="button" class="row-link press" data-rise data-history="' + v.id + '"><span class="ic purple" style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center">' + icon('history') + '</span><span class="t"><b>Previous surveys of this vessel</b><small>Documents and recovery</small></span>' + icon('chev', 'chev') + '</button>' : '') +
                 '<button type="button" class="row-link press" data-rise data-web="' + esc(v.web) + '"><span class="ic blue" style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center">' + icon('globe') + '</span><span class="t"><b>Open full page</b><small>Every detail and option of this vessel</small></span>' + icon('chev', 'chev') + '</button>';
             var sheet = scr.querySelector('.sheet');
             sheet.innerHTML = html;
@@ -616,7 +620,7 @@
         }
         var work = [
             me.can.inbox && item('Inbox', 'inbox', 'blue', '#inbox', me.unread ? '<span class="count">' + (me.unread > 99 ? '99+' : me.unread) + '</span>' : ''),
-            me.can.chat && item('Team chat', 'chat', 'purple', 'team_chat.php'),
+            me.can.chat && item('Team chat', 'chat', 'purple', '#chat'),
             me.can.recovery && item('Recovery', 'fuel', 'sky', '#recovery'),
             me.can.report_generator && item('Word report generator', 'file', 'orange', 'report_generator.php'),
             me.role !== 'Client' && item('Formats', 'folder', 'green', '#formats'),
@@ -1095,9 +1099,296 @@
         return scr;
     };
 
+    /* ---------------- Previous surveys of the same vessel ---------------- */
+    SCREENS.history = function (route) {
+        var scr = el('<section class="scr" aria-label="Previous surveys">' + barHeader('Previous surveys', '') +
+            '<div class="scr-body"><div class="scr-pad"><div class="list">' + skeletons(3) + '</div></div></div></section>');
+        var list = scr.querySelector('.list');
+        function docRow(d) {
+            var t = docType(d);
+            return '<a class="doc press" href="download.php?upload_id=' + d.id + '"><span class="ft ' + t[0] + '">' + t[1] + '</span><span class="t"><b>' + esc(d.name) + '</b><small>' + esc(d.type) + (d.when ? ' · ' + esc(d.when) : '') + '</small></span>' + icon('download', 'chev') + '</a>';
+        }
+        function load() {
+            return api('history', { id: route.id }).then(function (d) {
+                scr.querySelector('.hdr-bar .t').innerHTML = '<b>Previous surveys</b><small>' + esc(d.vessel) + '</small>';
+                list.innerHTML = d.items.length ? '<div class="info-note" data-rise>' + icon('history') + '<span>Earlier surveys of this vessel (same name or IMO, any client), for reference.</span></div>' +
+                    d.items.map(function (h) {
+                        var r = h.recovery;
+                        return '<section class="card card-pad hist" data-rise>' +
+                            '<div class="title-row"><div><b class="hn">' + esc(h.vessel) + '</b><div class="subline">' + esc([h.client, h.port].filter(Boolean).join(' · ')) + '</div></div>' +
+                            '<span class="tag ' + (h.status === 'Completed' ? 'green' : 'orange') + '">' + esc(h.status) + '</span></div>' +
+                            '<div class="meta">' + (h.completed_on ? '<span>' + icon('calendar') + 'Surveyed ' + esc(h.completed_on) + '</span>' : '') +
+                            (h.surveyors ? '<span>' + icon('user') + esc(h.surveyors) + '</span>' : '') + (h.report_no ? '<span>' + icon('file') + esc(h.report_no) + '</span>' : '') + '</div>' +
+                            '<div class="hist-rec"><div><small>Total</small><b>' + esc(r.total) + '</b></div><div><small>VLSFO</small><b>' + esc(r.vlsfo) + '</b></div><div><small>LSMGO</small><b>' + esc(r.lsmgo) + '</b></div><div><small>HSFO</small><b>' + esc(r.hsfo) + '</b></div></div>' +
+                            (h.type ? '<small class="hint">' + esc(h.type) + '</small>' : '') +
+                            (h.docs.length ? '<div class="hist-docs">' + h.docs.map(docRow).join('') + '</div>' : '<small class="hint">No documents on this survey.</small>') +
+                            '</section>';
+                    }).join('') : '<div class="empty"><span class="ic purple">' + icon('history') + '</span><b>No earlier surveys of this vessel</b></div>';
+                stagger(list);
+            }).catch(function (e) { if (e.message !== 'login') list.innerHTML = '<div class="empty"><span class="ic red">' + icon('alert') + '</span><b>Not available</b></div>'; });
+        }
+        pullToRefresh(scr, scr.querySelector('.scr-body'), load);
+        load();
+        return scr;
+    };
+
+    /* ---------------- Team chat (ajax/team_chat.php — its own checks: staff only, members only) ---------------- */
+    function tc(action, params) {
+        var q = new URLSearchParams(Object.assign({ action: action }, params || {}));
+        return fetch('ajax/team_chat.php?' + q.toString(), { credentials: 'same-origin', cache: 'no-store' }).then(tcResult);
+    }
+    function tcPost(action, data) {
+        var fd = data instanceof FormData ? data : new FormData();
+        if (!(data instanceof FormData)) Object.keys(data || {}).forEach(function (k) {
+            [].concat(data[k]).forEach(function (v) { fd.append(k, v); });
+        });
+        fd.append('action', action);
+        fd.append('csrf_token', state.me.csrf);
+        return fetch('ajax/team_chat.php', { method: 'POST', credentials: 'same-origin', body: fd }).then(tcResult);
+    }
+    function tcResult(r) {
+        return r.json().catch(function () { return { ok: false, error: 'Chat is not available right now.' }; }).then(function (d) {
+            if (r.status === 401) { state.me = null; go('login', { replace: true, anim: 'fade' }); }
+            if (!d.ok) { var e = new Error(d.error || 'error'); e.code = d.code; e.status = r.status; throw e; }
+            return d;
+        });
+    }
+    function initials(name) {
+        return String(name || '?').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join('') || '?';
+    }
+
+    SCREENS.chat = function () {
+        var scr = el('<section class="scr" aria-label="Team chat">' + barHeader('Team chat', '', '') +
+            '<div class="scr-body"><div class="scr-pad"><div class="list">' + skeletons(3) + '</div></div></div></section>');
+        var list = scr.querySelector('.list'), canManage = false;
+        function load() {
+            return tc('bootstrap').then(function (d) {
+                canManage = d.me.can_manage;
+                if (canManage && !scr.querySelector('[data-newgroup]')) {
+                    scr.querySelector('.hdr-bar').insertAdjacentHTML('beforeend', '<button type="button" class="icon-btn plain press" data-newgroup aria-label="New group">' + icon('plus') + '</button>');
+                    scr.querySelector('[data-newgroup]').onclick = newGroup;
+                }
+                list.innerHTML = d.groups.length ? d.groups.map(function (g) {
+                    return '<button type="button" class="grp press" data-rise data-room="' + g.id + '"><span class="gav">' + esc(initials(g.name)) + '</span>' +
+                        '<span class="t"><b>' + esc(g.name) + '</b><small>' + g.member_count + ' member' + (g.member_count === 1 ? '' : 's') + (g.is_member ? '' : ' · you are not in this group') + '</small></span>' +
+                        (g.unread ? '<span class="count">' + (g.unread > 99 ? '99+' : g.unread) + '</span>' : '') + icon('chev', 'chev') + '</button>';
+                }).join('') : '<div class="empty"><span class="ic purple">' + icon('chat') + '</span><b>No groups yet</b></div>';
+                stagger(list);
+            }).catch(function (e) { list.innerHTML = '<div class="empty"><span class="ic red">' + icon('alert') + '</span><b>' + esc(e.message) + '</b></div>'; });
+        }
+        list.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-room]');
+            if (b) { haptic(); go('room', { id: +b.getAttribute('data-room') }); }
+        });
+        function newGroup() {
+            tc('staff').then(function (d) {
+                openSheet('<h2>New group</h2><div class="field"><label for="ng-name">Group name</label><div class="inp"><input id="ng-name" maxlength="60" placeholder="e.g. Vizag surveyors"></div></div>' +
+                    '<div class="field-h">Members</div><div class="pick-list">' + d.staff.map(function (u) {
+                        return '<label class="pick-row"><input type="checkbox" value="' + u.user_id + '"><span class="gav sm">' + esc(initials(u.name)) + '</span><span class="t"><b>' + esc(u.name) + '</b><small>' + esc(u.role) + '</small></span></label>';
+                    }).join('') + '</div><div class="sheet-actions"><button type="button" class="btn primary press" data-create>Create group</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
+                function (sh) {
+                    sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
+                    sh.querySelector('[data-create]').onclick = function () {
+                        var ids = Array.prototype.map.call(sh.querySelectorAll('.pick-row input:checked'), function (c) { return c.value; });
+                        tcPost('create_group', { name: sh.querySelector('#ng-name').value, 'member_ids[]': ids }).then(function (r) {
+                            closeSheet(true); toast('Group created', 'ok'); go('room', { id: r.group.id });
+                        }).catch(function (e) { toast(e.message, 'bad'); });
+                    };
+                });
+            }).catch(function (e) { toast(e.message, 'bad'); });
+        }
+        pullToRefresh(scr, scr.querySelector('.scr-body'), load);
+        load();
+        return scr;
+    };
+
+    SCREENS.room = function (route) {
+        var gid = route.id;
+        var scr = el('<section class="scr room" aria-label="Chat">' + barHeader('Chat', '', '<button type="button" class="icon-btn plain press" data-members aria-label="Members">' + icon('users') + '</button>') +
+            '<div class="scr-body msgs" aria-live="polite"><div class="older" hidden><button type="button" class="link-btn" data-older>Load earlier messages</button></div><div class="thread"></div></div>' +
+            '<form class="composer" hidden><input type="file" id="tc-file" hidden>' +
+            '<label class="icon-btn plain press" for="tc-file" aria-label="Attach a file">' + icon('plus') + '</label>' +
+            '<div class="att-chip" hidden></div>' +
+            '<textarea rows="1" placeholder="Message" aria-label="Message" maxlength="4000"></textarea>' +
+            '<button type="submit" class="send press" aria-label="Send">' + icon('chev') + '</button></form>' +
+            '<div class="not-member" hidden></div></section>');
+        var body = scr.querySelector('.msgs'), thread = scr.querySelector('.thread'), form = scr.querySelector('.composer');
+        var ta = form.querySelector('textarea'), fileIn = form.querySelector('#tc-file'), chip = form.querySelector('.att-chip');
+        var me = null, lastId = 0, firstId = 0, avatars = {}, pending = null, polling = null, lastDay = '', settings = {};
+
+        function dayLabel(ts) {
+            var d = new Date(ts * 1000), today = new Date();
+            var y = new Date(); y.setDate(today.getDate() - 1);
+            if (d.toDateString() === today.toDateString()) return 'Today';
+            if (d.toDateString() === y.toDateString()) return 'Yesterday';
+            return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+        function timeLabel(ts) { return new Date(ts * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); }
+        function bubble(m, opts) {
+            var mine = me && m.sender_id === me.id;
+            var av = avatars[String(m.sender_id)];
+            var atts = (m.attachments || []).map(function (a) {
+                var url = 'ajax/team_chat.php?action=download&id=' + a.id;
+                return a.is_image
+                    ? '<a class="att-img" href="' + url + '"><img src="' + url + '&inline=1" alt="' + esc(a.name) + '" loading="lazy"></a>'
+                    : '<a class="att-file" href="' + url + '"><span class="ft other">' + esc(a.type_label.slice(0, 4).toUpperCase()) + '</span><span class="t"><b>' + esc(a.name) + '</b><small>' + mb(a.size) + '</small></span>' + icon('download') + '</a>';
+            }).join('');
+            return '<div class="msg' + (mine ? ' mine' : '') + (opts && opts.sending ? ' sending' : '') + '" data-mid="' + (m.id || '') + '">' +
+                (mine ? '' : '<span class="mav">' + (av ? '<img src="' + esc(av) + '" alt="">' : esc(initials(m.sender_name))) + '</span>') +
+                '<div class="bub">' + (mine ? '' : '<b class="who">' + esc(m.sender_name) + '</b>') + atts +
+                (m.text ? '<div class="txt">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '') +
+                '<span class="tm">' + (opts && opts.sending ? 'Sending…' : timeLabel(m.ts)) + '</span></div></div>';
+        }
+        function render(msgs, where) {
+            var html = '', day = where === 'top' ? '' : lastDay;
+            msgs.forEach(function (m) {
+                var dl = dayLabel(m.ts);
+                if (dl !== day) { html += '<div class="day"><span>' + dl + '</span></div>'; day = dl; }
+                html += bubble(m);
+            });
+            if (where === 'top') {
+                var h = body.scrollHeight;
+                // drop a repeated day divider at the join
+                var firstDay = thread.querySelector('.day');
+                if (firstDay && msgs.length && dayLabel(msgs[msgs.length - 1].ts) === firstDay.textContent) firstDay.remove();
+                thread.insertAdjacentHTML('afterbegin', html);
+                body.scrollTop += body.scrollHeight - h;
+            } else {
+                thread.insertAdjacentHTML('beforeend', html);
+                lastDay = day;
+            }
+        }
+        function atBottom() { return body.scrollHeight - body.scrollTop - body.clientHeight < 120; }
+        function toBottom(smooth) { body.scrollTo({ top: body.scrollHeight, behavior: smooth && !REDUCE ? 'smooth' : 'auto' }); }
+        function markRead() { if (lastId) tcPost('mark_read', { group_id: gid, message_id: lastId }).catch(function () {}); }
+
+        tc('bootstrap', { group_id: gid }).then(function (d) {
+            me = d.me; settings = d.settings || {};
+            gid = d.group.id;
+            scr.querySelector('.hdr-bar .t').innerHTML = '<b>' + esc(d.group.name) + '</b><small>' + d.members.length + ' members</small>';
+            if (!me.is_member) {
+                var nm = scr.querySelector('.not-member');
+                nm.hidden = false;
+                nm.innerHTML = '<div class="empty"><span class="ic purple">' + icon('users') + '</span><b>You are not a member of this group.</b>' + (me.can_manage ? '<span>Add yourself from Members to read and write here.</span>' : '') + '</div>';
+                if (!me.can_manage) scr.querySelector('[data-members]').hidden = true;
+                return;
+            }
+            form.hidden = false;
+            return tc('messages', { group_id: gid }).then(function (r) {
+                Object.assign(avatars, r.avatars || {});
+                if (r.messages.length) { firstId = r.messages[0].id; lastId = r.messages[r.messages.length - 1].id; }
+                render(r.messages);
+                if (!r.messages.length) thread.innerHTML = '<div class="empty" data-empty><span class="ic purple">' + icon('chat') + '</span>No messages yet — say hello.</div>';
+                scr.querySelector('.older').hidden = !r.has_more;
+                toBottom(false);
+                markRead();
+                poll();
+            });
+        }).catch(function (e) { thread.innerHTML = '<div class="empty"><span class="ic red">' + icon('alert') + '</span><b>' + esc(e.message) + '</b></div>'; });
+
+        function poll() {
+            clearTimeout(polling);
+            polling = setTimeout(function () {
+                if (!scr.isConnected) return;
+                if (document.hidden) { poll(); return; }
+                tc('poll', { group_id: gid, after_id: lastId }).then(function (r) {
+                    Object.assign(avatars, r.avatars || {});
+                    var fresh = r.messages.filter(function (m) { return !thread.querySelector('[data-mid="' + m.id + '"]'); });
+                    if (fresh.length) {
+                        var stick = atBottom();
+                        var empty = thread.querySelector('[data-empty]'); if (empty) empty.remove();
+                        render(fresh);
+                        lastId = r.messages[r.messages.length - 1].id;
+                        if (stick) toBottom(true);
+                        if (fresh.some(function (m) { return m.sender_id !== me.id; })) haptic();
+                        markRead();
+                    } else if (r.messages.length) lastId = r.messages[r.messages.length - 1].id;
+                    scr.querySelector('.hdr-bar .t small').textContent = r.member_count + ' members';
+                }).catch(function () {}).then(poll);
+            }, 3000);
+        }
+
+        scr.querySelector('[data-older]').addEventListener('click', function () {
+            var b = this;
+            b.disabled = true;
+            tc('messages', { group_id: gid, before_id: firstId }).then(function (r) {
+                Object.assign(avatars, r.avatars || {});
+                if (r.messages.length) { firstId = r.messages[0].id; render(r.messages, 'top'); }
+                scr.querySelector('.older').hidden = !r.has_more;
+            }).catch(function (e) { toast(e.message, 'bad'); }).then(function () { b.disabled = false; });
+        });
+
+        ta.addEventListener('input', function () { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; });
+        fileIn.addEventListener('change', function () {
+            var f = fileIn.files[0];
+            if (!f) return;
+            var ext = (f.name.split('.').pop() || '').toLowerCase();
+            if (settings.allowed_ext && settings.allowed_ext.indexOf(ext) === -1) { toast('This file type cannot be shared in chat.', 'bad'); fileIn.value = ''; return; }
+            if (settings.max_upload_bytes && f.size > settings.max_upload_bytes) { toast('File is too large. Maximum is ' + Math.round(settings.max_upload_bytes / 1048576) + ' MB.', 'bad'); fileIn.value = ''; return; }
+            pending = f;
+            chip.hidden = false;
+            chip.innerHTML = '<span>' + esc(f.name) + '</span><button type="button" class="icon-btn plain" aria-label="Remove file">' + icon('x') + '</button>';
+            chip.querySelector('button').onclick = function () { pending = null; fileIn.value = ''; chip.hidden = true; };
+        });
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var text = ta.value.trim();
+            if (!text && !pending) return;
+            var token = 'app-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+            var fd = new FormData();
+            fd.append('group_id', gid); fd.append('text', text); fd.append('client_token', token);
+            if (pending) fd.append('file', pending);
+            var empty = thread.querySelector('[data-empty]'); if (empty) empty.remove();
+            var nowTs = Date.now() / 1000;
+            if (dayLabel(nowTs) !== lastDay) { lastDay = dayLabel(nowTs); thread.insertAdjacentHTML('beforeend', '<div class="day"><span>' + lastDay + '</span></div>'); }
+            var temp = el(bubble({ sender_id: me.id, sender_name: me.name, text: text + (pending ? (text ? '\n' : '') + 'Attachment: ' + pending.name : ''), ts: nowTs }, { sending: true }));
+            thread.appendChild(temp);
+            toBottom(true);
+            ta.value = ''; ta.style.height = 'auto'; pending = null; fileIn.value = ''; chip.hidden = true;
+            haptic();
+            tcPost('send', fd).then(function (r) {
+                Object.assign(avatars, r.avatars || {});
+                if (r.message && !thread.querySelector('[data-mid="' + r.message.id + '"]')) {
+                    temp.replaceWith(el(bubble(r.message)));
+                    lastId = Math.max(lastId, r.message.id);
+                } else temp.remove();
+            }).catch(function (x) {
+                temp.classList.add('failed');
+                temp.querySelector('.tm').textContent = 'Not sent — ' + x.message;
+            });
+        });
+        ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !NATIVE) { e.preventDefault(); form.requestSubmit(); } });
+
+        scr.querySelector('[data-members]').addEventListener('click', function () {
+            Promise.all([tc('members', { group_id: gid }), me && me.can_manage ? tc('candidates', { group_id: gid }) : Promise.resolve({ candidates: [] })]).then(function (r) {
+                var manage = me && me.can_manage;
+                openSheet('<h2>Members</h2><div class="pick-list">' + r[0].members.map(function (m) {
+                    return '<div class="pick-row"><span class="gav sm">' + esc(initials(m.name)) + '</span><span class="t"><b>' + esc(m.name) + '</b><small>' + esc(m.role) + '</small></span>' +
+                        (manage ? '<button type="button" class="link-btn" style="color:#b91c1c" data-rm-member="' + m.user_id + '">Remove</button>' : '') + '</div>';
+                }).join('') + '</div>' +
+                    (manage && r[1].candidates.length ? '<div class="field-h">Add people</div><div class="pick-list">' + r[1].candidates.map(function (c) {
+                        return '<div class="pick-row"><span class="gav sm">' + esc(initials(c.name)) + '</span><span class="t"><b>' + esc(c.name) + '</b><small>' + esc(c.role) + '</small></span><button type="button" class="link-btn" data-add-member="' + c.user_id + '">Add</button></div>';
+                    }).join('') + '</div>' : ''),
+                function (sh) {
+                    sh.addEventListener('click', function (ev) {
+                        var b = ev.target.closest('[data-rm-member],[data-add-member]');
+                        if (!b) return;
+                        var add = b.hasAttribute('data-add-member');
+                        tcPost(add ? 'add_member' : 'remove_member', { group_id: gid, user_id: b.getAttribute(add ? 'data-add-member' : 'data-rm-member') }).then(function () {
+                            toast(add ? 'Member added' : 'Member removed', 'ok');
+                            closeSheet(true);
+                            if (+b.getAttribute(add ? 'data-add-member' : 'data-rm-member') === me.id) { show({ name: 'room', id: gid }, 'fade'); }
+                        }).catch(function (x) { toast(x.message, 'bad'); });
+                    });
+                });
+            }).catch(function (x) { toast(x.message, 'bad'); });
+        });
+        return scr;
+    };
+
     /* ---------------- global taps ---------------- */
     document.addEventListener('click', function (e) {
-        var t = e.target.closest('[data-web],[data-go],[data-vessel],[data-upload],[data-back],[data-refresh]');
+        var t = e.target.closest('[data-web],[data-go],[data-vessel],[data-upload],[data-history],[data-back],[data-refresh]');
         if (!t) return;
         if (t.hasAttribute('data-web')) {
             e.preventDefault();
@@ -1106,6 +1397,7 @@
         }
         if (t.hasAttribute('data-vessel')) { haptic(); go('vessel', { id: +t.getAttribute('data-vessel') }); return; }
         if (t.hasAttribute('data-upload')) { haptic(); go('upload', { id: +t.getAttribute('data-upload') }); return; }
+        if (t.hasAttribute('data-history')) { haptic(); go('history', { id: +t.getAttribute('data-history') }); return; }
         if (t.hasAttribute('data-go')) { haptic(); go(t.getAttribute('data-go')); return; }
         if (t.hasAttribute('data-back')) { back(); return; }
         if (t.hasAttribute('data-refresh')) { closeSheet(); location.reload(); }

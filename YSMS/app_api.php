@@ -16,6 +16,7 @@
  *   GET app_api.php?a=recovery[&q=][&month=YYYY-MM][&status=][&page=1]
  *   GET app_api.php?a=formats
  *   GET app_api.php?a=profile
+ *   GET app_api.php?a=history&id=<id>             previous surveys of the same vessel
  */
 require_once 'config/config.php';
 require_once 'includes/notifications.php';
@@ -312,7 +313,8 @@ if ($a === 'survey') {
         ],
         // Same as the Latest Update form on vessel_detail.php (shown to everyone who can open it).
         'can_update' => $s['status'] === 'Pending Vessel',
-        'can_history' => $fullAccess || $assigned,
+        // vessel_detail.php shows previous surveys (Pending Vessel) to Admin / Super Admin / Surveyor.
+        'can_history' => $s['status'] === 'Pending Vessel' && ($fullAccess || $assigned),
     ];
     appOut($card);
 }
@@ -411,6 +413,31 @@ if ($a === 'profile') {
         // profile.php: Surveyors edit first / last name and date of birth; everyone else full name, email, phone.
         'surveyor_form' => $role === 'Surveyor',
     ]);
+}
+
+if ($a === 'history') {
+    require_once 'includes/vessel_history.php';
+    $id = (int)($_GET['id'] ?? 0);
+    $st = $db->prepare('SELECT * FROM surveys WHERE id = ?');
+    $st->execute([$id]);
+    $s = $st->fetch(PDO::FETCH_ASSOC);
+    // Same as vessel_detail.php: Pending Vessel, Admin / Super Admin or the assigned Surveyor.
+    if (!$s || $s['status'] !== 'Pending Vessel' || !($fullAccess || ($role === 'Surveyor' && isSurveyorAssignedToSurvey($db, $id, $userId)))) {
+        appOut(['error' => 'not_found'], 404);
+    }
+    $out = [];
+    foreach (vesselHistory($db, $s) as $h) {
+        $rec = function ($v) use ($h) { return $h['recovery_na'] ? 'N/A' : ($v !== null ? recoveryDisplay(abs((float)$v), (bool)$h['recovery_onhire']) : '—'); };
+        $out[] = [
+            'id' => (int)$h['id'], 'vessel' => (string)$h['vessel_name'], 'status' => (string)$h['status'],
+            'report_no' => (string)($h['report_number'] ?? ''), 'type' => (string)$h['types'], 'client' => (string)($h['company_name'] ?? ''),
+            'port' => (string)($h['port_name'] ?? ''), 'surveyors' => (string)$h['surveyors'],
+            'completed_on' => appDate($h['survey_completed_date'] ?? ''), 'report_on' => appDate($h['report_uploaded_date'] ?? ''),
+            'recovery' => ['total' => $rec($h['recovery_amount']), 'vlsfo' => $rec($h['vlsfo_recovery']), 'lsmgo' => $rec($h['lsmgo_recovery']), 'hsfo' => $rec($h['hsfo_recovery'])],
+            'docs' => array_map(function ($f) { return ['id' => (int)$f['id'], 'name' => (string)$f['file_name'], 'type' => (string)$f['file_type'], 'when' => appDate($f['uploaded_at'] ?? '')]; }, $h['files']),
+        ];
+    }
+    appOut(['vessel' => (string)$s['vessel_name'], 'items' => $out]);
 }
 
 appOut(['error' => 'unknown'], 400);
