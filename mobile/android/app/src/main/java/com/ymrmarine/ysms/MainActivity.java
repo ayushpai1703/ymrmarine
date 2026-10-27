@@ -16,6 +16,9 @@ import android.webkit.URLUtil;
 import android.webkit.WebView;
 import android.widget.Toast;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 
 /**
@@ -49,6 +52,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(FileSaverPlugin.class);
         super.onCreate(savedInstanceState);
+        showSystemBars();
 
         WebView webView = getBridge().getWebView();
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
@@ -61,6 +65,21 @@ public class MainActivity extends BridgeActivity {
 
         IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
         ContextCompat.registerReceiver(this, downloadDone, filter, ContextCompat.RECEIVER_EXPORTED);
+    }
+
+    // Not a fullscreen app: the status bar and the navigation / gesture bar always stay visible.
+    // The page is laid out between them (Capacitor SystemBars "native" insets pads the window
+    // with the bar sizes, see capacitor.config.json), so nothing is drawn under the bars.
+    private void showSystemBars() {
+        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        bars.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_DEFAULT);
+        bars.show(WindowInsetsCompat.Type.systemBars());
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) showSystemBars();
     }
 
     @Override

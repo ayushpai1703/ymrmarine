@@ -41,7 +41,9 @@ a { color: var(--primary); }
 svg.i { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ---------- Screens and transitions ---------- */
-#app { position: fixed; inset: 0; overflow: hidden; }
+/* Not fullscreen: the Android app lays the page out between the status bar and the navigation /
+   gesture bar. env() is 0 there; it only keeps content off the bars if a device still draws under them. */
+#app { position: fixed; inset: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px) 0; overflow: hidden; }
 .scr {
     position: absolute; inset: 0; display: flex; flex-direction: column;
     background: var(--bg); overflow: hidden; will-change: transform;
@@ -82,7 +84,7 @@ svg.i { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none;
 
 /* ---------- Bottom tab bar ---------- */
 .tabbar {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; height: var(--tabbar-h);
+    position: fixed; left: 0; right: 0; bottom: env(safe-area-inset-bottom, 0px); z-index: 20; height: var(--tabbar-h);
     display: grid; grid-template-columns: repeat(5, 1fr);
     background: rgba(255, 255, 255, .94);
     -webkit-backdrop-filter: saturate(160%) blur(16px); backdrop-filter: saturate(160%) blur(16px);
@@ -331,7 +333,7 @@ svg.i { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none;
 .ptr.back { transition: transform .25s ease, opacity .25s ease; }
 .ptr.ready { color: var(--accent); }
 .ptr.loading svg { animation: spin .8s linear infinite; }
-.toast { position: fixed; left: 16px; right: 16px; bottom: calc(var(--tabbar-h) + 16px); z-index: 60; background: #1f2937; color: #fff; border-radius: 14px; padding: 13px 16px; font-size: 14px; font-weight: 600; box-shadow: 0 14px 30px rgba(15, 23, 42, .35); animation: toastIn .35s var(--ease) both; }
+.toast { position: fixed; left: 16px; right: 16px; bottom: calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom, 0px)); z-index: 60; background: #1f2937; color: #fff; border-radius: 14px; padding: 13px 16px; font-size: 14px; font-weight: 600; box-shadow: 0 14px 30px rgba(15, 23, 42, .35); animation: toastIn .35s var(--ease) both; }
 .toast.ok { background: #166534; }
 .toast.bad { background: #b91c1c; }
 .toast.out { animation: toastOut .3s ease both; }

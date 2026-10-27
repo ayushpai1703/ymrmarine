@@ -26,7 +26,9 @@
     },
     "SystemBars": {
       "insetsHandling": "native",
-      "style": "DARK"
+      "style": "DARK",
+      "hidden": false,
+      "initialViewportFitValueHint": "contain"
     }
   }
 }

@@ -13,7 +13,7 @@ $v = function (string $f): string { return (string)(@filemtime(__DIR__ . '/' . $
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <meta name="theme-color" content="#0b1e46">
     <title>YMR YSMS</title>
     <link rel="icon" href="assets/images/logo.png">
