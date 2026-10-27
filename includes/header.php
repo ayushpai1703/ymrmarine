@@ -78,6 +78,8 @@ $logoUrl = "https://www.ymrmarine.com/" . ltrim($logo, '/');
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 
 <link rel="stylesheet" href="assets/css/style.css?v=<?= @filemtime(__DIR__ . '/../assets/css/style.css') ?: time() ?>">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/modern.css?v=<?= @filemtime(__DIR__ . '/../assets/css/modern.css') ?: time() ?>">
 
 <style>
 :root{
@@ -111,29 +113,5 @@ $logoUrl = "https://www.ymrmarine.com/" . ltrim($logo, '/');
  ]
 }
 </script></head>
-<body>
-<nav class="nav" id="mainNav">
-  <div class="nav-inner">
-    <a href="index.php" class="nav-logo">
-      <?php if ($logo): ?><img src="<?= e($logo) ?>" width="50" height="50" alt="Logo"><?php endif; ?>
-      <span class="accent">YMR</span><span class="rest">MARINE</span>
-    </a>
-    <ul class="nav-links">
-      <li><a href="about-us.php">About</a></li>
-      <li><a href="#services">Services</a></li>
-      <li><a href="#why-us">Why Us</a></li>
-      <li><a href="#team">Team</a></li>
-      <li><a href="ports.php">Ports</a></li>
-      <li><a href="#testimonials">Clients</a></li>
-      <li><a href="contact.php">Contact</a></li>
-    </ul>
-    <a href="<?= e($empLogin) ?>" class="btn-nav" target="_blank">Employee Login</a>
-    <button class="nav-toggle" id="navToggle" aria-label="Open menu"><span></span><span></span><span></span></button>
-  </div>
-  <div class="nav-mobile" id="navMobile">
-    <a href="about-us.php">About</a><a href="#services">Services</a><a href="#why-us">Why Us</a>
-    <a href="#team">Team</a><a href="ports.php">Ports</a><a href="#testimonials">Clients</a>
-    <a href="contact.php">Contact</a>
-    <a href="<?= e($empLogin) ?>" class="btn-nav" target="_blank">Employee Login</a>
-  </div>
-</nav>
+<body class="msite mhome">
+<?php $navLogo = $logo; $navEmpLogin = $empLogin; $activeNav = 'home'; require __DIR__ . '/site_nav.php'; ?>

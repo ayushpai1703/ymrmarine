@@ -50,6 +50,8 @@ $activeNav = $activeNav ?? '';
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Lexend:wght@100..900&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css?v=<?= @filemtime(__DIR__ . '/../assets/css/style.css') ?: time() ?>">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/modern.css?v=<?= @filemtime(__DIR__ . '/../assets/css/modern.css') ?: time() ?>">
 <style>
 :root { --accent: <?= e($c['primary']) ?>; }
 .page-hero {
@@ -88,33 +90,5 @@ $activeNav = $activeNav ?? '';
 <script type="application/ld+json"><?= $schemaJson ?></script>
 <?php endif; ?>
 </head>
-<body>
-<nav class="nav" id="mainNav">
-  <div class="nav-inner">
-    <a href="index.php" class="nav-logo">
-      <?php if ($c['logo']): ?><img src="<?= e($c['logo']) ?>" width="50" height="50" alt="YMR Marine logo"><?php endif; ?>
-      <span class="accent">YMR</span><span class="rest">MARINE</span>
-    </a>
-    <ul class="nav-links">
-      <li><a href="about-us.php" class="<?= $activeNav==='about'?'active':'' ?>">About</a></li>
-      <li><a href="index.php#services" class="<?= $activeNav==='services'?'active':'' ?>">Services</a></li>
-      <li><a href="index.php#why-us">Why Us</a></li>
-      <li><a href="index.php#team">Team</a></li>
-      <li><a href="ports.php" class="<?= $activeNav==='ports'?'active':'' ?>">Ports</a></li>
-      <li><a href="index.php#testimonials">Clients</a></li>
-      <li><a href="contact.php" class="<?= $activeNav==='contact'?'active':'' ?>">Contact</a></li>
-    </ul>
-    <a href="<?= e($c['empLogin']) ?>" class="btn-nav" target="_blank" rel="noopener">Employee Login</a>
-    <button class="nav-toggle" id="navToggle" aria-label="Open menu"><span></span><span></span><span></span></button>
-  </div>
-  <div class="nav-mobile" id="navMobile">
-    <a href="about-us.php" class="<?= $activeNav==='about'?'active':'' ?>">About</a>
-    <a href="index.php#services">Services</a>
-    <a href="index.php#why-us">Why Us</a>
-    <a href="index.php#team">Team</a>
-    <a href="ports.php" class="<?= $activeNav==='ports'?'active':'' ?>">Ports</a>
-    <a href="index.php#testimonials">Clients</a>
-    <a href="contact.php" class="<?= $activeNav==='contact'?'active':'' ?>">Contact</a>
-    <a href="<?= e($c['empLogin']) ?>" class="btn-nav" target="_blank" rel="noopener">Employee Login</a>
-  </div>
-</nav>
+<body class="msite">
+<?php $navLogo = $c['logo']; $navEmpLogin = $c['empLogin']; require __DIR__ . '/site_nav.php'; ?>
