@@ -47,6 +47,7 @@
         eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
         eyeOff: '<path d="m3 3 18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6C3.9 8.3 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
         'wifi-off': '<path d="M2 8.8a15 15 0 0 1 4.2-2.6M10.7 5.1A15 15 0 0 1 22 8.8M5 12.6a10 10 0 0 1 5.2-2.6M16.8 10.8A10 10 0 0 1 19 12.6M8.5 16.4a5 5 0 0 1 7 0M12 20h.01M2 2l20 20"/>',
+        finger: '<path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .13-5.35 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>',
         moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
         lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
         refresh: '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
@@ -237,6 +238,40 @@
         if (TABS.indexOf(h) !== -1) return { name: h };
         return { name: 'home' };
     }
+    // A website link, an app link (app.php#/…) or a deep link (ysms://vessel/123) → the app's own screen.
+    // Returns { name, id } or { web: page } for pages the app opens as full pages; null if not ours.
+    var PAGE_ROUTES = { 'recovery.php': 'recovery', 'formats_download.php': 'formats', 'cancelled.php': 'cancelled', 'team_chat.php': 'chat', 'profile.php': 'me',
+        'vessels.php': 'vessels', 'reports.php': 'reports', 'completed.php': 'completed', 'index.php': 'home', 'inbox.php': 'inbox',
+        'login_activity.php': 'activity', 'possible_duplicates.php': 'duplicates', 'manage_templates.php': 'templates', 'admin_controls.php': 'admin',
+        'super_admin_controls.php': 'sacontrols' };
+    function routeForLink(link) {
+        link = String(link || '').trim();
+        if (!link) return null;
+        var u;
+        try { u = new URL(link, location.href); } catch (e) { return null; }
+        if (u.protocol === 'ysms:') {
+            // ysms://vessel/123 · ysms://chat · ysms://v/123
+            var parts = (u.host + u.pathname).split('/').filter(Boolean);
+            if (!parts.length) return { name: 'home' };
+            if (parts[0] === 'vessel' && +parts[1]) return { name: 'vessel', id: +parts[1] };
+            return parse('#/' + parts.join('/'));
+        }
+        if (u.origin !== location.origin) return null;
+        var base = location.pathname.replace(/[^\/]*$/, '');
+        if (u.pathname.indexOf(base) !== 0) return null;
+        var page = u.pathname.slice(base.length), id = +(u.searchParams.get('id') || 0);
+        if (page === 'app.php' || page === '') return parse(u.hash);
+        if (/^(vessel|report|completed)_detail\.php$/.test(page) && id) return { name: 'vessel', id: id };
+        if (page === 'add_surveyor.php' && id && state.me && state.me.role === 'Admin') return { name: 'surveyor', id: id };
+        if (page === 'coming_soon.php' || !PAGE_ROUTES[page]) return { web: page + u.search + u.hash };
+        return { name: PAGE_ROUTES[page] };
+    }
+    function openLink(link) {
+        var r = routeForLink(link);
+        if (!r) return;
+        if (r.web) openWeb(r.web); else go(r.name, { id: r.id });
+    }
+
     var PUSHED = ['forgot', 'search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign', 'admin', 'addclient', 'addadmin', 'surveyor', 'activity', 'duplicates', 'templates', 'sacontrols', 'soon'];
     var ROUTE_IDS = { v: 'vessel', up: 'upload', h: 'history', c: 'room', e: 'assign', sv: 'surveyor', m: 'module' };
     function hashFor(name, id) {
@@ -392,7 +427,9 @@
                 throw new Error('bad');
             }).then(function () {
                 haptic('MEDIUM');
+                window.YSMS_APP.loggedIn = true; window.YSMS_APP.uid = state.me.id;
                 go('home', { replace: true, anim: 'fade' });
+                setupPush();
             }).catch(function (x) {
                 fail(x && x.message === 'bad' ? 'Wrong username or password.' : 'Could not connect. Check the internet and try again.');
             });
@@ -1018,10 +1055,13 @@
             '<div class="section-title" data-rise>Work</div><div class="menu-card" data-rise>' + work + '</div>' +
             (admin ? '<div class="section-title" data-rise>' + (me.role === 'Client' ? 'Client' : 'Admin') + '</div><div class="menu-card" data-rise>' + admin + '</div>' : '') +
             '<div class="section-title" data-rise>Account</div><div class="menu-card" data-rise>' + item('My profile', 'user', 'blue', '#me') +
+            lockToggleRow() +
             '<button type="button" class="menu-item press" data-theme-pick><span class="ic purple">' + icon('moon') + '</span><span class="grow">Appearance</span><span class="count soft" data-theme-now>' + THEMES[themePref()] + '</span>' + icon('chev', 'chev') + '</button>' +
             item('Support', 'chat', 'green', 'coming_soon.php?feature=Support') +
             '<button type="button" class="menu-item press" data-logout style="color:var(--red-text)"><span class="ic red">' + icon('logout') + '</span><span class="grow">Log out</span></button></div>' +
             '</div></div></section>');
+        var lt = scr.querySelector('[data-lock-toggle]');
+        if (lt) lt.addEventListener('click', function () { toggleLock(lt); });
         scr.querySelector('[data-theme-pick]').addEventListener('click', function () {
             pickTheme(function (v) { scr.querySelector('[data-theme-now]').textContent = THEMES[v]; });
         });
@@ -1031,9 +1071,7 @@
             function (sh) {
                 sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
                 sh.querySelector('[data-yes]').onclick = function () {
-                    clearCache();
-                    if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('clear');
-                    fetch('logout.php', { credentials: 'same-origin', redirect: 'manual' }).catch(function () {}).then(function () {
+                    signOut().then(function () {
                         closeSheet(true); state.me = null; go('login', { anim: 'fade' });
                     });
                 };
@@ -1321,15 +1359,7 @@
             b.classList.remove('unread');
             var sid = +b.getAttribute('data-sid'), link = b.getAttribute('data-link');
             if (sid) { go('vessel', { id: sid }); return; }
-            // Links of other notifications → the app's own screens; anything else opens the page.
-            var m = /^add_surveyor\.php\?id=(\d+)/.exec(link);
-            if (m && state.me.role === 'Admin') { go('surveyor', { id: +m[1] }); return; }
-            var page = (link || '').split(/[?#]/)[0];
-            var to = { 'recovery.php': 'recovery', 'formats_download.php': 'formats', 'cancelled.php': 'cancelled', 'team_chat.php': 'chat', 'profile.php': 'me',
-                'vessels.php': 'vessels', 'reports.php': 'reports', 'completed.php': 'completed', 'index.php': 'home', 'inbox.php': 'inbox',
-                'login_activity.php': 'activity', 'possible_duplicates.php': 'duplicates', 'manage_templates.php': 'templates', 'admin_controls.php': 'admin', 'super_admin_controls.php': 'sacontrols' }[page];
-            if (to) go(to);
-            else if (link) openWeb(link);
+            openLink(link);
         });
         if ('IntersectionObserver' in window) {
             new IntersectionObserver(function (en) { if (en[0].isIntersecting && more && !loading) { page++; load(false); } }, { root: body, rootMargin: '300px' }).observe(loader);
@@ -2685,6 +2715,111 @@
         setTimeout(function () { if (s.isConnected) s.remove(); }, 7000);
     }
 
+    /* ---------------- Fingerprint unlock (App lock, Profile) ---------------- */
+    // The phone's fingerprint (or PIN on Android 11+) is asked when the app opens and after it was in
+    // the background for 30 s. Only a lock over the screens: the sign-in itself stays the server session.
+    var LOCK_AFTER = 30000, lockEl = null, bgAt = 0;
+    var BIO = NATIVE && P.YsmsNative ? P.YsmsNative : null;
+    function lockKey() { return 'ysmsLock:' + ((state.me && state.me.id) || window.YSMS_APP.uid || 0); }
+    function lockOn() { try { return localStorage.getItem(lockKey()) === '1'; } catch (e) { return false; } }
+    function setLockOn(on) { try { if (on) localStorage.setItem(lockKey(), '1'); else localStorage.removeItem(lockKey()); } catch (e) {} }
+    function showLock() {
+        if (!BIO || lockEl || !window.YSMS_APP.loggedIn || !lockOn()) return;
+        lockEl = el('<div class="applock" role="dialog" aria-modal="true" aria-label="App locked"><div class="mark"><img src="' + LOGO + '" alt=""></div>' +
+            '<b>YMR YSMS is locked</b><span>Unlock with your fingerprint to continue.</span>' +
+            '<button type="button" class="btn primary press" data-unlock>' + icon('finger') + 'Unlock</button>' +
+            '<button type="button" class="link-btn" data-lock-pw>Sign in with password instead</button></div>');
+        document.body.appendChild(lockEl);
+        lockEl.querySelector('[data-unlock]').onclick = unlock;
+        lockEl.querySelector('[data-lock-pw]').onclick = function () {
+            signOut().then(function () { hideLock(); go('login', { replace: true, anim: 'fade' }); });
+        };
+        unlock();
+    }
+    function hideLock() {
+        if (!lockEl) return;
+        var l = lockEl; lockEl = null;
+        l.classList.add('out'); setTimeout(function () { l.remove(); }, 300);
+    }
+    function unlock() {
+        BIO.biometricVerify({ title: 'Unlock YMR YSMS', subtitle: 'Use your fingerprint' }).then(function () { haptic('MEDIUM'); hideLock(); })
+            .catch(function () {});
+    }
+    if (BIO && P.App) P.App.addListener('appStateChange', function (s) {
+        if (!s.isActive) bgAt = Date.now();
+        else if (bgAt && Date.now() - bgAt > LOCK_AFTER) { bgAt = 0; showLock(); }
+    });
+    function lockToggleRow() {
+        return BIO ? '<button type="button" class="menu-item press" data-lock-toggle><span class="ic green">' + icon('finger') + '</span><span class="grow">Fingerprint unlock</span>' +
+            '<span class="switch' + (lockOn() ? ' on' : '') + '" role="switch" aria-checked="' + lockOn() + '"><i></i></span></button>' : '';
+    }
+    function toggleLock(btn) {
+        var sw = btn.querySelector('.switch');
+        if (lockOn()) { setLockOn(false); sw.classList.remove('on'); sw.setAttribute('aria-checked', 'false'); toast('Fingerprint unlock is off'); return; }
+        BIO.biometricStatus().then(function (r) {
+            if (!r.available) {
+                toast(r.reason === 'not_enrolled' ? 'Add a fingerprint in the phone\'s Settings first' : 'This phone has no fingerprint unlock', 'bad');
+                return;
+            }
+            return BIO.biometricVerify({ title: 'Turn on fingerprint unlock', subtitle: 'Confirm it is you' }).then(function () {
+                setLockOn(true); sw.classList.add('on'); sw.setAttribute('aria-checked', 'true'); haptic('MEDIUM'); toast('Fingerprint unlock is on', 'ok');
+            });
+        }).catch(function () {});
+    }
+
+    /* ---------------- Deep links (ysms://…, the server's vessel links) ---------------- */
+    var pendingLink = null;
+    if (NATIVE && P.App) P.App.addListener('appUrlOpen', function (e) {
+        if (state.me) openLink(e.url); else pendingLink = e.url;
+    });
+    function launchLink() {
+        // Opened by a link: route to it once (the same launch link is reported again after a reload).
+        if (!NATIVE || !P.App || !P.App.getLaunchUrl) return Promise.resolve(null);
+        return P.App.getLaunchUrl().then(function (r) {
+            var u = r && r.url;
+            var seen; try { seen = sessionStorage.getItem('ysmsLaunch'); sessionStorage.setItem('ysmsLaunch', u || ''); } catch (e) {}
+            return u && u !== seen ? routeForLink(u) : null;
+        }).catch(function () { return null; });
+    }
+
+    /* ---------------- Push notifications ---------------- */
+    var PUSH = NATIVE && P.PushNotifications ? P.PushNotifications : null, pushToken = null, pushWired = false;
+    function setupPush() {
+        if (!PUSH || !BIO || !state.me) return;
+        BIO.pushReady().then(function (r) {
+            if (!r.ready) return; // this build has no Firebase config
+            if (!pushWired) {
+                pushWired = true;
+                PUSH.createChannel({ id: 'ysms', name: 'YSMS updates', description: 'Vessel assignments, reports and messages', importance: 4, visibility: 1, vibration: true }).catch(function () {});
+                PUSH.addListener('registration', function (t) {
+                    pushToken = t.value;
+                    postPage('ajax/app_push_token.php', { token: t.value, action: 'save' }).catch(function () {});
+                });
+                PUSH.addListener('pushNotificationReceived', function (n) {
+                    // While the app is open: a toast instead of a system notification; Inbox count refreshes.
+                    toast(n.title || 'New notification');
+                    loadMe().then(function () { if (current && current.route.name === 'home') renderTabbar('home'); }).catch(function () {});
+                });
+                PUSH.addListener('pushNotificationActionPerformed', function (a) {
+                    var u = a.notification && a.notification.data && a.notification.data.url;
+                    if (u) openLink(u); else go('inbox');
+                });
+            }
+            return PUSH.checkPermissions().then(function (p) {
+                return p.receive === 'prompt' || p.receive === 'prompt-with-rationale' ? PUSH.requestPermissions() : p;
+            }).then(function (p) { if (p.receive === 'granted') return PUSH.register(); });
+        }).catch(function () {});
+    }
+    // Sign-out: forget this phone's push token and everything saved for offline use.
+    function signOut() {
+        var t = pushToken ? postPage('ajax/app_push_token.php', { token: pushToken, action: 'delete' }).catch(function () {}) : Promise.resolve();
+        return t.then(function () {
+            clearCache();
+            if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('clear');
+            return fetch('logout.php', { credentials: 'same-origin', redirect: 'manual' }).catch(function () {});
+        }).then(function () { state.me = null; window.YSMS_APP.loggedIn = false; });
+    }
+
     // Offline start: keeps the app's page and files (app-sw.js, which leaves the website's pages alone).
     if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('app-sw.js').catch(function () {});
     if (navigator.onLine === false) setOffline(true, null);
@@ -2696,8 +2831,13 @@
         history.replaceState({ d: 0 }, '', '#/login');
         show({ name: 'login' }, 'fade');
     } else {
-        ready = loadMe().then(function () {
+        showLock();
+        ready = launchLink().then(function (lr) { return loadMe().then(function () { return lr; }); }).then(function (lr) {
+            if (lr && lr.web) { openWeb(lr.web); return; }
+            if (lr) { route = lr; history.replaceState({ d: 0 }, '', hashFor(route.name, route.id)); }
             if (route.name === 'login') route = { name: 'home' };
+            setupPush();
+            if (pendingLink) { var pl = pendingLink; pendingLink = null; setTimeout(function () { openLink(pl); }, 400); }
             var d = (history.state && history.state.d) || 0;
             if (!history.state) history.replaceState({ d: 0 }, '', hashFor(route.name, route.id));
             show(route, 'fade', d);

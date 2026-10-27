@@ -27,7 +27,10 @@ import com.getcapacitor.BridgeActivity;
  *  - file downloads (reports, Excel exports, documents) go through Android's DownloadManager
  *    with the signed-in session cookie, land in Downloads and open when finished;
  *  - files the page builds itself (blob: links, e.g. the Word report generator) are saved by
- *    the FileSaver plugin, see FileSaverPlugin.java.
+ *    the FileSaver plugin, see FileSaverPlugin.java;
+ *  - fingerprint unlock and the push set-up check, see YsmsNativePlugin.java.
+ * Deep links (ysms://… and the server's own vessel links, AndroidManifest.xml) reach the page
+ * through the App plugin's appUrlOpen / getLaunchUrl.
  */
 public class MainActivity extends BridgeActivity {
 
@@ -51,6 +54,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(FileSaverPlugin.class);
+        registerPlugin(YsmsNativePlugin.class);
         super.onCreate(savedInstanceState);
         showSystemBars();
 

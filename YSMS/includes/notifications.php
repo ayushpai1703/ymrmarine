@@ -35,7 +35,7 @@ function createNotification(PDO $db, int $userId, string $title, string $message
     try {
         ensureNotificationsTable($db);
         $stmt = $db->prepare("INSERT INTO notifications (user_id, type, title, message, link, created_by) VALUES (?, ?, ?, ?, ?, ?)");
-        return $stmt->execute([
+        $ok = $stmt->execute([
             $userId,
             substr($type, 0, 50),
             substr($title, 0, 255),
@@ -43,6 +43,12 @@ function createNotification(PDO $db, int $userId, string $title, string $message
             $link,
             $createdBy,
         ]);
+        // Also to the user's phones (Android app), when push is set up on this server; see includes/push.php.
+        if ($ok) {
+            require_once __DIR__ . '/push.php';
+            pushQueue($userId, $title, $message, $link);
+        }
+        return $ok;
     } catch (Throwable $e) {
         error_log('createNotification: ' . $e->getMessage());
         return false;

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.ymrmarine.ysms",
+      "sha256_cert_fingerprints": [
+        "36:BF:D1:1F:E0:4B:6E:2C:FE:A8:30:38:45:A6:CC:29:7B:EF:2D:60:51:2A:A7:30:AD:41:4A:59:3B:4B:6C:4C"
+      ]
+    }
+  }
+]

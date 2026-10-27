@@ -22,6 +22,27 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Deep links: ysms://vessel/123, ysms://chat, … -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ysms" />
+            </intent-filter>
+
+            <!-- The server's own links (vessel / report / completed pages, the app page) open in the app.
+                 Verified through /.well-known/assetlinks.json on the server. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${ysmsHost}" />
+                <data android:path="/YSMS/vessel_detail.php" />
+                <data android:path="/YSMS/report_detail.php" />
+                <data android:path="/YSMS/completed_detail.php" />
+                <data android:path="/YSMS/app.php" />
+            </intent-filter>
+
         </activity>
 
         <provider
