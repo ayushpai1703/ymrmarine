@@ -540,3 +540,4 @@ svg.i { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none;
 .rm-h b { font-size: 13.5px; }
 .rm-h small { flex: 1; font-size: 12px; color: var(--muted); }
 .rm-t { font-size: 14px; margin: 4px 0; -webkit-user-select: text; user-select: text; }
+a.menu-item { text-decoration: none; }

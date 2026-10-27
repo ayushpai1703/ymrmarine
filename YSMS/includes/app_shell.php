@@ -60,6 +60,7 @@ if (ysmsIsApp()):
         });
     })();
     </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/app-shell.css?v=<?= @filemtime($appShellDir . '/css/app-shell.css') ?: time() ?>">
     <script src="assets/js/app-shell.js?v=<?= @filemtime($appShellDir . '/js/app-shell.js') ?: time() ?>" defer></script>
 <?php endif; ?>

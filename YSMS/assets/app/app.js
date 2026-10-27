@@ -399,10 +399,10 @@
     }
 
     var LISTS = {
-        vessels: { status: 'pending_vessel', title: 'Pending Vessels', empty: 'No pending vessels', overdue: 'Overdue' },
-        reports: { status: 'pending_report', title: 'Pending Reports', empty: 'No pending reports', overdue: 'Report overdue' },
-        completed: { status: 'completed', title: 'Completed', empty: 'No completed vessels' },
-        cancelled: { status: 'cancelled', title: 'Cancelled', empty: 'No cancelled vessels', pushed: true }
+        vessels: { status: 'pending_vessel', title: 'Pending Vessels', empty: 'No pending vessels', overdue: 'Overdue', export: 'export_vessels.php' },
+        reports: { status: 'pending_report', title: 'Pending Reports', empty: 'No pending reports', overdue: 'Report overdue', export: 'export_reports.php' },
+        completed: { status: 'completed', title: 'Completed', empty: 'No completed vessels', export: 'export_completed.php' },
+        cancelled: { status: 'cancelled', title: 'Cancelled', empty: 'No cancelled vessels', pushed: true, export: 'export_cancelled.php' }
     };
 
     function vcard(v) {
@@ -430,7 +430,8 @@
         var showOverdue = cfg.overdue && ['Admin', 'Super Admin', 'Surveyor'].indexOf(me.role) !== -1;
         var scr = el('<section class="scr' + (cfg.pushed ? '' : ' has-tabs') + '" aria-label="' + cfg.title + '">' +
             '<header class="hdr-white"><div class="hdr-title-row">' + (cfg.pushed ? '<button type="button" class="icon-btn plain press" data-back aria-label="Back" style="margin-left:-8px">' + icon('back') + '</button>' : '') +
-            '<div style="flex:1"><h1>' + cfg.title + '</h1><div class="hdr-sub" data-total>&nbsp;</div></div></div>' +
+            '<div style="flex:1"><h1>' + cfg.title + '</h1><div class="hdr-sub" data-total>&nbsp;</div></div>' +
+            (cfg.export ? '<a class="icon-btn plain press" href="' + cfg.export + '" aria-label="Download Excel">' + icon('download') + '</a>' : '') + '</div>' +
             '<label class="search flat">' + icon('search') + '<span class="sr">Search</span><input type="search" placeholder="Search vessel, port, client" enterkeyhint="search"></label>' +
             (showOverdue ? '<div class="chips"><button type="button" class="chip" aria-pressed="true" data-f="">All</button><button type="button" class="chip warn" aria-pressed="false" data-f="1">' + cfg.overdue + '</button></div>' : '') +
             '</header><div class="scr-body"><div class="scr-pad"><div class="list">' + skeletons(4) + '</div><div class="more-loader" hidden><span class="spin dark"></span></div></div></div>' +
@@ -582,6 +583,8 @@
                     (state.me.role === 'Admin' && v.status === 'Pending Vessel' ? '<button type="button" class="menu-item press" data-edit="' + v.id + '">' + icon('edit') + 'Edit vessel</button>' : '') +
                     '<button type="button" class="menu-item press" data-web="' + esc(v.web) + '">' + icon('globe') + 'Open full page</button>' +
                     (state.me.can.report_generator && v.status !== 'Pending Vessel' ? '<button type="button" class="menu-item press" data-web="report_generator.php?id=' + v.id + '">' + icon('file') + 'Word report generator</button>' : '') +
+                    (v.status === 'Pending Report' && ['Admin', 'Surveyor'].indexOf(state.me.role) !== -1 ? '<button type="button" class="menu-item press" data-web="photo_report_generator.php?id=' + v.id + '">' + icon('camera') + 'Photo report generator</button>' : '') +
+                    (state.me.role === 'Admin' && v.status !== 'Pending Vessel' ? '<button type="button" class="menu-item press" data-web="invoice_generator.php?id=' + v.id + '">' + icon('file') + 'Invoice generator</button>' : '') +
                     '<button type="button" class="menu-item press" data-refresh>' + icon('refresh') + 'Refresh</button>');
             };
             var up = scr.querySelector('[data-update]');
@@ -722,7 +725,8 @@
             me.can.recovery && item('Recovery', 'fuel', 'sky', '#recovery'),
             me.can.report_generator && item('Word report generator', 'file', 'orange', 'report_generator.php'),
             me.role !== 'Client' && item('Formats', 'folder', 'green', '#formats'),
-            item('Cancelled vessels', 'ban', 'red', '#cancelled')
+            item('Cancelled vessels', 'ban', 'red', '#cancelled'),
+            item('Permission copy', 'file', 'blue', 'generate_permission_copy.php')
         ].filter(Boolean).join('');
         var admin = me.role === 'Admin' ? [
             item('Assign vessel', 'plus', 'blue', '#assign'), item('Add surveyor', 'user', 'orange', '#surveyor'),
@@ -1784,7 +1788,16 @@
             '</div><div class="section-title" data-rise>Tools</div><div class="menu-card" data-rise>' +
             adminItem('Login activity', 'shield', 'red', 'activity') +
             (admin ? adminItem('Manage templates', 'file', 'sky', 'templates') + adminItem('Possible duplicates', 'folder', 'orange', 'duplicates') + adminItem('Formats', 'folder', 'green', 'formats') : '') +
+            '</div><div class="section-title" data-rise>More tools</div><div class="menu-card" data-rise>' +
+            (admin ? webItem('Daily emails', 'inbox', 'blue', 'admin_daily_emails.php') + webItem('Invoice templates', 'file', 'orange', 'admin_invoice_templates.php') +
+                webItem('Surveyor cards', 'user', 'purple', 'admin_surveyor_cards.php') + webItem('Import ports', 'pin', 'sky', 'ports_import.php') : '') +
+            webItem('Import completed vessels', 'upload', 'green', 'completed_import.php') +
+            webItem('Month summary (Excel)', 'download', 'blue', 'export_month_summary.php?y=' + new Date().getFullYear() + '&m=' + (new Date().getMonth() + 1), true) +
             '</div></div></div></section>');
+        function webItem(label, ic, cls, url, download) {
+            return (download ? '<a class="menu-item press" href="' + url + '">' : '<button type="button" class="menu-item press" data-web="' + url + '">') +
+                '<span class="ic ' + cls + '">' + icon(ic) + '</span><span class="grow">' + label + '</span>' + icon(download ? 'download' : 'chev', 'chev') + (download ? '</a>' : '</button>');
+        }
         function adminItem(label, ic, cls, go2) {
             return '<button type="button" class="menu-item press" data-go="' + go2 + '"><span class="ic ' + cls + '">' + icon(ic) + '</span><span class="grow">' + label + '</span>' + icon('chev', 'chev') + '</button>';
         }

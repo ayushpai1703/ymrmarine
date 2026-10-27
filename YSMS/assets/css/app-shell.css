@@ -252,3 +252,53 @@ html.ysms-app .footer-note { color: #64748b; }
 @media (prefers-reduced-motion: reduce) {
     #ysms-splash *, #ysms-splash { animation-duration: .01ms !important; }
 }
+
+/* ---------- Full pages inside the app: same look as the app screens (app.php) ---------- */
+html.ysms-sub body,
+html.ysms-sub .mobile-container { background: #f4f6fb; }
+html.ysms-sub body, html.ysms-sub .mobile-container, html.ysms-sub input, html.ysms-sub select, html.ysms-sub textarea, html.ysms-sub button {
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+html.ysms-sub .top-app-bar {
+    min-height: 60px; padding: 8px 10px; background: #fff !important; border-bottom: 1px solid #e2e8f0;
+    grid-template-columns: auto 1fr auto; gap: 6px; box-shadow: none;
+}
+html.ysms-sub .top-app-bar-title { text-align: left; font-size: 17px; font-weight: 800; color: #0f172a !important; overflow: hidden; text-overflow: ellipsis; }
+html.ysms-sub .top-app-bar-right { display: none; }
+html.ysms-sub .ysms-back-btn { border: 0; background: transparent; }
+html.ysms-sub .fnotes { display: none !important; }
+html.ysms-sub .btn-primary, html.ysms-sub .blue-action-btn { background: #1e3a8a; border-color: #1e3a8a; border-radius: 14px; }
+html.ysms-sub .form-control, html.ysms-sub .form-select { border: 1.5px solid #cbd5e1; border-radius: 14px; min-height: 48px; font-size: 16px; }
+html.ysms-sub .form-control:focus, html.ysms-sub .form-select:focus { border-color: #1e3a8a; box-shadow: 0 0 0 4px rgba(30, 58, 138, .12); }
+
+/* Word report generator (report_generator.php) — its engine is unchanged, only the look */
+html.ysms-sub .report-banner { display: none; }
+html.ysms-sub .report-tabs-wrap { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 8px 0 10px; margin: 0; position: sticky; top: 60px; z-index: 40; }
+html.ysms-sub .report-tabs { gap: 8px; padding: 0 12px; scrollbar-width: none; }
+html.ysms-sub .report-tabs::-webkit-scrollbar { display: none; }
+html.ysms-sub .report-tab-btn {
+    height: 38px; border-radius: 19px; border: 1px solid #cbd5e1; background: #fff; color: #334155;
+    font-size: 13px; font-weight: 600; padding: 0 14px; box-shadow: none; white-space: nowrap;
+}
+html.ysms-sub .report-tab-btn.active { background: #1e3a8a; border-color: #1e3a8a; color: #fff; }
+html.ysms-sub .report-section-block { padding: 14px 14px 0; }
+html.ysms-sub .accordion-group-card, html.ysms-sub .upload-zone-pro, html.ysms-sub .extra-field-card, html.ysms-sub .damage-widget-card {
+    background: #fff; border: 0 !important; border-radius: 20px; box-shadow: 0 4px 14px rgba(15, 23, 42, .06); overflow: hidden;
+}
+html.ysms-sub .upload-zone-pro { padding: 16px; }
+html.ysms-sub .accordion-header-bar { padding: 14px 16px; background: #fff; }
+html.ysms-sub .accordion-header-title { font-size: 15px; font-weight: 700; }
+html.ysms-sub .control-label { font-size: 13px; font-weight: 600; color: #334155; text-transform: none; letter-spacing: 0; }
+html.ysms-sub .generator-input {
+    min-height: 50px; border: 1.5px solid #cbd5e1; border-radius: 14px; font-size: 16px; padding: 0 14px; background: #fff;
+}
+html.ysms-sub .generator-input:focus { border-color: #1e3a8a; box-shadow: 0 0 0 4px rgba(30, 58, 138, .12); outline: 0; }
+html.ysms-sub .pro-dropdown-trigger { min-height: 50px; border: 1.5px solid #cbd5e1; border-radius: 14px; background: #fff; }
+html.ysms-sub .pro-dropdown-panel { border-radius: 16px; box-shadow: 0 14px 30px rgba(15, 23, 42, .18); }
+html.ysms-sub .zone-load-btn { min-height: 46px; border-radius: 14px; background: #1e3a8a; color: #fff; border: 0; font-weight: 700; }
+html.ysms-sub .btn-submit-pro {
+    position: sticky; bottom: 12px; z-index: 30; height: 54px; border-radius: 14px; margin: 16px 14px 24px; width: calc(100% - 28px);
+    font-size: 16px; box-shadow: 0 10px 24px rgba(15, 23, 42, .18);
+}
+html.ysms-sub .btn-submit-pro.ready { background: #1e3a8a; box-shadow: 0 10px 24px rgba(30, 58, 138, .35); }
+html.ysms-sub .scroll-content { padding-bottom: 24px !important; }
