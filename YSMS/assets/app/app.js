@@ -545,20 +545,29 @@
             var html =
                 '<div data-rise><div class="title-row"><h1>' + esc(v.vessel) + '</h1><span class="tag ' + statusTag[0] + '">' + statusTag[1] + '</span></div>' +
                 '<div class="subline">' + esc(v.client) + (v.port ? ' · ' + esc(v.port) : '') + '</div></div>' +
+                (v.share ? '<div class="share-row" data-rise><a class="btn wa press" href="' + esc(v.share.whatsapp) + '">' + icon('chat') + 'WhatsApp</a>' +
+                    '<a class="btn mail press" href="mailto:?subject=' + encodeURIComponent(v.share.subject) + '&body=' + encodeURIComponent(v.share.body) + '">' + icon('inbox') + 'Email</a></div>' : '') +
                 (over ? '<div class="alert ' + over.kind + '" role="status" data-rise>' + icon('alert') + '<div><b>' + (over.kind === 'survey' ? 'Survey pending.' : 'Report overdue.') + '</b> ' +
                     over.days + ' days since the ' + (over.kind === 'survey' ? 'appointment date' : 'survey was completed') + '.</div></div>' : '') +
                 '<section class="card rows" data-rise>' + rows.map(function (r) { return '<div class="kv"><span>' + r[0] + '</span><b>' + esc(r[1]) + '</b></div>'; }).join('') +
-                (v.remarks ? '<div class="kv"><span style="color:#c2410c">Admin remarks</span><b>' + esc(v.remarks) + '</b></div>' : '') + '</section>' +
+                (v.remarks ? '<div class="kv"><span style="color:#c2410c">Admin remarks</span><b>' + esc(v.remarks) + '</b></div>' : '') +
+                (v.agent_email ? '<div class="kv"><span>Agent update</span><b><button type="button" class="link-btn" style="min-height:32px;padding:0" data-agent-mail>' + (v.agent_email.sent ? 'Send again' : 'Send email to agent') + '</button>' +
+                    (v.agent_email.sent ? '<small style="display:block;font-weight:500;color:#64748b">Sent ' + esc(v.agent_email.sent) + '</small>' : '') + '</b></div>' : '') + '</section>' +
+                (v.recovery ? '<section class="card card-pad" data-rise><div class="card-h">Recovery (MT)' + (v.recovery.can_edit ? '<button type="button" class="link-btn" data-rec-edit>Edit</button>' : '') + '</div>' +
+                    (v.recovery.na ? '<div style="font-size:13px;color:#64748b">Not applicable for this survey type.</div>'
+                        : '<div class="hist-rec"><div><small>Total</small><b>' + esc(v.recovery.total || '—') + '</b></div><div><small>VLSFO</small><b>' + esc(v.recovery.vlsfo || '—') + '</b></div><div><small>LSMGO</small><b>' + esc(v.recovery.lsmgo || '—') + '</b></div><div><small>HSFO</small><b>' + esc(v.recovery.hsfo || '—') + '</b></div></div>') + '</section>' : '') +
                 '<section class="card card-pad" data-rise><div class="card-h">Latest update' + (v.can_update ? '<button type="button" class="link-btn" data-update>' + (v.update ? 'Edit' : 'Add') + '</button>' : '') + '</div>' +
                 (v.update ? '<div style="font-size:14px">' + esc(v.update) + '</div><div style="font-size:12px;color:#64748b">' + esc(v.update_when) + (v.update_by ? ' · by ' + esc(v.update_by) : '') + '</div>'
                     : '<div style="font-size:13px;color:#64748b">No updates recorded yet.</div>') + '</section>' +
                 '<section class="card card-pad" data-rise><div class="card-h">Documents<span style="font-size:12px;color:#64748b;font-weight:500">' + v.docs.length + '</span></div>' +
                 (v.docs.length ? v.docs.map(function (d) {
                     var t = docType(d);
-                    return '<a class="doc press" href="download.php?upload_id=' + d.id + '"><span class="ft ' + t[0] + '">' + t[1] + '</span><span class="t"><b>' + esc(d.name) + '</b><small>' + esc(d.type) + (d.when ? ' · ' + esc(d.when) : '') + '</small></span>' + icon('download', 'chev') + '</a>';
+                    return '<div class="doc-row"><a class="doc press" href="download.php?upload_id=' + d.id + '"><span class="ft ' + t[0] + '">' + t[1] + '</span><span class="t"><b>' + esc(d.name) + '</b><small>' + esc(d.type) + (d.when ? ' · ' + esc(d.when) : '') + '</small></span>' + icon('download', 'chev') + '</a>' +
+                        (v.can_replace ? '<button type="button" class="icon-btn plain press" data-replace="' + d.id + '" aria-label="Replace ' + esc(d.name) + '">' + icon('refresh') + '</button>' : '') + '</div>';
                 }).join('') : '<div style="font-size:13px;color:#64748b">No documents uploaded yet.</div>') + '</section>' +
+                (v.remarks_list ? remarksHtml(v) : '') +
                 (v.can_history ? '<button type="button" class="row-link press" data-rise data-history="' + v.id + '"><span class="ic purple" style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center">' + icon('history') + '</span><span class="t"><b>Previous surveys of this vessel</b><small>Documents and recovery</small></span>' + icon('chev', 'chev') + '</button>' : '') +
-                '<button type="button" class="row-link press" data-rise data-web="' + esc(v.web) + '"><span class="ic blue" style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center">' + icon('globe') + '</span><span class="t"><b>Open full page</b><small>Every detail and option of this vessel</small></span>' + icon('chev', 'chev') + '</button>';
+                '';
             var sheet = scr.querySelector('.sheet');
             sheet.innerHTML = html;
             var acts = [];
@@ -577,7 +586,93 @@
             };
             var up = scr.querySelector('[data-update]');
             if (up) up.onclick = function () { updateSheet(v); };
+            wireExtras(v);
             stagger(scr);
+        }
+        function remarksHtml(v) {
+            var r = v.remarks_list;
+            return '<section class="card card-pad" data-rise><div class="card-h">Remarks<span style="font-size:12px;color:#64748b;font-weight:500">' + r.items.length + '</span></div>' +
+                (r.can_add ? '<div class="rm-add"><textarea class="ta" rows="2" placeholder="Add a remark" data-rm-text></textarea>' +
+                    '<div class="rm-bar"><label class="link-btn press" for="rm-files">' + icon('plus') + '<span data-rm-count>Attach files</span></label><input type="file" id="rm-files" multiple hidden>' +
+                    '<button type="button" class="btn primary press" style="height:40px" data-rm-save>Save remark</button></div></div>' : '') +
+                (r.items.length ? r.items.map(function (m) {
+                    return '<div class="rm"><div class="rm-h"><b>' + esc(m.by) + '</b><small>' + esc(m.when) + '</small>' + (r.can_delete ? '<button type="button" class="link-btn" style="color:#b91c1c;min-height:32px" data-rm-del="' + m.id + '">Delete</button>' : '') + '</div>' +
+                        (m.text ? '<div class="rm-t">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '') +
+                        m.files.map(function (f) { return '<a class="att-file" href="download.php?remark_attachment_id=' + f.id + '"><span class="ft other">FILE</span><span class="t"><b>' + esc(f.name) + '</b></span>' + icon('download') + '</a>'; }).join('') + '</div>';
+                }).join('') : '<div style="font-size:13px;color:#64748b">No remarks yet.</div>') + '</section>';
+        }
+        function wireExtras(v) {
+            var page = v.web.split('?')[0] + '?id=' + v.id;
+            var agent = scr.querySelector('[data-agent-mail]');
+            if (agent) agent.onclick = function () {
+                // ajax/send_agent_update.php (Admin): stored agent emails, or ask for them.
+                getJson('ajax/send_agent_update.php?action=lookup&survey_id=' + v.id).then(function (d) {
+                    openSheet('<h2>Send update to agent</h2><p class="sheet-p">' + esc(d.agent_name) + (d.has_emails ? ' · ' + esc(d.emails.join(', ')) : ' · no email saved yet') + '</p>' +
+                        (d.has_emails ? '' : fieldsHtml([{ name: 'email_primary', label: 'Agent email', type: 'email', required: true }, { name: 'email_optional', label: 'Another email (optional)', type: 'email' }], {})) +
+                        '<div class="sheet-actions"><button type="button" class="btn primary press" data-yes>Send email</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
+                    function (sh) {
+                        sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
+                        sh.querySelector('[data-yes]').onclick = function () {
+                            var data = Object.assign({ action: 'send', survey_id: v.id }, collect(sh)), b = this;
+                            if (!d.has_emails && !data.email_primary) { toast('Enter the agent email.', 'bad'); return; }
+                            busyBtn(b, true);
+                            postJson('ajax/send_agent_update.php', data).then(function (r) { closeSheet(); toast(r.message || 'Email sent.', 'ok'); load(); })
+                                .catch(function (x) { busyBtn(b, false); toast(x.message, 'bad'); });
+                        };
+                    });
+                }).catch(function (x) { toast(x.message, 'bad'); });
+            };
+            var rec = scr.querySelector('[data-rec-edit]');
+            if (rec) rec.onclick = function () {
+                var R = v.recovery;
+                openSheet('<h2>Edit recovery (MT)</h2><div class="rec-grid">' +
+                    [['recovery_amount', 'Total', R.total], ['vlsfo_recovery', 'VLSFO', R.vlsfo], ['lsmgo_recovery', 'LSMGO', R.lsmgo], ['hsfo_recovery', 'HSFO', R.hsfo]].map(function (f) {
+                        return '<label class="mini' + (f[0] === 'recovery_amount' ? ' total' : '') + '"><span>' + f[1] + '</span><input type="number" step="0.001" min="0" inputmode="decimal" name="' + f[0] + '" value="' + esc(f[2]) + '"></label>';
+                    }).join('') + '</div><div class="sheet-actions"><button type="button" class="btn primary press" data-yes>Save recovery</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
+                function (sh) {
+                    sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
+                    sh.querySelector('[data-yes]').onclick = function () {
+                        var b = this; busyBtn(b, true);
+                        postPage(page, Object.assign({ update_recovery: '1' }, collect(sh))).then(function (r) {
+                            if (!r.ok) throw new Error(r.message || 'Could not save.');
+                            closeSheet(); toast(r.message, 'ok'); load();
+                        }).catch(function (x) { busyBtn(b, false); toast(x.message, 'bad'); });
+                    };
+                });
+            };
+            scr.querySelectorAll('[data-replace]').forEach(function (b) {
+                b.onclick = function () {
+                    var i = document.createElement('input'); i.type = 'file';
+                    i.onchange = function () {
+                        var f = i.files[0]; if (!f) return;
+                        var fd = new FormData(); fd.append('document_id', b.getAttribute('data-replace')); fd.append('new_file', f); fd.append('csrf_token', state.me.csrf);
+                        toast('Replacing…');
+                        fetch('ajax/document_replace.php', { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF-Token': state.me.csrf } })
+                            .then(function (r) { return r.json(); }).then(function (r) { if (!r.success) throw new Error(r.message); toast(r.message, 'ok'); load(); })
+                            .catch(function (x) { toast(x.message || 'Could not replace the file', 'bad'); });
+                    };
+                    i.click();
+                };
+            });
+            var rmFiles = [], rmIn = scr.querySelector('#rm-files');
+            if (rmIn) rmIn.onchange = function () { rmFiles = Array.prototype.slice.call(rmIn.files); scr.querySelector('[data-rm-count]').textContent = rmFiles.length ? rmFiles.length + ' file' + (rmFiles.length > 1 ? 's' : '') : 'Attach files'; };
+            var rmSave = scr.querySelector('[data-rm-save]');
+            if (rmSave) rmSave.onclick = function () {
+                var text = scr.querySelector('[data-rm-text]').value.trim();
+                if (!text && !rmFiles.length) { toast('Write a remark or attach a file.', 'bad'); return; }
+                var fd = new FormData(); fd.append('add_remark', '1'); fd.append('remarks', text);
+                rmFiles.forEach(function (f) { fd.append('remark_attachments[]', f); });
+                busyBtn(rmSave, true);
+                postPage(page, fd).then(function (r) { if (!r.ok) throw new Error(r.message || 'Could not save.'); toast(r.message, 'ok'); load(); })
+                    .catch(function (x) { busyBtn(rmSave, false); toast(x.message, 'bad'); });
+            };
+            scr.querySelectorAll('[data-rm-del]').forEach(function (b) {
+                b.onclick = function () {
+                    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Tap to confirm'; haptic('HEAVY'); return; }
+                    postPage(page, { delete_remark_id: b.getAttribute('data-rm-del') }).then(function (r) { toast(r.message || 'Remark deleted', r.ok ? 'ok' : 'bad'); load(); })
+                        .catch(function (x) { toast(x.message, 'bad'); });
+                };
+            });
         }
         function updateSheet(v) {
             openSheet('<h2>Latest update</h2><label class="sr" for="lu">Latest update</label>' +
@@ -676,7 +771,7 @@
         }).then(function (html) {
             var doc = new DOMParser().parseFromString(html, 'text/html');
             // The page's own message: an inline alert, or the flash toast after a save-and-redirect.
-            var ok = doc.querySelector('.alert-success, .vdd-alert-success, .ysms-toast-success'), bad = doc.querySelector('.alert-danger, .vdd-alert-danger, .ysms-toast-error');
+            var ok = doc.querySelector('.alert-success, .vdd-alert-success, .ysms-toast-success'), bad = doc.querySelector('.alert-danger, .vdd-alert-danger, .ysms-toast-error, .remarks-alert');
             if (!ok && !bad) {
                 // Some pages confirm an upload with a SweetAlert instead of an inline message.
                 var sw = html.match(/Swal\.fire\(\{\s*icon:\s*'success',\s*title:\s*'([^']+)'/);

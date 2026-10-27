@@ -25,6 +25,7 @@
  */
 require_once 'config/config.php';
 require_once 'includes/notifications.php';
+require_once 'includes/document_replace_helpers.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: private, no-store');
@@ -134,6 +135,54 @@ function appCard(PDO $db, array $s, bool $fullAccess, string $role): array
         'overdue' => $over ? ['kind' => $over['kind'], 'days' => $over['days']] : null,
         'status' => (string)$s['status'],
     ];
+}
+
+/** The WhatsApp / Email text vessel_detail.php builds for a new appointment. */
+function appShareText(PDO $db, array $s): array
+{
+    $client = (string)($s['company_name'] ?? 'N/A');
+    $lines = [
+        'Vessel Name: ' . ($s['vessel_name'] ?? 'N/A'),
+        'Report No: ' . (!empty($s['report_number']) ? $s['report_number'] : 'N/A'),
+        'Client: ' . $client,
+        'Survey Type: ' . getCombinedSurveyTypeNames($db, $s['survey_type_ids'] ?? '', $s['type_name'] ?? 'N/A'),
+        'Assigned Date: ' . (!empty($s['assign_date']) ? date('d M Y', strtotime((string)$s['assign_date'])) : '--/--/----'),
+        'Agent: ' . ($s['agent_name'] ?? 'N/A'),
+        'Surveyor: ' . getCombinedSurveyorNames($db, $s['id'] ?? 0, $s['surveyor_name'] ?? 'N/A'),
+        'Port: ' . ($s['port_name'] ?? 'N/A'),
+        'Status: ' . ($s['status'] ?? 'N/A'),
+    ];
+    if (!empty($s['custom_live_status'])) $lines[] = 'Latest Update: ' . $s['custom_live_status'];
+    if (!empty($s['remarks'])) $lines[] = 'Admin Remarks: ' . $s['remarks'];
+    $block = implode("\n", $lines);
+    $wa = "*New Survey Appointment*\n\n" . $block;
+    $num = preg_replace('/\D+/', '', WHATSAPP_NUMBER);
+    return [
+        'whatsapp' => $num !== '' ? 'https://wa.me/' . $num . '?text=' . rawurlencode($wa) : 'https://api.whatsapp.com/send?text=' . rawurlencode($wa),
+        'subject' => 'New Survey Appointment - ' . ($s['vessel_name'] ?? 'Vessel') . ' (' . $client . ')',
+        'body' => "Dear Sir,\n\nGood day to you.\n\nPlease find the below appointment from client (" . $client . ").\n\n" . $block . "\n\nThank you.\nYMR Marine Solutions",
+    ];
+}
+
+/** Recovery figures and whether this user may edit them (Admin, report / completed detail pages). */
+function appRecovery(PDO $db, array $s, string $role): ?array
+{
+    if (!in_array($s['status'], ['Pending Report', 'Completed'], true)) return null;
+    $na = isRecoveryNotApplicable($db, (string)($s['survey_type_ids'] ?? ''), (string)($s['type_name'] ?? ''));
+    $v = function ($k) use ($s) { return $s[$k] !== null && $s[$k] !== '' ? number_format(abs((float)$s[$k]), 3, '.', '') : ''; };
+    return ['na' => $na, 'total' => $v('recovery_amount'), 'vlsfo' => $v('vlsfo_recovery'), 'lsmgo' => $v('lsmgo_recovery'), 'hsfo' => $v('hsfo_recovery'),
+        'can_edit' => $role === 'Admin' && !$na];
+}
+
+function appRemarks(PDO $db, array $s, string $role, int $userId): array
+{
+    require_once __DIR__ . '/includes/completed_remarks_helpers.php';
+    $items = [];
+    foreach (getCompletedRemarks($db, (int)$s['id']) as $r) {
+        $items[] = ['id' => (int)$r['id'], 'text' => (string)$r['remarks'], 'by' => (string)($r['author_name'] ?? ''), 'when' => appDate($r['created_at'] ?? '', 'd M Y, h:i A'),
+            'files' => array_map(function ($f) { return ['id' => (int)$f['id'], 'name' => (string)($f['original_name'] ?? $f['file_name'] ?? 'File')]; }, $r['attachments'] ?? [])];
+    }
+    return ['items' => $items, 'can_add' => canAddCompletedRemark($db, $s, $role, $userId), 'can_delete' => canDeleteCompletedRemark($role)];
 }
 
 $a = (string)($_GET['a'] ?? '');
@@ -320,6 +369,13 @@ if ($a === 'survey') {
         'can_update' => $s['status'] === 'Pending Vessel',
         // vessel_detail.php shows previous surveys (Pending Vessel) to Admin / Super Admin / Surveyor.
         'can_history' => $s['status'] === 'Pending Vessel' && ($fullAccess || $assigned),
+        // Extra tools of the detail pages:
+        'share' => $s['status'] === 'Pending Vessel' ? appShareText($db, $s) : null,                  // vessel_detail.php WhatsApp / Email
+        'agent_email' => $s['status'] === 'Pending Vessel' && $role === 'Admin' && trim((string)$s['agent_name']) !== ''
+            ? ['sent' => !empty($s['agent_email_sent_at']) ? date('d M Y, h:i A', strtotime((string)$s['agent_email_sent_at'])) : ''] : null,
+        'recovery' => appRecovery($db, $s, $role),                                                 // report / completed detail
+        'can_replace' => canReplaceDocument($db, $role, $userId, $id),                             // ajax/document_replace.php
+        'remarks_list' => $s['status'] === 'Completed' ? appRemarks($db, $s, $role, $userId) : null, // completed_detail.php
     ];
     appOut($card);
 }

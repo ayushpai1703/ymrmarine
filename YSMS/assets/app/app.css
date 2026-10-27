@@ -522,3 +522,21 @@ svg.i { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none;
 .dup .t b { display: block; font-size: 13.5px; }
 .dup .t small { display: block; font-size: 12px; color: var(--muted); }
 .fcard .dl { text-decoration: none; }
+
+/* Detail extras */
+.share-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.share-row .btn { height: 46px; text-decoration: none; font-size: 14px; }
+.btn.wa { background: #16a34a; color: #fff; }
+.btn.mail { background: #fff; color: #b91c1c; border: 1.5px solid #fecaca; }
+.doc-row { display: flex; align-items: center; gap: 4px; border-top: 1px solid #f1f5f9; }
+.doc-row:first-of-type { border-top: 0; }
+.doc-row .doc { flex: 1; min-width: 0; border-top: 0; }
+.rm-add { display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9; }
+.rm-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rm-bar .link-btn { display: inline-flex; align-items: center; gap: 6px; }
+.rm { border-top: 1px solid #f1f5f9; padding: 8px 0; }
+.rm:first-of-type { border-top: 0; }
+.rm-h { display: flex; align-items: center; gap: 8px; }
+.rm-h b { font-size: 13.5px; }
+.rm-h small { flex: 1; font-size: 12px; color: var(--muted); }
+.rm-t { font-size: 14px; margin: 4px 0; -webkit-user-select: text; user-select: text; }
