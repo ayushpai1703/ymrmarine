@@ -165,6 +165,9 @@ svg.i { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none;
 .att-row b { display: block; font-size: 15px; font-weight: 600; }
 .att-row small { display: block; font-size: 12px; color: var(--orange-text); }
 .att-row.report small { color: var(--red-text); }
+.qa-head { display: flex; align-items: center; justify-content: space-between; }
+.qa-head .link-btn { display: inline-flex; align-items: center; gap: 5px; }
+.qa-head .link-btn svg { width: 15px; height: 15px; }
 .quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .qa { border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 4px 0; font-size: 11.5px; font-weight: 600; color: var(--text-2); text-align: center; }
 .qa .q { width: 58px; height: 58px; border-radius: 19px; background: #fff; color: var(--primary); box-shadow: 0 4px 12px rgba(15, 23, 42, .08); display: flex; align-items: center; justify-content: center; }

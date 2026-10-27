@@ -195,6 +195,7 @@ if ($a === 'me') {
         try { $unread = (int)getUnreadNotificationCount($db, $userId); } catch (Throwable $e) { $unread = 0; }
     }
     appOut([
+        'id' => (int)$userId,
         'name' => $name,
         'first' => explode(' ', trim($name))[0] ?? '',
         'initials' => appInitials($name),

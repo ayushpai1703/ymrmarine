@@ -354,10 +354,11 @@
             statTile('completed', 'check', 'green', 'Completed') +
             '<button type="button" class="stat press" data-rise' + (me.can.recovery ? ' data-go="recovery"' : '') + '><span class="ic sky">' + icon('chart') + '</span><span class="n" data-n="rec">–</span><span class="l">Recovery this month (MT)</span></button>' +
             '</div><div data-attention></div>' +
-            '<div class="section-title" data-rise>Quick actions</div><div class="quick" data-rise>' + quickActions(me) + '</div>' +
+            '<div class="section-title qa-head" data-rise>Quick actions<button type="button" class="link-btn press" data-qa-edit>' + icon('edit') + 'Edit</button></div><div class="quick" data-rise data-quick>' + quickActions(me) + '</div>' +
             '<div data-month></div>' +
             '</div></div></section>');
         var body = scr.querySelector('.scr-body');
+        scr.querySelector('[data-qa-edit]').addEventListener('click', function () { editQuickActions(me, scr.querySelector('[data-quick]')); });
         function load() {
             return api('dashboard').then(function (d) {
                 countUp(scr.querySelector('[data-n=vessels]'), d.counts.pending_vessel);
@@ -383,19 +384,52 @@
         return scr;
     };
 
+    // Home quick actions: every shortcut this role can use; the user picks up to 4 (saved on this phone).
+    var QA_MAX = 4;
+    function quickAll(me) {
+        return [
+            me.can.assign && { k: 'assign', label: me.role === 'Client' ? 'Request survey' : 'Assign vessel', ic: 'plus', to: '#assign' },
+            me.can.report_generator && { k: 'word', label: 'Word report', ic: 'file', to: 'report_generator.php' },
+            me.can.recovery && { k: 'recovery', label: 'Recovery', ic: 'fuel', to: '#recovery' },
+            me.can.chat && { k: 'chat', label: 'Team chat', ic: 'chat', to: '#chat' },
+            me.can.inbox && { k: 'inbox', label: 'Inbox', ic: 'inbox', to: '#inbox' },
+            { k: 'search', label: 'Search', ic: 'search', to: '#search' },
+            me.role !== 'Client' && { k: 'formats', label: 'Formats', ic: 'folder', to: '#formats' },
+            { k: 'cancelled', label: 'Cancelled', ic: 'ban', to: '#cancelled' },
+            { k: 'permission', label: 'Permission copy', ic: 'file', to: 'generate_permission_copy.php' },
+            me.role === 'Admin' && { k: 'surveyor', label: 'Add surveyor', ic: 'user', to: '#surveyor' },
+            ['Admin', 'Super Admin'].indexOf(me.role) !== -1 && { k: 'addclient', label: 'Add client', ic: 'users', to: '#addclient' },
+            me.role === 'Admin' && { k: 'admin', label: 'Admin controls', ic: 'shield', to: '#admin' },
+            me.role === 'Admin' && { k: 'duplicates', label: 'Duplicates', ic: 'folder', to: '#duplicates' },
+            ['Admin', 'Super Admin'].indexOf(me.role) !== -1 && { k: 'activity', label: 'Login activity', ic: 'shield', to: '#activity' },
+            { k: 'profile', label: 'My profile', ic: 'user', to: '#me' }
+        ].filter(Boolean);
+    }
+    function qaKey(me) { return 'ysmsQuick:' + (me.id || me.name); }
+    function quickChosen(me) {
+        var all = quickAll(me), saved = null;
+        try { saved = JSON.parse(localStorage.getItem(qaKey(me)) || 'null'); } catch (e) { saved = null; }
+        var pick = Array.isArray(saved) ? saved.map(function (k) { return all.filter(function (a) { return a.k === k; })[0]; }).filter(Boolean) : [];
+        return (pick.length ? pick : all).slice(0, QA_MAX);
+    }
     function quickActions(me) {
-        var all = [
-            me.can.assign && [me.role === 'Client' ? 'Request survey' : 'Assign vessel', 'plus', '#assign', true],
-            me.can.report_generator && ['Word report', 'file', 'report_generator.php'],
-            me.can.recovery && ['Recovery', 'fuel', '#recovery'],
-            me.can.chat && ['Team chat', 'chat', '#chat'],
-            me.role !== 'Client' && ['Formats', 'folder', '#formats'],
-            ['Cancelled', 'ban', '#cancelled']
-        ].filter(Boolean).slice(0, 4);
-        return all.map(function (a, i) {
-            var target = a[2].charAt(0) === '#' ? 'data-go="' + a[2].slice(1) + '"' : 'data-web="' + a[2] + '"';
-            return '<button type="button" class="qa" ' + target + '><span class="q press' + (i === 0 ? ' solid' : '') + '">' + icon(a[1]) + '</span>' + esc(a[0]) + '</button>';
+        return quickChosen(me).map(function (a, i) {
+            var target = a.to.charAt(0) === '#' ? 'data-go="' + a.to.slice(1) + '"' : 'data-web="' + a.to + '"';
+            return '<button type="button" class="qa" ' + target + '><span class="q press' + (i === 0 ? ' solid' : '') + '">' + icon(a.ic) + '</span>' + esc(a.label) + '</button>';
         }).join('');
+    }
+    function editQuickActions(me, box) {
+        pickSheet('Quick actions', quickAll(me).map(function (a) { return { value: a.k, label: a.label }; }), {
+            multi: true, max: QA_MAX, hint: 'Choose up to ' + QA_MAX + '. They show in the order you tap them.',
+            selected: quickChosen(me).map(function (a) { return a.k; })
+        }).then(function (v) {
+            if (v === null) return;
+            if (!v.length) { toast('Choose at least one quick action', 'bad'); return; }
+            try { localStorage.setItem(qaKey(me), JSON.stringify(v)); } catch (e) {}
+            box.innerHTML = quickActions(me);
+            haptic('MEDIUM');
+            toast('Quick actions updated', 'ok');
+        });
     }
 
     var LISTS = {
@@ -576,17 +610,16 @@
             var old = scr.querySelector('.actions'); if (old) old.remove();
             if (acts.length) scr.appendChild(el('<div class="actions' + (acts.length === 1 ? ' one' : '') + '">' + acts.join('') + '</div>'));
             else sheet.style.paddingBottom = '32px';
+            // ⋮ menu — Pending Vessel: Edit vessel · Pending Report: Edit vessel + report tools ·
+            // Completed: Edit vessel + Invoice generator. Editing is Admin-only (assign_vessel.php).
+            var isAdmin = state.me.role === 'Admin', st = v.status;
+            var menu = (isAdmin ? '<button type="button" class="menu-item press" data-edit="' + v.id + '">' + icon('edit') + 'Edit vessel</button>' : '') +
+                (st === 'Pending Report' && state.me.can.report_generator ? '<button type="button" class="menu-item press" data-web="report_generator.php?id=' + v.id + '">' + icon('file') + 'Word report generator</button>' : '') +
+                (st === 'Pending Report' && ['Admin', 'Surveyor'].indexOf(state.me.role) !== -1 ? '<button type="button" class="menu-item press" data-web="photo_report_generator.php?id=' + v.id + '">' + icon('camera') + 'Photo report generator</button>' : '') +
+                (isAdmin && (st === 'Pending Report' || st === 'Completed') ? '<button type="button" class="menu-item press" data-web="invoice_generator.php?id=' + v.id + '">' + icon('file') + 'Invoice generator</button>' : '');
             var more = scr.querySelector('[data-more]');
-            more.hidden = false;
-            more.onclick = function () {
-                openSheet('<h2>' + esc(v.vessel) + '</h2>' +
-                    (state.me.role === 'Admin' && v.status === 'Pending Vessel' ? '<button type="button" class="menu-item press" data-edit="' + v.id + '">' + icon('edit') + 'Edit vessel</button>' : '') +
-                    '<button type="button" class="menu-item press" data-web="' + esc(v.web) + '">' + icon('globe') + 'Open full page</button>' +
-                    (state.me.can.report_generator && v.status !== 'Pending Vessel' ? '<button type="button" class="menu-item press" data-web="report_generator.php?id=' + v.id + '">' + icon('file') + 'Word report generator</button>' : '') +
-                    (v.status === 'Pending Report' && ['Admin', 'Surveyor'].indexOf(state.me.role) !== -1 ? '<button type="button" class="menu-item press" data-web="photo_report_generator.php?id=' + v.id + '">' + icon('camera') + 'Photo report generator</button>' : '') +
-                    (state.me.role === 'Admin' && v.status !== 'Pending Vessel' ? '<button type="button" class="menu-item press" data-web="invoice_generator.php?id=' + v.id + '">' + icon('file') + 'Invoice generator</button>' : '') +
-                    '<button type="button" class="menu-item press" data-refresh>' + icon('refresh') + 'Refresh</button>');
-            };
+            more.hidden = !menu;
+            more.onclick = function () { openSheet('<h2>' + esc(v.vessel) + '</h2>' + menu); };
             var up = scr.querySelector('[data-update]');
             if (up) up.onclick = function () { updateSheet(v); };
             wireExtras(v);
@@ -1546,7 +1579,7 @@
         var chosen = (opt.selected || []).map(String);
         return new Promise(function (resolve) {
             var done = false;
-            var sh = openSheet('<h2>' + esc(title) + '</h2>' +
+            var sh = openSheet('<h2>' + esc(title) + '</h2>' + (opt.hint ? '<p class="sheet-p">' + esc(opt.hint) + '</p>' : '') +
                 (items.length > 7 ? '<label class="search flat" style="margin-bottom:8px">' + icon('search') + '<span class="sr">Search</span><input type="search" placeholder="Search" data-q></label>' : '') +
                 '<div class="pick-list" data-items></div>' +
                 (opt.multi ? '<div class="sheet-actions"><button type="button" class="btn primary press" data-ok>Done</button></div>' : ''));
@@ -1576,6 +1609,7 @@
                 if (opt.exclusive && v === opt.exclusive) chosen = i === -1 ? [v] : [];
                 else {
                     chosen = chosen.filter(function (x) { return x !== opt.exclusive; });
+                    if (i === -1 && opt.max && chosen.length >= opt.max) { haptic('HEAVY'); toast('You can choose up to ' + opt.max, 'bad'); return; }
                     if (i === -1) chosen.push(v); else chosen.splice(i, 1);
                 }
                 draw();
