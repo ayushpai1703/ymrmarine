@@ -596,3 +596,20 @@ a.menu-item { text-decoration: none; }
 .top-row .bar i { display: block; height: 100%; background: var(--primary); border-radius: 4px; }
 .top-row .v { font-size: 13.5px; font-weight: 700; text-align: right; }
 .top-row .v small { font-size: 11px; color: var(--muted); }
+
+/* Vessel details: Edit; recovery auto total; Coming soon */
+.rows-h { display: flex; align-items: center; justify-content: space-between; padding: 6px 0 0; border-bottom: 1px solid #f1f5f9; }
+.rows-h b { font-size: 15px; }
+.rows-h .link-btn, .card-h .link-btn { display: inline-flex; align-items: center; gap: 5px; }
+.rows-h .link-btn svg { width: 15px; height: 15px; }
+label.mini.auto input { background: #f1f5f9; color: var(--primary); font-weight: 700; }
+.rec-auto { display: block; margin-top: 6px; }
+.soon { min-height: 70vh; display: flex; align-items: center; justify-content: center; }
+.soon-card { background: #fff; border-radius: 24px; box-shadow: 0 10px 28px rgba(15, 23, 42, .08); padding: 36px 24px; text-align: center; width: 100%; }
+.soon-ic { width: 72px; height: 72px; margin: 0 auto 18px; border-radius: 22px; background: #eff6ff; color: var(--primary); display: flex; align-items: center; justify-content: center; animation: soonPulse 2.4s ease-in-out infinite; }
+.soon-ic svg { width: 34px; height: 34px; }
+.soon-card h2 { margin: 0 0 8px; font-size: 22px; font-weight: 800; }
+.soon-card p { margin: 0 0 22px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+@keyframes soonPulse { 50% { transform: scale(1.06); box-shadow: 0 0 0 10px rgba(37, 99, 235, .06); } }
+@media (prefers-reduced-motion: reduce) { .soon-ic { animation: none; } }
+.soon-card .btn { display: inline-flex; width: auto; padding: 0 22px; }

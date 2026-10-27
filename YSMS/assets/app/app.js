@@ -95,6 +95,12 @@
 
     // Full tools open the existing pages inside the app; Back returns here.
     function openWeb(url) {
+        // The website's "Coming soon" page is an app screen here.
+        var cs = /^coming_soon\.php(?:\?(.*))?$/.exec(url);
+        if (cs) {
+            var f = new URLSearchParams(cs[1] || '').get('feature');
+            state.soon = f || 'This feature'; go('soon'); return;
+        }
         haptic();
         document.body.appendChild(el('<div class="sheet-back" style="background:rgba(244,246,251,.6)"></div>'));
         location.href = url;
@@ -183,7 +189,7 @@
         if (TABS.indexOf(h) !== -1) return { name: h };
         return { name: 'home' };
     }
-    var PUSHED = ['forgot', 'search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign', 'admin', 'addclient', 'addadmin', 'surveyor', 'activity', 'duplicates', 'templates', 'sacontrols'];
+    var PUSHED = ['forgot', 'search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign', 'admin', 'addclient', 'addadmin', 'surveyor', 'activity', 'duplicates', 'templates', 'sacontrols', 'soon'];
     var ROUTE_IDS = { v: 'vessel', up: 'upload', h: 'history', c: 'room', e: 'assign', sv: 'surveyor', m: 'module' };
     function hashFor(name, id) {
         if (id) for (var k in ROUTE_IDS) if (ROUTE_IDS[k] === name) return '#/' + k + '/' + id;
@@ -485,6 +491,7 @@
             me.role !== 'Client' && { k: 'formats', label: 'Formats', ic: 'folder', to: '#formats' },
             { k: 'cancelled', label: 'Cancelled', ic: 'ban', to: '#cancelled' },
             { k: 'permission', label: 'Permission copy', ic: 'file', to: 'generate_permission_copy.php' },
+            me.role === 'Surveyor' && { k: 'lineups', label: 'Vessel line-ups', ic: 'ship', to: 'coming_soon.php?feature=Vessel+Lineups' },
             me.role === 'Admin' && { k: 'surveyor', label: 'Add surveyor', ic: 'user', to: '#surveyor' },
             ['Admin', 'Super Admin'].indexOf(me.role) !== -1 && { k: 'addclient', label: 'Add client', ic: 'users', to: '#addclient' },
             me.role === 'Admin' && { k: 'admin', label: 'Admin controls', ic: 'shield', to: '#admin' },
@@ -673,7 +680,8 @@
                     '<a class="btn mail press" href="mailto:?subject=' + encodeURIComponent(v.share.subject) + '&body=' + encodeURIComponent(v.share.body) + '">' + icon('inbox') + 'Email</a></div>' : '') +
                 (over ? '<div class="alert ' + over.kind + '" role="status" data-rise>' + icon('alert') + '<div><b>' + (over.kind === 'survey' ? 'Survey pending.' : 'Report overdue.') + '</b> ' +
                     over.days + ' days since the ' + (over.kind === 'survey' ? 'appointment date' : 'survey was completed') + '.</div></div>' : '') +
-                '<section class="card rows" data-rise>' + rows.map(function (r) { return '<div class="kv"><span>' + r[0] + '</span><b>' + esc(r[1]) + '</b></div>'; }).join('') +
+                '<section class="card rows" data-rise><div class="rows-h"><b>Details</b>' +
+                (state.me.role === 'Admin' ? '<button type="button" class="link-btn press" data-edit="' + v.id + '">' + icon('edit') + 'Edit</button>' : '') + '</div>' + rows.map(function (r) { return '<div class="kv"><span>' + r[0] + '</span><b>' + esc(r[1]) + '</b></div>'; }).join('') +
                 (v.remarks ? '<div class="kv"><span style="color:#c2410c">Admin remarks</span><b>' + esc(v.remarks) + '</b></div>' : '') +
                 (v.agent_email ? '<div class="kv"><span>Agent update</span><b><button type="button" class="link-btn" style="min-height:32px;padding:0" data-agent-mail>' + (v.agent_email.sent ? 'Send again' : 'Send email to agent') + '</button>' +
                     (v.agent_email.sent ? '<small style="display:block;font-weight:500;color:#64748b">Sent ' + esc(v.agent_email.sent) + '</small>' : '') + '</b></div>' : '') + '</section>' +
@@ -705,7 +713,8 @@
             var menu = (isAdmin ? '<button type="button" class="menu-item press" data-edit="' + v.id + '">' + icon('edit') + 'Edit vessel</button>' : '') +
                 (st === 'Pending Report' && state.me.can.report_generator ? '<button type="button" class="menu-item press" data-web="report_generator.php?id=' + v.id + '">' + icon('file') + 'Word report generator</button>' : '') +
                 (st === 'Pending Report' && ['Admin', 'Surveyor'].indexOf(state.me.role) !== -1 ? '<button type="button" class="menu-item press" data-web="photo_report_generator.php?id=' + v.id + '">' + icon('camera') + 'Photo report generator</button>' : '') +
-                (isAdmin && (st === 'Pending Report' || st === 'Completed') ? '<button type="button" class="menu-item press" data-web="invoice_generator.php?id=' + v.id + '">' + icon('file') + 'Invoice generator</button>' : '');
+                (isAdmin && (st === 'Pending Report' || st === 'Completed') ? '<button type="button" class="menu-item press" data-web="invoice_generator.php?id=' + v.id + '">' + icon('file') + 'Invoice generator</button>' : '') +
+                (st === 'Completed' && state.me.role === 'Surveyor' ? '<button type="button" class="menu-item press" data-web="coming_soon.php?feature=Generate+Expenses">' + icon('file') + 'Generate expenses</button>' : '');
             var more = scr.querySelector('[data-more]');
             more.hidden = !menu;
             more.onclick = function () { openSheet('<h2>' + esc(v.vessel) + '</h2>' + menu); };
@@ -755,6 +764,18 @@
                         return '<label class="mini' + (f[0] === 'recovery_amount' ? ' total' : '') + '"><span>' + f[1] + '</span><input type="number" step="0.001" min="0" inputmode="decimal" name="' + f[0] + '" value="' + esc(f[2]) + '"></label>';
                     }).join('') + '</div><div class="sheet-actions"><button type="button" class="btn primary press" data-yes>Save recovery</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
                 function (sh) {
+                    // Total = VLSFO + LSMGO + HSFO, filled in as they are typed. With all three empty the
+                    // total stays editable (older vessels have only a total).
+                    var tot = sh.querySelector('[name=recovery_amount]'), parts = ['vlsfo_recovery', 'lsmgo_recovery', 'hsfo_recovery'].map(function (n) { return sh.querySelector('[name=' + n + ']'); });
+                    var hint = el('<small class="hint rec-auto">Total = VLSFO + LSMGO + HSFO</small>');
+                    sh.querySelector('.rec-grid').after(hint);
+                    function sum() {
+                        var any = parts.some(function (i) { return i.value.trim() !== ''; });
+                        tot.readOnly = any; tot.parentNode.classList.toggle('auto', any); hint.hidden = !any;
+                        if (any) tot.value = parts.reduce(function (a, i) { return a + (parseFloat(i.value) || 0); }, 0).toFixed(3);
+                    }
+                    parts.forEach(function (i) { i.addEventListener('input', sum); });
+                    sum();
                     sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
                     sh.querySelector('[data-yes]').onclick = function () {
                         var b = this; busyBtn(b, true);
@@ -848,7 +869,8 @@
             me.can.report_generator && item('Word report generator', 'file', 'orange', 'report_generator.php'),
             me.role !== 'Client' && item('Formats', 'folder', 'green', '#formats'),
             item('Cancelled vessels', 'ban', 'red', '#cancelled'),
-            item('Permission copy', 'file', 'blue', 'generate_permission_copy.php')
+            item('Permission copy', 'file', 'blue', 'generate_permission_copy.php'),
+            me.role === 'Surveyor' && item('Vessel line-ups', 'ship', 'sky', 'coming_soon.php?feature=Vessel+Lineups')
         ].filter(Boolean).join('');
         var admin = me.role === 'Admin' ? [
             item('Assign vessel', 'plus', 'blue', '#assign'), item('Add surveyor', 'user', 'orange', '#surveyor'),
@@ -865,7 +887,7 @@
             '<div class="scr-pad">' +
             '<div class="section-title" data-rise>Work</div><div class="menu-card" data-rise>' + work + '</div>' +
             (admin ? '<div class="section-title" data-rise>' + (me.role === 'Client' ? 'Client' : 'Admin') + '</div><div class="menu-card" data-rise>' + admin + '</div>' : '') +
-            '<div class="section-title" data-rise>Account</div><div class="menu-card" data-rise>' + item('My profile', 'user', 'blue', '#me') +
+            '<div class="section-title" data-rise>Account</div><div class="menu-card" data-rise>' + item('My profile', 'user', 'blue', '#me') + item('Support', 'chat', 'green', 'coming_soon.php?feature=Support') +
             '<button type="button" class="menu-item press" data-logout style="color:#b91c1c"><span class="ic red">' + icon('logout') + '</span><span class="grow">Log out</span></button></div>' +
             '</div></div></section>');
         scr.querySelector('[data-logout]').addEventListener('click', function () {
@@ -2265,6 +2287,15 @@
         pullToRefresh(scr, scr.querySelector('.scr-body'), load);
         load();
         return scr;
+    };
+
+    /* ---------------- Coming soon (coming_soon.php) ---------------- */
+    SCREENS.soon = function () {
+        var f = state.soon || 'This feature';
+        return el('<section class="scr" aria-label="Coming soon">' + barHeader(f, '') +
+            '<div class="scr-body"><div class="scr-pad soon"><div class="soon-card" data-rise><span class="soon-ic">' + icon('clock') + '</span>' +
+            '<h2>Coming soon</h2><p><b>' + esc(f) + '</b> is being prepared and will be available here soon.</p>' +
+            '<button type="button" class="btn primary press" data-go="home">' + icon('home') + 'Return home</button></div></div></div></section>');
     };
 
     /* ---------------- Super Admin controls (super_admin_controls.php, Super Admin) ---------------- */
