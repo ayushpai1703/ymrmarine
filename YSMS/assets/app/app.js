@@ -174,16 +174,16 @@
     var current = null; // { route, depth, node }
     function parse(hash) {
         var h = (hash || location.hash || '').replace(/^#\/?/, '');
-        var m = h.match(/^(v|up|h|c)\/(\d+)$/);
+        var m = h.match(/^(v|up|h|c|e)\/(\d+)$/);
         if (m) return { name: ROUTE_IDS[m[1]], id: +m[2] };
         if (PUSHED.indexOf(h) !== -1 || h === 'login') return { name: h };
         if (TABS.indexOf(h) !== -1) return { name: h };
         return { name: 'home' };
     }
-    var PUSHED = ['search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat'];
-    var ROUTE_IDS = { v: 'vessel', up: 'upload', h: 'history', c: 'room' };
+    var PUSHED = ['search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign'];
+    var ROUTE_IDS = { v: 'vessel', up: 'upload', h: 'history', c: 'room', e: 'assign' };
     function hashFor(name, id) {
-        for (var k in ROUTE_IDS) if (ROUTE_IDS[k] === name) return '#/' + k + '/' + id;
+        if (id) for (var k in ROUTE_IDS) if (ROUTE_IDS[k] === name) return '#/' + k + '/' + id;
         return '#/' + name;
     }
 
@@ -383,7 +383,7 @@
 
     function quickActions(me) {
         var all = [
-            me.can.assign && [me.role === 'Client' ? 'Request survey' : 'Assign vessel', 'plus', 'assign_vessel.php', true],
+            me.can.assign && [me.role === 'Client' ? 'Request survey' : 'Assign vessel', 'plus', '#assign', true],
             me.can.report_generator && ['Word report', 'file', 'report_generator.php'],
             me.can.recovery && ['Recovery', 'fuel', '#recovery'],
             me.can.chat && ['Team chat', 'chat', '#chat'],
@@ -432,7 +432,7 @@
             '<label class="search flat">' + icon('search') + '<span class="sr">Search</span><input type="search" placeholder="Search vessel, port, client" enterkeyhint="search"></label>' +
             (showOverdue ? '<div class="chips"><button type="button" class="chip" aria-pressed="true" data-f="">All</button><button type="button" class="chip warn" aria-pressed="false" data-f="1">' + cfg.overdue + '</button></div>' : '') +
             '</header><div class="scr-body"><div class="scr-pad"><div class="list">' + skeletons(4) + '</div><div class="more-loader" hidden><span class="spin dark"></span></div></div></div>' +
-            (key === 'vessels' && me.can.assign ? '<button type="button" class="fab press" data-web="assign_vessel.php" aria-label="' + (me.role === 'Client' ? 'Request survey' : 'Assign vessel') + '">' + icon('plus') + '</button>' : '') +
+            (key === 'vessels' && me.can.assign ? '<button type="button" class="fab press" data-go="assign" aria-label="' + (me.role === 'Client' ? 'Request survey' : 'Assign vessel') + '">' + icon('plus') + '</button>' : '') +
             '</section>');
         var body = scr.querySelector('.scr-body'), list = scr.querySelector('.list'), loader = scr.querySelector('.more-loader');
         var input = scr.querySelector('input'), totalEl = scr.querySelector('[data-total]');
@@ -568,6 +568,7 @@
             more.hidden = false;
             more.onclick = function () {
                 openSheet('<h2>' + esc(v.vessel) + '</h2>' +
+                    (state.me.role === 'Admin' && v.status === 'Pending Vessel' ? '<button type="button" class="menu-item press" data-edit="' + v.id + '">' + icon('edit') + 'Edit vessel</button>' : '') +
                     '<button type="button" class="menu-item press" data-web="' + esc(v.web) + '">' + icon('globe') + 'Open full page</button>' +
                     (state.me.can.report_generator && v.status !== 'Pending Vessel' ? '<button type="button" class="menu-item press" data-web="report_generator.php?id=' + v.id + '">' + icon('file') + 'Word report generator</button>' : '') +
                     '<button type="button" class="menu-item press" data-refresh>' + icon('refresh') + 'Refresh</button>');
@@ -627,13 +628,13 @@
             item('Cancelled vessels', 'ban', 'red', '#cancelled')
         ].filter(Boolean).join('');
         var admin = me.role === 'Admin' ? [
-            item('Assign vessel', 'plus', 'blue', 'assign_vessel.php'), item('Add surveyor', 'user', 'orange', 'add_surveyor.php'),
+            item('Assign vessel', 'plus', 'blue', '#assign'), item('Add surveyor', 'user', 'orange', 'add_surveyor.php'),
             item('Add client', 'users', 'green', 'add_client.php'), item('Admin controls', 'shield', 'purple', 'admin_controls.php'),
             item('Manage templates', 'file', 'sky', 'manage_templates.php'), item('Login activity', 'shield', 'red', 'login_activity.php')
         ].join('') : me.role === 'Super Admin' ? [
             item('Add client', 'users', 'green', 'add_client.php'), item('Add admin', 'shield', 'purple', 'add_admin.php'),
             item('Manage clients', 'users', 'blue', 'super_admin_clients.php'), item('Login activity', 'shield', 'red', 'login_activity.php')
-        ].join('') : me.role === 'Client' ? item('Request survey', 'plus', 'blue', 'assign_vessel.php') : '';
+        ].join('') : me.role === 'Client' ? item('Request survey', 'plus', 'blue', '#assign') : '';
         var scr = el('<section class="scr has-tabs" aria-label="Profile"><div class="scr-body">' +
             '<header class="profile-hdr"><span class="avatar">' + avatar + '</span><b>' + esc(me.name) + '</b><small>' + esc(me.role) + '</small></header>' +
             '<div class="scr-pad">' +
@@ -1386,9 +1387,196 @@
         return scr;
     };
 
+    /* ---------------- Picker sheet (searchable, single or multi) ---------------- */
+    // items: [{ value, label, sub }]; resolves with the chosen value(s), or null when closed.
+    function pickSheet(title, items, opt) {
+        opt = opt || {};
+        var chosen = (opt.selected || []).map(String);
+        return new Promise(function (resolve) {
+            var done = false;
+            var sh = openSheet('<h2>' + esc(title) + '</h2>' +
+                (items.length > 7 ? '<label class="search flat" style="margin-bottom:8px">' + icon('search') + '<span class="sr">Search</span><input type="search" placeholder="Search" data-q></label>' : '') +
+                '<div class="pick-list" data-items></div>' +
+                (opt.multi ? '<div class="sheet-actions"><button type="button" class="btn primary press" data-ok>Done</button></div>' : ''));
+            var box = sh.querySelector('[data-items]'), q = sh.querySelector('[data-q]');
+            function draw() {
+                var term = q ? q.value.trim().toLowerCase() : '';
+                var html = '', group = null;
+                items.forEach(function (it) {
+                    if (term && (it.label + ' ' + (it.sub || '')).toLowerCase().indexOf(term) === -1) return;
+                    if (opt.groupBy && it.sub !== group) { group = it.sub; html += '<div class="pick-group">' + esc(group) + '</div>'; }
+                    var on = chosen.indexOf(String(it.value)) !== -1;
+                    html += '<button type="button" class="pick-row opt press' + (on ? ' on' : '') + (it.warn ? ' warn' : '') + '" data-v="' + esc(it.value) + '" aria-pressed="' + on + '">' +
+                        '<span class="t"><b>' + esc(it.label) + '</b>' + (!opt.groupBy && it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</span>' +
+                        '<span class="tick">' + icon('check') + '</span></button>';
+                });
+                box.innerHTML = html || '<div class="empty" style="padding:24px">Nothing matches</div>';
+            }
+            draw();
+            if (q) q.addEventListener('input', draw);
+            box.addEventListener('click', function (e) {
+                var b = e.target.closest('[data-v]');
+                if (!b) return;
+                var v = b.getAttribute('data-v');
+                haptic();
+                if (!opt.multi) { done = true; resolve(v); closeSheet(); return; }
+                var i = chosen.indexOf(v);
+                if (opt.exclusive && v === opt.exclusive) chosen = i === -1 ? [v] : [];
+                else {
+                    chosen = chosen.filter(function (x) { return x !== opt.exclusive; });
+                    if (i === -1) chosen.push(v); else chosen.splice(i, 1);
+                }
+                draw();
+            });
+            var ok = sh.querySelector('[data-ok]');
+            if (ok) ok.onclick = function () { done = true; resolve(chosen.slice()); closeSheet(); };
+            var watch = setInterval(function () { if (!sh.isConnected) { clearInterval(watch); if (!done) resolve(null); } }, 300);
+        });
+    }
+
+    /* ---------------- Assign vessel / Request survey / Edit assignment (assign_vessel.php) ---------------- */
+    SCREENS.assign = function (route) {
+        var editId = route.id || 0;
+        var scr = el('<section class="scr" aria-label="Assign vessel">' + barHeader(editId ? 'Edit vessel' : 'Assign vessel', '') +
+            '<div class="scr-body"><div class="scr-pad" data-form><div class="skel-card" style="height:420px"></div></div></div></section>');
+        var pad = scr.querySelector('[data-form]');
+        api('assign_form', editId ? { edit_id: editId } : {}).then(build).catch(function (e) {
+            if (e.message !== 'login') pad.innerHTML = '<div class="empty"><span class="ic red">' + icon('alert') + '</span><b>Not available</b></div>';
+        });
+
+        function build(d) {
+            var isClient = d.role === 'Client', e = d.edit || {};
+            var f = {
+                client: e.client_id || (isClient && d.clients[0] ? d.clients[0].id : 0),
+                port: e.port_id || 0,
+                types: (e.type_ids || []).map(String),
+                surveyors: (e.surveyor_ids || []).map(String),
+                files: []
+            };
+            scr.querySelector('.hdr-bar .t').innerHTML = '<b>' + (editId ? 'Edit vessel' : isClient ? 'Request survey' : 'Assign vessel') + '</b>' + (editId ? '<small>' + esc(e.report_no) + '</small>' : '');
+            function name(list, id) { var x = list.filter(function (i) { return String(i.id) === String(id); })[0]; return x ? x.name : ''; }
+            function selectRow(key, label, value, placeholder, locked) {
+                return '<div class="field"><label>' + label + ' <i class="req">*</i></label><button type="button" class="sel press' + (locked ? ' locked' : '') + '" data-sel="' + key + '"' + (locked ? ' disabled' : '') + '>' +
+                    '<span class="' + (value ? '' : 'ph') + '">' + esc(value || placeholder) + '</span>' + (locked ? icon('lock') : icon('chev', 'chev')) + '</button></div>';
+            }
+            function chipsOf(list, ids, out) {
+                return ids.length ? '<div class="sel-chips">' + ids.map(function (id) { return '<span class="chip on">' + esc(id === 'outsourcing' ? 'Outsourcing' : name(list, id)) + '</span>'; }).join('') + '</div>' : '<div class="hint">' + out + '</div>';
+            }
+            function draw() {
+                pad.innerHTML =
+                    '<section class="card card-pad" data-rise><div class="card-h">Vessel</div>' +
+                    '<div class="field"><label for="av-vessel">Vessel name <i class="req">*</i></label><div class="inp"><input id="av-vessel" autocapitalize="characters" placeholder="e.g. MV. OCEAN STAR" value="' + esc(f.vessel != null ? f.vessel : (e.vessel || '')) + '"></div></div>' +
+                    selectRow('client', 'Client', name(d.clients, f.client), 'Choose client', isClient || !!editId && false) +
+                    (!editId && !isClient ? '<div class="rn" data-rn' + (f.client ? '' : ' hidden') + '><small>Report no.</small><b data-rnv>…</b></div>' : '') +
+                    '<div class="field"><label for="av-agent">Agent name <i class="req">*</i></label><div class="inp"><input id="av-agent" autocapitalize="characters" value="' + esc(f.agent != null ? f.agent : (e.agent || '')) + '"></div></div>' +
+                    '</section>' +
+                    '<section class="card card-pad" data-rise><div class="card-h">Survey</div>' +
+                    selectRow('port', 'Port', name(d.ports, f.port) ? name(d.ports, f.port) + ' · ' + d.ports.filter(function (p) { return p.id === +f.port; })[0].country : '', 'Choose port') +
+                    '<div class="field"><label>Survey type <i class="req">*</i></label><button type="button" class="sel press" data-sel="types"><span class="' + (f.types.length ? '' : 'ph') + '">' + (f.types.length ? f.types.length + ' selected' : 'Choose one or more') + '</span>' + icon('chev', 'chev') + '</button>' + chipsOf(d.types, f.types, '') + '</div>' +
+                    (isClient ? '' : '<div class="field"><label>Surveyor(s) <i class="req">*</i></label><button type="button" class="sel press" data-sel="surveyors"><span class="' + (f.surveyors.length ? '' : 'ph') + '">' + (f.surveyors.length ? f.surveyors.length + ' selected' : 'Choose one or more') + '</span>' + icon('chev', 'chev') + '</button>' + chipsOf(d.surveyors, f.surveyors, '') + '</div>') +
+                    '<div class="field"><label for="av-date">Appointment date <i class="req">*</i></label><div class="inp"><input type="date" id="av-date" value="' + esc(f.date != null ? f.date : (e.appointment || '')) + '"></div></div>' +
+                    '<div class="field"><label for="av-remarks">Remarks</label><textarea id="av-remarks" class="ta" rows="3" placeholder="Any specific instructions or notes">' + esc(f.remarks != null ? f.remarks : (e.remarks || '')) + '</textarea></div>' +
+                    '</section>' +
+                    picker('att', 'Attachments', editId ? 'Optional · added to the files already there' : 'Optional · PDF, Word, Excel, images, ZIP', '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip', true, false) +
+                    '<div class="err" hidden role="alert">' + icon('alert') + '<span></span></div><div style="height:84px"></div>';
+                renderFiles();
+                if (!editId && !isClient && f.client) preview();
+                stagger(pad);
+            }
+            function keep() {
+                var v = pad.querySelector('#av-vessel'); if (!v) return;
+                f.vessel = v.value; f.agent = pad.querySelector('#av-agent').value; f.date = pad.querySelector('#av-date').value; f.remarks = pad.querySelector('#av-remarks').value;
+            }
+            function renderFiles() {
+                var box = pad.querySelector('[data-pick="att"] .pick-files');
+                box.innerHTML = f.files.map(function (x, i) {
+                    var t = docType({ name: x.name });
+                    return '<div class="pf"><span class="ft ' + t[0] + '">' + t[1] + '</span><span class="t"><b>' + esc(x.name) + '</b><small>' + mb(x.size) + '</small></span><button type="button" class="icon-btn plain" data-rmf="' + i + '" aria-label="Remove ' + esc(x.name) + '">' + icon('x') + '</button></div>';
+                }).join('');
+                pad.querySelector('[data-pick="att"]').classList.toggle('has', f.files.length > 0);
+            }
+            function preview() {
+                fetch('ajax/preview_report_number.php?client_id=' + encodeURIComponent(f.client), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (r) {
+                    var v = pad.querySelector('[data-rnv]'); if (v) v.textContent = r.success ? r.report_number : '—';
+                }).catch(function () {});
+            }
+            function err(m) { var x = pad.querySelector('.err'); x.hidden = !m; x.querySelector('span').textContent = m || ''; if (m) { haptic('HEAVY'); x.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }
+            draw();
+            scr.appendChild(el('<div class="actions one"><button type="button" class="btn primary press" data-save>' + icon(editId ? 'check' : 'plus') + (editId ? 'Save changes' : isClient ? 'Send request' : 'Assign &amp; save vessel') + '</button></div>'));
+
+            pad.addEventListener('click', function (ev) {
+                var s = ev.target.closest('[data-sel]'), rm = ev.target.closest('[data-rmf]');
+                if (rm) { f.files.splice(+rm.getAttribute('data-rmf'), 1); renderFiles(); return; }
+                if (!s || s.disabled) return;
+                keep();
+                var k = s.getAttribute('data-sel');
+                var p = k === 'client' ? pickSheet('Client', d.clients.map(function (c) { return { value: c.id, label: c.name }; }), { selected: [f.client] })
+                    : k === 'port' ? pickSheet('Port', d.ports.map(function (x) { return { value: x.id, label: x.name, sub: x.country }; }), { selected: [f.port], groupBy: true })
+                    : k === 'types' ? pickSheet('Survey type', d.types.map(function (x) { return { value: x.id, label: x.name }; }), { multi: true, selected: f.types })
+                    : pickSheet('Surveyor(s)', d.surveyors.map(function (x) { return { value: x.id, label: x.name }; }).concat([{ value: 'outsourcing', label: 'Outsourcing', warn: true }]), { multi: true, selected: f.surveyors, exclusive: 'outsourcing' });
+                p.then(function (v) {
+                    if (v === null) return;
+                    if (k === 'client') f.client = v; else if (k === 'port') f.port = v; else if (k === 'types') f.types = v; else f.surveyors = v;
+                    draw();
+                });
+            });
+            pad.addEventListener('change', function (ev) {
+                if (ev.target.id !== 'pk-att') return;
+                f.files = f.files.concat(Array.prototype.slice.call(ev.target.files));
+                ev.target.value = '';
+                renderFiles();
+            });
+
+            scr.querySelector('[data-save]').addEventListener('click', function () {
+                keep(); err('');
+                var vessel = (f.vessel || '').trim(), agent = (f.agent || '').trim();
+                if (!vessel) return err('Vessel name is required.');
+                if (!f.client) return err(isClient ? 'Your login is not linked to a client company. Please contact the admin.' : 'Please choose the client.');
+                if (!agent) return err('Agent name is required.');
+                if (!f.port) return err('Please choose the port.');
+                if (!f.types.length) return err('Please choose at least one survey type.');
+                if (!isClient && !f.surveyors.length) return err('Please choose a surveyor (or Outsourcing).');
+                if (!f.date) return err('Appointment date is required.');
+                var total = 0; f.files.forEach(function (x) { total += x.size; });
+                if (total > MAX_TOTAL) return err('The attachments add up to ' + mb(total) + ' (limit 31 MB).');
+                var fd = new FormData();
+                if (editId) fd.append('edit_id', String(editId));
+                fd.append('vessel_name', vessel); fd.append('client_id', String(f.client)); fd.append('agent_name', agent);
+                fd.append('port_id', String(f.port)); fd.append('survey_type_ids', f.types.join(','));
+                fd.append('surveyor_ids', f.surveyors.join(',')); fd.append('appointment_date', f.date); fd.append('remarks', (f.remarks || '').trim());
+                f.files.forEach(function (x) { fd.append('assignment_attachment[]', x); });
+                var go2 = function () { save(fd); };
+                if (editId) { go2(); return; }
+                // Same "already in Pending Vessels?" question the website asks.
+                fetch('ajax/check_pending_vessel_duplicate.php?vessel_name=' + encodeURIComponent(vessel), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (r) {
+                    if (!r.exists) { go2(); return; }
+                    var x = r.entry;
+                    openSheet('<h2>Already in Pending Vessels</h2><p class="sheet-p">A vessel named <b>' + esc(x.vessel_name) + '</b> is already pending:</p>' +
+                        '<div class="card rows" style="box-shadow:none;background:#f8fafc"><div class="kv"><span>Report no.</span><b>' + esc(x.report_number) + '</b></div><div class="kv"><span>Client</span><b>' + esc(x.client_name) + '</b></div><div class="kv"><span>Port</span><b>' + esc(x.port_name) + '</b></div><div class="kv"><span>Assigned</span><b>' + esc(x.assign_date) + '</b></div></div>' +
+                        '<div class="sheet-actions"><button type="button" class="btn primary press" data-yes>Yes, add it anyway</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
+                    function (sh) { sh.querySelector('[data-no]').onclick = function () { closeSheet(); }; sh.querySelector('[data-yes]').onclick = function () { closeSheet(true); go2(); }; });
+                }).catch(go2);
+            });
+            function save(fd) {
+                var b = scr.querySelector('[data-save]');
+                b.disabled = true; b.innerHTML = '<span class="spin"></span> Saving…';
+                postPage('assign_vessel.php' + (editId ? '?edit_id=' + editId : ''), fd).then(function (r) {
+                    if (!r.ok) throw new Error(r.message || 'Could not save. Please check the details.');
+                    haptic('MEDIUM');
+                    toast(r.message, 'ok');
+                    if (editId) history.back(); else go('vessels', { anim: 'fade' });
+                }).catch(function (x) {
+                    b.disabled = false; b.innerHTML = icon(editId ? 'check' : 'plus') + (editId ? 'Save changes' : isClient ? 'Send request' : 'Assign &amp; save vessel');
+                    err(x.message);
+                });
+            }
+        }
+        return scr;
+    };
+
     /* ---------------- global taps ---------------- */
     document.addEventListener('click', function (e) {
-        var t = e.target.closest('[data-web],[data-go],[data-vessel],[data-upload],[data-history],[data-back],[data-refresh]');
+        var t = e.target.closest('[data-web],[data-go],[data-vessel],[data-upload],[data-history],[data-edit],[data-back],[data-refresh]');
         if (!t) return;
         if (t.hasAttribute('data-web')) {
             e.preventDefault();
@@ -1398,6 +1586,7 @@
         if (t.hasAttribute('data-vessel')) { haptic(); go('vessel', { id: +t.getAttribute('data-vessel') }); return; }
         if (t.hasAttribute('data-upload')) { haptic(); go('upload', { id: +t.getAttribute('data-upload') }); return; }
         if (t.hasAttribute('data-history')) { haptic(); go('history', { id: +t.getAttribute('data-history') }); return; }
+        if (t.hasAttribute('data-edit')) { closeSheet(true); haptic(); go('assign', { id: +t.getAttribute('data-edit') }); return; }
         if (t.hasAttribute('data-go')) { haptic(); go(t.getAttribute('data-go')); return; }
         if (t.hasAttribute('data-back')) { back(); return; }
         if (t.hasAttribute('data-refresh')) { closeSheet(); location.reload(); }

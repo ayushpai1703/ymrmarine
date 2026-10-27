@@ -17,6 +17,7 @@
  *   GET app_api.php?a=formats
  *   GET app_api.php?a=profile
  *   GET app_api.php?a=history&id=<id>             previous surveys of the same vessel
+ *   GET app_api.php?a=assign_form[&edit_id=<id>]   choices for Assign Vessel / Request Survey (assign_vessel.php)
  */
 require_once 'config/config.php';
 require_once 'includes/notifications.php';
@@ -438,6 +439,51 @@ if ($a === 'history') {
         ];
     }
     appOut(['vessel' => (string)$s['vessel_name'], 'items' => $out]);
+}
+
+if ($a === 'assign_form') {
+    // Same choices assign_vessel.php offers; saving still posts to assign_vessel.php.
+    if (!in_array($role, ['Admin', 'Client'], true)) appOut(['error' => 'not_allowed'], 403);
+    $editId = (int)($_GET['edit_id'] ?? 0);
+    if ($editId > 0 && $role !== 'Admin') appOut(['error' => 'not_allowed'], 403);
+    $out = ['role' => $role, 'edit' => null];
+    if ($role === 'Client') {
+        $st = $db->prepare('SELECT id, company_name FROM clients WHERE user_id = ? LIMIT 1');
+        $st->execute([$userId]);
+        $c = $st->fetch(PDO::FETCH_ASSOC);
+        $out['clients'] = $c ? [['id' => (int)$c['id'], 'name' => (string)$c['company_name']]] : [];
+        $out['surveyors'] = [];
+    } else {
+        $out['clients'] = array_map(function ($c) { return ['id' => (int)$c['id'], 'name' => (string)$c['company_name']]; },
+            $db->query('SELECT id, company_name FROM clients ORDER BY company_name ASC')->fetchAll(PDO::FETCH_ASSOC));
+        $out['surveyors'] = array_map(function ($u) { return ['id' => (int)$u['id'], 'name' => (string)$u['full_name']]; },
+            $db->query("SELECT id, full_name FROM users WHERE role_id = 2 AND status = 'Active' ORDER BY full_name ASC")->fetchAll(PDO::FETCH_ASSOC));
+    }
+    $hasCountry = (bool)$db->query("SHOW COLUMNS FROM ports LIKE 'country'")->fetch();
+    $out['ports'] = array_map(function ($p) { return ['id' => (int)$p['id'], 'name' => (string)$p['port_name'], 'country' => (string)($p['country'] ?? '') ?: 'India']; },
+        $db->query('SELECT id, port_name' . ($hasCountry ? ', country' : '') . ' FROM ports ORDER BY ' . ($hasCountry ? 'country ASC, ' : '') . 'port_name ASC')->fetchAll(PDO::FETCH_ASSOC));
+    $out['types'] = array_map(function ($t) { return ['id' => (int)$t['id'], 'name' => (string)$t['type_name']]; },
+        $db->query('SELECT id, type_name FROM survey_types ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC));
+    if ($editId > 0) {
+        $st = $db->prepare('SELECT * FROM surveys WHERE id = ?');
+        $st->execute([$editId]);
+        $e = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$e) appOut(['error' => 'not_found'], 404);
+        $ids = [];
+        try {
+            $ss = $db->prepare('SELECT surveyor_id FROM survey_surveyors WHERE survey_id = ? ORDER BY id ASC');
+            $ss->execute([$editId]);
+            $ids = array_map('intval', $ss->fetchAll(PDO::FETCH_COLUMN));
+        } catch (Throwable $x) { $ids = []; }
+        if (!$ids && (int)$e['surveyor_id'] > 1) $ids = [(int)$e['surveyor_id']];
+        $out['edit'] = [
+            'id' => $editId, 'vessel' => (string)$e['vessel_name'], 'report_no' => (string)($e['report_number'] ?? ''),
+            'client_id' => (int)$e['client_id'], 'agent' => (string)$e['agent_name'], 'port_id' => (int)$e['port_id'],
+            'type_ids' => array_values(array_filter(array_map('intval', explode(',', (string)($e['survey_type_ids'] ?: $e['survey_type_id']))))),
+            'surveyor_ids' => $ids, 'appointment' => appDate($e['appointment_date'] ?? '', 'Y-m-d'), 'remarks' => (string)($e['remarks'] ?? ''),
+        ];
+    }
+    appOut($out);
 }
 
 appOut(['error' => 'unknown'], 400);
