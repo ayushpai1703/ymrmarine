@@ -105,6 +105,8 @@ $faq             = $content['faq'];
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Lexend:wght@100..900&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css?v=<?= @filemtime(__DIR__ . '/assets/css/style.css') ?: time() ?>">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/modern.css?v=<?= @filemtime(__DIR__ . '/assets/css/modern.css') ?: time() ?>">
 <style>
 :root { --accent: <?= e($primary) ?>; }
 .svc-page-hero {
@@ -247,37 +249,9 @@ $faq             = $content['faq'];
 </script>
 <?php endif; ?>
 </head>
-<body>
+<body class="msite">
 
-<nav class="nav" id="mainNav">
-  <div class="nav-inner">
-    <a href="index.php" class="nav-logo">
-      <?php if ($logo): ?><img src="<?= e($logo) ?>" width="50" height="50" alt="YMR Marine logo"><?php endif; ?>
-      <span class="accent">YMR</span><span class="rest">MARINE</span>
-    </a>
-    <ul class="nav-links">
-      <li><a href="about-us.php">About</a></li>
-      <li><a href="index.php#services" class="active">Services</a></li>
-      <li><a href="index.php#why-us">Why Us</a></li>
-      <li><a href="index.php#team">Team</a></li>
-      <li><a href="ports.php">Ports</a></li>
-      <li><a href="index.php#testimonials">Clients</a></li>
-      <li><a href="#request">Contact</a></li>
-    </ul>
-    <a href="<?= e($empLogin) ?>" class="btn-nav" target="_blank" rel="noopener">Employee Login</a>
-    <button class="nav-toggle" id="navToggle" aria-label="Open menu"><span></span><span></span><span></span></button>
-  </div>
-  <div class="nav-mobile" id="navMobile">
-    <a href="about-us.php">About</a>
-    <a href="index.php#services" class="active">Services</a>
-    <a href="index.php#why-us">Why Us</a>
-    <a href="index.php#team">Team</a>
-    <a href="ports.php">Ports</a>
-    <a href="index.php#testimonials">Clients</a>
-    <a href="contact.php">Contact</a>
-    <a href="<?= e($empLogin) ?>" class="btn-nav" target="_blank" rel="noopener">Employee Login</a>
-  </div>
-</nav>
+<?php $navLogo = $logo; $navEmpLogin = $empLogin; $activeNav = 'services'; require __DIR__ . '/includes/site_nav.php'; ?>
 
 <section class="svc-page-hero" id="top">
   <div class="section">
@@ -477,75 +451,11 @@ $faq             = $content['faq'];
 </section>
 </div>
 
-<footer>
-  <div class="footer-inner">
-    <div class="footer-grid">
-      <div class="footer-brand">
-        <div class="logo-text">
-          <?php if ($logo): ?><img src="<?= e($logo) ?>" width="40" height="40" alt=""><?php endif; ?>
-          <span class="a">YMR</span> <span class="b">MARINE</span>
-        </div>
-        <p><?= e($footerText) ?></p>
-      </div>
-      <div class="footer-col">
-        <h6>Company</h6>
-        <ul>
-          <li><a href="about-us.php">About Us</a></li>
-          <li><a href="index.php#why-us">Why Choose Us</a></li>
-          <li><a href="index.php#team">Our Team</a></li>
-          <li><a href="#request">Contact</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h6>Services</h6>
-        <ul>
-          <?php foreach (array_slice($allServices, 0, 6) as $fs):
-            $fslug = $fs['slug'] ?: serviceSlugify($fs['title']);
-          ?>
-          <li><a href="service.php?slug=<?= e(rawurlencode($fslug)) ?>"><?= e($fs['title']) ?></a></li>
-          <?php endforeach; ?>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h6>Contact</h6>
-        <ul>
-          <li><a href="mailto:<?= e($email) ?>"><?= e($email) ?></a></li>
-          <li><a href="tel:<?= e(preg_replace('/\s+/', '', $phone)) ?>"><?= e($phone) ?></a></li>
-        </ul>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <p><?= e($copyright) ?></p>
-      <p>Designed for excellence in maritime services</p>
-    </div>
-  </div>
-</footer>
-
-<script>
-const nav = document.getElementById('mainNav');
-window.addEventListener('scroll', () => nav.classList.toggle('scrolled', window.scrollY > 40), { passive: true });
-const toggle = document.getElementById('navToggle');
-const mobile = document.getElementById('navMobile');
-toggle.addEventListener('click', () => { toggle.classList.toggle('open'); mobile.classList.toggle('open'); });
-mobile.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
-  toggle.classList.remove('open'); mobile.classList.remove('open');
-}));
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-  a.addEventListener('click', e => {
-    const id = a.getAttribute('href');
-    if (id === '#') return;
-    const t = document.querySelector(id);
-    if (!t) return;
-    e.preventDefault();
-    window.scrollTo({ top: t.getBoundingClientRect().top + scrollY - (nav.offsetHeight + 16), behavior: 'smooth' });
-  });
-});
-const revealEls = document.querySelectorAll('.reveal');
-const io = new IntersectionObserver((entries) => {
-  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
-}, { threshold: 0.12 });
-revealEls.forEach(el => io.observe(el));
-</script>
+<?php
+$footer = ['logo' => $logo, 'footerText' => $footerText, 'email' => $email, 'phone' => $phone, 'address' => $address, 'copyright' => $copyright];
+$footerServices = $allServices;
+require __DIR__ . '/includes/site_footer.php';
+?>
 <?php require_once __DIR__ . '/includes/callback_widget.php'; ?>
 </body>
 </html>
