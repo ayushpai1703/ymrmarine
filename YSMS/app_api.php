@@ -18,6 +18,8 @@
  *   GET app_api.php?a=profile
  *   GET app_api.php?a=history&id=<id>             previous surveys of the same vessel
  *   GET app_api.php?a=assign_form[&edit_id=<id>]   choices for Assign Vessel / Request Survey (assign_vessel.php)
+ *   GET app_api.php?a=admin_modules                 Admin Controls modules (config/admin_modules.php) for this role
+ *   GET app_api.php?a=surveyor&id=<id>              Admin: a surveyor's details for the edit form (add_surveyor.php)
  */
 require_once 'config/config.php';
 require_once 'includes/notifications.php';
@@ -484,6 +486,35 @@ if ($a === 'assign_form') {
         ];
     }
     appOut($out);
+}
+
+if ($a === 'admin_modules') {
+    // ajax/admin_master.php rules: Admin every module, Super Admin only Clients.
+    if (!in_array($role, ['Admin', 'Super Admin'], true)) appOut(['error' => 'not_allowed'], 403);
+    $mods = [];
+    foreach (require __DIR__ . '/config/admin_modules.php' as $key => $m) {
+        if ($role !== 'Admin' && $key !== 'clients') continue;
+        $mods[] = ['key' => $key, 'label' => $m['label'], 'singular' => $m['singular'], 'name_field' => $m['name_field'],
+            'fields' => array_map(function ($f) { return array_intersect_key($f, array_flip(['name', 'label', 'type', 'required', 'options', 'hint', 'readonly'])); }, $m['fields'])];
+    }
+    appOut(['modules' => $mods]);
+}
+
+if ($a === 'surveyor') {
+    if ($role !== 'Admin') appOut(['error' => 'not_allowed'], 403);
+    $st = $db->prepare('SELECT * FROM users WHERE id = ? AND role_id = 2');
+    $st->execute([(int)($_GET['id'] ?? 0)]);
+    $u = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$u) appOut(['error' => 'not_found'], 404);
+    $parts = preg_split('/\s+/', trim((string)$u['full_name']), 2) ?: [''];
+    appOut([
+        'id' => (int)$u['id'], 'username' => (string)$u['username'],
+        'first_name' => (string)($u['first_name'] ?? '') !== '' ? (string)$u['first_name'] : ($parts[0] ?? ''),
+        'last_name' => (string)($u['last_name'] ?? '') !== '' ? (string)$u['last_name'] : ($parts[1] ?? ''),
+        'dob' => appDate($u['dob'] ?? '', 'Y-m-d'), 'date_of_joining' => appDate($u['date_of_joining'] ?? '', 'Y-m-d'),
+        'phone' => (string)($u['phone'] ?? ''), 'email' => (string)($u['email'] ?? ''), 'status' => (string)($u['status'] ?? 'Active'),
+        'avatar' => appAvatar($db, (int)$u['id']),
+    ]);
 }
 
 appOut(['error' => 'unknown'], 400);

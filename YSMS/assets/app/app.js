@@ -174,14 +174,16 @@
     var current = null; // { route, depth, node }
     function parse(hash) {
         var h = (hash || location.hash || '').replace(/^#\/?/, '');
-        var m = h.match(/^(v|up|h|c|e)\/(\d+)$/);
+        var m = h.match(/^(v|up|h|c|e|sv)\/(\d+)$/);
         if (m) return { name: ROUTE_IDS[m[1]], id: +m[2] };
+        m = h.match(/^m\/([a-z_]+)$/);
+        if (m) return { name: 'module', id: m[1] };
         if (PUSHED.indexOf(h) !== -1 || h === 'login') return { name: h };
         if (TABS.indexOf(h) !== -1) return { name: h };
         return { name: 'home' };
     }
-    var PUSHED = ['search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign'];
-    var ROUTE_IDS = { v: 'vessel', up: 'upload', h: 'history', c: 'room', e: 'assign' };
+    var PUSHED = ['search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign', 'admin', 'addclient', 'addadmin', 'surveyor'];
+    var ROUTE_IDS = { v: 'vessel', up: 'upload', h: 'history', c: 'room', e: 'assign', sv: 'surveyor', m: 'module' };
     function hashFor(name, id) {
         if (id) for (var k in ROUTE_IDS) if (ROUTE_IDS[k] === name) return '#/' + k + '/' + id;
         return '#/' + name;
@@ -628,12 +630,12 @@
             item('Cancelled vessels', 'ban', 'red', '#cancelled')
         ].filter(Boolean).join('');
         var admin = me.role === 'Admin' ? [
-            item('Assign vessel', 'plus', 'blue', '#assign'), item('Add surveyor', 'user', 'orange', 'add_surveyor.php'),
-            item('Add client', 'users', 'green', 'add_client.php'), item('Admin controls', 'shield', 'purple', 'admin_controls.php'),
+            item('Assign vessel', 'plus', 'blue', '#assign'), item('Add surveyor', 'user', 'orange', '#surveyor'),
+            item('Add client', 'users', 'green', '#addclient'), item('Admin controls', 'shield', 'purple', '#admin'),
             item('Manage templates', 'file', 'sky', 'manage_templates.php'), item('Login activity', 'shield', 'red', 'login_activity.php')
         ].join('') : me.role === 'Super Admin' ? [
-            item('Add client', 'users', 'green', 'add_client.php'), item('Add admin', 'shield', 'purple', 'add_admin.php'),
-            item('Manage clients', 'users', 'blue', 'super_admin_clients.php'), item('Login activity', 'shield', 'red', 'login_activity.php')
+            item('Add client', 'users', 'green', '#addclient'), item('Add admin', 'shield', 'purple', '#addadmin'),
+            item('Manage clients', 'users', 'blue', '#admin'), item('Login activity', 'shield', 'red', 'login_activity.php')
         ].join('') : me.role === 'Client' ? item('Request survey', 'plus', 'blue', '#assign') : '';
         var scr = el('<section class="scr has-tabs" aria-label="Profile"><div class="scr-body">' +
             '<header class="profile-hdr"><span class="avatar">' + avatar + '</span><b>' + esc(me.name) + '</b><small>' + esc(me.role) + '</small></header>' +
@@ -673,7 +675,7 @@
         }).then(function (html) {
             var doc = new DOMParser().parseFromString(html, 'text/html');
             // The page's own message: an inline alert, or the flash toast after a save-and-redirect.
-            var ok = doc.querySelector('.alert-success, .ysms-toast-success'), bad = doc.querySelector('.alert-danger, .ysms-toast-error');
+            var ok = doc.querySelector('.alert-success, .vdd-alert-success, .ysms-toast-success'), bad = doc.querySelector('.alert-danger, .vdd-alert-danger, .ysms-toast-error');
             var box = bad || ok, text = box ? (box.querySelector('.ysms-toast-text') || box).textContent : '';
             return { ok: !!ok && !bad, message: text.replace(/\s+/g, ' ').replace(/\s*×\s*$/, '').trim() };
         });
@@ -1572,6 +1574,280 @@
             }
         }
         return scr;
+    };
+
+    /* ---------------- Simple forms (fields → inputs, posted to the existing pages / JSON) ---------------- */
+    // defs: [{ name, label, type: text|email|tel|date|password|select|checkbox|textarea, required, options, hint, readonly }]
+    function fieldsHtml(defs, values) {
+        values = values || {};
+        return defs.map(function (f) {
+            var id = 'ff-' + f.name, v = values[f.name] != null ? values[f.name] : '';
+            var req = f.required ? ' <i class="req">*</i>' : '';
+            var hint = f.hint ? '<small class="hint">' + esc(f.hint) + '</small>' : '';
+            if (f.type === 'select') {
+                return '<div class="field"><label for="' + id + '">' + esc(f.label) + req + '</label><div class="inp"><select id="' + id + '" name="' + f.name + '">' +
+                    (f.options || []).map(function (o) { return '<option' + (String(o) === String(v) ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select></div>' + hint + '</div>';
+            }
+            if (f.type === 'checkbox') {
+                return '<label class="check"><input type="checkbox" name="' + f.name + '" value="1"' + (v ? ' checked' : '') + '> ' + esc(f.label) + '</label>' + hint;
+            }
+            if (f.type === 'textarea') {
+                return '<div class="field"><label for="' + id + '">' + esc(f.label) + req + '</label><textarea id="' + id + '" name="' + f.name + '" class="ta" rows="3">' + esc(v) + '</textarea>' + hint + '</div>';
+            }
+            var type = { password: 'password', email: 'email', tel: 'tel', date: 'date' }[f.type] || 'text';
+            return '<div class="field"><label for="' + id + '">' + esc(f.label) + req + '</label><div class="inp' + (f.readonly ? ' ro' : '') + '"><input id="' + id + '" name="' + f.name + '" type="' + type + '" value="' + esc(v) + '"' +
+                (f.readonly ? ' readonly' : '') + (type === 'password' ? ' autocomplete="new-password"' : '') + (f.name === 'username' ? ' autocapitalize="none" spellcheck="false"' : '') + '></div>' + hint + '</div>';
+        }).join('');
+    }
+    function collect(root) {
+        var out = {};
+        root.querySelectorAll('input[name], select[name], textarea[name]').forEach(function (i) {
+            if (i.type === 'checkbox') { if (i.checked) out[i.name] = i.value; return; }
+            if (i.type === 'file') return;
+            out[i.name] = i.type === 'password' ? i.value : i.value.trim();
+        });
+        return out;
+    }
+    function missing(defs, data) {
+        var f = defs.filter(function (d) { return d.required && !d.readonly && !data[d.name]; })[0];
+        return f ? f.label + ' is required.' : '';
+    }
+    function busyBtn(b, on, label) {
+        if (on) { b.dataset.label = b.innerHTML; b.disabled = true; b.innerHTML = '<span class="spin"></span> Saving…'; }
+        else { b.disabled = false; b.innerHTML = label || b.dataset.label || 'Save'; }
+    }
+    // Post to a JSON endpoint ({success, message}).
+    function postJson(url, data) {
+        var body = new URLSearchParams(data);
+        body.set('csrf_token', state.me.csrf);
+        return fetch(url, { method: 'POST', credentials: 'same-origin', body: body }).then(function (r) { return r.json(); }).then(function (d) {
+            if (!d.success) throw new Error(d.message || 'Could not save.');
+            return d;
+        });
+    }
+
+    /* ---------------- Admin hub ---------------- */
+    SCREENS.admin = function () {
+        var me = state.me, admin = me.role === 'Admin';
+        var scr = el('<section class="scr" aria-label="Admin">' + barHeader(admin ? 'Admin controls' : 'Manage', '') +
+            '<div class="scr-body"><div class="scr-pad"><div data-mods><div class="skel-card" style="height:160px"></div></div>' +
+            '<div class="section-title" data-rise>People</div><div class="menu-card" data-rise>' +
+            (admin ? adminItem('Add surveyor', 'user', 'orange', 'surveyor') : '') +
+            adminItem('Add client', 'users', 'green', 'addclient') +
+            (!admin ? adminItem('Add admin', 'shield', 'purple', 'addadmin') : '') +
+            '</div><div data-more-tools></div></div></div></section>');
+        function adminItem(label, ic, cls, go2) {
+            return '<button type="button" class="menu-item press" data-go="' + go2 + '"><span class="ic ' + cls + '">' + icon(ic) + '</span><span class="grow">' + label + '</span>' + icon('chev', 'chev') + '</button>';
+        }
+        var ICON_OF = { ports: ['pin', 'blue'], agents: ['users', 'orange'], clients: ['folder', 'green'], survey_types: ['file', 'purple'], surveyors: ['user', 'sky'] };
+        api('admin_modules').then(function (d) {
+            scr.querySelector('[data-mods]').innerHTML = '<div class="section-title" data-rise>Master data</div><div class="tiles" data-rise>' + d.modules.map(function (m) {
+                var ic = ICON_OF[m.key] || ['folder', 'blue'];
+                return '<button type="button" class="tile press" data-module="' + m.key + '"><span class="ic ' + ic[1] + '">' + icon(ic[0]) + '</span><b>' + esc(m.label) + '</b></button>';
+            }).join('') + '</div>';
+            stagger(scr);
+        }).catch(function () {});
+        scr.addEventListener('click', function (e) {
+            var t = e.target.closest('[data-module]');
+            if (t) { haptic(); go('module', { id: t.getAttribute('data-module') }); }
+        });
+        return scr;
+    };
+
+    /* ---------------- One master-data module (ajax/admin_master.php) ---------------- */
+    SCREENS.module = function (route) {
+        var key = route.id, mod = null, rows = [];
+        var scr = el('<section class="scr" aria-label="Master data">' + barHeader('…', '') +
+            '<div class="hdr-white" style="padding-top:8px"><label class="search flat">' + icon('search') + '<span class="sr">Search</span><input type="search" placeholder="Search" enterkeyhint="search"></label></div>' +
+            '<div class="scr-body"><div class="scr-pad"><div class="list">' + skeletons(4) + '</div></div></div>' +
+            '<button type="button" class="fab press" style="bottom:24px" data-add aria-label="Add">' + icon('plus') + '</button></section>');
+        var list = scr.querySelector('.list'), input = scr.querySelector('input[type=search]');
+        var logins = {}; // Super Admin: login of each client company
+        api('admin_modules').then(function (d) {
+            mod = d.modules.filter(function (m) { return m.key === key; })[0];
+            if (!mod) { list.innerHTML = '<div class="empty"><b>Not available</b></div>'; scr.querySelector('[data-add]').hidden = true; return; }
+            scr.querySelector('.hdr-bar .t').innerHTML = '<b>' + esc(mod.label) + '</b><small data-count></small>';
+            load();
+        }).catch(function () {});
+        function sub(r) {
+            return mod.fields.filter(function (f) { return f.name !== mod.name_field && f.type !== 'password' && r[f.name]; }).map(function (f) { return r[f.name]; }).join(' · ');
+        }
+        function load() {
+            var q = input.value.trim();
+            var p1 = fetch('ajax/admin_master.php?' + new URLSearchParams({ module: key, action: 'list', q: q }), { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+            var p2 = key === 'clients' && state.me.role === 'Super Admin'
+                ? fetch('ajax/super_admin_client_login.php?action=list_logins', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (x) { logins = x.by_client || {}; }).catch(function () {})
+                : Promise.resolve();
+            return Promise.all([p1, p2]).then(function (r) {
+                var d = r[0];
+                if (!d.success) throw new Error(d.message);
+                rows = d.rows;
+                scr.querySelector('[data-count]').textContent = rows.length + (rows.length === 1 ? ' entry' : ' entries');
+                list.innerHTML = rows.length ? rows.map(function (row, i) {
+                    var lg = logins[row.id];
+                    return '<button type="button" class="mrow press" data-rise data-i="' + i + '"><span class="t"><b>' + esc(row[mod.name_field]) + '</b>' +
+                        (sub(row) ? '<small>' + esc(sub(row)) + '</small>' : '') +
+                        (key === 'clients' && state.me.role === 'Super Admin' ? '<small class="' + (lg ? 'ok' : 'no') + '">' + (lg ? 'Login: ' + esc(lg.username) : 'No login yet') + '</small>' : '') +
+                        '</span>' + (row.status ? '<span class="tag ' + (row.status === 'Active' ? 'green' : 'red') + '">' + esc(row.status) + '</span>' : '') + icon('chev', 'chev') + '</button>';
+                }).join('') : '<div class="empty"><span class="ic blue">' + icon('folder') + '</span><b>' + (q ? 'Nothing matches' : 'Nothing here yet') + '</b></div>';
+                stagger(list);
+            }).catch(function (e) { list.innerHTML = '<div class="empty"><span class="ic red">' + icon('alert') + '</span><b>' + esc(e.message || 'Could not load') + '</b></div>'; });
+        }
+        var t = null;
+        input.addEventListener('input', function () { clearTimeout(t); t = setTimeout(load, 300); });
+        list.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-i]');
+            if (!b) return;
+            var row = rows[+b.getAttribute('data-i')];
+            haptic();
+            if (key === 'surveyors') { go('surveyor', { id: +row.id }); return; }
+            edit(row);
+        });
+        scr.querySelector('[data-add]').addEventListener('click', function () {
+            haptic();
+            if (key === 'surveyors') { go('surveyor'); return; }
+            edit(null);
+        });
+        function edit(row) {
+            var defs = mod.fields.filter(function (f) { return row || !f.readonly; });
+            var sa = key === 'clients' && state.me.role === 'Super Admin' && row;
+            openSheet('<h2>' + (row ? 'Edit ' : 'Add ') + esc(mod.singular.toLowerCase()) + '</h2><div data-f>' + fieldsHtml(defs, row || {}) + '</div>' +
+                '<div class="err" hidden role="alert">' + icon('alert') + '<span></span></div>' +
+                '<div class="sheet-actions"><button type="button" class="btn primary press" data-save>' + (row ? 'Save changes' : 'Add ' + esc(mod.singular.toLowerCase())) + '</button>' +
+                (sa ? '<button type="button" class="btn outline press" data-login>' + (logins[row.id] ? 'Client login' : 'Create client login') + '</button>' : '') +
+                (row ? '<button type="button" class="btn danger press" data-del>Delete</button>' : '') + '<button type="button" class="btn ghost" data-no>Cancel</button></div>',
+            function (sh) {
+                var err = function (m) { var x = sh.querySelector('.err'); x.hidden = !m; x.querySelector('span').textContent = m || ''; };
+                sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
+                sh.querySelector('[data-save]').onclick = function () {
+                    var data = collect(sh.querySelector('[data-f]')), m = missing(defs, data), b = this;
+                    if (m) return err(m);
+                    data.module = key; data.action = row ? 'edit' : 'add';
+                    if (row) data.id = row.id;
+                    busyBtn(b, true);
+                    postJson('ajax/admin_master.php', data).then(function (r) { closeSheet(); toast(r.message, 'ok'); load(); })
+                        .catch(function (x) { busyBtn(b, false); err(x.message); });
+                };
+                var del = sh.querySelector('[data-del]');
+                if (del) del.onclick = function () {
+                    if (del.dataset.sure !== '1') { del.dataset.sure = '1'; del.textContent = 'Tap again to delete'; haptic('HEAVY'); return; }
+                    postJson('ajax/admin_master.php', { module: key, action: 'delete', id: row.id }).then(function (r) { closeSheet(); toast(r.message, 'ok'); load(); })
+                        .catch(function (x) { err(x.message); del.dataset.sure = ''; del.textContent = 'Delete'; });
+                };
+                var lgBtn = sh.querySelector('[data-login]');
+                if (lgBtn) lgBtn.onclick = function () { closeSheet(true); clientLogin(row); };
+            });
+        }
+        // Super Admin: create / edit the login of a client company (ajax/super_admin_client_login.php).
+        function clientLogin(row) {
+            var lg = logins[row.id] || {};
+            var defs = [
+                { name: 'username', label: 'Username', required: true },
+                { name: 'full_name', label: 'Contact person', required: true },
+                { name: 'email', label: 'Email', type: 'email' },
+                { name: 'phone', label: 'Mobile', type: 'tel' },
+                { name: 'password', label: lg.user_id ? 'New password' : 'Password', type: 'password', required: !lg.user_id, hint: lg.user_id ? 'Leave blank to keep the current password.' : '' }
+            ];
+            openSheet('<h2>Client login · ' + esc(row.company_name) + '</h2><div data-f>' + fieldsHtml(defs, lg) + '</div>' +
+                '<div class="err" hidden role="alert">' + icon('alert') + '<span></span></div>' +
+                '<div class="sheet-actions"><button type="button" class="btn primary press" data-save>' + (lg.user_id ? 'Save login' : 'Create login') + '</button><button type="button" class="btn ghost" data-no>Cancel</button></div>',
+            function (sh) {
+                sh.querySelector('[data-no]').onclick = function () { closeSheet(); };
+                sh.querySelector('[data-save]').onclick = function () {
+                    var data = collect(sh.querySelector('[data-f]')), m = missing(defs, data), b = this;
+                    var x = sh.querySelector('.err');
+                    if (m) { x.hidden = false; x.querySelector('span').textContent = m; return; }
+                    data.action = 'save'; data.client_id = row.id;
+                    busyBtn(b, true);
+                    postJson('ajax/super_admin_client_login.php', data).then(function (r) { closeSheet(); toast(r.message, 'ok'); load(); })
+                        .catch(function (e2) { busyBtn(b, false); x.hidden = false; x.querySelector('span').textContent = e2.message; });
+                };
+            });
+        }
+        pullToRefresh(scr, scr.querySelector('.scr-body'), load);
+        return scr;
+    };
+
+    /* ---------------- Add / edit surveyor (add_surveyor.php) ---------------- */
+    SCREENS.surveyor = function (route) {
+        var id = route.id || 0;
+        var scr = el('<section class="scr" aria-label="Surveyor">' + barHeader(id ? 'Edit surveyor' : 'Add surveyor', '') +
+            '<div class="scr-body"><div class="scr-pad" data-form><div class="skel-card" style="height:420px"></div></div></div></section>');
+        var pad = scr.querySelector('[data-form]'), photo = null;
+        var defs = [
+            { name: 'first_name', label: 'First name', required: true }, { name: 'last_name', label: 'Last name', required: true },
+            { name: 'username', label: 'Username', required: true }, { name: 'phone', label: 'Mobile', type: 'tel' },
+            { name: 'email', label: 'Email', type: 'email' }, { name: 'dob', label: 'Date of birth', type: 'date' },
+            { name: 'date_of_joining', label: 'Date of joining', type: 'date' }, { name: 'status', label: 'Status', type: 'select', options: ['Active', 'Inactive'], required: true }
+        ];
+        var pw = [{ name: 'password', label: 'Password', type: 'password', required: !id }, { name: 'confirm_password', label: 'Confirm password', type: 'password', required: !id }];
+        (id ? api('surveyor', { id: id }) : Promise.resolve({ status: 'Active' })).then(function (u) {
+            pad.innerHTML = '<div class="me-photo" data-rise><span class="avatar big">' + (u.avatar ? '<img src="' + esc(u.avatar) + '" alt="">' : esc(initials((u.first_name || '') + ' ' + (u.last_name || '')) || '+')) + '</span>' +
+                '<label class="cam press" for="sv-photo" aria-label="Choose photo">' + icon('camera') + '</label><input type="file" id="sv-photo" accept="image/jpeg,image/png,image/webp" hidden></div>' +
+                '<section class="card card-pad" data-rise data-f>' + fieldsHtml(defs, u) + '</section>' +
+                (id ? '' : '<section class="card card-pad" data-rise data-p><div class="card-h">Login password</div>' + fieldsHtml(pw, {}) + '</section>') +
+                '<div class="err" hidden role="alert">' + icon('alert') + '<span></span></div><div style="height:84px"></div>';
+            scr.appendChild(el('<div class="actions one"><button type="button" class="btn primary press" data-save>' + (id ? 'Save changes' : 'Create surveyor') + '</button></div>'));
+            stagger(pad);
+            pad.querySelector('#sv-photo').addEventListener('change', function () {
+                photo = this.files[0] || null;
+                if (photo) pad.querySelector('.avatar').innerHTML = '<img src="' + URL.createObjectURL(photo) + '" alt="">';
+            });
+            scr.querySelector('[data-save]').addEventListener('click', function () {
+                var b = this, x = pad.querySelector('.err');
+                var data = collect(pad);
+                var m = missing(defs.concat(id ? [] : pw), data);
+                if (!m && !id && data.password !== data.confirm_password) m = 'Passwords do not match.';
+                if (m) { x.hidden = false; x.querySelector('span').textContent = m; haptic('HEAVY'); return; }
+                var fd = new FormData();
+                Object.keys(data).forEach(function (k) { fd.append(k, data[k]); });
+                fd.append('save_surveyor', '1');
+                if (photo) fd.append('profile_photo', photo);
+                busyBtn(b, true);
+                postPage('add_surveyor.php' + (id ? '?id=' + id : ''), fd).then(function (r) {
+                    if (!r.ok) throw new Error(r.message || 'Could not save.');
+                    toast(r.message, 'ok'); haptic('MEDIUM'); history.back();
+                }).catch(function (e) { busyBtn(b, false); x.hidden = false; x.querySelector('span').textContent = e.message; });
+            });
+        }).catch(function () { pad.innerHTML = '<div class="empty"><b>Not available</b></div>'; });
+        return scr;
+    };
+
+    /* ---------------- Add client (add_client.php) / Add admin (add_admin.php) ---------------- */
+    function simpleCreate(title, url, defs, extra, button) {
+        var scr = el('<section class="scr" aria-label="' + esc(title) + '">' + barHeader(title, '') +
+            '<div class="scr-body"><div class="scr-pad"><section class="card card-pad" data-rise data-f>' + fieldsHtml(defs, {}) + '</section>' +
+            '<div class="err" hidden role="alert">' + icon('alert') + '<span></span></div><div style="height:84px"></div></div></div></section>');
+        scr.appendChild(el('<div class="actions one"><button type="button" class="btn primary press" data-save>' + button + '</button></div>'));
+        scr.querySelector('[data-save]').addEventListener('click', function () {
+            var b = this, x = scr.querySelector('.err'), data = collect(scr.querySelector('[data-f]'));
+            var m = missing(defs, data);
+            if (!m && data.password !== data.confirm_password) m = 'Passwords do not match.';
+            if (m) { x.hidden = false; x.querySelector('span').textContent = m; haptic('HEAVY'); return; }
+            busyBtn(b, true);
+            postPage(url, Object.assign(data, extra || {})).then(function (r) {
+                if (!r.ok) throw new Error(r.message || 'Could not save.');
+                toast(r.message, 'ok'); haptic('MEDIUM'); history.back();
+            }).catch(function (e) { busyBtn(b, false); x.hidden = false; x.querySelector('span').textContent = e.message; });
+        });
+        stagger(scr);
+        return scr;
+    }
+    SCREENS.addclient = function () {
+        return simpleCreate('Add client', 'add_client.php', [
+            { name: 'company_name', label: 'Company name', required: true }, { name: 'contact_person', label: 'Contact person', required: true },
+            { name: 'username', label: 'Username', required: true }, { name: 'mobile', label: 'Mobile', type: 'tel', required: true },
+            { name: 'email', label: 'Email', type: 'email', required: true }, { name: 'password', label: 'Password', type: 'password', required: true },
+            { name: 'confirm_password', label: 'Confirm password', type: 'password', required: true }
+        ], null, 'Create client');
+    };
+    SCREENS.addadmin = function () {
+        return simpleCreate('Add admin', 'add_admin.php', [
+            { name: 'full_name', label: 'Full name', required: true }, { name: 'username', label: 'Username', required: true },
+            { name: 'mobile', label: 'Mobile', type: 'tel' }, { name: 'email', label: 'Email', type: 'email' },
+            { name: 'password', label: 'Password', type: 'password', required: true }, { name: 'confirm_password', label: 'Confirm password', type: 'password', required: true },
+            { name: 'is_super_admin', label: 'Make this a Super Admin login', type: 'checkbox' }
+        ], null, 'Create login');
     };
 
     /* ---------------- global taps ---------------- */
