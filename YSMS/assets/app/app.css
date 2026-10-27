@@ -827,3 +827,11 @@ label.mini.auto input { background: #f1f5f9; color: var(--primary); font-weight:
 .switch.on i { transform: translateX(18px); }
 :root[data-theme=dark] .switch { background: #33435f; }
 :root[data-theme=dark] .switch.on { background: #16a34a; }
+
+/* Fingerprint login */
+.fp-login { margin-top: 10px; width: 100%; border: 1.5px solid var(--line); background: var(--card); color: var(--text); border-radius: 16px; min-height: 56px; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 14px; }
+.fp-login svg.i { width: 28px; height: 28px; color: var(--primary); }
+.fp-login span { display: flex; flex-direction: column; align-items: flex-start; }
+.fp-login b { font-size: 15px; }
+.fp-login small { font-size: 12px; color: var(--muted); }
+.menu-item .grow small.sub { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }

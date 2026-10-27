@@ -141,6 +141,28 @@
             });
     }
     function loadMe() { return api('me').then(function (m) { state.me = m; return m; }); }
+    // Stay signed in: when the server session ended, the next request starts a new one from the
+    // remember cookie, with a new form (CSRF) token. A POST still carrying the old token gets 403:
+    // take the new token and send it once more. Covers every form and JSON post in the app.
+    var rawFetch = window.fetch.bind(window);
+    window.fetch = function (input, init) {
+        var post = init && String(init.method || '').toUpperCase() === 'POST';
+        var req = rawFetch(input, init);
+        if (!post || !state.me || init.ysmsRetried) return req;
+        return req.then(function (r) {
+            if (r.status !== 403) return r;
+            var old = state.me.csrf;
+            return loadMe().then(function () {
+                var nt = state.me.csrf, b = init.body;
+                if (!nt || nt === old) return r;
+                if (b && typeof b.has === 'function' && b.has('csrf_token')) b.set('csrf_token', nt);
+                else if (typeof b === 'string') b = b.replace(/(^|&)csrf_token=[^&]*/, '$1csrf_token=' + encodeURIComponent(nt));
+                var h = new Headers(init.headers || {});
+                if (h.has('X-CSRF-Token')) h.set('X-CSRF-Token', nt);
+                return rawFetch(input, Object.assign({}, init, { body: b, headers: h, ysmsRetried: true }));
+            }, function () { return r; });
+        });
+    };
 
     // Full tools open the existing pages inside the app; Back returns here.
     function openWeb(url) {
@@ -403,6 +425,7 @@
             '<div class="opts"><label class="check"><input type="checkbox" name="remember" checked> Keep me signed in</label>' +
             '<a href="#/forgot" data-go="forgot">Forgot password?</a></div>' +
             '<button type="submit" class="btn primary press">Sign in</button>' +
+            '<button type="button" class="fp-login press" data-fp-login hidden>' + icon('finger') + '<span><b>Login with fingerprint</b><small></small></span></button>' +
             '</form><p class="foot">YMR Marine · Survey Management System</p></div></section>');
         var form = scr.querySelector('form'), err = scr.querySelector('.err'), btn = form.querySelector('[type=submit]');
         scr.querySelector('[data-eye]').addEventListener('click', function () {
@@ -420,20 +443,54 @@
             fetch('login.php', {
                 method: 'POST', credentials: 'same-origin', redirect: 'manual',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ username: u, password: p }).toString()
+                body: new URLSearchParams({ username: u, password: p, remember: form.remember.checked ? '1' : '' }).toString()
             }).then(function (r) {
                 // login.php answers a correct sign-in with a redirect to index.php.
                 if (r.type === 'opaqueredirect' || r.redirected || (r.status >= 300 && r.status < 400)) return loadMe();
                 throw new Error('bad');
-            }).then(function () {
-                haptic('MEDIUM');
-                window.YSMS_APP.loggedIn = true; window.YSMS_APP.uid = state.me.id;
-                go('home', { replace: true, anim: 'fade' });
-                setupPush();
-            }).catch(function (x) {
+            }).then(signedIn).catch(function (x) {
                 fail(x && x.message === 'bad' ? 'Wrong username or password.' : 'Could not connect. Check the internet and try again.');
             });
         });
+        function signedIn() {
+            haptic('MEDIUM');
+            window.YSMS_APP.loggedIn = true; window.YSMS_APP.uid = state.me.id;
+            go('home', { replace: true, anim: 'fade' });
+            setupPush();
+        }
+        // Fingerprint login: only when it was turned on in Profile on this phone.
+        var fp = scr.querySelector('[data-fp-login]');
+        if (BIO && BIO.bioKeyHas) BIO.bioKeyHas().then(function (r) {
+            if (!r.has) return;
+            var who = ''; try { who = localStorage.getItem('ysmsBioName') || ''; } catch (e) {}
+            fp.hidden = false;
+            fp.querySelector('small').textContent = who ? 'as ' + who : '';
+            if (state.autoFp !== false) { state.autoFp = false; setTimeout(fpLogin, 450); }
+        }).catch(function () {});
+        fp.addEventListener('click', fpLogin);
+        function fpLogin() {
+            err.hidden = true;
+            BIO.bioKeyRead().then(function (r) {
+                fp.disabled = true; fp.querySelector('b').innerHTML = '<span class="spin dark"></span> Signing in…';
+                var body = new URLSearchParams({ action: 'login', key: r.key });
+                return fetch('ajax/app_bio_login.php', { method: 'POST', credentials: 'same-origin', body: body }).then(function (res) {
+                    return res.json().then(function (j) {
+                        if (!res.ok || !j.success) {
+                            if (res.status === 401) { BIO.bioKeyClear(); fp.hidden = true; }
+                            throw new Error(j.message || 'Fingerprint login did not work. Sign in with your password.');
+                        }
+                        return loadMe();
+                    });
+                }).then(signedIn);
+            }).catch(function (x) {
+                fp.disabled = false; fp.querySelector('b').textContent = 'Login with fingerprint';
+                var m = x && x.message || '';
+                if (x && x.code === 'invalidated') { fp.hidden = true; fail(m); return; }
+                // Cancelled or "Use password": just stay on the form.
+                if (/^(10|13|5)$/.test(String(x && x.code)) || /cancel/i.test(m)) return;
+                if (m) fail(m);
+            });
+        }
         function fail(msg) {
             btn.disabled = false; btn.textContent = 'Sign in';
             err.hidden = false; err.querySelector('span').textContent = msg;
@@ -1055,11 +1112,12 @@
             '<div class="section-title" data-rise>Work</div><div class="menu-card" data-rise>' + work + '</div>' +
             (admin ? '<div class="section-title" data-rise>' + (me.role === 'Client' ? 'Client' : 'Admin') + '</div><div class="menu-card" data-rise>' + admin + '</div>' : '') +
             '<div class="section-title" data-rise>Account</div><div class="menu-card" data-rise>' + item('My profile', 'user', 'blue', '#me') +
-            lockToggleRow() +
+            fpLoginRow() + lockToggleRow() +
             '<button type="button" class="menu-item press" data-theme-pick><span class="ic purple">' + icon('moon') + '</span><span class="grow">Appearance</span><span class="count soft" data-theme-now>' + THEMES[themePref()] + '</span>' + icon('chev', 'chev') + '</button>' +
             item('Support', 'chat', 'green', 'coming_soon.php?feature=Support') +
             '<button type="button" class="menu-item press" data-logout style="color:var(--red-text)"><span class="ic red">' + icon('logout') + '</span><span class="grow">Log out</span></button></div>' +
             '</div></div></section>');
+        wireFpLogin(scr.querySelector('[data-fp-toggle]'));
         var lt = scr.querySelector('[data-lock-toggle]');
         if (lt) lt.addEventListener('click', function () { toggleLock(lt); });
         scr.querySelector('[data-theme-pick]').addEventListener('click', function () {
@@ -1275,7 +1333,11 @@
                     }).catch(function () { finish(true, 'Uploaded.'); });
                 };
                 xhr.onerror = function () { finish(false, 'No connection — the files were not uploaded. Try again.'); };
-                xhr.send(fd);
+                // A fresh session / form token first (stay signed in), so a long upload is not refused at the end.
+                loadMe().catch(function () {}).then(function () {
+                    if (fd.has('csrf_token')) fd.set('csrf_token', state.me.csrf);
+                    xhr.send(fd);
+                });
                 function finish(ok, text, warn) {
                     ov.classList.add(ok ? 'done' : 'fail');
                     pct.innerHTML = ok ? icon('check') : icon('x');
@@ -2750,8 +2812,60 @@
         else if (bgAt && Date.now() - bgAt > LOCK_AFTER) { bgAt = 0; showLock(); }
     });
     function lockToggleRow() {
-        return BIO ? '<button type="button" class="menu-item press" data-lock-toggle><span class="ic green">' + icon('finger') + '</span><span class="grow">Fingerprint unlock</span>' +
+        return BIO ? '<button type="button" class="menu-item press" data-lock-toggle><span class="ic green">' + icon('finger') + '</span><span class="grow">Fingerprint app lock<small class="sub">Ask for the fingerprint when the app opens</small></span>' +
             '<span class="switch' + (lockOn() ? ' on' : '') + '" role="switch" aria-checked="' + lockOn() + '"><i></i></span></button>' : '';
+    }
+    // Fingerprint login: a device key from the server, kept on the phone under its Keystore so only
+    // the fingerprint can read it (YsmsNativePlugin). Works after Log out, until turned off here.
+    function deviceId() {
+        var d = '';
+        try { d = localStorage.getItem('ysmsDevice') || ''; } catch (e) {}
+        if (!d) {
+            var a = new Uint8Array(16); crypto.getRandomValues(a);
+            d = Array.prototype.map.call(a, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+            try { localStorage.setItem('ysmsDevice', d); } catch (e) {}
+        }
+        return d;
+    }
+    function fpLoginRow() {
+        return BIO && BIO.bioKeySave ? '<button type="button" class="menu-item press" data-fp-toggle><span class="ic blue">' + icon('finger') + '</span><span class="grow">Fingerprint login<small class="sub">Sign in with your fingerprint after Log out</small></span>' +
+            '<span class="switch" role="switch" aria-checked="false"><i></i></span></button>' : '';
+    }
+    function wireFpLogin(btn) {
+        if (!btn) return;
+        var sw = btn.querySelector('.switch'), mine = false;
+        function set(on) { sw.classList.toggle('on', on); sw.setAttribute('aria-checked', String(on)); }
+        BIO.bioKeyHas().then(function (r) {
+            var who = ''; try { who = localStorage.getItem('ysmsBioUser') || ''; } catch (e) {}
+            mine = r.has && who === String(state.me.id);
+            set(mine);
+        }).catch(function () {});
+        btn.addEventListener('click', function () {
+            var fd = { action: mine ? 'disable' : 'enroll', device: deviceId(), csrf_token: state.me.csrf };
+            if (mine) {
+                postJson('ajax/app_bio_login.php', fd).catch(function () {}).then(function () {
+                    BIO.bioKeyClear(); mine = false; set(false); toast('Fingerprint login is off');
+                });
+                return;
+            }
+            BIO.bioKeyHas().then(function (r) {
+                if (!r.strong) throw new Error('Add a fingerprint in the phone\'s Settings first.');
+                return postJson('ajax/app_bio_login.php', fd);
+            }).then(function (j) {
+                if (!j.success || !j.key) throw new Error(j.message || 'Could not turn on fingerprint login.');
+                return BIO.bioKeySave({ key: j.key }).catch(function (x) {
+                    // Not confirmed on the phone: drop the key on the server too.
+                    postJson('ajax/app_bio_login.php', { action: 'disable', device: fd.device, csrf_token: state.me.csrf }).catch(function () {});
+                    throw x;
+                });
+            }).then(function () {
+                try { localStorage.setItem('ysmsBioUser', String(state.me.id)); localStorage.setItem('ysmsBioName', state.me.name); } catch (e) {}
+                mine = true; set(true); haptic('MEDIUM'); toast('Fingerprint login is on', 'ok');
+            }).catch(function (x) {
+                var m = x && x.message || '';
+                if (!/cancel|^Use password$/i.test(m) && !/^(10|13)$/.test(String(x && x.code))) toast(m || 'Could not turn on fingerprint login', 'bad');
+            });
+        });
     }
     function toggleLock(btn) {
         var sw = btn.querySelector('.switch');
@@ -2817,7 +2931,7 @@
             clearCache();
             if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('clear');
             return fetch('logout.php', { credentials: 'same-origin', redirect: 'manual' }).catch(function () {});
-        }).then(function () { state.me = null; window.YSMS_APP.loggedIn = false; });
+        }).then(function () { state.me = null; window.YSMS_APP.loggedIn = false; state.autoFp = false; });
     }
 
     // Offline start: keeps the app's page and files (app-sw.js, which leaves the website's pages alone).

@@ -87,6 +87,13 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onPause() {
+        super.onPause();
+        // Keep the "stay signed in" cookie on disk even if Android closes the app.
+        CookieManager.getInstance().flush();
+    }
+
+    @Override
     public void onDestroy() {
         try {
             unregisterReceiver(downloadDone);
