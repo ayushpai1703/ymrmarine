@@ -681,7 +681,7 @@
                 (over ? '<div class="alert ' + over.kind + '" role="status" data-rise>' + icon('alert') + '<div><b>' + (over.kind === 'survey' ? 'Survey pending.' : 'Report overdue.') + '</b> ' +
                     over.days + ' days since the ' + (over.kind === 'survey' ? 'appointment date' : 'survey was completed') + '.</div></div>' : '') +
                 '<section class="card rows" data-rise><div class="rows-h"><b>Details</b>' +
-                (state.me.role === 'Admin' ? '<button type="button" class="link-btn press" data-edit="' + v.id + '">' + icon('edit') + 'Edit</button>' : '') + '</div>' + rows.map(function (r) { return '<div class="kv"><span>' + r[0] + '</span><b>' + esc(r[1]) + '</b></div>'; }).join('') +
+                (state.me.role === 'Admin' ? '<button type="button" class="link-btn press" data-inline-edit>' + icon('edit') + 'Edit</button>' : '') + '</div>' + rows.map(function (r) { return '<div class="kv"><span>' + r[0] + '</span><b>' + esc(r[1]) + '</b></div>'; }).join('') +
                 (v.remarks ? '<div class="kv"><span style="color:#c2410c">Admin remarks</span><b>' + esc(v.remarks) + '</b></div>' : '') +
                 (v.agent_email ? '<div class="kv"><span>Agent update</span><b><button type="button" class="link-btn" style="min-height:32px;padding:0" data-agent-mail>' + (v.agent_email.sent ? 'Send again' : 'Send email to agent') + '</button>' +
                     (v.agent_email.sent ? '<small style="display:block;font-weight:500;color:#64748b">Sent ' + esc(v.agent_email.sent) + '</small>' : '') + '</b></div>' : '') + '</section>' +
@@ -721,6 +721,8 @@
             var up = scr.querySelector('[data-update]');
             if (up) up.onclick = function () { updateSheet(v); };
             wireExtras(v);
+            var ie = scr.querySelector('[data-inline-edit]');
+            if (ie) ie.onclick = function () { inlineEdit(v); };
             stagger(scr);
         }
         function remarksHtml(v) {
@@ -734,6 +736,66 @@
                         (m.text ? '<div class="rm-t">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '') +
                         m.files.map(function (f) { return '<a class="att-file" href="download.php?remark_attachment_id=' + f.id + '"><span class="ft other">FILE</span><span class="t"><b>' + esc(f.name) + '</b></span>' + icon('download') + '</a>'; }).join('') + '</div>';
                 }).join('') : '<div style="font-size:13px;color:#64748b">No remarks yet.</div>') + '</section>';
+        }
+        // Edit the details card in place (Admin). Saves through assign_vessel.php's edit, like the
+        // Assign vessel form; vessel name, client and port are sent unchanged (⋮ > Edit vessel has them).
+        // Report no. and the dates set by uploads are not editable there, so they stay read-only here.
+        function inlineEdit(v) {
+            var card = scr.querySelector('.card.rows'), ie = card.querySelector('[data-inline-edit]');
+            ie.disabled = true; ie.innerHTML = '<span class="spin dark"></span>';
+            api('assign_form', { edit_id: v.id }).then(function (d) {
+                var e = d.edit, f = { types: e.type_ids.map(String), surveyors: e.surveyor_ids.map(String) };
+                function names(list, ids) {
+                    return ids.map(function (id) { if (id === 'outsourcing') return 'Outsourcing'; var x = list.filter(function (i) { return String(i.id) === String(id); })[0]; return x ? x.name : ''; }).filter(Boolean).join(' + ');
+                }
+                function lock(label, val) { return val ? '<div class="kv ro"><span>' + label + '</span><b>' + esc(val) + icon('lock') + '</b></div>' : ''; }
+                function pickRow(key, label, list) {
+                    return '<div class="kv ed"><span>' + label + '</span><button type="button" class="sel-in press" data-ie-pick="' + key + '"><span>' + esc(names(list, f[key]) || 'Choose') + '</span>' + icon('chev', 'chev') + '</button></div>';
+                }
+                function draw() {
+                    card.classList.add('editing');
+                    card.innerHTML = '<div class="rows-h"><b>Edit details</b><span><button type="button" class="link-btn" data-ie-cancel>Cancel</button><button type="button" class="link-btn press" data-ie-save>' + icon('check') + 'Save</button></span></div>' +
+                        '<div class="kv ed"><span>Appointment</span><input type="date" data-ie="date" value="' + esc(f.date != null ? f.date : e.appointment) + '"></div>' +
+                        pickRow('types', 'Survey type', d.types) + pickRow('surveyors', 'Surveyor', d.surveyors) +
+                        '<div class="kv ed"><span>Agent</span><input type="text" data-ie="agent" autocapitalize="characters" value="' + esc(f.agent != null ? f.agent : e.agent) + '"></div>' +
+                        lock('Report no.', v.report_no) + lock('Assigned on', v.assigned_on) + lock('Survey completed', v.completed_on) + lock('Report completed', v.report_on) +
+                        '<div class="kv ed col"><span style="color:#c2410c">Admin remarks</span><textarea class="ta" rows="2" data-ie="remarks" placeholder="Any specific instructions or notes">' + esc(f.remarks != null ? f.remarks : e.remarks) + '</textarea></div>' +
+                        '<div class="err" hidden role="alert">' + icon('alert') + '<span></span></div>';
+                }
+                function keep() { ['date', 'agent', 'remarks'].forEach(function (k) { var i = card.querySelector('[data-ie=' + k + ']'); if (i) f[k] = i.value; }); }
+                function err(m) { var x = card.querySelector('.err'); x.hidden = !m; x.querySelector('span').textContent = m || ''; if (m) haptic('HEAVY'); }
+                draw();
+                card.onclick = function (ev) {
+                    var p = ev.target.closest('[data-ie-pick]');
+                    if (ev.target.closest('[data-ie-cancel]')) { card.onclick = null; render(v); return; }
+                    if (p) {
+                        keep();
+                        var k = p.getAttribute('data-ie-pick');
+                        (k === 'types' ? pickSheet('Survey type', d.types.map(function (x) { return { value: x.id, label: x.name }; }), { multi: true, selected: f.types })
+                            : pickSheet('Surveyor(s)', d.surveyors.map(function (x) { return { value: x.id, label: x.name }; }).concat([{ value: 'outsourcing', label: 'Outsourcing', warn: true }]), { multi: true, selected: f.surveyors, exclusive: 'outsourcing' }))
+                            .then(function (val) { if (val !== null) { f[k] = val; draw(); } });
+                        return;
+                    }
+                    var sv = ev.target.closest('[data-ie-save]');
+                    if (!sv) return;
+                    keep(); err('');
+                    var agent = (f.agent || '').trim();
+                    if (!f.date) return err('Appointment date is required.');
+                    if (!f.types.length) return err('Please choose at least one survey type.');
+                    if (!f.surveyors.length) return err('Please choose a surveyor (or Outsourcing).');
+                    if (!agent) return err('Agent name is required.');
+                    var fd = new FormData();
+                    fd.append('edit_id', String(v.id)); fd.append('vessel_name', e.vessel); fd.append('client_id', String(e.client_id)); fd.append('port_id', String(e.port_id));
+                    fd.append('agent_name', agent); fd.append('survey_type_ids', f.types.join(',')); fd.append('surveyor_ids', f.surveyors.join(','));
+                    fd.append('appointment_date', f.date); fd.append('remarks', (f.remarks || '').trim());
+                    sv.disabled = true; sv.innerHTML = '<span class="spin dark"></span>';
+                    postPage('assign_vessel.php?edit_id=' + v.id, fd).then(function (r) {
+                        if (!r.ok) throw new Error(r.message || 'Could not save. Please check the details.');
+                        haptic('MEDIUM'); toast(r.message, 'ok'); card.onclick = null; load();
+                    }).catch(function (x) { sv.disabled = false; sv.innerHTML = icon('check') + 'Save'; err(x.message); });
+                };
+                var first = card.querySelector('[data-ie=date]'); if (first) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }).catch(function () { ie.disabled = false; ie.innerHTML = icon('edit') + 'Edit'; toast('Could not open edit', 'bad'); });
         }
         function wireExtras(v) {
             var page = v.web.split('?')[0] + '?id=' + v.id;
