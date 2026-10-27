@@ -182,7 +182,7 @@
         if (TABS.indexOf(h) !== -1) return { name: h };
         return { name: 'home' };
     }
-    var PUSHED = ['search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign', 'admin', 'addclient', 'addadmin', 'surveyor', 'activity', 'duplicates', 'templates'];
+    var PUSHED = ['forgot', 'search', 'inbox', 'recovery', 'cancelled', 'formats', 'me', 'chat', 'assign', 'admin', 'addclient', 'addadmin', 'surveyor', 'activity', 'duplicates', 'templates'];
     var ROUTE_IDS = { v: 'vessel', up: 'upload', h: 'history', c: 'room', e: 'assign', sv: 'surveyor', m: 'module' };
     function hashFor(name, id) {
         if (id) for (var k in ROUTE_IDS) if (ROUTE_IDS[k] === name) return '#/' + k + '/' + id;
@@ -212,7 +212,7 @@
     });
 
     function show(route, anim, depthOverride) {
-        if (route.name !== 'login' && !state.me) {
+        if (route.name !== 'login' && route.name !== 'forgot' && !state.me) {
             return loadMe().then(function () { show(route, anim, depthOverride); }, function () {});
         }
         var builder = SCREENS[route.name] || SCREENS.home;
@@ -293,7 +293,7 @@
             '<input id="lg-pass" name="password" type="password" autocomplete="current-password" required>' +
             '<button type="button" class="icon-btn plain" data-eye aria-label="Show password">' + icon('eye') + '</button></div></div>' +
             '<div class="opts"><label class="check"><input type="checkbox" name="remember" checked> Keep me signed in</label>' +
-            '<a href="forgot_password.php" data-web>Forgot password?</a></div>' +
+            '<a href="#/forgot" data-go="forgot">Forgot password?</a></div>' +
             '<button type="submit" class="btn primary press">Sign in</button>' +
             '</form><p class="foot">YMR Marine · Survey Management System</p></div></section>');
         var form = scr.querySelector('form'), err = scr.querySelector('.err'), btn = form.querySelector('[type=submit]');
@@ -1032,10 +1032,15 @@
             fetch('inbox.php?open=' + b.getAttribute('data-notif'), { credentials: 'same-origin', redirect: 'manual' }).catch(function () {});
             b.classList.remove('unread');
             var sid = +b.getAttribute('data-sid'), link = b.getAttribute('data-link');
-            if (sid) go('vessel', { id: sid });
-            else if (/^recovery\.php/.test(link)) go('recovery');
-            else if (/^formats_download\.php/.test(link)) go('formats');
-            else if (/^cancelled\.php/.test(link)) go('cancelled');
+            if (sid) { go('vessel', { id: sid }); return; }
+            // Links of other notifications → the app's own screens; anything else opens the page.
+            var m = /^add_surveyor\.php\?id=(\d+)/.exec(link);
+            if (m && state.me.role === 'Admin') { go('surveyor', { id: +m[1] }); return; }
+            var page = (link || '').split(/[?#]/)[0];
+            var to = { 'recovery.php': 'recovery', 'formats_download.php': 'formats', 'cancelled.php': 'cancelled', 'team_chat.php': 'chat', 'profile.php': 'me',
+                'vessels.php': 'vessels', 'reports.php': 'reports', 'completed.php': 'completed', 'index.php': 'home', 'inbox.php': 'inbox',
+                'login_activity.php': 'activity', 'possible_duplicates.php': 'duplicates', 'manage_templates.php': 'templates', 'admin_controls.php': 'admin' }[page];
+            if (to) go(to);
             else if (link) openWeb(link);
         });
         if ('IntersectionObserver' in window) {
@@ -2199,6 +2204,34 @@
         return scr;
     };
 
+    /* ---------------- Forgot password (forgot_password.php sends the reset link) ---------------- */
+    SCREENS.forgot = function () {
+        var scr = el('<section class="scr login" aria-label="Forgot password"><div class="scr-body">' +
+            '<div class="login-top" style="height:250px"><button type="button" class="icon-btn glass press" data-back aria-label="Back">' + icon('back') + '</button>' +
+            '<div><h1>Forgot password?</h1><p>We will email you a link to set a new one.</p></div></div>' +
+            '<form class="login-card" novalidate><div class="err" hidden role="alert">' + icon('alert') + '<span></span></div>' +
+            '<div class="ok-note" hidden data-ok>' + icon('check') + '<span></span></div>' +
+            '<div class="field"><label for="fp-email">Email</label><div class="inp">' + icon('inbox') + '<input id="fp-email" type="email" autocomplete="email" placeholder="you@company.com" required></div></div>' +
+            '<button type="submit" class="btn primary press">Send reset link</button></form></div></section>');
+        var form = scr.querySelector('form'), err = scr.querySelector('.err'), okBox = scr.querySelector('[data-ok]'), btn = form.querySelector('[type=submit]');
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var email = scr.querySelector('#fp-email').value.trim();
+            err.hidden = true; okBox.hidden = true;
+            if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { err.hidden = false; err.querySelector('span').textContent = 'Please enter a valid email address.'; return; }
+            btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Sending…';
+            fetch('forgot_password.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ email: email }).toString() })
+                .then(function (r) { return r.text(); }).then(function (html) {
+                    var a = new DOMParser().parseFromString(html, 'text/html').querySelector('.alert');
+                    var good = a && a.classList.contains('alert-success');
+                    (good ? okBox : err).hidden = false;
+                    (good ? okBox : err).querySelector('span').textContent = a ? a.textContent.trim() : 'Could not send the link. Try again.';
+                }).catch(function () { err.hidden = false; err.querySelector('span').textContent = 'Could not connect. Check the internet and try again.'; })
+                .then(function () { btn.disabled = false; btn.textContent = 'Send reset link'; });
+        });
+        return scr;
+    };
+
     /* ---------------- global taps ---------------- */
     document.addEventListener('click', function (e) {
         var t = e.target.closest('[data-web],[data-go],[data-vessel],[data-upload],[data-history],[data-edit],[data-back],[data-refresh]');
@@ -2212,7 +2245,7 @@
         if (t.hasAttribute('data-upload')) { haptic(); go('upload', { id: +t.getAttribute('data-upload') }); return; }
         if (t.hasAttribute('data-history')) { haptic(); go('history', { id: +t.getAttribute('data-history') }); return; }
         if (t.hasAttribute('data-edit')) { closeSheet(true); haptic(); go('assign', { id: +t.getAttribute('data-edit') }); return; }
-        if (t.hasAttribute('data-go')) { haptic(); go(t.getAttribute('data-go')); return; }
+        if (t.hasAttribute('data-go')) { e.preventDefault(); haptic(); go(t.getAttribute('data-go')); return; }
         if (t.hasAttribute('data-back')) { back(); return; }
         if (t.hasAttribute('data-refresh')) { closeSheet(); location.reload(); }
     });
