@@ -34,7 +34,10 @@ function outsourcedCreditSurveyor(PDO $db): array {
     return $cache;
 }
 
-/** Normalised filters from the query string; the surveyor filter is Admin / Super Admin only. */
+require_once __DIR__ . '/list_filters.php';
+
+/** Normalised filters from the query string; the surveyor filter is Admin / Super Admin only.
+ *  type / place / client / surveyor are lists (multi-select; one value from older links still works). */
 function recoveryListFilters(array $get, bool $fullAccess): array {
     $str = fn($k) => trim((string)($get[$k] ?? ''));
     $status = $str('status');
@@ -42,11 +45,12 @@ function recoveryListFilters(array $get, bool $fullAccess): array {
     $sort = $str('sort');
     return [
         'q'        => $str('q'),
-        'type'     => $str('type'),
-        'place'    => $str('place'),
-        'client'   => $str('client'),
-        // -1 = OUTSOURCED_CREDIT_SURVEYOR when they have no Surveyor login (outsourced vessels only)
-        'surveyor' => $fullAccess && ((int)($get['surveyor'] ?? 0) > 0 || (int)($get['surveyor'] ?? 0) === -1) ? (int)$get['surveyor'] : 0,
+        'type'     => listFilterValues($get, 'type'),
+        'place'    => listFilterValues($get, 'place'),
+        'client'   => listFilterValues($get, 'client'),
+        // surveyor ids; -1 = OUTSOURCED_CREDIT_SURVEYOR when they have no Surveyor login (outsourced vessels only)
+        'surveyor' => $fullAccess ? array_values(array_unique(array_filter(array_map('intval', listFilterValues($get, 'surveyor')),
+            fn($id) => $id > 0 || $id === -1))) : [],
         'status'   => in_array($status, ['Pending Report', 'Completed'], true) ? $status : '',
         'month'    => preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month) ? $month : '',
         'sort'     => in_array($sort, ['oldest', 'recovery-desc', 'recovery-asc', 'name-asc'], true) ? $sort : 'newest',
@@ -77,16 +81,20 @@ function recoveryListWhere(string $role, int $userId, int $clientRowId, array $f
         $like = '%' . $f['q'] . '%';
         array_push($params, $like, $like, $like, $like, $like, $like);
     }
-    if ($f['type'] !== '') { $where[] = 'st.type_name = ?'; $params[] = $f['type']; }
-    if ($f['place'] !== '') { $where[] = 'p.port_name = ?'; $params[] = $f['place']; }
-    if ($f['client'] !== '') { $where[] = 'c.company_name = ?'; $params[] = $f['client']; }
-    if ($f['surveyor'] === -1) {
-        $where[] = RECOVERY_NO_SURVEYOR_SQL;
-    } elseif ($f['surveyor'] > 0) {
-        $where[] = '(s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?)'
-            . ($f['surveyor'] === $creditId ? ' OR ' . RECOVERY_NO_SURVEYOR_SQL : '') . ')';
-        $params[] = $f['surveyor'];
-        $params[] = $f['surveyor'];
+    if ($f['type']) { $where[] = listFilterTypeSql($f['type'], $params); }
+    if ($f['place']) { $where[] = listFilterInSql('p.port_name', $f['place'], $params); }
+    if ($f['client']) { $where[] = listFilterInSql('c.company_name', $f['client'], $params); }
+    if ($f['surveyor']) {
+        // Any of the chosen surveyors; the outsourced vessels count for the credited surveyor (and -1).
+        $ids = array_values(array_filter($f['surveyor'], fn($id) => $id > 0));
+        $or = [];
+        if ($ids) {
+            $in = implode(', ', array_fill(0, count($ids), '?'));
+            $or[] = "s.surveyor_id IN ($in) OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id IN ($in))";
+            array_push($params, ...$ids, ...$ids);
+        }
+        if (in_array(-1, $f['surveyor'], true) || ($creditId > 0 && in_array($creditId, $ids, true))) $or[] = RECOVERY_NO_SURVEYOR_SQL;
+        $where[] = '(' . implode(' OR ', $or) . ')';
     }
     if ($f['status'] !== '') { $where[] = 's.status = ?'; $params[] = $f['status']; }
     if ($f['month'] !== '') {
@@ -109,7 +117,7 @@ function recoveryListWhere(string $role, int $userId, int $clientRowId, array $f
 function recoveryListQs(array $f, array $extra = []): string {
     $f = array_merge($f, $extra);
     if (($f['sort'] ?? '') === 'newest') unset($f['sort']);
-    return http_build_query(array_filter($f, fn($v) => $v !== '' && $v !== null && $v !== 0));
+    return http_build_query(array_filter($f, fn($v) => $v !== '' && $v !== null && $v !== 0 && $v !== []));
 }
 
 /** One row ready for display/export: dates d-m-Y, recovery null / float, 'na' for types without Recovery. */

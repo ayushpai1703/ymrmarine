@@ -494,6 +494,24 @@ require_once __DIR__ . '/../config/config.php';
         .list-controls-panel { display: none; margin: -5px 20px 15px; padding: 12px; background: #fff; border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 20px rgba(15,23,42,.08); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
         .list-controls-panel.open { display: grid; animation: controlsReveal .2s ease-out; }
         .list-controls-panel select { min-width: 0; width: 100%; padding: 9px 10px; border: 1px solid var(--border-color); border-radius: 9px; color: var(--text-dark); background: #f8fafc; font-size: 12px; }
+        /* Multi-select filters (assets/js/app.js: select[data-multi]) */
+        .ysms-ms { position: relative; min-width: 0; }
+        .ysms-ms > select { display: none !important; }
+        .ysms-ms-trigger { width: 100%; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 9px 10px; border: 1px solid var(--border-color); border-radius: 9px; color: var(--text-dark); background: #f8fafc; font-size: 12px; text-align: left; cursor: pointer; }
+        .ysms-ms-trigger.has-value { border-color: #A78BFA; background: #F3EEFE; color: #5B2DEE; font-weight: 600; }
+        .ysms-ms-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ysms-ms-trigger i { font-size: 9px; color: #94A3B8; flex: none; transition: transform .15s ease; }
+        .ysms-ms.open .ysms-ms-trigger i { transform: rotate(180deg); }
+        .ysms-ms-panel { display: none; position: absolute; z-index: 60; top: calc(100% + 6px); left: 0; min-width: 100%; width: max-content; max-width: min(300px, 86vw); background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 16px 36px rgba(15,23,42,.16); padding: 6px; }
+        .ysms-ms.open .ysms-ms-panel { display: block; }
+        .ysms-ms-list { max-height: 240px; overflow-y: auto; }
+        .ysms-ms-opt { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 10px; font-size: 13px; color: #334155; cursor: pointer; margin: 0; }
+        .ysms-ms-opt:hover { background: #F3EEFE; }
+        .ysms-ms-opt input { width: 16px; height: 16px; accent-color: #5B2DEE; flex: none; margin: 0; }
+        .ysms-ms-bar { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid #eef1f6; margin-top: 4px; padding: 6px 4px 2px; }
+        .ysms-ms-bar button { border: 0; background: transparent; font-size: 12.5px; font-weight: 700; color: #64748b; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+        .ysms-ms-bar .ysms-ms-done { background: #5B2DEE; color: #fff; padding: 6px 14px; }
+        .vd-dd-trigger.has-value { border-color: #A78BFA; background: #F3EEFE; color: #5B2DEE; }
         @keyframes controlsReveal { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
         .list-empty-state { display: none; }
 
