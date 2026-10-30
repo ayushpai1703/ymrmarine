@@ -18,6 +18,7 @@ register_shutdown_function(function () {
 require 'vendor/autoload.php';
 require_once 'config/config.php';
 require_once __DIR__ . '/includes/excel_export_helpers.php';
+require_once __DIR__ . '/includes/list_filters.php';
 checkAuth();
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -54,10 +55,14 @@ try {
     // assign_date) that builds completed.php's own month dropdown and
     // data-month rows.
     $q = trim((string)($_GET['q'] ?? ''));
-    $filter_type = trim((string)($_GET['type'] ?? ''));
-    $filter_place = trim((string)($_GET['place'] ?? ''));
-    $filter_client = trim((string)($_GET['client'] ?? ''));
-    $filter_surveyor = trim((string)($_GET['surveyor'] ?? ''));
+    // Each filter can hold several values (multi-select on the list pages): any of them matches.
+    $filter_types = listFilterValues($_GET, 'type');
+    $filter_places = listFilterValues($_GET, 'place');
+    $filter_clients = listFilterValues($_GET, 'client');
+    $filter_surveyors = listFilterValues($_GET, 'surveyor');
+    $filter_place = implode(', ', $filter_places);
+    $filter_client = implode(', ', $filter_clients);
+    $filter_surveyor = implode(', ', $filter_surveyors);
     $filter_month = trim((string)($_GET['month'] ?? ''));
 
     $where = ["s.status = 'Completed'"];
@@ -75,12 +80,11 @@ try {
         $like = '%' . $q . '%';
         array_push($params, $like, $like, $like, $like, $like, $like);
     }
-    if ($filter_type !== '') { $where[] = 't.type_name = ?'; $params[] = $filter_type; }
-    if ($filter_place !== '') { $where[] = 'p.port_name = ?'; $params[] = $filter_place; }
-    if ($filter_client !== '') { $where[] = 'c.company_name = ?'; $params[] = $filter_client; }
-    if ($is_full_access && $filter_surveyor !== '') {
-        $where[] = "COALESCE((SELECT GROUP_CONCAT(u2.full_name ORDER BY ss2.id SEPARATOR ' + ') FROM survey_surveyors ss2 JOIN users u2 ON ss2.surveyor_id = u2.id WHERE ss2.survey_id = s.id), u.full_name) = ?";
-        $params[] = $filter_surveyor;
+    if ($filter_types) { $where[] = listFilterTypeSql($filter_types, $params); }
+    if ($filter_places) { $where[] = listFilterInSql('p.port_name', $filter_places, $params); }
+    if ($filter_clients) { $where[] = listFilterInSql('c.company_name', $filter_clients, $params); }
+    if ($is_full_access && $filter_surveyors) {
+        $where[] = listFilterSurveyorNameSql($filter_surveyors, $params);
     }
     if ($filter_month !== '') {
         // Report Completed Date month (same as completed.php's Filter by Month).

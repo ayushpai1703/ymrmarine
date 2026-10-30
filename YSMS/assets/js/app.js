@@ -43,6 +43,96 @@ $(document).ready(function() {
         }
     });
 
+    // Multi-select filters: <select multiple data-multi> shown as a dropdown with tick boxes.
+    // The select stays the source of truth (its options' selected state + a real 'change' event),
+    // so the filter code reads it with .val() as before.
+    function ysmsMultiLabel(sel) {
+        const picked = Array.prototype.filter.call(sel.options, function(o) { return o.selected && o.value !== ''; });
+        const allText = sel.options[0] && sel.options[0].value === '' ? sel.options[0].textContent : 'All';
+        if (!picked.length) return allText;
+        if (picked.length === 1) return picked[0].textContent;
+        return picked.length + ' ' + allText.replace(/^All\s+/i, '') + ' selected';
+    }
+    window.ysmsMultiSync = function(sel) {
+        const ui = sel && sel._ysmsMulti;
+        if (!ui) return;
+        ui.label.textContent = ysmsMultiLabel(sel);
+        ui.trigger.classList.toggle('has-value', Array.prototype.some.call(sel.options, function(o) { return o.selected && o.value !== ''; }));
+        ui.list.querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+            cb.checked = !!(sel.options[cb.dataset.i] && sel.options[cb.dataset.i].selected);
+        });
+    };
+    function ysmsMultiEnhance(sel) {
+        if (sel._ysmsMulti || sel.closest('.vd-dd')) return;
+        sel.multiple = true;
+        Array.prototype.forEach.call(sel.options, function(o) { if (o.value === '') o.selected = false; });
+        const wrap = document.createElement('div');
+        wrap.className = 'ysms-ms';
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(sel);
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.className = 'ysms-ms-trigger';
+        trigger.setAttribute('aria-haspopup', 'listbox');
+        trigger.setAttribute('aria-expanded', 'false');
+        if (sel.getAttribute('aria-label')) trigger.setAttribute('aria-label', sel.getAttribute('aria-label'));
+        const label = document.createElement('span');
+        label.className = 'ysms-ms-label';
+        trigger.appendChild(label);
+        trigger.insertAdjacentHTML('beforeend', '<i class="fa-solid fa-chevron-down" aria-hidden="true"></i>');
+        const panel = document.createElement('div');
+        panel.className = 'ysms-ms-panel';
+        const list = document.createElement('div');
+        list.className = 'ysms-ms-list';
+        Array.prototype.forEach.call(sel.options, function(o, i) {
+            if (o.value === '') return;
+            const row = document.createElement('label');
+            row.className = 'ysms-ms-opt';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.dataset.i = i;
+            row.appendChild(cb);
+            row.appendChild(document.createTextNode(' ' + o.textContent));
+            cb.addEventListener('change', function() {
+                o.selected = cb.checked;
+                window.ysmsMultiSync(sel);
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            list.appendChild(row);
+        });
+        const bar = document.createElement('div');
+        bar.className = 'ysms-ms-bar';
+        bar.innerHTML = '<button type="button" class="ysms-ms-clear">Clear</button><button type="button" class="ysms-ms-done">Done</button>';
+        panel.appendChild(list);
+        panel.appendChild(bar);
+        wrap.appendChild(trigger);
+        wrap.appendChild(panel);
+        const close = function() { wrap.classList.remove('open'); trigger.setAttribute('aria-expanded', 'false'); };
+        trigger.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+            const open = !wrap.classList.contains('open');
+            document.querySelectorAll('.ysms-ms.open').forEach(function(w) { w.classList.remove('open'); });
+            wrap.classList.toggle('open', open);
+            trigger.setAttribute('aria-expanded', String(open));
+        });
+        panel.addEventListener('click', function(ev) { ev.stopPropagation(); });
+        bar.querySelector('.ysms-ms-done').addEventListener('click', close);
+        bar.querySelector('.ysms-ms-clear').addEventListener('click', function() {
+            Array.prototype.forEach.call(sel.options, function(o) { o.selected = false; });
+            window.ysmsMultiSync(sel);
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        sel._ysmsMulti = { trigger: trigger, label: label, list: list };
+        window.ysmsMultiSync(sel);
+    }
+    document.querySelectorAll('select[data-multi]').forEach(ysmsMultiEnhance);
+    document.addEventListener('click', function() {
+        document.querySelectorAll('.ysms-ms.open').forEach(function(w) {
+            w.classList.remove('open');
+            const t = w.querySelector('.ysms-ms-trigger'); if (t) t.setAttribute('aria-expanded', 'false');
+        });
+    });
+
     // Reliable local search, sort and filter controls
     // Use .attr() for string data-* values — jQuery .data() can mangle long strings / HTML entities
     function cardAttr($el, name) {
@@ -53,11 +143,21 @@ $(document).ready(function() {
         const $scope = $(scope);
         const container = $scope.find('[data-list-container]');
         const query = String($scope.find('[data-list-search]').val() || '').toLowerCase().trim();
-        const type = String($scope.find('[data-filter-type]').val() || '');
-        const place = String($scope.find('[data-filter-place]').val() || '');
-        const client = String($scope.find('[data-filter-client]').val() || '');
+        // Survey type, place, client and surveyor are multi-select: a card matches any ticked value.
+        const picked = function(sel) {
+            const v = $scope.find(sel).val();
+            return (Array.isArray(v) ? v : (v ? [v] : [])).map(String).filter(Boolean);
+        };
+        const types = picked('[data-filter-type]');
+        const places = picked('[data-filter-place]');
+        const clients = picked('[data-filter-client]');
         const status = String($scope.find('[data-filter-status]').val() || '');
-        const surveyor = String($scope.find('[data-filter-surveyor]').val() || '');
+        const surveyors = picked('[data-filter-surveyor]');
+        // "Name1 + Name2" (surveyors, survey types): matches when any of the names is ticked.
+        const anyName = function(value, list) {
+            const names = String(value || '').split(' + ').map(function(x) { return x.trim(); });
+            return list.some(function(p) { return names.indexOf(p) !== -1; });
+        };
         const month = String($scope.find('[data-filter-month]').val() || '');
         const appointment = String($scope.find('[data-filter-appointment]').val() || '');
         const sort = String($scope.find('[data-list-sort]').val() || 'newest');
@@ -93,11 +193,11 @@ $(document).ready(function() {
                 return haystack.indexOf(part) !== -1;
             });
             const show = matchQuery
-                && (!type || attr(card, 'type') === type)
-                && (!place || attr(card, 'place') === place)
-                && (!client || attr(card, 'client') === client)
+                && (!types.length || anyName(attr(card, 'type'), types))
+                && (!places.length || places.indexOf(attr(card, 'place')) !== -1)
+                && (!clients.length || clients.indexOf(attr(card, 'client')) !== -1)
                 && (!status || attr(card, 'status') === status)
-                && (!surveyor || attr(card, 'surveyor') === surveyor)
+                && (!surveyors.length || anyName(attr(card, 'surveyor'), surveyors))
                 && (!month || attr(card, 'month') === month)
                 && (!appointment || attr(card, 'appointment') === appointment);
             card.style.display = show ? '' : 'none';
@@ -125,10 +225,10 @@ $(document).ready(function() {
             const base = $mobileExport.data('export-base') || String($mobileExport.attr('href') || '').split('?')[0];
             const exportParams = [];
             if (query) exportParams.push('q=' + encodeURIComponent(query));
-            if (type) exportParams.push('type=' + encodeURIComponent(type));
-            if (place) exportParams.push('place=' + encodeURIComponent(place));
-            if (client) exportParams.push('client=' + encodeURIComponent(client));
-            if (surveyor) exportParams.push('surveyor=' + encodeURIComponent(surveyor));
+            types.forEach(function(v) { exportParams.push('type[]=' + encodeURIComponent(v)); });
+            places.forEach(function(v) { exportParams.push('place[]=' + encodeURIComponent(v)); });
+            clients.forEach(function(v) { exportParams.push('client[]=' + encodeURIComponent(v)); });
+            surveyors.forEach(function(v) { exportParams.push('surveyor[]=' + encodeURIComponent(v)); });
             if (month) exportParams.push('month=' + encodeURIComponent(month));
             if (appointment) exportParams.push('appointment=' + encodeURIComponent(appointment));
             $mobileExport.attr('href', base + (exportParams.length ? '?' + exportParams.join('&') : ''));
@@ -147,6 +247,7 @@ $(document).ready(function() {
         const scope = $(this).closest('[data-list-scope]');
         scope.find('[data-list-search]').val('');
         scope.find('[data-filter-type], [data-filter-place], [data-filter-client], [data-filter-status], [data-filter-surveyor], [data-filter-month], [data-filter-appointment]').val('');
+        scope.find('select[data-multi]').each(function() { $(this).val([]); ysmsMultiSync(this); });
         scope.find('[data-list-sort]').val('newest');
         updateSurveyList(scope);
     });

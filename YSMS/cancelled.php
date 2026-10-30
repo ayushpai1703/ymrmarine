@@ -1,5 +1,6 @@
 <?php
 require_once 'config/config.php';
+require_once 'includes/list_filters.php';
 checkAuth();
 
 $db = getDB();
@@ -60,17 +61,17 @@ foreach ($surveys as $row) {
     if (!empty($row['port_name'])) $survey_places_filter[$row['port_name']] = $row['port_name'];
     if (!empty($row['company_name'])) $survey_clients_filter[$row['company_name']] = $row['company_name'];
     $rowSurveyorNames = getCombinedSurveyorNames($db, $row['id'], $row['surveyor_name'] ?? '');
-    if (!empty($rowSurveyorNames)) $survey_surveyors_filter[$rowSurveyorNames] = $rowSurveyorNames;
+    foreach (listFilterSplitNames($rowSurveyorNames) as $svName) $survey_surveyors_filter[$svName] = $svName;
 }
 
 /* Desktop: pagination */
 $perPage = 25;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $q = trim((string)($_GET['q'] ?? ''));
-$filter_type = trim((string)($_GET['type'] ?? ''));
-$filter_place = trim((string)($_GET['place'] ?? ''));
-$filter_client = trim((string)($_GET['client'] ?? ''));
-$filter_surveyor = trim((string)($_GET['surveyor'] ?? ''));
+$filter_type = listFilterFirst($_GET, 'type');
+$filter_place = listFilterFirst($_GET, 'place');
+$filter_client = listFilterFirst($_GET, 'client');
+$filter_surveyor = listFilterFirst($_GET, 'surveyor');
 $sort = trim((string)($_GET['sort'] ?? 'newest'));
 
 $where = ["s.status = 'Cancelled'"];
@@ -249,11 +250,11 @@ include 'includes/header.php';
     </div>
     <div class="list-controls-panel" data-controls-panel>
         <select data-list-sort><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name-asc">Vessel A–Z</option><option value="name-desc">Vessel Z–A</option></select>
-        <select data-filter-type><option value="">All survey types</option><?php foreach ($survey_types_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
-        <select data-filter-place><option value="">All survey places</option><?php foreach ($survey_places_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
-        <select data-filter-client><option value="">All clients</option><?php foreach ($survey_clients_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
+        <select multiple data-multi data-filter-type><option value="">All survey types</option><?php foreach ($survey_types_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
+        <select multiple data-multi data-filter-place><option value="">All survey places</option><?php foreach ($survey_places_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
+        <select multiple data-multi data-filter-client><option value="">All clients</option><?php foreach ($survey_clients_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
         <?php if ($role === 'Admin'): ?>
-        <select data-filter-surveyor><option value="">All surveyors</option><?php foreach ($survey_surveyors_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
+        <select multiple data-multi data-filter-surveyor><option value="">All surveyors</option><?php foreach ($survey_surveyors_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
         <?php endif; ?>
         <button type="button" class="clear-filters-btn" data-clear-filters><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
     </div>
@@ -269,7 +270,7 @@ include 'includes/header.php';
         <div class="vessel-card" style="background:white;border-radius:16px;padding:15px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;border-left:4px solid #ef4444;"
              data-survey-card
              data-name="<?= sanitize(strtolower($survey['vessel_name'] ?? '')) ?>"
-             data-type="<?= sanitize($survey['type_name'] ?? '') ?>"
+             data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>"
              data-place="<?= sanitize($survey['port_name'] ?? '') ?>"
              data-client="<?= sanitize($survey['company_name'] ?? '') ?>"
              data-surveyor="<?= sanitize($surveyorNames) ?>"
@@ -314,26 +315,26 @@ include 'includes/header.php';
                         <option value="name-asc">Vessel A–Z</option>
                         <option value="name-desc">Vessel Z–A</option>
                     </select>
-                    <select data-desk-type>
+                    <select multiple data-multi data-desk-type>
                         <option value="">All types</option>
                         <?php foreach ($survey_types_filter as $v): ?>
                             <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
                         <?php endforeach; ?>
                     </select>
-                    <select data-desk-place>
+                    <select multiple data-multi data-desk-place>
                         <option value="">All ports</option>
                         <?php foreach ($survey_places_filter as $v): ?>
                             <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
                         <?php endforeach; ?>
                     </select>
-                    <select data-desk-client>
+                    <select multiple data-multi data-desk-client>
                         <option value="">All clients</option>
                         <?php foreach ($survey_clients_filter as $v): ?>
                             <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
                         <?php endforeach; ?>
                     </select>
                     <?php if ($role === 'Admin'): ?>
-                    <select data-desk-surveyor>
+                    <select multiple data-multi data-desk-surveyor>
                         <option value="">All surveyors</option>
                         <?php foreach ($survey_surveyors_filter as $v): ?>
                             <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
@@ -379,7 +380,7 @@ include 'includes/header.php';
                             <tr class="vd-row"
                                 data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '', $surveyorNames, $survey['report_number'] ?? '']))) ?>"
                                 data-name="<?= sanitize(strtolower($vessel_name)) ?>"
-                                data-type="<?= sanitize(strtolower($survey['type_name'] ?? '')) ?>"
+                                data-type="<?= sanitize(strtolower(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? ''))) ?>"
                                 data-place="<?= sanitize(strtolower($survey['port_name'] ?? '')) ?>"
                                 data-client="<?= sanitize(strtolower($survey['company_name'] ?? '')) ?>"
                                 data-surveyor="<?= sanitize(strtolower($surveyorNames)) ?>"
@@ -447,23 +448,33 @@ include 'includes/header.php';
   var page = 1;
 
   function val(sel) { return sel ? (sel.value || '').toLowerCase() : ''; }
+  // Multi-select filters: the ticked values (lower case); a row matches when it has any of them.
+  function vals(sel) {
+    return sel ? Array.prototype.filter.call(sel.options, function (o) { return o.selected && o.value !== ''; })
+      .map(function (o) { return o.value.toLowerCase(); }) : [];
+  }
+  // "Name1 + Name2" (surveyors, survey types) → matches when any of its names is ticked.
+  function anyName(attr, picked) {
+    var names = String(attr || '').toLowerCase().split(' + ').map(function (x) { return x.trim(); });
+    return picked.some(function (p) { return names.indexOf(p) !== -1; });
+  }
 
   function filtered() {
     var q = (search ? search.value : '').toLowerCase().trim();
     var parts = q ? q.split(/\s+/).filter(Boolean) : [];
-    var type = val(typeSel);
-    var place = val(placeSel);
-    var client = val(clientSel);
-    var surveyor = val(surveyorSel);
+    var types = vals(typeSel);
+    var place = vals(placeSel);
+    var client = vals(clientSel);
+    var surveyor = vals(surveyorSel);
     var sort = sortSel ? sortSel.value : 'newest';
 
     var rows = allRows.filter(function (row) {
       var hay = (row.getAttribute('data-search') || '').toLowerCase();
       if (parts.length && !parts.every(function (p) { return hay.indexOf(p) !== -1; })) return false;
-      if (type && (row.getAttribute('data-type') || '').toLowerCase() !== type) return false;
-      if (place && (row.getAttribute('data-place') || '').toLowerCase() !== place) return false;
-      if (client && (row.getAttribute('data-client') || '').toLowerCase() !== client) return false;
-      if (surveyor && (row.getAttribute('data-surveyor') || '').toLowerCase() !== surveyor) return false;
+      if (types.length && !anyName(row.getAttribute('data-type'), types)) return false;
+      if (place.length && place.indexOf((row.getAttribute('data-place') || '').toLowerCase()) === -1) return false;
+      if (client.length && client.indexOf((row.getAttribute('data-client') || '').toLowerCase()) === -1) return false;
+      if (surveyor.length && !anyName(row.getAttribute('data-surveyor'), surveyor)) return false;
       return true;
     });
 
@@ -545,14 +556,10 @@ include 'includes/header.php';
     var params = [];
     var q = search ? search.value.trim() : '';
     if (q) params.push('q=' + encodeURIComponent(q));
-    var type = val(typeSel);
-    if (type) params.push('type=' + encodeURIComponent(type));
-    var place = val(placeSel);
-    if (place) params.push('place=' + encodeURIComponent(place));
-    var client = val(clientSel);
-    if (client) params.push('client=' + encodeURIComponent(client));
-    var surveyor = val(surveyorSel);
-    if (surveyor) params.push('surveyor=' + encodeURIComponent(surveyor));
+    vals(typeSel).forEach(function (v) { params.push('type[]=' + encodeURIComponent(v)); });
+    vals(placeSel).forEach(function (v) { params.push('place[]=' + encodeURIComponent(v)); });
+    vals(clientSel).forEach(function (v) { params.push('client[]=' + encodeURIComponent(v)); });
+    vals(surveyorSel).forEach(function (v) { params.push('surveyor[]=' + encodeURIComponent(v)); });
     exportLink.href = 'export_cancelled.php' + (params.length ? '?' + params.join('&') : '');
   }
 
@@ -568,6 +575,7 @@ include 'includes/header.php';
     [sortSel, typeSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
       if (!el) return;
       if (el === sortSel) el.value = 'newest';
+      else if (el.multiple) { Array.prototype.forEach.call(el.options, function (o) { o.selected = false; }); if (window.ysmsMultiSync) window.ysmsMultiSync(el); }
       else el.value = '';
     });
     page = 1;

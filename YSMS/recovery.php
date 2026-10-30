@@ -122,24 +122,24 @@ include 'includes/header.php';
                 <option value="Pending Report"<?= $f['status'] === 'Pending Report' ? ' selected' : '' ?>>Report Pending</option>
                 <option value="Completed"<?= $f['status'] === 'Completed' ? ' selected' : '' ?>>Completed</option>
             </select>
-            <select name="type" data-testid="rc-type" aria-label="Survey type">
+            <select name="type[]" multiple data-multi data-testid="rc-type" aria-label="Survey type">
                 <option value="">All survey types</option>
-                <?php foreach ($types_opt as $v): ?><option value="<?= sanitize($v) ?>"<?= $v === $f['type'] ? ' selected' : '' ?>><?= sanitize($v) ?></option><?php endforeach; ?>
+                <?php foreach ($types_opt as $v): ?><option value="<?= sanitize($v) ?>"<?= in_array($v, $f['type'], true) ? ' selected' : '' ?>><?= sanitize($v) ?></option><?php endforeach; ?>
             </select>
-            <select name="place" data-testid="rc-place" aria-label="Survey place">
+            <select name="place[]" multiple data-multi data-testid="rc-place" aria-label="Survey place">
                 <option value="">All survey places</option>
-                <?php foreach ($places_opt as $v): ?><option value="<?= sanitize($v) ?>"<?= $v === $f['place'] ? ' selected' : '' ?>><?= sanitize($v) ?></option><?php endforeach; ?>
+                <?php foreach ($places_opt as $v): ?><option value="<?= sanitize($v) ?>"<?= in_array($v, $f['place'], true) ? ' selected' : '' ?>><?= sanitize($v) ?></option><?php endforeach; ?>
             </select>
             <?php if ($role !== 'Client'): ?>
-            <select name="client" data-testid="rc-client" aria-label="Client">
+            <select name="client[]" multiple data-multi data-testid="rc-client" aria-label="Client">
                 <option value="">All clients</option>
-                <?php foreach ($clients_opt as $v): ?><option value="<?= sanitize($v) ?>"<?= $v === $f['client'] ? ' selected' : '' ?>><?= sanitize($v) ?></option><?php endforeach; ?>
+                <?php foreach ($clients_opt as $v): ?><option value="<?= sanitize($v) ?>"<?= in_array($v, $f['client'], true) ? ' selected' : '' ?>><?= sanitize($v) ?></option><?php endforeach; ?>
             </select>
             <?php endif; ?>
             <?php if ($is_full_access): ?>
-            <select name="surveyor" data-testid="rc-surveyor" aria-label="Surveyor">
+            <select name="surveyor[]" multiple data-multi data-testid="rc-surveyor" aria-label="Surveyor">
                 <option value="">All surveyors</option>
-                <?php foreach ($surveyors_opt as $sv): ?><option value="<?= (int)$sv['id'] ?>"<?= (int)$sv['id'] === $f['surveyor'] ? ' selected' : '' ?>><?= sanitize($sv['full_name']) ?><?= $sv['status'] === 'Inactive' ? ' (Inactive)' : '' ?></option><?php endforeach; ?>
+                <?php foreach ($surveyors_opt as $sv): ?><option value="<?= (int)$sv['id'] ?>"<?= in_array((int)$sv['id'], $f['surveyor'], true) ? ' selected' : '' ?>><?= sanitize($sv['full_name']) ?><?= $sv['status'] === 'Inactive' ? ' (Inactive)' : '' ?></option><?php endforeach; ?>
             </select>
             <?php endif; ?>
             <select name="sort" data-testid="rc-sort" aria-label="Sort">
@@ -220,7 +220,12 @@ include 'includes/header.php';
 <script>
 // Dropdowns apply straight away; the search box applies on Enter / Apply.
 document.querySelectorAll('#rcFilters select').forEach(function (s) {
+    // Multi-select filters (type, place, client, surveyor) apply on "Done" (or Apply), not on every tick.
+    if (s.multiple) return;
     s.addEventListener('change', function () { s.form.submit(); });
 });
+document.getElementById('rcFilters').addEventListener('click', function (ev) {
+    if (ev.target.closest('.ysms-ms-done')) this.submit();
+}, true);
 </script>
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>
