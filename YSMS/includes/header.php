@@ -511,6 +511,12 @@ require_once __DIR__ . '/../config/config.php';
         .ysms-ms-bar { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid #eef1f6; margin-top: 4px; padding: 6px 4px 2px; }
         .ysms-ms-bar button { border: 0; background: transparent; font-size: 12.5px; font-weight: 700; color: #64748b; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
         .ysms-ms-bar .ysms-ms-done { background: #5B2DEE; color: #fff; padding: 6px 14px; }
+        /* In the desktop list toolbars: same size as the other filter controls there. */
+        /* Filters that don't fit go to a second line instead of a hidden side-scroll. */
+        body .vd-toolbar:has(.ysms-ms), body .vd-toolbar:has(.ysms-ms) .vd-toolbar-inner, body .vd-toolbar:has(.ysms-ms) form { flex-wrap: wrap; overflow: visible; }
+        .vd-toolbar .ysms-ms { flex: 0 0 auto; width: 140px; }
+        .vd-toolbar .ysms-ms-trigger { height: 40px; padding: 0 12px; border-radius: 10px; border-color: #e2e8f0; background: #fff; color: #0f172a; font-size: 13px; }
+        .vd-toolbar .ysms-ms-trigger.has-value { border-color: #A78BFA; background: #F3EEFE; color: #5B2DEE; }
         .vd-dd-trigger.has-value { border-color: #A78BFA; background: #F3EEFE; color: #5B2DEE; }
         @keyframes controlsReveal { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
         .list-empty-state { display: none; }

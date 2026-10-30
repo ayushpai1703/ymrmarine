@@ -161,6 +161,7 @@ $(document).ready(function() {
             document.querySelectorAll('.ysms-ms.open').forEach(function(w) { w.classList.remove('open'); });
             wrap.classList.toggle('open', open);
             trigger.setAttribute('aria-expanded', String(open));
+            if (open) ysmsMultiPlace(wrap);
         });
         panel.addEventListener('click', function(ev) { ev.stopPropagation(); });
         bar.querySelector('.ysms-ms-done').addEventListener('click', close);
@@ -172,6 +173,31 @@ $(document).ready(function() {
         sel._ysmsMulti = { trigger: trigger, label: label, list: list };
         window.ysmsMultiSync(sel);
     }
+    // The open panel is fixed to the viewport, under (or above) its button, so a filter bar that
+    // scrolls sideways (overflow: auto) can't clip it into a small scroll box.
+    function ysmsMultiPlace(wrap) {
+        const panel = wrap.querySelector('.ysms-ms-panel');
+        const list = wrap.querySelector('.ysms-ms-list');
+        if (!panel || !list) return;
+        const r = wrap.querySelector('.ysms-ms-trigger').getBoundingClientRect();
+        const vw = document.documentElement.clientWidth, vh = window.innerHeight, gap = 6, edge = 8;
+        panel.style.position = 'fixed';
+        panel.style.maxWidth = Math.min(300, vw - edge * 2) + 'px';
+        panel.style.minWidth = Math.min(r.width, vw - edge * 2) + 'px';
+        list.style.maxHeight = '';
+        const below = vh - r.bottom - gap - edge, above = r.top - gap - edge;
+        const extra = panel.offsetHeight - list.offsetHeight;
+        const up = panel.offsetHeight > below && above > below;
+        list.style.maxHeight = Math.max(120, Math.min(240, (up ? above : below) - extra)) + 'px';
+        panel.style.top = (up ? Math.max(edge, r.top - gap - panel.offsetHeight) : r.bottom + gap) + 'px';
+        panel.style.left = Math.max(edge, Math.min(r.left, vw - edge - panel.offsetWidth)) + 'px';
+    }
+    function ysmsMultiReplace() { document.querySelectorAll('.ysms-ms.open').forEach(ysmsMultiPlace); }
+    window.addEventListener('resize', ysmsMultiReplace);
+    window.addEventListener('scroll', function(ev) {
+        if (ev.target && ev.target.closest && ev.target.closest('.ysms-ms-panel')) return;
+        ysmsMultiReplace();
+    }, true);
     document.querySelectorAll('select[data-multi]').forEach(ysmsMultiEnhance);
     document.addEventListener('click', function() {
         document.querySelectorAll('.ysms-ms.open').forEach(function(w) {
