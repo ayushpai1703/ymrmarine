@@ -43,3 +43,12 @@ INSERT IGNORE INTO `invoices` (`survey_id`, `vessel_name`, `report_number`, `inv
 SELECT s.`id`, s.`vessel_name`, s.`report_number`, 'Pending for CP Prices', 'backfill'
 FROM `surveys` s
 WHERE s.`status` IN ('Pending Report', 'Completed');
+
+-- Invoice numbers: YMR-<client short code>-<n>, n from 1000, +1 per vessel invoice
+-- (includes/invoice_helpers.php invoiceAllocateNumber(); also created at runtime).
+CREATE TABLE IF NOT EXISTS `invoice_number_seq` (
+    `id` tinyint NOT NULL,
+    `next_no` int NOT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT IGNORE INTO `invoice_number_seq` (`id`, `next_no`) VALUES (1, 1000);

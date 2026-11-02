@@ -191,3 +191,62 @@ function invoiceListOrderSql(): string {
     $scd = '(CASE WHEN YEAR(s.survey_completed_date) > 0 THEN s.survey_completed_date END)';
     return "($scd IS NULL) ASC, $scd DESC, i.id DESC";
 }
+
+/* ---------- Invoice numbers: YMR-<client short code>-<n>, n from 1000, +1 per invoice ----------
+   A vessel's number is fixed the first time its invoice is downloaded (preview never uses a
+   number up) and kept on its invoices row; generating again reuses it. Its Recovery Invoice
+   is the same number with "B" at the end. Client short codes are the ones the report
+   numbers already use (clients.short_code, includes/report_number.php). */
+const INVOICE_FIRST_NUMBER = 1000;
+
+function invoiceEnsureSequence(PDO $db): void {
+    static $done = false;
+    if ($done) return;
+    $db->exec("CREATE TABLE IF NOT EXISTS `invoice_number_seq` (
+        `id` tinyint NOT NULL, `next_no` int NOT NULL, PRIMARY KEY (`id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $db->exec('INSERT IGNORE INTO invoice_number_seq (id, next_no) VALUES (1, ' . INVOICE_FIRST_NUMBER . ')');
+    $done = true;
+}
+
+/** The client's short code for invoice numbers (e.g. BB for Bainbridge). */
+function invoiceClientCode(PDO $db, int $surveyId): string {
+    require_once __DIR__ . '/report_number.php';
+    $q = $db->prepare('SELECT client_id FROM surveys WHERE id = ?');
+    $q->execute([$surveyId]);
+    $cid = (int)$q->fetchColumn();
+    return $cid > 0 ? preg_replace('/[^A-Z0-9]/', '', strtoupper(ensureClientHasShortCode($db, $cid))) ?: 'XX' : 'XX';
+}
+
+/** The number the vessel's invoice has, or the one it would get now (not reserved). */
+function invoicePeekNumber(PDO $db, array $inv): string {
+    if (trim((string)($inv['invoice_no'] ?? '')) !== '') return (string)$inv['invoice_no'];
+    invoiceEnsureSequence($db);
+    $n = (int)$db->query('SELECT next_no FROM invoice_number_seq WHERE id = 1')->fetchColumn();
+    return 'YMR-' . invoiceClientCode($db, (int)$inv['survey_id']) . '-' . max(INVOICE_FIRST_NUMBER, $n);
+}
+
+/** Gives the invoice its number if it has none yet (one transaction) and returns it. */
+function invoiceAllocateNumber(PDO $db, int $invoiceId): string {
+    invoiceEnsureSequence($db);
+    $s = $db->prepare('SELECT survey_id FROM invoices WHERE id = ?');
+    $s->execute([$invoiceId]);
+    $code = invoiceClientCode($db, (int)$s->fetchColumn()); // before the transaction (may save a missing client code)
+    $db->beginTransaction();
+    try {
+        $q = $db->prepare('SELECT invoice_no FROM invoices WHERE id = ? FOR UPDATE');
+        $q->execute([$invoiceId]);
+        $row = $q->fetch(PDO::FETCH_ASSOC);
+        if (!$row) throw new RuntimeException('Invoice not found.');
+        if (trim((string)$row['invoice_no']) !== '') { $db->commit(); return (string)$row['invoice_no']; }
+        $n = max(INVOICE_FIRST_NUMBER, (int)$db->query('SELECT next_no FROM invoice_number_seq WHERE id = 1 FOR UPDATE')->fetchColumn());
+        $no = 'YMR-' . $code . '-' . $n;
+        $db->prepare('UPDATE invoices SET invoice_no = ? WHERE id = ?')->execute([$no, $invoiceId]);
+        $db->prepare('UPDATE invoice_number_seq SET next_no = ? WHERE id = 1')->execute([$n + 1]);
+        $db->commit();
+        return $no;
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $e;
+    }
+}
