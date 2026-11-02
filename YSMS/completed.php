@@ -264,6 +264,37 @@ include 'includes/header.php';
             background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7;
             font-size: 10px; padding: 4px 9px; border-radius: 50px; font-weight: 700;
         }
+
+        /* ── Completed card (numbered header + label / value rows) ── */
+        .vessel-list-container .vessel-card { border-radius: 22px !important; box-shadow: 0 10px 28px rgba(30,58,138,.09) !important; padding: 14px 12px 14px !important; }
+        .cc-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px 12px; min-width: 0; }
+        .cc-num { flex: none; width: 30px; height: 30px; border-radius: 50%; background: #F1F5F9; color: #0f172a; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+        .cc-ship { flex: none; width: 44px; height: 44px; border-radius: 14px; background: #d1fae5; color: #047857; font-size: 19px; display: flex; align-items: center; justify-content: center; }
+        .cc-div { flex: none; width: 2px; height: 26px; border-radius: 2px; background: #cbd5e1; }
+        .cc-name { flex: 1 1 auto; min-width: 0; font-size: 17px; font-weight: 800; color: #0f172a; line-height: 1.2; letter-spacing: .01em; text-transform: uppercase; overflow-wrap: break-word; }
+        .cc-rows { display: grid; gap: 7px; }
+        .cc-row { display: grid; grid-template-columns: 40% 12px minmax(0, 1fr); align-items: stretch; background: #F3F6FB; border-radius: 12px; overflow: visible; min-height: 40px; }
+        .cc-k { display: flex; align-items: center; gap: 9px; padding: 8px 10px; background: #E8EEF8; border-radius: 12px 0 0 12px; min-width: 0; }
+        .cc-k i { flex: none; width: 18px; text-align: center; color: #1D4ED8; font-size: 14px; }
+        .cc-k span { font-size: 12.5px; font-weight: 600; color: #1e3a6e; line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
+        .cc-c { display: flex; align-items: center; justify-content: center; font-weight: 800; color: #334155; font-size: 13px; }
+        .cc-v { display: flex; align-items: center; padding: 7px 10px 7px 4px; min-width: 0; }
+        .cc-v b { font-size: 12.5px; font-weight: 800; color: #0f172a; text-transform: uppercase; overflow-wrap: anywhere; line-height: 1.25; }
+        .cc-v b.cc-date { text-transform: none; font-size: 13px; }
+        .cc-v .recovery-total b, .cc-v .recovery-total.na b { color: inherit; text-transform: none; font-size: inherit; overflow-wrap: normal; }
+        .cc-row .cc-type.pv-type-pill { align-self: center; text-align: left; border-radius: 14px; font-size: 10.5px; font-weight: 800; padding: 5px 12px; letter-spacing: .02em; }
+        .cc-row.recovery-row .cc-v { padding-top: 8px; padding-bottom: 8px; }
+        .cc-row .recovery-cell { display: block; min-width: 0; }
+        .cc-row .recovery-total { font-size: 12.5px; padding: 6px 12px; }
+        .cc-parts { display: flex !important; flex-wrap: wrap; gap: 2px 6px; margin-top: 6px !important; font-size: 10.5px !important; color: #475569 !important; font-weight: 600 !important; }
+        .cc-parts i { font-style: normal; color: #94a3b8; }
+        .cc-port { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; background: #ECFDF5; color: #047857; border: 1.5px solid #86EFAC; border-radius: 16px; padding: 4px 12px; font-size: 12px; font-weight: 800; text-transform: uppercase; line-height: 1.25; overflow-wrap: anywhere; }
+        .cc-port i { font-size: 11px; }
+        .cc-status { display: inline-flex; align-items: center; gap: 6px; background: #ECFDF5; color: #15803D; border: 1.5px solid #6EE7B7; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 800; }
+        .cc-status i { font-size: 11px; }
+        .cc-foot { display: flex; justify-content: flex-end; padding-top: 4px; }
+        .cc-edit { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; border: 1.5px solid #FED7AA; color: #C2410C; background: #FFF7ED; font-size: 12px; font-weight: 700; text-decoration: none; }
+        @media (max-width: 360px) { .cc-row { grid-template-columns: 42% 10px minmax(0, 1fr); } .cc-k span { font-size: 11px; } .cc-k { gap: 6px; padding: 8px 7px; } .cc-name { font-size: 15.5px; } }
     }
 
     .list-desktop-view { display: none; }
@@ -503,41 +534,39 @@ include 'includes/header.php';
              data-recovery="<?= cvRecovery($survey) ?>"
              data-date="<?= surveyReportTs($survey) ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$survey['vessel_name'] ?? '', $survey['company_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>">
-            <div class="pv-card-top">
-                <div class="pv-card-headline">
-                    <span class="pv-row-num" data-testid="pv-row-num"><?= $rtOffset + $rtI + 1 ?></span>
-                    <div class="pv-ship-icon"><i class="fa-solid fa-ship"></i></div>
-                    <div class="pv-vessel-name"><?= sanitize($survey['vessel_name']) ?></div>
-                </div>
-                <span class="badge-assigned pv-type-pill"><?= sanitize($typeLabel) ?></span>
+            <div class="cc-head">
+                <span class="cc-num" data-testid="pv-row-num"><?= $rtOffset + $rtI + 1 ?></span>
+                <span class="cc-ship"><i class="fa-solid fa-ship"></i></span>
+                <span class="cc-div" aria-hidden="true"></span>
+                <span class="cc-name"><?= sanitize($survey['vessel_name']) ?></span>
             </div>
-            <div class="pv-info-rows">
-                <div class="pv-info-row"><i class="fa-solid fa-user"></i><span class="pv-info-label">Client</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['company_name'] ?? '') ?></span></div>
-                <div class="pv-info-row"><i class="fa-solid fa-people-group"></i><span class="pv-info-label">Agent</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['agent_name'] ?? '') ?></span></div>
+            <div class="cc-rows">
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user"></i><span>Client</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div></div>
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-people-group"></i><span>Agent</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b></div></div>
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-layer-group"></i><span>Survey Type</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-type pv-type-pill"><?= sanitize($typeLabel) ?></span></div></div>
                 <?php $rp = recoveryDisplayParts($survey); ?>
-                    <div class="pv-info-row recovery-row">
-                        <i class="fa-solid fa-droplet"></i><span class="pv-info-label">Recovery</span><span>:</span>
-                        <span class="pv-info-val">
-                            <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-mobile">
-                                <?php if ($rp['na']): ?>
-                                <span class="recovery-total na" data-testid="recovery-pill"><b><?= sanitize($rp['total']) ?></b></span>
-                                <?php else: ?>
-                                <span class="recovery-total" data-testid="recovery-pill"><i class="fa-solid fa-droplet"></i> Total: <b><?= sanitize($rp['total']) ?></b></span>
-                                <span class="recovery-parts">VLSFO: <?= sanitize($rp['vlsfo']) ?> · HSFO: <?= sanitize($rp['hsfo']) ?> · LSMGO: <?= sanitize($rp['lsmgo']) ?></span>
-                                <?php endif; ?>
-                                <?php if ($is_full_access): ?>
-                                <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
-                                <?php endif; ?>
-                            </span>
+                <div class="cc-row recovery-row"><div class="cc-k"><i class="fa-solid fa-droplet"></i><span>Recovery</span></div><span class="cc-c">:</span>
+                    <div class="cc-v">
+                        <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-mobile">
+                            <?php if ($rp['na']): ?>
+                            <span class="recovery-total na" data-testid="recovery-pill"><b><?= sanitize($rp['total']) ?></b></span>
+                            <?php else: ?>
+                            <span class="recovery-total" data-testid="recovery-pill"><i class="fa-solid fa-droplet"></i> Total: <b><?= sanitize($rp['total']) ?></b></span>
+                            <span class="recovery-parts cc-parts"><span>VLSFO: <?= sanitize($rp['vlsfo']) ?></span><i>|</i><span>HSFO: <?= sanitize($rp['hsfo']) ?></span><i>|</i><span>LSMGO: <?= sanitize($rp['lsmgo']) ?></span></span>
+                            <?php endif; ?>
+                            <?php if ($is_full_access): ?>
+                            <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
+                            <?php endif; ?>
                         </span>
                     </div>
-                <div class="pv-info-row"><i class="fa-solid fa-location-dot"></i><span class="pv-info-label">Port</span><span>:</span><span class="badge-place"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
+                </div>
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-location-dot"></i><span>Port</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-port"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div></div>
                 <?php $rtD = rtRowDate($survey, $rt['date']); ?>
-                <div class="pv-info-row" data-testid="cv-date"><i class="fa-solid fa-calendar-check"></i><span class="pv-info-label"><?= sanitize(rtDateShort($rt['date'])) ?></span><span>:</span><span class="pv-info-val"><?= $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—' ?></span></div>
-                <div class="pv-info-row"><i class="fa-solid fa-circle-check"></i><span class="pv-info-label">Status</span><span>:</span><span class="pv-status-pill"><i class="fa-solid fa-check"></i> Completed</span></div>
+                <div class="cc-row" data-testid="cv-date"><div class="cc-k"><i class="fa-solid fa-calendar-check"></i><span><?= sanitize(rtDateShort($rt['date'])) ?></span></div><span class="cc-c">:</span><div class="cc-v"><b class="cc-date"><?= $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—' ?></b></div></div>
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-circle-check"></i><span>Status</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-status"><i class="fa-solid fa-check"></i> Completed</span></div></div>
                 <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
-                <div class="pv-info-row" style="justify-content:flex-end;border-top:1px dashed #e2e8f0;padding-top:8px;margin-top:2px;">
-                    <a href="completed_detail.php?id=<?= (int)$survey['id'] ?>" onclick="event.stopPropagation();" data-testid="cv-edit-<?= (int)$survey['id'] ?>" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1.5px solid #FED7AA;color:#C2410C;background:#FFF7ED;font-size:12px;font-weight:700;text-decoration:none;"><i class="fa-solid fa-pen"></i> Edit</a>
+                <div class="cc-foot">
+                    <a href="completed_detail.php?id=<?= (int)$survey['id'] ?>" onclick="event.stopPropagation();" data-testid="cv-edit-<?= (int)$survey['id'] ?>" class="cc-edit"><i class="fa-solid fa-pen"></i> Edit</a>
                 </div>
                 <?php endif; ?>
             </div>
