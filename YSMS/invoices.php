@@ -168,6 +168,28 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
     .inv-sel { flex: 1 1 calc(50% - 8px); max-width: none; }
 }
 </style>
+<?php if ($view === 'completed'): ?><link rel="stylesheet" href="assets/css/invoice-airtable.css?v=<?= @filemtime(__DIR__ . '/assets/css/invoice-airtable.css') ?>"><?php endif; ?>
+<style>
+.inv-at .at-t tbody tr { cursor: default; }
+.inv-at .at-grid { min-height: 0; }
+.inv-at .at-t th.c-pk, .inv-at .at-t td.c-pk { left: 52px; }
+.inv-at .at-t td[data-inv-actions] { overflow: visible; }
+.inv-at .at-t td.c-pk { font-weight: 700; color: #1f2328; }
+.inv-at .at-tag { display: inline-block; background: #EFF6FF; color: #1D4ED8; font-size: 10.5px; font-weight: 700; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .03em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.inv-at .inv-actions { display: inline-flex; gap: 6px; flex-wrap: nowrap; min-width: 0; max-width: none; flex-direction: row; align-items: center; }
+.inv-at .at-ig { display: inline-flex; align-items: center; gap: 2px; border: 1px solid #e1e4e8; border-radius: 6px; padding: 0 2px 0 7px; height: 24px; background: #fff; }
+.inv-at .at-ig b { font-size: 10.5px; font-weight: 700; color: #b42318; margin-right: 2px; }
+.inv-at .at-ig.rec b { color: #0E7490; }
+.inv-at .at-ib { width: 22px; height: 20px; border: 0; background: transparent; border-radius: 4px; color: #4b5563; display: inline-flex; align-items: center; justify-content: center; font-size: 11.5px; text-decoration: none; padding: 0; }
+.inv-at .at-ib:hover { background: #f1edfe; color: #6C4CF1; }
+.inv-at .at-ib.mod, .inv-at .at-ib.del { width: 26px; height: 24px; border: 1px solid #e1e4e8; background: #fff; border-radius: 6px; }
+.inv-at button.at-ib { height: 24px !important; min-height: 0 !important; padding: 0 !important; margin: 0; box-shadow: none; line-height: 1; }
+.inv-at .at-ib.del { color: #b42318; } .inv-at .at-ib.del:hover { background: #fef2f2; border-color: #b42318; color: #b42318; }
+.inv-at .inv-btn, .inv-at button.inv-btn { height: 24px !important; padding: 0 8px !important; border-radius: 6px; font-size: 11.5px; border-width: 1px; justify-content: flex-start; }
+.inv-at .at-pg a, .inv-at .at-pg span.off { height: 26px; min-width: 26px; border: 1px solid #e1e4e8; background: #fff; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: #374151; text-decoration: none; font-size: 12px; }
+.inv-at .at-pg span.off { opacity: .4; }
+.inv-at .at-t tfoot td { color: #6b7280; }
+</style>
 <div class="scroll-content" data-testid="invoices-page">
 <?php $back_url = ''; $page_testid = 'invoices'; include 'includes/top_app_bar.php'; ?>
 <div class="inv-wrap">
@@ -212,6 +234,56 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
     <?php if (!$rows): ?>
     <div class="inv-card"><div class="inv-empty" data-testid="inv-empty"><i class="fa-solid fa-file-invoice"></i><?= $filtered ? 'No invoices match these filters.' : ($view === 'completed' ? 'No completed invoices yet.' : 'No pending invoices. Vessels appear here as soon as their survey is completed (documents submitted).') ?></div></div>
     <?php else: ?>
+    <?php if ($view === 'completed'): ?>
+    <!-- Completed: Airtable-style grid (same look as Invoice Airtable) -->
+    <div class="inv-d inv-at at-page" data-testid="inv-at">
+        <div class="at-shell">
+        <div class="at-grid" style="max-height:none">
+        <table class="at-t" data-testid="inv-table">
+            <colgroup><col style="width:52px"><col style="width:180px"><col style="width:112px"><col style="width:300px"><col style="width:160px"><col style="width:170px"><col style="width:120px"><col style="width:140px"><col style="width:120px"></colgroup>
+            <thead><tr>
+                <th class="c-no">#</th>
+                <?php foreach ([['c-pk', 'fa-hashtag', 'Invoice Number'], ['', 'fa-circle-half-stroke', 'Status'], ['', 'fa-bolt', 'Actions'], ['', 'fa-ship', 'Vessel'], ['', 'fa-building', 'Client Name'], ['', 'fa-tags', 'Survey Type'], ['', 'fa-location-dot', 'Port Name'],
+                                ['', 'fa-regular fa-calendar-check', 'Survey Completed Date']] as [$cls, $ic, $lbl]): ?>
+                <th class="<?= $cls ?>"><div class="th"><i class="ic <?= strpos($ic, ' ') ? $ic : 'fa-solid ' . $ic ?>"></i><span class="lbl"><?= $lbl ?></span><?= $lbl === 'Invoice Number' ? '<span class="sorti" title="Sorted by invoice number"><i class="fa-solid fa-arrow-up"></i></span>' : '' ?></div></th>
+                <?php endforeach; ?>
+            </tr></thead>
+            <tbody>
+            <?php foreach ($rows as $i => $r):
+                $json = invoiceRowJson($db, $r);
+                $vessel = (string)($r['s_vessel_name'] ?? $r['vessel_name'] ?? '');
+                $type = !empty($r['sid']) ? getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? '') : '';
+                $rep = (string)($r['s_report_number'] ?? $r['report_number'] ?? '');
+            ?>
+            <tr data-inv='<?= sanitize(json_encode($json)) ?>' data-testid="inv-row-<?= (int)$r['id'] ?>">
+                <td class="c-no"><?= $offset + $i + 1 ?></td>
+                <td class="c-pk"><?php if (!empty($r['invoice_no'])): ?><span class="inv-no" data-testid="inv-no-<?= (int)$r['id'] ?>"><?= sanitize($r['invoice_no']) ?></span><?= $json['has_rec'] ? '<span class="at-kind" title="Recovery invoice ' . sanitize($r['invoice_no']) . 'B">+ Recovery</span>' : '' ?><?php else: ?><span class="muted">No number</span><?php endif; ?></td>
+                <td data-inv-status></td>
+                <td data-inv-actions></td>
+                <td title="<?= sanitize($vessel) ?>"><?= sanitize($vessel ?: '—') ?><?php if ($rep !== ''): ?> <span class="muted" style="font-size:11px">· <?= sanitize($rep) ?></span><?php endif; ?><?php if (empty($r['sid'])): ?> <span style="color:#DC2626;font-size:11px">· survey deleted</span><?php endif; ?></td>
+                <td title="<?= sanitize($r['company_name'] ?? '') ?>"><?= !empty($r['company_name']) ? sanitize($r['company_name']) : '<span class="muted">—</span>' ?></td>
+                <td title="<?= sanitize($type) ?>"><?= $type !== '' ? '<span class="at-tag">' . sanitize($type) . '</span>' : '<span class="muted">—</span>' ?></td>
+                <td title="<?= sanitize($r['port_name'] ?? '') ?>"><?= !empty($r['port_name']) ? sanitize($r['port_name']) : '<span class="muted">—</span>' ?></td>
+                <td><?= $json['survey_completed'] !== '' ? sanitize($json['survey_completed']) : '<span class="muted">—</span>' ?></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+            <tfoot><tr><td class="c-no"></td><td class="c-pk"><b><?= $total ?></b> record<?= $total === 1 ? '' : 's' ?></td><td colspan="7"></td></tr></tfoot>
+        </table>
+        </div>
+        <?php if ($pages > 1): ?>
+        <div class="at-pager">
+            <div class="at-count">25 per page</div>
+            <div class="at-pg">
+                <?= $page > 1 ? '<a href="' . sanitize(invPageUrl($page - 1)) . '" aria-label="Previous page"><i class="fa-solid fa-chevron-left"></i></a>' : '<span class="off"><i class="fa-solid fa-chevron-left"></i></span>' ?>
+                <span><?= $page ?> / <?= $pages ?></span>
+                <?= $page < $pages ? '<a href="' . sanitize(invPageUrl($page + 1)) . '" aria-label="Next page"><i class="fa-solid fa-chevron-right"></i></a>' : '<span class="off"><i class="fa-solid fa-chevron-right"></i></span>' ?>
+            </div>
+        </div>
+        <?php endif; ?>
+        </div>
+    </div>
+    <?php else: ?>
     <div class="inv-card inv-d">
         <div style="overflow-x:auto">
         <table class="inv-table" data-testid="inv-table">
@@ -247,6 +319,7 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
         </div></div>
         <?php endif; ?>
     </div>
+    <?php endif; ?>
 
     <div class="inv-m">
         <?php foreach ($rows as $i => $r):
@@ -307,8 +380,22 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
     var st = el.querySelector('[data-inv-status]');
     if (VIEW === 'completed') {
       // Completed: status is fixed; View / Download (vessel + recovery), Modify, Delete only.
-      st.innerHTML = '<span class="inv-status done static" data-testid="inv-status-' + d.id + '"><i class="fa-solid fa-circle-check"></i> Completed</span>';
+      st.innerHTML = el.closest('.inv-at')
+        ? '<span class="at-pill paid" data-testid="inv-status-' + d.id + '">Completed</span>'
+        : '<span class="inv-status done static" data-testid="inv-status-' + d.id + '"><i class="fa-solid fa-circle-check"></i> Completed</span>';
       var c = '';
+      if (el.closest('.inv-at')) {
+        // Airtable grid: compact icon actions (labels in tooltips)
+        var ib = function (cls, href, icon, label, tid, extra) {
+          return '<a class="at-ib ' + cls + '" href="' + href + '"' + (extra || '') + ' title="' + label + '" aria-label="' + label + '" data-testid="' + tid + '"><i class="fa-solid ' + icon + '"></i></a>';
+        };
+        if (d.has_file) c += '<span class="at-ig"><b>Invoice</b>' + ib('', fileUrl + '&mode=view', 'fa-eye', 'View invoice', 'inv-view-' + d.id, ' target="_blank" rel="noopener"') + ib('', fileUrl + '&mode=download', 'fa-download', 'Download invoice', 'inv-download-' + d.id) + '</span>';
+        if (d.has_rec) c += '<span class="at-ig rec"><b>Recovery</b>' + ib('', fileUrl + '&which=recovery&mode=view', 'fa-eye', 'View recovery invoice', 'inv-rec-view-' + d.id, ' target="_blank" rel="noopener"') + ib('', fileUrl + '&which=recovery&mode=download', 'fa-download', 'Download recovery invoice', 'inv-rec-download-' + d.id) + '</span>';
+        c += ib('mod', 'invoice_pdf.php?id=' + d.id, 'fa-pen-to-square', 'Modify', 'inv-modify-' + d.id) +
+          '<button type="button" class="at-ib del" data-act="delete" title="Delete" aria-label="Delete" data-testid="inv-delete-' + d.id + '"><i class="fa-solid fa-trash"></i></button>';
+        el.querySelector('[data-inv-actions]').innerHTML = '<div class="inv-actions at-acts">' + c + '</div>';
+        return;
+      }
       if (d.has_file) {
         c += '<a class="inv-btn" href="' + fileUrl + '&mode=view" target="_blank" rel="noopener" data-testid="inv-view-' + d.id + '"><i class="fa-solid fa-eye"></i> View</a>' +
           '<a class="inv-btn" href="' + fileUrl + '&mode=download" data-testid="inv-download-' + d.id + '"><i class="fa-solid fa-download"></i> Download</a>';
