@@ -1,6 +1,7 @@
 <?php
 require_once 'config/config.php';
 require_once 'includes/list_filters.php';
+require_once 'includes/report_table.php';
 checkAuth();
 
 $db = getDB();
@@ -12,133 +13,21 @@ $client_id = ($role === 'Client') ? getClientIdForUser($db, $user_id) : 0;
 // own" surveys like a Surveyor).
 $is_full_access = in_array($role, ['Admin', 'Super Admin'], true);
 
-/* Mobile: full list */
-if ($is_full_access) {
-    $stmt = $db->prepare("
-        SELECT s.*, c.company_name, u.full_name as surveyor_name, st.type_name, p.port_name
-        FROM surveys s
-        JOIN clients c ON s.client_id = c.id
-        LEFT JOIN users u ON s.surveyor_id = u.id
-        LEFT JOIN survey_types st ON s.survey_type_id = st.id
-        LEFT JOIN ports p ON s.port_id = p.id
-        WHERE s.status = 'Pending Report'
-        ORDER BY " . SURVEY_COMPLETED_ORDER_SQL . " DESC, s.id DESC
-    ");
-    $stmt->execute();
-} elseif ($role === 'Client') {
-    $stmt = $db->prepare("
-        SELECT s.*, c.company_name, u.full_name as surveyor_name, st.type_name, p.port_name
-        FROM surveys s
-        JOIN clients c ON s.client_id = c.id
-        LEFT JOIN users u ON s.surveyor_id = u.id
-        LEFT JOIN survey_types st ON s.survey_type_id = st.id
-        LEFT JOIN ports p ON s.port_id = p.id
-        WHERE s.status = 'Pending Report' AND s.client_id = ?
-        ORDER BY " . SURVEY_COMPLETED_ORDER_SQL . " DESC, s.id DESC
-    ");
-    $stmt->execute([$client_id]);
-} else {
-    // 🌟 Include reports assigned via survey_surveyors (multi-surveyor), not
-    // just the primary surveys.surveyor_id.
-    $stmt = $db->prepare("
-        SELECT s.*, c.company_name, u.full_name as surveyor_name, st.type_name, p.port_name
-        FROM surveys s
-        JOIN clients c ON s.client_id = c.id
-        LEFT JOIN users u ON s.surveyor_id = u.id
-        LEFT JOIN survey_types st ON s.survey_type_id = st.id
-        LEFT JOIN ports p ON s.port_id = p.id
-        WHERE s.status = 'Pending Report' AND (s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))
-        ORDER BY " . SURVEY_COMPLETED_ORDER_SQL . " DESC, s.id DESC
-    ");
-    $stmt->execute([$user_id, $user_id]);
-}
-$surveys = $stmt->fetchAll();
-
-$survey_types_filter = [];
-$survey_places_filter = [];
-$survey_clients_filter = [];
-$survey_surveyors_filter = [];
-foreach ($db->query("SELECT type_name FROM survey_types ORDER BY type_name ASC")->fetchAll() as $st_row) {
-    if (!empty($st_row['type_name'])) $survey_types_filter[$st_row['type_name']] = $st_row['type_name'];
-}
-foreach ($surveys as $row) {
-    if (!empty($row['port_name'])) $survey_places_filter[$row['port_name']] = $row['port_name'];
-    if (!empty($row['company_name'])) $survey_clients_filter[$row['company_name']] = $row['company_name'];
-    $rowSurveyorNames = getCombinedSurveyorNames($db, $row['id'], $row['surveyor_name'] ?? '');
-    foreach (listFilterSplitNames($rowSurveyorNames) as $svName) $survey_surveyors_filter[$svName] = $svName;
-}
-
-/* Desktop: pagination */
-$perPage = 25;
-$page = max(1, (int)($_GET['page'] ?? 1));
-$q = trim((string)($_GET['q'] ?? ''));
-$filter_type = listFilterFirst($_GET, 'type');
-$filter_place = listFilterFirst($_GET, 'place');
-$filter_client = listFilterFirst($_GET, 'client');
-$filter_surveyor = listFilterFirst($_GET, 'surveyor');
-$sort = trim((string)($_GET['sort'] ?? 'newest'));
-
-$where = ["s.status = 'Pending Report'"];
-$params = [];
-if ($role === 'Client') { $where[] = 's.client_id = ?'; $params[] = $client_id; } elseif (!$is_full_access) { $where[] = '(s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))'; $params[] = $user_id; $params[] = $user_id; }
-if ($q !== '') {
-    $where[] = '(s.vessel_name LIKE ? OR c.company_name LIKE ? OR s.agent_name LIKE ? OR st.type_name LIKE ? OR p.port_name LIKE ? OR u.full_name LIKE ?)';
-    $like = '%' . $q . '%';
-    array_push($params, $like, $like, $like, $like, $like, $like);
-}
-if ($filter_type !== '') { $where[] = 'st.type_name = ?'; $params[] = $filter_type; }
-if ($filter_place !== '') { $where[] = 'p.port_name = ?'; $params[] = $filter_place; }
-if ($filter_client !== '') { $where[] = 'c.company_name = ?'; $params[] = $filter_client; }
-if ($is_full_access && $filter_surveyor !== '') {
-    $where[] = "COALESCE((SELECT GROUP_CONCAT(u2.full_name ORDER BY ss2.id SEPARATOR ' + ') FROM survey_surveyors ss2 JOIN users u2 ON ss2.surveyor_id = u2.id WHERE ss2.survey_id = s.id), u.full_name) = ?";
-    $params[] = $filter_surveyor;
-}
-$whereSql = implode(' AND ', $where);
-$orderSql = SURVEY_COMPLETED_ORDER_SQL . ' DESC, s.id DESC';
-if ($sort === 'oldest') $orderSql = SURVEY_COMPLETED_ORDER_SQL . ' ASC, s.id ASC';
-elseif ($sort === 'name-asc') $orderSql = 's.vessel_name ASC';
-elseif ($sort === 'name-desc') $orderSql = 's.vessel_name DESC';
-
-$countStmt = $db->prepare("
-    SELECT COUNT(*) FROM surveys s
-    JOIN clients c ON s.client_id = c.id
-    LEFT JOIN users u ON s.surveyor_id = u.id
-    LEFT JOIN survey_types st ON s.survey_type_id = st.id
-    LEFT JOIN ports p ON s.port_id = p.id
-    WHERE $whereSql
-");
-$countStmt->execute($params);
-$total = (int)$countStmt->fetchColumn();
-$totalPages = max(1, (int)ceil($total / $perPage));
-if ($page > $totalPages) $page = $totalPages;
-$offset = ($page - 1) * $perPage;
-
-$deskStmt = $db->prepare("
-    SELECT s.*, c.company_name, u.full_name as surveyor_name, st.type_name, p.port_name
-    FROM surveys s
-    JOIN clients c ON s.client_id = c.id
-    LEFT JOIN users u ON s.surveyor_id = u.id
-    LEFT JOIN survey_types st ON s.survey_type_id = st.id
-    LEFT JOIN ports p ON s.port_id = p.id
-    WHERE $whereSql
-    ORDER BY $orderSql
-    LIMIT $perPage OFFSET $offset
-");
-$deskStmt->execute($params);
-$deskSurveys = $deskStmt->fetchAll(PDO::FETCH_ASSOC);
-
-function vd_qs(array $extra = []): string {
-    $base = [
-        'q' => $_GET['q'] ?? '',
-        'type' => $_GET['type'] ?? '',
-        'place' => $_GET['place'] ?? '',
-        'client' => $_GET['client'] ?? '',
-        'surveyor' => $_GET['surveyor'] ?? '',
-        'sort' => $_GET['sort'] ?? 'newest',
-    ];
-    $merged = array_filter(array_merge($base, $extra), fn($v) => $v !== '' && $v !== null);
-    return http_build_query($merged);
-}
+/* Filters, sorting and paging run in SQL (includes/report_table.php); the table, the phone
+   cards and the Download use the same state. Default order: Survey Completed Date, newest
+   first, reports without one last. */
+[$rtScopeWhere, $rtScopeParams] = rtScope('Pending Report', $role, (int)$user_id, (int)$client_id, $is_full_access);
+$rt = rtState($_GET, 'survey', $is_full_access);
+[$rtWhereSql, $rtParams] = rtWhere($rt, $rtScopeWhere, $rtScopeParams);
+[$rtTotal, $rtRows, $rtPage, $rtPages] = rtFetchPage($db, $rt, $rtWhereSql, $rtParams);
+$rt['page'] = $rtPage;
+$rtOffset = ($rtPage - 1) * RT_PER_PAGE;
+$rtOpts = rtOptions($db, $rtScopeWhere, $rtScopeParams, $is_full_access);
+$rtYears = rtYears($db, $rtScopeWhere, $rtScopeParams, $rt['date']);
+$rtBase = 'reports.php';
+$rtHeadHtml = rtHeader('Pending Reports', 'fa-solid fa-file-lines', $rtBase, $rt, rtUrl('export_reports.php', $rt),
+    [[(string)$rtTotal, $rtTotal === 1 ? 'Pending Report' : 'Pending Reports']]);
+$rtChipsHtml = rtChips($rtBase, $rt);
 
 // 🌟 Desktop hero banner stat + surveyor avatar helpers — display only,
 // same helpers as vessels.php's redesign, duplicated here page-scoped.
@@ -162,10 +51,11 @@ function pvAvatarGradient(string $name): string {
     [$from, $to] = $palette[$idx];
     return "linear-gradient(135deg, $from, $to)";
 }
-$pv_total = count($surveys);
+$pv_total = $rtTotal;
 
 include 'includes/header.php';
 ?>
+<link rel="stylesheet" href="assets/css/report-table.css?v=<?= @filemtime(__DIR__ . '/assets/css/report-table.css') ?>">
 
 <style>
 
@@ -627,36 +517,14 @@ include 'includes/header.php';
     <?php $page_title = 'Pending Reports'; $back_url = ''; $page_testid = 'pending-reports'; include 'includes/top_app_bar.php'; ?>
 
     <div class="list-mobile-view">
-    <div class="search-filter-row">
-        <div class="search-input-wrapper">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" class="search-control" placeholder="Search by vessel, client, agent or type..." data-list-search data-testid="pending-reports-search-input">
-        </div>
-        <button type="button" class="filter-btn" data-filter-toggle aria-expanded="false"><i class="fa-solid fa-sliders"></i></button>
+    <div class="rt-mobile-top">
+        <?= $rtHeadHtml ?>
+        <?= rtMobileBar($rt, $is_full_access) ?>
+        <?= $rtChipsHtml ?>
+        <?= rtMeta($rt, $rtTotal, $rtOffset, count($rtRows)) ?>
     </div>
-    <div class="list-controls-panel" data-controls-panel>
-        <select multiple data-multi data-filter-type><option value="">All survey types</option><?php foreach ($survey_types_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
-        <select multiple data-multi data-filter-place><option value="">All survey places</option><?php foreach ($survey_places_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
-        <select multiple data-multi data-filter-client><option value="">All clients</option><?php foreach ($survey_clients_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
-        <?php if ($is_full_access): ?>
-        <select multiple data-multi data-filter-surveyor><option value="">All surveyors</option><?php foreach ($survey_surveyors_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
-        <?php endif; ?>
-        <button type="button" class="clear-filters-btn" data-clear-filters><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
-    </div>
-    <div class="pv-actions-row">
-        <a href="export_reports.php" class="pv-export-btn" data-mobile-export data-export-base="export_reports.php"><i class="fa-solid fa-file-excel"></i> Export to Excel</a>
-        <div class="pv-sort-wrap">
-            <i class="fa-solid fa-arrow-down-wide-short"></i>
-            <select class="pv-sort-select" data-list-sort>
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="name-asc">Vessel A–Z</option>
-                <option value="name-desc">Vessel Z–A</option>
-            </select>
-        </div>
-    </div>
-    <div class="vessel-list-container" data-list-container>
-        <?php if (!empty($surveys)): foreach ($surveys as $survey):
+    <div class="vessel-list-container">
+        <?php if (!empty($rtRows)): foreach ($rtRows as $rtI => $survey):
             $vessel_name = $survey['vessel_name'] ?: 'Vessel';
             $typeLabel = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
             $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
@@ -672,7 +540,7 @@ include 'includes/header.php';
              data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '']))) ?>">
             <div class="pv-card-top">
                 <div class="pv-card-headline">
-                    <span class="pv-row-num" data-row-num data-testid="pv-row-num"></span>
+                    <span class="pv-row-num" data-testid="pv-row-num"><?= $rtOffset + $rtI + 1 ?></span>
                     <div class="pv-ship-icon"><i class="fa-solid fa-ship"></i></div>
                     <div class="pv-vessel-name"><?= sanitize($vessel_name) ?></div>
                 </div>
@@ -685,7 +553,8 @@ include 'includes/header.php';
                     <div class="pv-info-row"><i class="fa-solid fa-user-tie"></i><span class="pv-info-label">Surveyor</span><span>:</span><span class="pv-info-val"><?= sanitize($surveyorNames) ?></span></div>
                 <?php endif; ?>
                 <div class="pv-info-row"><i class="fa-solid fa-location-dot"></i><span class="pv-info-label">Port</span><span>:</span><span class="badge-place"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
-                <div class="pv-info-row" data-testid="pr-completed-date"><i class="fa-solid fa-calendar-check"></i><span class="pv-info-label">Completed</span><span>:</span><span class="pv-info-val"><?= surveyCompletedTs($survey) ? date('d M Y', surveyCompletedTs($survey)) : '—' ?></span></div>
+                <?php $rtD = rtRowDate($survey, $rt['date']); ?>
+                <div class="pv-info-row" data-testid="pr-completed-date"><i class="fa-solid fa-calendar-check"></i><span class="pv-info-label"><?= sanitize($rt['date'] === 'survey' ? 'Completed' : rtDateShort($rt['date'])) ?></span><span>:</span><span class="pv-info-val"><?= $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—' ?></span></div>
                 <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
                 <div class="pv-info-row" style="justify-content:flex-end;border-top:1px dashed #e2e8f0;padding-top:8px;margin-top:2px;">
                     <a href="report_detail.php?id=<?= (int)$survey['id'] ?>" onclick="event.stopPropagation();" data-testid="pr-edit-<?= (int)$survey['id'] ?>" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1.5px solid #FED7AA;color:#C2410C;background:#FFF7ED;font-size:12px;font-weight:700;text-decoration:none;"><i class="fa-solid fa-pen"></i> Edit</a>
@@ -694,9 +563,9 @@ include 'includes/header.php';
             </div>
         </div>
         <?php endforeach; else: ?>
-            <div class="text-center py-5 px-3 mx-3 mt-4 bg-white rounded-4 border border-dashed shadow-sm"><h5>No Pending Reports</h5></div>
+            <div class="text-center py-5 px-3 mx-3 mt-4 bg-white rounded-4 border border-dashed shadow-sm"><h5><?= rtHasFilters($rt) ? 'No matching reports found' : 'No Pending Reports' ?></h5></div>
         <?php endif; ?>
-        <div class="text-center py-5 px-3 bg-white rounded-4 border shadow-sm list-empty-state" data-list-empty style="display:none;"><h5>No matching reports found</h5></div>
+        <div class="py-3"><?= rtPager($rtBase, $rt, $rtPage, $rtPages) ?></div>
     </div>
     </div>
 
@@ -705,103 +574,34 @@ include 'includes/header.php';
     <div class="list-desktop-view vessels-desktop-view">
         <div class="vd-wrap">
 
-            <div class="vd-hero" data-testid="pending-reports-hero">
-                <i class="fa-solid fa-file-lines vd-hero-icon-bg" aria-hidden="true"></i>
-                <div>
-                    <div class="vd-hero-title">Pending Reports</div>
-                    <div class="vd-hero-sub"><?= (int)$pv_total ?> report<?= $pv_total === 1 ? '' : 's' ?> awaiting completion</div>
-                </div>
-                <div class="vd-hero-stats">
-                    <div class="vd-hero-stat">
-                        <div class="n"><?= (int)$pv_total ?></div>
-                        <div class="l">Total</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="vd-toolbar">
-                <div class="vd-toolbar-inner">
-                    <div class="vd-search">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                        <input type="search" data-desk-search placeholder="Search vessel" autocomplete="off">
-                    </div>
-                    <div class="vd-dd">
-                        <i class="fa-solid fa-arrow-down-wide-short vd-dd-icon-src"></i>
-                        <select data-desk-sort>
-                            <option value="newest">Newest first</option>
-                            <option value="oldest">Oldest first</option>
-                            <option value="name-asc">Vessel A–Z</option>
-                            <option value="name-desc">Vessel Z–A</option>
-                        </select>
-                    </div>
-                    <div class="vd-dd">
-                        <i class="fa-solid fa-list-check vd-dd-icon-src"></i>
-                        <select multiple data-desk-type>
-                            <option value="">All survey types</option>
-                            <?php foreach ($survey_types_filter as $v): ?>
-                                <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="vd-dd">
-                        <i class="fa-solid fa-location-dot vd-dd-icon-src"></i>
-                        <select multiple data-desk-place>
-                            <option value="">All ports</option>
-                            <?php foreach ($survey_places_filter as $v): ?>
-                                <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="vd-dd">
-                        <i class="fa-solid fa-building vd-dd-icon-src"></i>
-                        <select multiple data-desk-client>
-                            <option value="">All clients</option>
-                            <?php foreach ($survey_clients_filter as $v): ?>
-                                <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <?php if ($is_full_access): ?>
-                    <div class="vd-dd">
-                        <i class="fa-solid fa-user-tie vd-dd-icon-src"></i>
-                        <select multiple data-desk-surveyor>
-                            <option value="">All surveyors</option>
-                            <?php foreach ($survey_surveyors_filter as $v): ?>
-                                <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <?php endif; ?>
-                    <button type="button" class="vd-clear-btn" data-desk-clear><i class="fa-solid fa-rotate-left"></i> Clear</button>
-                </div>
-                <a href="export_reports.php" class="btn-export" id="vdExportLink" data-desk-export><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Download</a>
-            </div>
-            <div class="vd-meta" data-desk-meta></div>
+            <?= $rtHeadHtml ?>
+            <?= $rtChipsHtml ?>
+            <?= rtMeta($rt, $rtTotal, $rtOffset, count($rtRows)) ?>
             <div class="vd-table-card">
-                <div data-desk-empty style="display:none;text-align:center;padding:48px 20px;color:#94a3b8;">
-                    <i class="fa-solid fa-ship d-block" style="font-size:32px;margin-bottom:10px;opacity:.5;"></i>
-                    No records match your search.
-                </div>
+                <?php if (!$rtRows): ?>
+                <div class="rt-empty" data-testid="rt-empty"><i class="fa-solid fa-ship"></i><?= rtHasFilters($rt) ? 'No reports match these filters.' : 'No pending reports.' ?></div>
+                <?php endif; ?>
                 <div class="vd-table-wrap" style="overflow-x:auto;">
-                    <table class="vd-table">
+                    <table class="vd-table rt-table">
                         <thead>
                             <tr>
-                                <th>#</th>
-                                <th>Vessel</th>
-                                <th>Client / Agent</th>
-                                <th>Survey type</th>
-                                <th>Port</th>
-                                <?php if ($is_full_access): ?><th>Surveyor</th><?php endif; ?>
-                                <th>Survey Completed</th>
-                                <th>Actions</th>
+                                <?= rtHead($rt, 'num', '#') ?>
+                                <?= rtHead($rt, 'vessel', 'Vessel') ?>
+                                <?= rtHead($rt, 'client', 'Client / Agent') ?>
+                                <?= rtHead($rt, 'type', 'Survey Type') ?>
+                                <?= rtHead($rt, 'port', 'Port') ?>
+                                <?php if ($is_full_access): ?><?= rtHead($rt, 'surveyor', 'Surveyor') ?><?php endif; ?>
+                                <?= rtHead($rt, 'date', 'Date', rtDateShort($rt['date'])) ?>
+                                <th class="rt-th static">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (!empty($surveys)): foreach ($surveys as $i => $survey):
+                            <?php if (!empty($rtRows)): foreach ($rtRows as $i => $survey):
                                 $vessel_name = $survey['vessel_name'] ?: 'Vessel';
                                 $typeLabel = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
                                 $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
-                                $date_disp = surveyCompletedTs($survey) ? date('d M Y', surveyCompletedTs($survey)) : '—';
+                                $rtD = rtRowDate($survey, $rt['date']);
+                                $date_disp = $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—';
                             ?>
                             <tr class="vd-row"
                                 data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '', $surveyorNames, $survey['report_number'] ?? '']))) ?>"
@@ -811,7 +611,7 @@ include 'includes/header.php';
                                 data-client="<?= sanitize(strtolower($survey['company_name'] ?? '')) ?>"
                                 data-surveyor="<?= sanitize(strtolower($surveyorNames)) ?>"
                                 data-date="<?= surveyCompletedTs($survey) ?>">
-                                <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
+                                <td style="color:#94a3b8;font-weight:600;" data-testid="rt-num"><?= $rtOffset + $i + 1 ?></td>
                                 <td>
                                     <div class="vd-vessel-cell">
                                         <div class="vd-vessel-icon"><i class="fa-solid fa-ship"></i></div>
@@ -856,263 +656,16 @@ include 'includes/header.php';
                         </tbody>
                     </table>
                 </div>
-                <div class="vd-pagination">
-                    <div class="vd-page-info">25 per page</div>
-                    <div class="vd-page-links" data-desk-pager></div>
+                <div class="rt-foot">
+                    <div>25 per page</div>
+                    <?= rtPager($rtBase, $rt, $rtPage, $rtPages) ?>
                 </div>
             </div>
         </div>
     </div>
 
 
-<script>
-(function () {
-  var PER = 25;
-  var root = document.querySelector('.list-desktop-view, .vessels-desktop-view');
-  if (!root) return;
-
-  var search = root.querySelector('[data-desk-search]');
-  var sortSel = root.querySelector('[data-desk-sort]');
-  var typeSel = root.querySelector('[data-desk-type]');
-  var placeSel = root.querySelector('[data-desk-place]');
-  var clientSel = root.querySelector('[data-desk-client]');
-  var surveyorSel = root.querySelector('[data-desk-surveyor]');
-  var clearBtn = root.querySelector('[data-desk-clear]');
-  var exportLink = root.querySelector('[data-desk-export]');
-  var tbody = root.querySelector('.vd-table tbody');
-  var meta = root.querySelector('[data-desk-meta]');
-  var pager = root.querySelector('[data-desk-pager]');
-  var empty = root.querySelector('[data-desk-empty]');
-  if (!tbody) return;
-
-  var allRows = Array.prototype.slice.call(tbody.querySelectorAll('tr.vd-row'));
-  var page = 1;
-
-  // 🌟 Modern custom-styled dropdown — a pill trigger + floating menu built
-  // by JS over the real <select data-desk-*> (kept in the DOM, just
-  // display:none'd), so filtered()/onChange() below still read these
-  // selects' .value exactly as before; a custom item click just sets the
-  // select's value and dispatches a real 'change' event on it.
-  var enhancedDropdowns = [];
-  function enhanceDropdown(selectEl) {
-    if (!selectEl) return;
-    var wrap = selectEl.closest('.vd-dd');
-    if (!wrap) return;
-    var iconSrc = wrap.querySelector('.vd-dd-icon-src');
-    var iconClass = iconSrc ? iconSrc.className.replace('vd-dd-icon-src', '').trim() : '';
-    if (iconSrc) iconSrc.remove();
-
-    var trigger = document.createElement('button');
-    trigger.type = 'button';
-    trigger.className = 'vd-dd-trigger';
-    trigger.innerHTML = '<i class="' + iconClass + ' vd-dd-icon"></i><span class="vd-dd-label"></span><i class="fa-solid fa-chevron-down vd-dd-chevron"></i>';
-
-    var menu = document.createElement('div');
-    menu.className = 'vd-dd-menu';
-    Array.prototype.forEach.call(selectEl.options, function (opt) {
-      var item = document.createElement('div');
-      item.className = 'vd-dd-item';
-      item.textContent = opt.textContent;
-      item.dataset.value = opt.value;
-      item.addEventListener('click', function (ev) {
-        if (selectEl.multiple) {
-          // Several values: tick / untick and keep the menu open; "All …" clears the choice.
-          ev.stopPropagation();
-          if (opt.value === '') Array.prototype.forEach.call(selectEl.options, function (o) { o.selected = false; });
-          else { opt.selected = !opt.selected; selectEl.options[0].selected = false; }
-          selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-          syncDropdownLabel(entry);
-          return;
-        }
-        selectEl.value = opt.value;
-        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-        syncDropdownLabel(entry);
-        closeAllDropdowns();
-      });
-      menu.appendChild(item);
-    });
-
-    wrap.appendChild(trigger);
-    wrap.appendChild(menu);
-
-    trigger.addEventListener('click', function (ev) {
-      ev.stopPropagation();
-      var wasOpen = menu.classList.contains('open');
-      closeAllDropdowns();
-      if (!wasOpen) { trigger.classList.add('open'); menu.classList.add('open'); }
-    });
-
-    var entry = { select: selectEl, trigger: trigger, menu: menu };
-    enhancedDropdowns.push(entry);
-    syncDropdownLabel(entry);
-  }
-  function syncDropdownLabel(entry) {
-    if (entry.select.multiple) {
-      var picked = Array.prototype.filter.call(entry.select.options, function (o) { return o.selected && o.value !== ''; });
-      var allText = entry.select.options[0] ? entry.select.options[0].textContent : '';
-      entry.trigger.querySelector('.vd-dd-label').textContent = !picked.length ? allText
-        : picked.length === 1 ? picked[0].textContent : picked.length + ' ' + allText.replace(/^All\s+/i, '');
-      entry.trigger.classList.toggle('has-value', picked.length > 0);
-      Array.prototype.forEach.call(entry.menu.children, function (item, i) {
-        item.classList.toggle('selected', item.dataset.value === '' ? !picked.length : entry.select.options[i].selected);
-      });
-      return;
-    }
-    var opt = entry.select.options[entry.select.selectedIndex];
-    entry.trigger.querySelector('.vd-dd-label').textContent = opt ? opt.textContent : '';
-    Array.prototype.forEach.call(entry.menu.children, function (item) {
-      item.classList.toggle('selected', item.dataset.value === entry.select.value);
-    });
-  }
-  function closeAllDropdowns() {
-    enhancedDropdowns.forEach(function (e) {
-      e.trigger.classList.remove('open');
-      e.menu.classList.remove('open');
-    });
-  }
-  document.addEventListener('click', closeAllDropdowns);
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closeAllDropdowns(); });
-  [sortSel, typeSel, placeSel, clientSel, surveyorSel].forEach(enhanceDropdown);
-
-  function val(sel) { return sel ? (sel.value || '').toLowerCase() : ''; }
-  // Multi-select filters: the ticked values (lower case); a row matches when it has any of them.
-  function vals(sel) {
-    return sel ? Array.prototype.filter.call(sel.options, function (o) { return o.selected && o.value !== ''; })
-      .map(function (o) { return o.value.toLowerCase(); }) : [];
-  }
-  // "Name1 + Name2" (surveyors, survey types) → matches when any of its names is ticked.
-  function anyName(attr, picked) {
-    var names = String(attr || '').toLowerCase().split(' + ').map(function (x) { return x.trim(); });
-    return picked.some(function (p) { return names.indexOf(p) !== -1; });
-  }
-
-  function filtered() {
-    var q = (search ? search.value : '').toLowerCase().trim();
-    var parts = q ? q.split(/\s+/).filter(Boolean) : [];
-    var types = vals(typeSel);
-    var place = vals(placeSel);
-    var client = vals(clientSel);
-    var surveyor = vals(surveyorSel);
-    var sort = sortSel ? sortSel.value : 'newest';
-
-    var rows = allRows.filter(function (row) {
-      var hay = (row.getAttribute('data-search') || '').toLowerCase();
-      if (parts.length && !parts.every(function (p) { return hay.indexOf(p) !== -1; })) return false;
-      if (types.length && !anyName(row.getAttribute('data-type'), types)) return false;
-      if (place.length && place.indexOf((row.getAttribute('data-place') || '').toLowerCase()) === -1) return false;
-      if (client.length && client.indexOf((row.getAttribute('data-client') || '').toLowerCase()) === -1) return false;
-      if (surveyor.length && !anyName(row.getAttribute('data-surveyor'), surveyor)) return false;
-      return true;
-    });
-
-    rows.sort(function (a, b) {
-      var an = (a.getAttribute('data-name') || '');
-      var bn = (b.getAttribute('data-name') || '');
-      var ad = parseInt(a.getAttribute('data-date') || '0', 10);
-      var bd = parseInt(b.getAttribute('data-date') || '0', 10);
-      if (sort === 'name-asc') return an.localeCompare(bn);
-      if (sort === 'name-desc') return bn.localeCompare(an);
-      if (sort === 'oldest') return ad - bd;
-      return bd - ad; // newest
-    });
-    return rows;
-  }
-
-  function render() {
-    var rows = filtered();
-    var total = rows.length;
-    var pages = Math.max(1, Math.ceil(total / PER));
-    if (page > pages) page = pages;
-    var start = (page - 1) * PER;
-    var slice = rows.slice(start, start + PER);
-
-    allRows.forEach(function (r) { r.style.display = 'none'; });
-    slice.forEach(function (r, i) {
-      r.style.display = '';
-      // Move the row into the table in sorted order too — this "#" badge
-      // was already being computed against the sorted array, but without
-      // actually reordering the <tr> elements the row STAYED at its
-      // original (PHP query) position, so the number and the row it sat
-      // next to disagreed whenever the client-side sort (e.g. "newest")
-      // differed from the initial render order.
-      tbody.appendChild(r);
-      var num = r.querySelector('[data-row-num]');
-      if (num) num.textContent = String(start + i + 1);
-    });
-
-    if (empty) empty.style.display = total === 0 ? 'block' : 'none';
-    var tableWrap = root.querySelector('.vd-table-wrap');
-    if (tableWrap) tableWrap.style.display = total === 0 ? 'none' : '';
-
-    if (meta) {
-      var from = total ? start + 1 : 0;
-      var to = Math.min(start + slice.length, total);
-      meta.innerHTML = 'Showing <strong>' + from + '</strong>–<strong>' + to + '</strong> of <strong>' + total + '</strong> · Page <strong>' + page + '</strong> / <strong>' + pages + '</strong> · 25 per page';
-    }
-
-    if (pager) {
-      var html = '';
-      function btn(label, p, disabled, active) {
-        if (disabled) return '<span class="disabled">' + label + '</span>';
-        if (active) return '<span class="active">' + label + '</span>';
-        return '<a href="#" data-page="' + p + '">' + label + '</a>';
-      }
-      html += btn('&laquo;', 1, page <= 1);
-      html += btn('&lsaquo; Prev', page - 1, page <= 1);
-      var s = Math.max(1, page - 2), e = Math.min(pages, page + 2);
-      for (var p = s; p <= e; p++) html += btn(String(p), p, false, p === page);
-      html += btn('Next &rsaquo;', page + 1, page >= pages);
-      html += btn('&raquo;', pages, page >= pages);
-      pager.innerHTML = html;
-      pager.querySelectorAll('a[data-page]').forEach(function (a) {
-        a.addEventListener('click', function (ev) {
-          ev.preventDefault();
-          page = parseInt(a.getAttribute('data-page'), 10) || 1;
-          render();
-        });
-      });
-    }
-  }
-
-  // 🌟 Keep the Download/Export link in sync with the currently applied
-  // filters — no filters applied → full export_reports.php (unfiltered,
-  // same as before); any filter active → append it as a query param so
-  // export_reports.php narrows the export to match what's on screen.
-  function updateExportLink() {
-    if (!exportLink) return;
-    var params = [];
-    var q = search ? search.value.trim() : '';
-    if (q) params.push('q=' + encodeURIComponent(q));
-    vals(typeSel).forEach(function (v) { params.push('type[]=' + encodeURIComponent(v)); });
-    vals(placeSel).forEach(function (v) { params.push('place[]=' + encodeURIComponent(v)); });
-    vals(clientSel).forEach(function (v) { params.push('client[]=' + encodeURIComponent(v)); });
-    vals(surveyorSel).forEach(function (v) { params.push('surveyor[]=' + encodeURIComponent(v)); });
-    exportLink.href = 'export_reports.php' + (params.length ? '?' + params.join('&') : '');
-  }
-
-  function onChange() { page = 1; render(); updateExportLink(); }
-
-  if (search) search.addEventListener('input', onChange);
-  [sortSel, typeSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
-    if (el) el.addEventListener('change', onChange);
-  });
-  if (clearBtn) clearBtn.addEventListener('click', function (ev) {
-    ev.preventDefault();
-    if (search) search.value = '';
-    [sortSel, typeSel, placeSel, clientSel, surveyorSel].forEach(function (el) {
-      if (!el) return;
-      if (el === sortSel) el.value = 'newest';
-      else el.value = '';
-    });
-    enhancedDropdowns.forEach(syncDropdownLabel);
-    page = 1;
-    render();
-    updateExportLink();
-  });
-
-  render();
-  updateExportLink();
-})();
-</script>
+<?= rtMenus($rtBase, $rt, $rtOpts, $rtYears, $is_full_access) ?>
+<script src="assets/js/report-table.js?v=<?= @filemtime(__DIR__ . '/assets/js/report-table.js') ?>"></script>
 
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>
