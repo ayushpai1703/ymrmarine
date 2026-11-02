@@ -9,8 +9,7 @@
  * invoicePdfHtml($d) — $d keys: invoice_no, invoice_date (Y-m-d), client, client_addr1,
  * client_addr2, supplier_ref, other_ref, vessel, survey_type, port, survey_completed,
  * report_no, note (optional description line shown above the items, no amount),
- * items: [['desc' => …, 'rate' => float, 'qty' => float, 'pct' => optional %], …].
- * An item's amount is rate × qty (× pct / 100 when pct is given — recovery commission).
+ * items: [['desc' => …, 'rate' => float, 'qty' => float], …]; each amount is rate × qty.
  *
  * The signatory's name is also printed as a handwritten-style signature, in the font from
  * assets/fonts/signature/ (DannyBrassco.ttf/.otf when its licensed file is placed there,
@@ -49,9 +48,7 @@ function invoicePdfMoney(float $v): string {
 
 /** Amount of one invoice line. */
 function invoicePdfLineAmount(array $it): float {
-    $a = (float)$it['rate'] * (float)$it['qty'];
-    if (isset($it['pct'])) $a = $a * (float)$it['pct'] / 100;
-    return round($a, 2);
+    return round((float)$it['rate'] * (float)$it['qty'], 2);
 }
 
 function invoicePdfHtml(array $d): string {

@@ -5,8 +5,9 @@
  * Template: includes/invoice_pdf_template.php.
  *
  *   ?id=N                 vessel invoice: survey service, Travel Cost, Launch Cost, added services
- *   ?id=N&type=recovery   recovery invoice: description + commission on recovery (agreed %) of the
- *                         CP price for VLSFO, HSFO (when not 0) and LSMGO
+ *   ?id=N&type=recovery   recovery invoice: description + "COMMISSION ON RECOVERY @<agreed %>% OF CP
+ *                         PRICE FOR <fuel>" lines for VLSFO, HSFO (when not 0) and LSMGO; the % is only
+ *                         wording, each amount is unit x qty
  *
  * Invoice number: YMR-<client short code>-<n> (includes/invoice_helpers.php), given to the
  * vessel the first time an invoice is downloaded and kept; the recovery invoice is that
@@ -101,7 +102,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             foreach ($fuelRows as $k => $r) {
                 // HSFO is listed only when it was filled in (not 0); VLSFO and LSMGO always.
                 if ($k === 'hsfo' && ($r['rate'] * $r['qty']) <= 0) continue;
-                $items[] = ['desc' => 'COMMISSION ON RECOVERY @' . $pctTxt . '% OF CP PRICE FOR ' . IG_FUELS[$k], 'rate' => $r['rate'], 'qty' => $r['qty'], 'pct' => $pct];
+                $items[] = ['desc' => 'COMMISSION ON RECOVERY @' . $pctTxt . '% OF CP PRICE FOR ' . IG_FUELS[$k], 'rate' => $r['rate'], 'qty' => $r['qty']]; // % is only part of the wording
             }
         }
     } else {
@@ -284,8 +285,7 @@ include 'includes/header.php';
   function num(v) { v = String(v || '').replace(/[, ]/g, ''); return v === '' || isNaN(v) ? 0 : parseFloat(v); }
   function total() {
     var t = 0;
-    var pctEl = document.querySelector('[data-ig-pct]'), pct = pctEl ? num(pctEl.value) / 100 : 1;
-    document.querySelectorAll('.ig-svc-row').forEach(function (r) { var a = r.querySelector('[data-ig-rate]'), q = r.querySelector('[data-ig-qty]'); if (a) t += num(a.value) * (q && q.value !== '' ? num(q.value) : 1) * pct; });
+    document.querySelectorAll('.ig-svc-row').forEach(function (r) { var a = r.querySelector('[data-ig-rate]'), q = r.querySelector('[data-ig-qty]'); if (a) t += num(a.value) * (q && q.value !== '' ? num(q.value) : 1); });
     document.querySelector('[data-ig-total]').textContent = t.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   var add = document.querySelector('[data-ig-add]');
