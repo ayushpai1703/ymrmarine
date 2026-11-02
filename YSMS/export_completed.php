@@ -19,6 +19,7 @@ require 'vendor/autoload.php';
 require_once 'config/config.php';
 require_once __DIR__ . '/includes/excel_export_helpers.php';
 require_once __DIR__ . '/includes/list_filters.php';
+require_once __DIR__ . '/includes/report_table.php';
 checkAuth();
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -47,64 +48,22 @@ try {
     @set_time_limit(120);
     @ini_set('memory_limit', '256M');
 
-    // 🌟 Mirror completed.php's own filter UI (search/type/place/client/
-    // surveyor/month) so the export matches whatever's currently on screen:
-    // no filter applied → every param below is empty → identical to the
-    // old always-full export. Month uses the exact same "Y-m" key + date-
-    // source priority (report_uploaded_date > survey_completed_date >
-    // assign_date) that builds completed.php's own month dropdown and
-    // data-month rows.
-    $q = trim((string)($_GET['q'] ?? ''));
-    // Each filter can hold several values (multi-select on the list pages): any of them matches.
-    $filter_types = listFilterValues($_GET, 'type');
-    $filter_places = listFilterValues($_GET, 'place');
-    $filter_clients = listFilterValues($_GET, 'client');
-    $filter_surveyors = listFilterValues($_GET, 'surveyor');
-    $filter_place = implode(', ', $filter_places);
-    $filter_client = implode(', ', $filter_clients);
-    $filter_surveyor = implode(', ', $filter_surveyors);
-    $filter_month = trim((string)($_GET['month'] ?? ''));
-
-    $where = ["s.status = 'Completed'"];
-    $params = [];
-    if ($role === 'Client') {
-        $where[] = 's.client_id = ?';
-        $params[] = $client_row_id;
-    } elseif (!$is_full_access) {
-        $where[] = '(s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))';
-        $params[] = $user_id;
-        $params[] = $user_id;
-    }
-    if ($q !== '') {
-        $where[] = '(s.vessel_name LIKE ? OR c.company_name LIKE ? OR s.agent_name LIKE ? OR t.type_name LIKE ? OR p.port_name LIKE ? OR u.full_name LIKE ?)';
-        $like = '%' . $q . '%';
-        array_push($params, $like, $like, $like, $like, $like, $like);
-    }
-    if ($filter_types) { $where[] = listFilterTypeSql($filter_types, $params); }
-    if ($filter_places) { $where[] = listFilterInSql('p.port_name', $filter_places, $params); }
-    if ($filter_clients) { $where[] = listFilterInSql('c.company_name', $filter_clients, $params); }
-    if ($is_full_access && $filter_surveyors) {
-        $where[] = listFilterSurveyorNameSql($filter_surveyors, $params);
-    }
-    if ($filter_month !== '') {
-        // Report Completed Date month (same as completed.php's Filter by Month).
-        $mStart = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $filter_month) ? $filter_month . '-01' : '1900-01-01';
-        $where[] = "s.report_uploaded_date >= ? AND s.report_uploaded_date < (? + INTERVAL 1 MONTH)";
-        $params[] = $mStart;
-        $params[] = $mStart;
-    }
-    $whereSql = implode(' AND ', $where);
+    // Same filters and order as the page on screen (includes/report_table.php), so the
+    // download is exactly the filtered table (every page of it).
+    $rtState = rtState($_GET, 'report', $is_full_access);
+    [$rtScopeWhere, $rtScopeParams] = rtScope('Completed', $role, $user_id, $client_row_id, $is_full_access);
+    [$whereSql, $params] = rtWhere($rtState, $rtScopeWhere, $rtScopeParams);
+    $filter_place = implode(', ', $rtState['place']);
+    $filter_client = implode(', ', array_merge($rtState['client'], $rtState['agent']));
+    $filter_surveyor = implode(', ', $rtState['surveyor']);
+    $filter_month = $rtState['ym'];
 
     $baseSql = "
-        SELECT s.id, s.vessel_name, s.agent_name, c.company_name, t.type_name, s.survey_type_ids, u.full_name as surveyor_name, s.recovery_amount, s.report_uploaded_date,
+        SELECT s.id, s.vessel_name, s.agent_name, c.company_name, st.type_name, s.survey_type_ids, u.full_name as surveyor_name, s.recovery_amount, s.report_uploaded_date,
                p.port_name, p.country
-        FROM surveys s
-        LEFT JOIN clients c ON s.client_id = c.id
-        LEFT JOIN survey_types t ON s.survey_type_id = t.id
-        LEFT JOIN users u ON s.surveyor_id = u.id
-        LEFT JOIN ports p ON s.port_id = p.id
+        " . rtFromSql(true) . "
         WHERE $whereSql
-        ORDER BY s.report_uploaded_date DESC
+        ORDER BY " . rtOrderSql($rtState) . "
     ";
     $stmt = $db->prepare($baseSql);
     $stmt->execute($params);

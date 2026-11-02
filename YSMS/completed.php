@@ -1,6 +1,7 @@
 <?php
 require_once 'config/config.php';
 require_once 'includes/list_filters.php';
+require_once 'includes/report_table.php';
 checkAuth();
 
 $db = getDB();
@@ -12,52 +13,6 @@ $client_id = ($role === 'Client') ? getClientIdForUser($db, $user_id) : 0;
 // must not be scoped down to "their own" surveys like a Surveyor here).
 $is_full_access = in_array($role, ['Admin', 'Super Admin'], true);
 
-/* Mobile: full list */
-if ($is_full_access) {
-    $stmt = $db->prepare("
-        SELECT s.*, c.company_name, u.full_name as surveyor_name, st.type_name, p.port_name
-        FROM surveys s
-        JOIN clients c ON s.client_id = c.id
-        LEFT JOIN users u ON s.surveyor_id = u.id
-        LEFT JOIN survey_types st ON s.survey_type_id = st.id
-        LEFT JOIN ports p ON s.port_id = p.id
-        WHERE s.status = 'Completed'
-        ORDER BY " . SURVEY_REPORT_ORDER_SQL . " DESC, s.id DESC
-    ");
-    $stmt->execute();
-} elseif ($role === 'Client') {
-    $stmt = $db->prepare("
-        SELECT s.*, c.company_name, u.full_name as surveyor_name, st.type_name, p.port_name
-        FROM surveys s
-        JOIN clients c ON s.client_id = c.id
-        LEFT JOIN users u ON s.surveyor_id = u.id
-        LEFT JOIN survey_types st ON s.survey_type_id = st.id
-        LEFT JOIN ports p ON s.port_id = p.id
-        WHERE s.status = 'Completed' AND s.client_id = ?
-        ORDER BY " . SURVEY_REPORT_ORDER_SQL . " DESC, s.id DESC
-    ");
-    $stmt->execute([$client_id]);
-} else {
-    // 🌟 Include completed surveys assigned via survey_surveyors (multi-surveyor),
-    // not just the primary surveys.surveyor_id.
-    $stmt = $db->prepare("
-        SELECT s.*, c.company_name, u.full_name as surveyor_name, st.type_name, p.port_name
-        FROM surveys s
-        JOIN clients c ON s.client_id = c.id
-        LEFT JOIN users u ON s.surveyor_id = u.id
-        LEFT JOIN survey_types st ON s.survey_type_id = st.id
-        LEFT JOIN ports p ON s.port_id = p.id
-        WHERE s.status = 'Completed' AND (s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))
-        ORDER BY " . SURVEY_REPORT_ORDER_SQL . " DESC, s.id DESC
-    ");
-    $stmt->execute([$user_id, $user_id]);
-}
-$surveys = $stmt->fetchAll();
-
-$survey_types_filter = [];
-$survey_places_filter = [];
-$survey_clients_filter = [];
-$survey_surveyors_filter = [];
 /** Report Completed month ('YYYY-MM') — the only date the month filter uses. */
 function cvReportMonth(array $r): string {
     $v = (string)($r['report_uploaded_date'] ?? '');
@@ -71,101 +26,25 @@ function cvRecovery(array $r): float {
     return isRecoveryNotApplicable($db, (string)($r['survey_type_ids'] ?? ''), (string)($r['type_name'] ?? '')) ? 0.0 : abs((float)$r['recovery_amount']);
 }
 
-// Month filter ('YYYY-MM' => ['label' => 'October 2026', 'count' => 12]) —
-// filters the whole Completed list by the vessel's Report Completed Date
-// (report_uploaded_date). Vessels without a report date show only under "All months".
-$survey_months_filter = [];
-$cv_selected_month = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', (string)($_GET['month'] ?? '')) ? (string)$_GET['month'] : '';
-foreach ($db->query("SELECT type_name FROM survey_types ORDER BY type_name ASC")->fetchAll() as $st_row) {
-    if (!empty($st_row['type_name'])) $survey_types_filter[$st_row['type_name']] = $st_row['type_name'];
-}
-foreach ($surveys as $row) {
-    if (!empty($row['port_name'])) $survey_places_filter[$row['port_name']] = $row['port_name'];
-    if (!empty($row['company_name'])) $survey_clients_filter[$row['company_name']] = $row['company_name'];
-    $rowSurveyorNames = getCombinedSurveyorNames($db, $row['id'], $row['surveyor_name'] ?? '');
-    foreach (listFilterSplitNames($rowSurveyorNames) as $svName) $survey_surveyors_filter[$svName] = $svName;
-
-    $month_key = cvReportMonth($row);
-    if ($month_key !== '') {
-        if (!isset($survey_months_filter[$month_key])) {
-            $survey_months_filter[$month_key] = ['label' => date('F Y', strtotime($month_key . '-01')), 'count' => 0];
-        }
-        $survey_months_filter[$month_key]['count']++;
-    }
-}
-krsort($survey_months_filter);
-
-/* Desktop: pagination */
-$perPage = 25;
-$page = max(1, (int)($_GET['page'] ?? 1));
-$q = trim((string)($_GET['q'] ?? ''));
-$filter_type = listFilterFirst($_GET, 'type');
-$filter_place = listFilterFirst($_GET, 'place');
-$filter_client = listFilterFirst($_GET, 'client');
-$filter_surveyor = listFilterFirst($_GET, 'surveyor');
-$sort = trim((string)($_GET['sort'] ?? 'newest'));
-
-$where = ["s.status = 'Completed'"];
-$params = [];
-if ($role === 'Client') { $where[] = 's.client_id = ?'; $params[] = $client_id; } elseif (!$is_full_access) { $where[] = '(s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))'; $params[] = $user_id; $params[] = $user_id; }
-if ($q !== '') {
-    $where[] = '(s.vessel_name LIKE ? OR c.company_name LIKE ? OR s.agent_name LIKE ? OR st.type_name LIKE ? OR p.port_name LIKE ? OR u.full_name LIKE ?)';
-    $like = '%' . $q . '%';
-    array_push($params, $like, $like, $like, $like, $like, $like);
-}
-if ($filter_type !== '') { $where[] = 'st.type_name = ?'; $params[] = $filter_type; }
-if ($filter_place !== '') { $where[] = 'p.port_name = ?'; $params[] = $filter_place; }
-if ($filter_client !== '') { $where[] = 'c.company_name = ?'; $params[] = $filter_client; }
-if ($is_full_access && $filter_surveyor !== '') {
-    $where[] = "COALESCE((SELECT GROUP_CONCAT(u2.full_name ORDER BY ss2.id SEPARATOR ' + ') FROM survey_surveyors ss2 JOIN users u2 ON ss2.surveyor_id = u2.id WHERE ss2.survey_id = s.id), u.full_name) = ?";
-    $params[] = $filter_surveyor;
-}
-$whereSql = implode(' AND ', $where);
-$orderSql = SURVEY_REPORT_ORDER_SQL . ' DESC, s.id DESC';
-if ($sort === 'oldest') $orderSql = SURVEY_REPORT_ORDER_SQL . ' ASC, s.id ASC';
-elseif ($sort === 'name-asc') $orderSql = 's.vessel_name ASC';
-elseif ($sort === 'name-desc') $orderSql = 's.vessel_name DESC';
-
-$countStmt = $db->prepare("
-    SELECT COUNT(*) FROM surveys s
-    JOIN clients c ON s.client_id = c.id
-    LEFT JOIN users u ON s.surveyor_id = u.id
-    LEFT JOIN survey_types st ON s.survey_type_id = st.id
-    LEFT JOIN ports p ON s.port_id = p.id
-    WHERE $whereSql
-");
-$countStmt->execute($params);
-$total = (int)$countStmt->fetchColumn();
-$totalPages = max(1, (int)ceil($total / $perPage));
-if ($page > $totalPages) $page = $totalPages;
-$offset = ($page - 1) * $perPage;
-
-$deskStmt = $db->prepare("
-    SELECT s.*, c.company_name, u.full_name as surveyor_name, st.type_name, p.port_name
-    FROM surveys s
-    JOIN clients c ON s.client_id = c.id
-    LEFT JOIN users u ON s.surveyor_id = u.id
-    LEFT JOIN survey_types st ON s.survey_type_id = st.id
-    LEFT JOIN ports p ON s.port_id = p.id
-    WHERE $whereSql
-    ORDER BY $orderSql
-    LIMIT $perPage OFFSET $offset
-");
-$deskStmt->execute($params);
-$deskSurveys = $deskStmt->fetchAll(PDO::FETCH_ASSOC);
-
-function vd_qs(array $extra = []): string {
-    $base = [
-        'q' => $_GET['q'] ?? '',
-        'type' => $_GET['type'] ?? '',
-        'place' => $_GET['place'] ?? '',
-        'client' => $_GET['client'] ?? '',
-        'surveyor' => $_GET['surveyor'] ?? '',
-        'sort' => $_GET['sort'] ?? 'newest',
-    ];
-    $merged = array_filter(array_merge($base, $extra), fn($v) => $v !== '' && $v !== null);
-    return http_build_query($merged);
-}
+/* Default order: Report Completed Date (report_uploaded_date), newest first; vessels without one last. */
+/* Filters, sorting and paging run in SQL (includes/report_table.php); the table, the phone
+   cards and the Download use the same state. */
+[$rtScopeWhere, $rtScopeParams] = rtScope('Completed', $role, (int)$user_id, (int)$client_id, $is_full_access);
+$rt = rtState($_GET, 'report', $is_full_access);
+[$rtWhereSql, $rtParams] = rtWhere($rt, $rtScopeWhere, $rtScopeParams);
+[$rtTotal, $rtRows, $rtPage, $rtPages] = rtFetchPage($db, $rt, $rtWhereSql, $rtParams);
+$rt['page'] = $rtPage;
+$rtOffset = ($rtPage - 1) * RT_PER_PAGE;
+$rtOpts = rtOptions($db, $rtScopeWhere, $rtScopeParams, $is_full_access);
+$rtYears = rtYears($db, $rtScopeWhere, $rtScopeParams, $rt['date']);
+$rtBase = 'completed.php';
+$rtExport = rtUrl('export_completed.php', $rt);
+$rtChipsHtml = rtChips($rtBase, $rt);
+// Recovery of every vessel the filters match (all pages), same rule as before (cvRecovery).
+$recStmt = $db->prepare('SELECT s.recovery_amount, s.survey_type_ids, st.type_name ' . rtFromSql() . " WHERE $rtWhereSql");
+$recStmt->execute($rtParams);
+$cvRecoveryTotal = array_sum(array_map('cvRecovery', $recStmt->fetchAll(PDO::FETCH_ASSOC)));
+$cvRecoveryLabel = $rt['ym'] !== '' ? date('M Y', strtotime($rt['ym'] . '-01')) . ' Recovery' : 'Total Recovery';
 
 // 🌟 Recovery: Total/VLSFO/HSFO/LSMGO, formatted "12.500 MT" or "—" when unset.
 // 'na' => true (shown as NOT APPLICABLE only) for survey types that don't track
@@ -193,6 +72,13 @@ function recoveryDisplayParts(array $survey): array {
 
 include 'includes/header.php';
 ?>
+<link rel="stylesheet" href="assets/css/report-table.css?v=<?= @filemtime(__DIR__ . '/assets/css/report-table.css') ?>">
+<style>
+/* Search box in main's toolbar: icon inside the field, box keeps its size */
+.vd-toolbar .rt-vd-search { position: relative; flex: 0 0 auto !important; margin: 0; }
+.vd-toolbar .rt-vd-search > i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 12.5px; pointer-events: none; }
+.vd-toolbar .rt-vd-search input[type=search] { padding-left: 32px; }
+</style>
 
 <style>
 
@@ -331,41 +217,28 @@ include 'includes/header.php';
     <?php $page_title = 'Completed Surveys'; $back_url = 'index.php'; $page_testid = 'completed-surveys'; include 'includes/top_app_bar.php'; ?>
 
     <div class="list-mobile-view">
-    <div class="search-filter-row">
-        <div class="search-input-wrapper">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" class="search-control" placeholder="Search by vessel, client or type..." data-list-search>
+    <div class="rt-mobile-top">
+        <form class="search-filter-row" method="get" action="<?= sanitize($rtBase) ?>" role="search" data-rt-search>
+            <?= rtHidden($rt, ['q']) ?>
+            <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="search" name="q" class="search-control" value="<?= sanitize($rt['q']) ?>" placeholder="Search by vessel, report no, client or agent..." autocomplete="off" data-testid="rt-search-m">
+            </div>
+        </form>
+        <div class="px-3 mb-2">
+            <a href="<?= sanitize($rtExport) ?>" class="btn btn-success w-100" style="background-color:#28a745;border:none;font-weight:600;padding:8px;" data-testid="rt-download-m">
+                <i class="fa-solid fa-file-excel me-2"></i> Export to Excel
+            </a>
         </div>
-        <button type="button" class="filter-btn" style="background:#ecfdf5;color:#047857;" data-filter-toggle aria-expanded="false"><i class="fa-solid fa-sliders"></i></button>
+        <div class="cv-rec-summary cv-rec-mob" data-testid="cv-recovery-mobile">
+            <span><i class="fa-solid fa-droplet"></i> <?= sanitize($cvRecoveryLabel) ?></span>
+            <b><?= number_format($cvRecoveryTotal, 3) ?> MT</b>
+            <small><?= (int)$rtTotal ?> vessels</small>
+        </div>
+        <div class="px-3"><?= rtMobileBar($rt, $is_full_access) ?><?= $rtChipsHtml ?><?= rtMeta($rt, $rtTotal, $rtOffset, count($rtRows)) ?></div>
     </div>
-    <div class="list-controls-panel" data-controls-panel>
-        <select data-list-sort><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name-asc">Vessel A–Z</option><option value="name-desc">Vessel Z–A</option></select>
-        <select multiple data-multi data-filter-type><option value="">All survey types</option><?php foreach ($survey_types_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
-        <select multiple data-multi data-filter-place><option value="">All survey places</option><?php foreach ($survey_places_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
-        <select multiple data-multi data-filter-client><option value="">All clients</option><?php foreach ($survey_clients_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
-        <?php if ($is_full_access): ?>
-        <select multiple data-multi data-filter-surveyor><option value="">All surveyors</option><?php foreach ($survey_surveyors_filter as $value): ?><option value="<?= sanitize($value) ?>"><?= sanitize($value) ?></option><?php endforeach; ?></select>
-        <?php endif; ?>
-        <select data-filter-month aria-label="Filter by month (Report Completed Date)" data-testid="cv-month-mobile"><option value="">Filter by month — All</option><?php foreach ($survey_months_filter as $m_key => $m_info): ?><option value="<?= sanitize($m_key) ?>"<?= $m_key === $cv_selected_month ? ' selected' : '' ?>><?= sanitize($m_info['label']) ?> (<?= (int)$m_info['count'] ?>)</option><?php endforeach; ?></select>
-        <button type="button" class="clear-filters-btn" data-clear-filters><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
-    </div>
-    <div class="px-3 mb-3">
-        <a href="export_completed.php" data-mobile-export data-export-base="export_completed.php" class="btn btn-success w-100" style="background-color:#28a745;border:none;font-weight:600;padding:8px;">
-            <i class="fa-solid fa-file-excel me-2"></i> Export to Excel
-        </a>
-        <?php if ($is_full_access): ?>
-        <a href="completed_import.php" class="btn w-100 mt-2" style="background:#fff;color:#4B2FD6;border:1.5px solid #C4B5FD;font-weight:600;padding:8px;" data-testid="completed-import-mobile">
-            <i class="fa-solid fa-file-import me-2"></i> Import Excel
-        </a>
-        <?php endif; ?>
-    </div>
-    <div class="cv-rec-summary cv-rec-mob" data-testid="cv-recovery-mobile">
-        <span><i class="fa-solid fa-droplet"></i> <span data-cv-recovery-label-m>Total Recovery</span></span>
-        <b><span data-cv-recovery-m><?= number_format(array_sum(array_map('cvRecovery', $surveys)), 3) ?></span> MT</b>
-        <small><span data-cv-count-m><?= count($surveys) ?></span> vessels</small>
-    </div>
-    <div class="vessel-list-container" data-list-container>
-        <?php if (count($surveys) > 0): foreach ($surveys as $survey):
+    <div class="vessel-list-container">
+        <?php if (count($rtRows) > 0): foreach ($rtRows as $rtI => $survey):
             $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
             $card_date_src = $survey['report_uploaded_date'] ?? $survey['survey_completed_date'] ?? $survey['assign_date'] ?? '';
             $card_ts = (!empty($card_date_src) && $card_date_src !== '0000-00-00' && $card_date_src !== '0000-00-00 00:00:00')
@@ -385,7 +258,7 @@ include 'includes/header.php';
              data-date="<?= surveyReportTs($survey) ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$survey['vessel_name'] ?? '', $survey['company_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>">
             <div style="display:flex;align-items:center;gap:12px;">
-                <span class="pv-row-num" data-row-num data-testid="pv-row-num"></span>
+                <span class="pv-row-num" data-testid="pv-row-num"><?= $rtOffset + $rtI + 1 ?></span>
                 <div style="width:42px;height:42px;border-radius:50%;background:#e6f4ea;color:#137333;display:flex;justify-content:center;align-items:center;font-weight:700;">
                     <?= strtoupper(substr($survey['vessel_name'] ?? 'X', 0, 1)) ?>
                 </div>
@@ -412,14 +285,15 @@ include 'includes/header.php';
             <div style="text-align:right;">
                 <span style="font-size:10px;padding:3px 8px;border-radius:6px;font-weight:600;background:#d1fae5;color:#065f46;"><i class="fa-solid fa-user-check"></i> Completed</span>
                 <div style="font-size:11.5px;font-weight:700;color:#64748b;margin-top:4px;"><?= sanitize($surveyorNames) ?></div>
+                <?php $rtD = rtRowDate($survey, $rt['date']); ?>
+                <div style="font-size:11px;color:#64748b;margin-top:2px;" data-testid="cv-date"><i class="fa-solid fa-calendar-check"></i> <?= $rt['date'] === 'report' ? '' : sanitize(rtDateShort($rt['date'])) . ': ' ?><?= $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—' ?></div>
             </div>
         </div>
         <?php endforeach; ?>
-        <div class="text-secondary px-2 mt-2" style="font-size:12px;">Showing <span data-list-count><?= count($surveys) ?></span> of <?= count($surveys) ?></div>
+        <div class="py-3"><?= rtPager($rtBase, $rt, $rtPage, $rtPages) ?></div>
         <?php else: ?>
-        <div class="bg-white p-4 text-center text-muted rounded-3 border border-dashed my-3"><i class="fa-solid fa-folder-open d-block mb-2 fs-2"></i>No completed surveys found.</div>
+        <div class="bg-white p-4 text-center text-muted rounded-3 border border-dashed my-3"><i class="fa-solid fa-folder-open d-block mb-2 fs-2"></i><?= rtHasFilters($rt) ? 'No matching records.' : 'No completed surveys found.' ?></div>
         <?php endif; ?>
-        <div class="list-empty-state bg-white p-4 text-center text-muted rounded-3 border border-dashed my-3" data-list-empty style="display:none;">No matching records.</div>
     </div>
     </div>
 
@@ -429,86 +303,50 @@ include 'includes/header.php';
         <div class="vd-wrap">
             <div class="vd-toolbar">
                 <div class="vd-toolbar-inner">
-                    <input type="search" data-desk-search placeholder="Search vessel, client, agent, type…" autocomplete="off">
-                    <select data-desk-sort>
-                        <option value="newest">Newest first</option>
-                        <option value="oldest">Oldest first</option>
-                        <option value="name-asc">Vessel A–Z</option>
-                        <option value="name-desc">Vessel Z–A</option>
-                    </select>
-                    <select multiple data-multi data-desk-type>
-                        <option value="">All types</option>
-                        <?php foreach ($survey_types_filter as $v): ?>
-                            <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <select multiple data-multi data-desk-place>
-                        <option value="">All ports</option>
-                        <?php foreach ($survey_places_filter as $v): ?>
-                            <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <select multiple data-multi data-desk-client>
-                        <option value="">All clients</option>
-                        <?php foreach ($survey_clients_filter as $v): ?>
-                            <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <select data-desk-month aria-label="Filter by month (Report Completed Date)" data-testid="cv-month-desktop">
-                        <option value="">Filter by month — All</option>
-                        <?php foreach ($survey_months_filter as $m_key => $m_info): ?>
-                            <option value="<?= sanitize($m_key) ?>"<?= $m_key === $cv_selected_month ? ' selected' : '' ?>><?= sanitize($m_info['label']) ?> (<?= (int)$m_info['count'] ?>)</option>
-                        <?php endforeach; ?>
-                    </select>
+                    <?= rtDeskSearch($rtBase, $rt) ?>
                     <?php if ($is_full_access): ?>
-                    <select multiple data-multi data-desk-surveyor>
-                        <option value="">All surveyors</option>
-                        <?php foreach ($survey_surveyors_filter as $v): ?>
-                            <option value="<?= sanitize(strtolower($v)) ?>"><?= sanitize($v) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <button type="button" class="rt-tb-dd<?= $rt['surveyor'] ? ' has-value' : '' ?>" data-rt-open="surveyor" data-testid="rt-surveyor-filter">
+                        <span><?= $rt['surveyor'] ? (count($rt['surveyor']) === 1 ? sanitize($rt['surveyor'][0]) : count($rt['surveyor']) . ' surveyors') : 'All surveyors' ?></span><i class="fa-solid fa-chevron-down"></i>
+                    </button>
                     <?php endif; ?>
-                    <button type="button" class="btn-clear" data-desk-clear><i class="fa-solid fa-rotate-left"></i> Clear</button>
                 </div>
             </div>
             <div class="vd-export-row">
-                <a href="export_completed.php" class="btn-export" id="vdExportLink" data-desk-export><i class="fa-solid fa-file-excel"></i> Export Excel</a>
-                <?php if ($is_full_access): ?>
-                <a href="completed_import.php" class="btn-export" style="background:#fff;color:#4B2FD6;border:1.5px solid #C4B5FD;margin-left:8px;" title="Bulk import completed vessels from Excel" data-testid="completed-import-desktop"><i class="fa-solid fa-file-import"></i> Import Excel</a>
-                <?php endif; ?>
+                <a href="<?= sanitize($rtExport) ?>" class="btn-export" data-testid="rt-download"><i class="fa-solid fa-file-excel"></i> Export Excel</a>
             </div>
             <div class="cv-rec-summary cv-rec-desk" data-testid="cv-recovery-desktop">
-                <span><i class="fa-solid fa-droplet"></i> <span data-cv-recovery-label>Total Recovery</span></span>
-                <b><span data-cv-recovery><?= number_format(array_sum(array_map('cvRecovery', $surveys)), 3) ?></span> MT</b>
-                <small><span data-cv-count><?= count($surveys) ?></span> vessels</small>
+                <span><i class="fa-solid fa-droplet"></i> <?= sanitize($cvRecoveryLabel) ?></span>
+                <b><?= number_format($cvRecoveryTotal, 3) ?> MT</b>
+                <small><?= (int)$rtTotal ?> vessels</small>
             </div>
-            <div class="vd-meta" data-desk-meta></div>
+            <?= $rtChipsHtml ?>
+            <?= rtMeta($rt, $rtTotal, $rtOffset, count($rtRows)) ?>
             <div class="vd-table-card">
-                <div data-desk-empty style="display:none;text-align:center;padding:48px 20px;color:#94a3b8;">
-                    <i class="fa-solid fa-ship d-block" style="font-size:32px;margin-bottom:10px;opacity:.5;"></i>
-                    No records match your search.
-                </div>
+                <?php if (!$rtRows): ?>
+                <div class="rt-empty" data-testid="rt-empty"><i class="fa-solid fa-ship"></i><?= rtHasFilters($rt) ? 'No vessels match these filters.' : 'No completed vessels.' ?></div>
+                <?php endif; ?>
                 <div class="vd-table-wrap" style="overflow-x:auto;">
-                    <table class="vd-table">
+                    <table class="vd-table rt-table">
                         <thead>
                             <tr>
-                                <th>#</th>
-                                <th>Vessel</th>
-                                <th>Client / Agent</th>
-                                <th>Survey type</th>
-                                <th>Port</th>
-                                <th>Recovery</th>
-                                <th>Report Completed</th>
-                                <th>Actions</th>
+                                <?= rtHead($rt, 'num', '#') ?>
+                                <?= rtHead($rt, 'vessel', 'Vessel') ?>
+                                <?= rtHead($rt, 'client', 'Client / Agent') ?>
+                                <?= rtHead($rt, 'type', 'Survey Type') ?>
+                                <?= rtHead($rt, 'port', 'Port') ?>
+                                <th class="rt-th static">Recovery</th>
+                                <?= rtHead($rt, 'date', 'Date', rtDateShort($rt['date'])) ?>
+                                <th class="rt-th static">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (!empty($surveys)): foreach ($surveys as $i => $survey):
+                            <?php if (!empty($rtRows)): foreach ($rtRows as $i => $survey):
                                 $vessel_name = $survey['vessel_name'] ?: 'Vessel';
                                 $typeLabel = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
                                 $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
                                 $date_src = $survey['report_uploaded_date'] ?? $survey['survey_completed_date'] ?? $survey['assign_date'] ?? '';
-                                $date_disp = surveyReportTs($survey) ? date('d M Y', surveyReportTs($survey)) : '—';
+                                $rtD = rtRowDate($survey, $rt['date']);
+                                $date_disp = $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—';
                                 $ts = strtotime($date_src ?: '1970-01-01') ?: 0;
                             ?>
                             <tr class="vd-row"
@@ -521,7 +359,7 @@ include 'includes/header.php';
                                 data-month="<?= sanitize(cvReportMonth($survey)) ?>"
                                 data-recovery="<?= cvRecovery($survey) ?>"
                                 data-date="<?= surveyReportTs($survey) ?>">
-                                <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
+                                <td style="color:#94a3b8;font-weight:600;" data-testid="rt-num"><?= $rtOffset + $i + 1 ?></td>
                                 <td>
                                     <a class="vd-vessel" href="completed_detail.php?id=<?= (int)$survey['id'] ?>"><?= sanitize($vessel_name) ?></a>
                                     <?php if (!empty($survey['report_number'])): ?>
@@ -562,201 +400,17 @@ include 'includes/header.php';
                         </tbody>
                     </table>
                 </div>
-                <div class="vd-pagination">
-                    <div class="vd-page-info">25 per page</div>
-                    <div class="vd-page-links" data-desk-pager></div>
+                <div class="rt-foot">
+                    <div>25 per page</div>
+                    <?= rtPager($rtBase, $rt, $rtPage, $rtPages) ?>
                 </div>
             </div>
         </div>
     </div>
 
 
-<script>
-(function () {
-  var PER = 25;
-  var root = document.querySelector('.list-desktop-view, .vessels-desktop-view');
-  if (!root) return;
-
-  var search = root.querySelector('[data-desk-search]');
-  var sortSel = root.querySelector('[data-desk-sort]');
-  var typeSel = root.querySelector('[data-desk-type]');
-  var placeSel = root.querySelector('[data-desk-place]');
-  var clientSel = root.querySelector('[data-desk-client]');
-  var surveyorSel = root.querySelector('[data-desk-surveyor]');
-  var monthSel = root.querySelector('[data-desk-month]');
-  var clearBtn = root.querySelector('[data-desk-clear]');
-  var exportLink = root.querySelector('[data-desk-export]');
-  var tbody = root.querySelector('.vd-table tbody');
-  var meta = root.querySelector('[data-desk-meta]');
-  var pager = root.querySelector('[data-desk-pager]');
-  var empty = root.querySelector('[data-desk-empty]');
-  if (!tbody) return;
-
-  var allRows = Array.prototype.slice.call(tbody.querySelectorAll('tr.vd-row'));
-  var page = 1;
-
-  function val(sel) { return sel ? (sel.value || '').toLowerCase() : ''; }
-  // Multi-select filters: the ticked values (lower case); a row matches when it has any of them.
-  function vals(sel) {
-    return sel ? Array.prototype.filter.call(sel.options, function (o) { return o.selected && o.value !== ''; })
-      .map(function (o) { return o.value.toLowerCase(); }) : [];
-  }
-  // "Name1 + Name2" (surveyors, survey types) → matches when any of its names is ticked.
-  function anyName(attr, picked) {
-    var names = String(attr || '').toLowerCase().split(' + ').map(function (x) { return x.trim(); });
-    return picked.some(function (p) { return names.indexOf(p) !== -1; });
-  }
-
-  function filtered() {
-    var q = (search ? search.value : '').toLowerCase().trim();
-    var parts = q ? q.split(/\s+/).filter(Boolean) : [];
-    var types = vals(typeSel);
-    var place = vals(placeSel);
-    var client = vals(clientSel);
-    var surveyor = vals(surveyorSel);
-    var month = val(monthSel);
-    var sort = sortSel ? sortSel.value : 'newest';
-
-    var rows = allRows.filter(function (row) {
-      var hay = (row.getAttribute('data-search') || '').toLowerCase();
-      if (parts.length && !parts.every(function (p) { return hay.indexOf(p) !== -1; })) return false;
-      if (types.length && !anyName(row.getAttribute('data-type'), types)) return false;
-      if (place.length && place.indexOf((row.getAttribute('data-place') || '').toLowerCase()) === -1) return false;
-      if (client.length && client.indexOf((row.getAttribute('data-client') || '').toLowerCase()) === -1) return false;
-      if (surveyor.length && !anyName(row.getAttribute('data-surveyor'), surveyor)) return false;
-      if (month && (row.getAttribute('data-month') || '').toLowerCase() !== month) return false;
-      return true;
-    });
-
-    rows.sort(function (a, b) {
-      var an = (a.getAttribute('data-name') || '');
-      var bn = (b.getAttribute('data-name') || '');
-      var ad = parseInt(a.getAttribute('data-date') || '0', 10);
-      var bd = parseInt(b.getAttribute('data-date') || '0', 10);
-      if (sort === 'name-asc') return an.localeCompare(bn);
-      if (sort === 'name-desc') return bn.localeCompare(an);
-      if (sort === 'oldest') return ad - bd;
-      return bd - ad; // newest
-    });
-    return rows;
-  }
-
-  function render() {
-    var rows = filtered();
-    var total = rows.length;
-    var pages = Math.max(1, Math.ceil(total / PER));
-    if (page > pages) page = pages;
-    var start = (page - 1) * PER;
-    var slice = rows.slice(start, start + PER);
-
-    allRows.forEach(function (r) { r.style.display = 'none'; });
-    slice.forEach(function (r, i) {
-      r.style.display = '';
-      // Move the row into the table in sorted order too — this "#" badge
-      // was already being computed against the sorted array, but without
-      // actually reordering the <tr> elements the row STAYED at its
-      // original (PHP query) position, so the number and the row it sat
-      // next to disagreed whenever the client-side sort (e.g. "newest")
-      // differed from the initial render order.
-      tbody.appendChild(r);
-      var num = r.querySelector('[data-row-num]');
-      if (num) num.textContent = String(start + i + 1);
-    });
-
-    // Recovery of every vessel matching the filters (all pages, not just this one).
-    var rec = 0;
-    rows.forEach(function (r) { rec += parseFloat(r.getAttribute('data-recovery') || '0') || 0; });
-    var mSel = monthSel ? monthSel.options[monthSel.selectedIndex] : null;
-    var mLabel = monthSel && monthSel.value ? mSel.textContent.replace(/\s*\(\d+\)\s*$/, '') : '';
-    var recEl = root.querySelector('[data-cv-recovery]'), recLbl = root.querySelector('[data-cv-recovery-label]'), cntEl = root.querySelector('[data-cv-count]');
-    if (recEl) recEl.textContent = rec.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-    if (recLbl) recLbl.textContent = mLabel ? mLabel + ' Recovery' : 'Total Recovery';
-    if (cntEl) cntEl.textContent = String(total);
-
-    if (empty) empty.style.display = total === 0 ? 'block' : 'none';
-    var tableWrap = root.querySelector('.vd-table-wrap');
-    if (tableWrap) tableWrap.style.display = total === 0 ? 'none' : '';
-
-    if (meta) {
-      var from = total ? start + 1 : 0;
-      var to = Math.min(start + slice.length, total);
-      meta.innerHTML = 'Showing <strong>' + from + '</strong>–<strong>' + to + '</strong> of <strong>' + total + '</strong> · Page <strong>' + page + '</strong> / <strong>' + pages + '</strong> · 25 per page';
-    }
-
-    if (pager) {
-      var html = '';
-      function btn(label, p, disabled, active) {
-        if (disabled) return '<span class="disabled">' + label + '</span>';
-        if (active) return '<span class="active">' + label + '</span>';
-        return '<a href="#" data-page="' + p + '">' + label + '</a>';
-      }
-      html += btn('&laquo;', 1, page <= 1);
-      html += btn('&lsaquo; Prev', page - 1, page <= 1);
-      var s = Math.max(1, page - 2), e = Math.min(pages, page + 2);
-      for (var p = s; p <= e; p++) html += btn(String(p), p, false, p === page);
-      html += btn('Next &rsaquo;', page + 1, page >= pages);
-      html += btn('&raquo;', pages, page >= pages);
-      pager.innerHTML = html;
-      pager.querySelectorAll('a[data-page]').forEach(function (a) {
-        a.addEventListener('click', function (ev) {
-          ev.preventDefault();
-          page = parseInt(a.getAttribute('data-page'), 10) || 1;
-          render();
-        });
-      });
-    }
-  }
-
-  // 🌟 Keep the Export Excel link in sync with the currently applied
-  // filters — no filters applied → full export_completed.php (unfiltered,
-  // same as before); any filter active → append it as a query param so
-  // export_completed.php narrows the export to match what's on screen.
-  function updateExportLink() {
-    if (!exportLink) return;
-    var params = [];
-    var q = search ? search.value.trim() : '';
-    if (q) params.push('q=' + encodeURIComponent(q));
-    vals(typeSel).forEach(function (v) { params.push('type[]=' + encodeURIComponent(v)); });
-    vals(placeSel).forEach(function (v) { params.push('place[]=' + encodeURIComponent(v)); });
-    vals(clientSel).forEach(function (v) { params.push('client[]=' + encodeURIComponent(v)); });
-    vals(surveyorSel).forEach(function (v) { params.push('surveyor[]=' + encodeURIComponent(v)); });
-    var month = val(monthSel);
-    if (month) params.push('month=' + encodeURIComponent(month));
-    exportLink.href = 'export_completed.php' + (params.length ? '?' + params.join('&') : '');
-  }
-
-  function onChange() {
-    page = 1; render(); updateExportLink();
-    try {
-      var u = new URL(window.location.href);
-      if (monthSel && monthSel.value) u.searchParams.set('month', monthSel.value); else u.searchParams.delete('month');
-      u.searchParams.delete('page');
-      history.replaceState(null, '', u.toString());
-    } catch (e) {}
-  }
-
-  if (search) search.addEventListener('input', onChange);
-  [sortSel, typeSel, placeSel, clientSel, surveyorSel, monthSel].forEach(function (el) {
-    if (el) el.addEventListener('change', onChange);
-  });
-  if (clearBtn) clearBtn.addEventListener('click', function (ev) {
-    ev.preventDefault();
-    if (search) search.value = '';
-    [sortSel, typeSel, placeSel, clientSel, surveyorSel, monthSel].forEach(function (el) {
-      if (!el) return;
-      if (el === sortSel) el.value = 'newest';
-      else if (el.multiple) { Array.prototype.forEach.call(el.options, function (o) { o.selected = false; }); if (window.ysmsMultiSync) window.ysmsMultiSync(el); }
-      else el.value = '';
-    });
-    page = 1;
-    render();
-    updateExportLink();
-  });
-
-  render();
-  updateExportLink();
-})();
-</script>
+<?= rtMenus($rtBase, $rt, $rtOpts, $rtYears, $is_full_access) ?>
+<script src="assets/js/report-table.js?v=<?= @filemtime(__DIR__ . '/assets/js/report-table.js') ?>"></script>
 
 <script>
 // Recovery tooltip toggle (mobile card only — the desktop cell has no
@@ -783,24 +437,9 @@ document.addEventListener('click', function (ev) {
 .cv-rec-summary small { margin-left: auto; color: #64748b; font-weight: 600; }
 .cv-rec-desk { margin: 0 0 10px; }
 @media (min-width: 992px) { .cv-rec-mob { display: none; } }
+.rt-tb-dd { height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; color: #0f172a; font-size: 13px; cursor: pointer; flex: none; }
+.rt-tb-dd i { font-size: 9px; color: #94A3B8; }
+.rt-tb-dd.has-value { border-color: #A78BFA; background: #F3EEFE; color: #5B2DEE; font-weight: 600; }
 </style>
-<script>
-(function () {
-    var scope = document.querySelector('[data-list-scope]');
-    if (!scope) return;
-    function update() {
-        var cards = scope.querySelectorAll('[data-survey-card]'), rec = 0, n = 0;
-        cards.forEach(function (c) { if (c.style.display === 'none') return; n++; rec += parseFloat(c.getAttribute('data-recovery') || '0') || 0; });
-        var sel = scope.querySelector('[data-filter-month]');
-        var lbl = sel && sel.value ? sel.options[sel.selectedIndex].textContent.replace(/\s*\(\d+\)\s*$/, '') + ' Recovery' : 'Total Recovery';
-        var r = scope.querySelector('[data-cv-recovery-m]'), l = scope.querySelector('[data-cv-recovery-label-m]'), k = scope.querySelector('[data-cv-count-m]');
-        if (r) r.textContent = rec.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-        if (l) l.textContent = lbl;
-        if (k) k.textContent = String(n);
-    }
-    ['input', 'change', 'click'].forEach(function (ev) { document.addEventListener(ev, function () { setTimeout(update, 0); }); });
-    window.addEventListener('load', function () { setTimeout(update, 0); });
-})();
-</script>
 
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>
