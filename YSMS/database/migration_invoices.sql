@@ -44,6 +44,17 @@ SELECT s.`id`, s.`vessel_name`, s.`report_number`, 'Pending for CP Prices', 'bac
 FROM `surveys` s
 WHERE s.`status` IN ('Pending Report', 'Completed');
 
+-- Generated invoices (Generate Invoice / Recovery Invoice download): the saved form, the
+-- stored recovery PDF and the "recovery invoice too" flag. Also added at runtime
+-- (invoiceEnsureGenColumns()) when the table already exists without them.
+ALTER TABLE `invoices`
+    ADD COLUMN `gen_data` MEDIUMTEXT NULL,
+    ADD COLUMN `rec_gen_data` MEDIUMTEXT NULL,
+    ADD COLUMN `rec_file_name` VARCHAR(255) NULL,
+    ADD COLUMN `rec_file_path` VARCHAR(255) NULL,
+    ADD COLUMN `rec_generated_at` DATETIME NULL,
+    ADD COLUMN `recovery_pending` TINYINT(1) NOT NULL DEFAULT 0;
+
 -- Invoice numbers: YMR-<client short code>-<n>, n from 1000, +1 per vessel invoice
 -- (includes/invoice_helpers.php invoiceAllocateNumber(); also created at runtime).
 CREATE TABLE IF NOT EXISTS `invoice_number_seq` (

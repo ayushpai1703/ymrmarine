@@ -31,7 +31,7 @@ try {
     $db = getDB();
     invoiceEnsureTable($db);
     [$f, $whereSql, $params] = invoiceListFilters($_GET);
-    $st = $db->prepare(invoiceRowSql() . " WHERE $whereSql ORDER BY " . invoiceListOrderSql());
+    $st = $db->prepare(invoiceRowSql() . " WHERE $whereSql ORDER BY " . invoiceListOrderSql($f['view']));
     $st->execute($params);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
 
@@ -56,7 +56,7 @@ try {
             (string)($row['invoice_no'] ?? ''),
             !empty($row['invoice_date']) ? date('d-m-Y', strtotime($row['invoice_date'])) : '',
             $row['invoice_amount'] !== null ? (float)$row['invoice_amount'] : '',
-            invoiceFileAbs($row['file_path'] ?? null) ? 'Uploaded' : '',
+            trim((invoiceFileAbs($row['file_path'] ?? null) ? (!empty($row['gen_data']) ? 'Generated' : 'Uploaded') : '') . (invoiceFileAbs($row['rec_file_path'] ?? null) ? ' + Recovery' : '')),
         ], null, 'A' . $r);
         $r++;
     }

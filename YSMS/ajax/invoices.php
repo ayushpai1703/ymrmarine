@@ -6,9 +6,11 @@
  *   POST a=status  id, status            → invoice_status only
  *   POST a=upload  id, invoice_pdf, meta  → first upload or replacement of the PDF
  *   POST a=meta    id, invoice_no, invoice_date, invoice_amount, invoice_notes
- *   POST a=delete  id                    → removes the PDF and its details; the row and its
- *                                          status stay (the vessel stays listed in Invoices)
- *   GET  a=file    id, mode=view|download → the stored PDF
+ *   POST a=delete  id                    → removes the invoice PDFs (vessel + recovery) and their
+ *                                          details; the row stays and keeps its invoice number.
+ *                                          A Completed invoice goes back to the pending list
+ *                                          (Pending for CP Prices) so it can be made again.
+ *   GET  a=file    id, mode=view|download, which=recovery (optional) → the stored PDF
  *
  * Nothing here reads or writes survey status, report fields or the survey's own uploads.
  */
@@ -42,9 +44,10 @@ if (!$row) invJson(404, ['ok' => false, 'error' => 'Invoice not found.']);
 
 // ---------- file (GET) ----------
 if ($action === 'file') {
-    $abs = invoiceFileAbs($row['file_path'] ?? null);
-    if (!$abs) { http_response_code(404); header('Content-Type: text/plain; charset=utf-8'); exit('No invoice PDF uploaded for this vessel.'); }
-    $name = preg_replace('/[^A-Za-z0-9 ._()\-]/', '_', (string)($row['file_name'] ?: 'invoice.pdf'));
+    $rec = ($_GET['which'] ?? '') === 'recovery';
+    $abs = invoiceFileAbs($row[$rec ? 'rec_file_path' : 'file_path'] ?? null);
+    if (!$abs) { http_response_code(404); header('Content-Type: text/plain; charset=utf-8'); exit($rec ? 'No recovery invoice for this vessel.' : 'No invoice PDF uploaded for this vessel.'); }
+    $name = preg_replace('/[^A-Za-z0-9 ._()\-]/', '_', (string)($row[$rec ? 'rec_file_name' : 'file_name'] ?: ($rec ? 'recovery-invoice.pdf' : 'invoice.pdf')));
     if (strtolower(substr($name, -4)) !== '.pdf') $name .= '.pdf';
     $inline = ($_GET['mode'] ?? 'view') !== 'download';
     header('Content-Type: application/pdf');
@@ -114,23 +117,22 @@ switch ($action) {
             invJson(500, ['ok' => false, 'error' => 'The invoice could not be saved. Please try again.']);
         }
         // The previous PDF goes only after the new one is saved, and only if no other row uses it.
-        if ($old && $old !== $rel && ($oldAbs = invoiceFileAbs($old))) {
-            $c = $db->prepare('SELECT COUNT(*) FROM invoices WHERE file_path = ?');
-            $c->execute([$old]);
-            if ((int)$c->fetchColumn() === 0) @unlink($oldAbs);
-        }
+        if ($old && $old !== $rel) invoiceRemoveFileIfUnused($db, $old);
         invJson(200, ['ok' => true, 'replaced' => (bool)$old, 'row' => invoiceRowJson($db, $load($id))]);
 
     case 'delete':
-        $old = $row['file_path'] ?? null;
-        $db->prepare('UPDATE invoices SET file_name = NULL, file_path = NULL, file_size = NULL, uploaded_by = NULL, uploaded_at = NULL,
-                invoice_no = NULL, invoice_date = NULL, invoice_amount = NULL, invoice_notes = NULL WHERE id = ?')
-           ->execute([$id]);
-        if ($old && ($oldAbs = invoiceFileAbs($old))) {
-            $c = $db->prepare('SELECT COUNT(*) FROM invoices WHERE file_path = ?');
-            $c->execute([$old]);
-            if ((int)$c->fetchColumn() === 0) @unlink($oldAbs);
-        }
-        invJson(200, ['ok' => true, 'row' => invoiceRowJson($db, $load($id))]);
+        $old = [$row['file_path'] ?? null, $row['rec_file_path'] ?? null];
+        $wasDone = $row['invoice_status'] === 'Completed';
+        // MySQL applies SET left to right, so invoice_status is changed last.
+        // The invoice number is kept (numbers are never reused); generating again prints the same one.
+        $db->prepare("UPDATE invoices SET file_name = NULL, file_path = NULL, file_size = NULL, uploaded_by = NULL, uploaded_at = NULL,
+                invoice_date = NULL, invoice_amount = NULL, invoice_notes = NULL,
+                gen_data = NULL, rec_gen_data = NULL, rec_file_name = NULL, rec_file_path = NULL, rec_generated_at = NULL, recovery_pending = 0,
+                status_updated_by = IF(invoice_status = 'Completed', ?, status_updated_by),
+                status_updated_at = IF(invoice_status = 'Completed', NOW(), status_updated_at),
+                invoice_status = IF(invoice_status = 'Completed', ?, invoice_status) WHERE id = ?")
+           ->execute([$uid, INVOICE_DEFAULT_STATUS, $id]);
+        foreach ($old as $o) invoiceRemoveFileIfUnused($db, $o);
+        invJson(200, ['ok' => true, 'moved' => $wasDone, 'row' => invoiceRowJson($db, $load($id))]);
 }
 invJson(400, ['ok' => false, 'error' => 'Unknown action.']);

@@ -34,7 +34,7 @@ $total = (int)$cnt->fetchColumn();
 $pages = max(1, (int)ceil($total / $perPage));
 $page = min($page, $pages);
 $offset = ($page - 1) * $perPage;
-$list = $db->prepare(invoiceRowSql() . " WHERE $whereSql ORDER BY " . invoiceListOrderSql() . " LIMIT $perPage OFFSET $offset");
+$list = $db->prepare(invoiceRowSql() . " WHERE $whereSql ORDER BY " . invoiceListOrderSql($view) . " LIMIT $perPage OFFSET $offset");
 $list->execute($params);
 $rows = $list->fetchAll(PDO::FETCH_ASSOC);
 
@@ -120,6 +120,10 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
 .inv-status.cost { background-color: #EFF6FF; color: #1D4ED8; border-color: #93C5FD; }
 .inv-status.other { background-color: #F1F5F9; color: #475569; border-color: #CBD5E1; }
 .inv-status.done { background-color: #F0FDF4; color: #15803D; border-color: #86EFAC; }
+.inv-status.static { cursor: default; padding-right: 10px; background-image: none; display: inline-flex; align-items: center; gap: 5px; }
+.inv-sub.inv-no { color: #6C4CF1; font-weight: 700; }
+.inv-pend { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; color: #B45309; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 999px; padding: 2px 8px; margin-top: 4px; }
+.inv-btn.rec { color: #0E7490; border-color: #A5F3FC; }
 .inv-status.changed { box-shadow: 0 0 0 3px rgba(108,76,241,.2); }
 .inv-date { white-space: nowrap; color: #64748b; font-size: 12.5px; }
 .inv-empty { text-align: center; padding: 50px 20px; color: #94a3b8; }
@@ -203,7 +207,7 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
         <?php $expQs = invQs(['page' => '']); ?>
         <a class="inv-dl" href="export_invoices.php<?= $expQs !== '' ? '?' . sanitize($expQs) : '' ?>" data-testid="inv-download"><span><i class="fa-solid fa-arrow-down"></i></span> Download</a>
     </form>
-    <div class="inv-meta" data-testid="inv-meta">Showing <b><?= $total ? ($offset + 1) . '–' . ($offset + count($rows)) : 0 ?></b> of <b><?= $total ?></b> <?= $view === 'completed' ? 'completed' : 'pending' ?> invoice<?= $total === 1 ? '' : 's' ?><?= $filtered ? ' (filtered)' : '' ?> · newest Survey Completed Date first</div>
+    <div class="inv-meta" data-testid="inv-meta">Showing <b><?= $total ? ($offset + 1) . '–' . ($offset + count($rows)) : 0 ?></b> of <b><?= $total ?></b> <?= $view === 'completed' ? 'completed' : 'pending' ?> invoice<?= $total === 1 ? '' : 's' ?><?= $filtered ? ' (filtered)' : '' ?><?= $view === 'completed' ? ' · in invoice number order' : ' · newest Survey Completed Date first' ?></div>
 
     <?php if (!$rows): ?>
     <div class="inv-card"><div class="inv-empty" data-testid="inv-empty"><i class="fa-solid fa-file-invoice"></i><?= $filtered ? 'No invoices match these filters.' : ($view === 'completed' ? 'No completed invoices yet.' : 'No pending invoices. Vessels appear here as soon as their survey is completed (documents submitted).') ?></div></div>
@@ -221,7 +225,7 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
             ?>
             <tr data-inv='<?= sanitize(json_encode($json)) ?>' data-testid="inv-row-<?= (int)$r['id'] ?>">
                 <td style="color:#94a3b8;font-weight:600"><?= $offset + $i + 1 ?></td>
-                <td><div class="inv-vessel"><div class="inv-vessel-ic"><i class="fa-solid fa-ship"></i></div><div style="min-width:0"><b><?= sanitize($vessel ?: '—') ?></b><?php if ($rep !== ''): ?><div class="inv-sub">Report: <?= sanitize($rep) ?></div><?php endif; ?><?php if (empty($r['sid'])): ?><div class="inv-sub" style="color:#DC2626">Survey record deleted</div><?php endif; ?></div></div></td>
+                <td><div class="inv-vessel"><div class="inv-vessel-ic"><i class="fa-solid fa-ship"></i></div><div style="min-width:0"><b><?= sanitize($vessel ?: '—') ?></b><?php if ($view === 'completed' && !empty($r['invoice_no'])): ?><div class="inv-sub inv-no" data-testid="inv-no-<?= (int)$r['id'] ?>">Invoice: <?= sanitize($r['invoice_no']) ?></div><?php endif; ?><?php if ($rep !== ''): ?><div class="inv-sub">Report: <?= sanitize($rep) ?></div><?php endif; ?><?php if (empty($r['sid'])): ?><div class="inv-sub" style="color:#DC2626">Survey record deleted</div><?php endif; ?></div></div></td>
                 <td style="font-weight:600"><?= sanitize($r['company_name'] ?? '—') ?></td>
                 <td><?= $type !== '' ? '<span class="inv-type">' . sanitize($type) . '</span>' : '—' ?></td>
                 <td><div class="inv-port"><i class="fa-solid fa-location-dot"></i><?= sanitize($r['port_name'] ?? '—') ?></div></td>
@@ -252,7 +256,7 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
         ?>
         <div class="inv-mcard" data-inv='<?= sanitize(json_encode($json)) ?>' data-testid="inv-card-<?= (int)$r['id'] ?>">
             <div class="top">
-                <div class="inv-vessel"><span class="num"><?= $offset + $i + 1 ?></span><div style="min-width:0"><b><?= sanitize($vessel ?: '—') ?></b></div></div>
+                <div class="inv-vessel"><span class="num"><?= $offset + $i + 1 ?></span><div style="min-width:0"><b><?= sanitize($vessel ?: '—') ?></b><?php if ($view === 'completed' && !empty($r['invoice_no'])): ?><div class="inv-sub inv-no">Invoice: <?= sanitize($r['invoice_no']) ?></div><?php endif; ?></div></div>
                 <div data-inv-status></div>
             </div>
             <div class="rows">
@@ -301,10 +305,27 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
   function render(el) {
     var d = el._inv, fileUrl = API + '?a=file&id=' + d.id;
     var st = el.querySelector('[data-inv-status]');
+    if (VIEW === 'completed') {
+      // Completed: status is fixed; View / Download (vessel + recovery), Modify, Delete only.
+      st.innerHTML = '<span class="inv-status done static" data-testid="inv-status-' + d.id + '"><i class="fa-solid fa-circle-check"></i> Completed</span>';
+      var c = '';
+      if (d.has_file) {
+        c += '<a class="inv-btn" href="' + fileUrl + '&mode=view" target="_blank" rel="noopener" data-testid="inv-view-' + d.id + '"><i class="fa-solid fa-eye"></i> View</a>' +
+          '<a class="inv-btn" href="' + fileUrl + '&mode=download" data-testid="inv-download-' + d.id + '"><i class="fa-solid fa-download"></i> Download</a>';
+      }
+      if (d.has_rec) {
+        c += '<a class="inv-btn rec" href="' + fileUrl + '&which=recovery&mode=view" target="_blank" rel="noopener" data-testid="inv-rec-view-' + d.id + '"><i class="fa-solid fa-eye"></i> View Recovery</a>' +
+          '<a class="inv-btn rec" href="' + fileUrl + '&which=recovery&mode=download" data-testid="inv-rec-download-' + d.id + '"><i class="fa-solid fa-download"></i> Download Recovery</a>';
+      }
+      c += '<a class="inv-btn gen" href="invoice_pdf.php?id=' + d.id + '" data-testid="inv-modify-' + d.id + '"><i class="fa-solid fa-pen-to-square"></i> Modify</a>' +
+        '<button type="button" class="inv-btn del" data-act="delete" data-testid="inv-delete-' + d.id + '"><i class="fa-solid fa-trash"></i> Delete</button>';
+      el.querySelector('[data-inv-actions]').innerHTML = '<div class="inv-actions">' + c + '</div>';
+      return;
+    }
     st.innerHTML = '<select class="inv-status ' + CLS[d.status] + '" aria-label="Invoice status" data-testid="inv-status-' + d.id + '">' +
       STATUSES.map(function (s) { return '<option' + (s === d.status ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + '</select>';
     var a = '<button type="button" class="inv-btn save" data-act="update" hidden data-testid="inv-update-' + d.id + '"><i class="fa-solid fa-floppy-disk"></i> Update</button>' +
-      '<a class="inv-btn gen" href="invoice_pdf.php?id=' + d.id + '" data-testid="inv-generate-' + d.id + '"><i class="fa-solid fa-file-invoice-dollar"></i> Generate Invoice</a>';
+      '<a class="inv-btn gen" href="invoice_pdf.php?id=' + d.id + (d.recovery_pending ? '&type=recovery' : '') + '" data-testid="inv-generate-' + d.id + '"><i class="fa-solid fa-file-invoice-dollar"></i> Generate Invoice</a>';
     if (d.has_file) {
       a += '<a class="inv-btn" href="' + fileUrl + '&mode=view" target="_blank" rel="noopener" data-testid="inv-view-' + d.id + '"><i class="fa-solid fa-eye"></i> View</a>' +
         '<a class="inv-btn" href="' + fileUrl + '&mode=download" data-testid="inv-download-' + d.id + '"><i class="fa-solid fa-download"></i> Download</a>' +
@@ -315,6 +336,7 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
     }
     var info = d.has_file ? '<div class="inv-file" title="' + esc(d.file_name) + '"><i class="fa-solid fa-file-pdf" style="color:#DC2626"></i> ' + esc(d.file_name) +
       (d.invoice_no ? ' · No. ' + esc(d.invoice_no) : '') + (d.uploaded_at ? ' · ' + esc(d.uploaded_at) : '') + '</div>' : '';
+    if (d.recovery_pending) info += '<div class="inv-pend" data-testid="inv-rec-pending-' + d.id + '"><i class="fa-solid fa-droplet"></i> Recovery invoice pending</div>';
     el.querySelector('[data-inv-actions]').innerHTML = '<div class="inv-actions">' + a + '</div>' + info;
   }
   // Header counters (data-count="<status>" and "pending").
@@ -387,11 +409,21 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
         if (r.isConfirmed && r.value && r.value.ok) { update(d.id, r.value.row); toast('success', act === 'upload' ? 'Invoice uploaded' : (r.value.replaced ? 'Invoice replaced' : 'Invoice details saved')); }
       });
     } else if (act === 'delete') {
-      Swal.fire({ icon: 'warning', title: 'Delete this invoice?', html: 'The uploaded PDF <b>' + esc(d.file_name) + '</b> and its invoice details will be removed.<br><small>The vessel stays in Invoices with its status; survey records are not touched.</small>',
+      var delHtml = VIEW === 'completed'
+        ? 'The invoice PDF' + (d.has_rec ? 's (vessel + recovery invoice)' : '') + ' and saved details will be removed and the vessel goes back to <b>pending invoices</b> to be made again (same invoice number).<br><small>Survey records are not touched.</small>'
+        : 'The uploaded PDF <b>' + esc(d.file_name) + '</b> and its invoice details will be removed.<br><small>The vessel stays in Invoices with its status and invoice number; survey records are not touched.</small>';
+      Swal.fire({ icon: 'warning', title: 'Delete this invoice?', html: delHtml,
         showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#DC2626', showLoaderOnConfirm: true,
         preConfirm: function () { return post(fd({ a: 'delete', id: d.id })).then(function (res) { if (!res.ok) { Swal.showValidationMessage(res.error || 'Could not delete.'); return false; } return res; }); },
         allowOutsideClick: function () { return !Swal.isLoading(); }
-      }).then(function (r) { if (r.isConfirmed && r.value && r.value.ok) { update(d.id, r.value.row); toast('success', 'Invoice deleted'); } });
+      }).then(function (r) {
+        if (!(r.isConfirmed && r.value && r.value.ok)) return;
+        if (VIEW === 'completed' && r.value.moved) {
+          bump('Completed', -1); bump(r.value.row.status, +1);
+          holders(d.id).forEach(function (el) { el.classList.add('inv-row-out'); setTimeout(function () { el.remove(); }, 380); });
+          toast('success', 'Invoice deleted — back in pending invoices');
+        } else { update(d.id, r.value.row); toast('success', 'Invoice deleted'); }
+      });
     }
   });
 

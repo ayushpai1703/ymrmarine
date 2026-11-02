@@ -58,7 +58,51 @@ function invoiceEnsureTable(PDO $db): void {
         KEY `idx_invoices_status` (`invoice_status`),
         KEY `idx_invoices_created` (`created_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+    invoiceEnsureGenColumns($db);
     $done = true;
+}
+
+/**
+ * Columns for generated invoices (added to an existing table once; same as
+ * database/migration_invoices.sql):
+ *   gen_data / rec_gen_data   — the Generate Invoice / Recovery Invoice form as last downloaded
+ *                               (JSON), so Modify re-opens it filled in
+ *   rec_file_*                — the stored Recovery Invoice PDF (the vessel invoice uses file_*)
+ *   recovery_pending          — 1 when the Admin chose "Recovery invoice too": the invoice is
+ *                               Completed only once the recovery invoice is downloaded as well
+ */
+function invoiceEnsureGenColumns(PDO $db): void {
+    $have = array_flip(array_map('strtolower', $db->query('SHOW COLUMNS FROM invoices')->fetchAll(PDO::FETCH_COLUMN)));
+    $add = [
+        'gen_data' => 'MEDIUMTEXT NULL',
+        'rec_gen_data' => 'MEDIUMTEXT NULL',
+        'rec_file_name' => 'VARCHAR(255) NULL',
+        'rec_file_path' => 'VARCHAR(255) NULL',
+        'rec_generated_at' => 'DATETIME NULL',
+        'recovery_pending' => 'TINYINT(1) NOT NULL DEFAULT 0',
+    ];
+    foreach ($add as $col => $def) {
+        if (!isset($have[$col])) $db->exec("ALTER TABLE invoices ADD COLUMN `$col` $def");
+    }
+}
+
+/** Stores a generated PDF under uploads/invoices/ and returns its relative path (null on failure). */
+function invoiceStoreGenerated(int $invoiceId, string $pdf, string $tag): ?string {
+    $dir = invoiceStorageDir();
+    $rel = INVOICE_DIR . '/inv' . $invoiceId . '_' . $tag . '_' . bin2hex(random_bytes(10)) . '.pdf';
+    if (!is_dir($dir) || @file_put_contents(dirname(__DIR__) . '/' . $rel, $pdf) !== strlen($pdf)) {
+        @unlink(dirname(__DIR__) . '/' . $rel);
+        return null;
+    }
+    return $rel;
+}
+
+/** Removes a stored invoice file when no invoice row (vessel or recovery) still points to it. */
+function invoiceRemoveFileIfUnused(PDO $db, ?string $rel): void {
+    if (!$rel || !($abs = invoiceFileAbs($rel))) return;
+    $c = $db->prepare('SELECT COUNT(*) FROM invoices WHERE file_path = ? OR rec_file_path = ?');
+    $c->execute([$rel, $rel]);
+    if ((int)$c->fetchColumn() === 0) @unlink($abs);
 }
 
 /**
@@ -139,6 +183,10 @@ function invoiceRowJson(PDO $db, array $r): array {
         'id' => (int)$r['id'],
         'status' => (string)$r['invoice_status'],
         'has_file' => invoiceFileAbs($r['file_path'] ?? null) !== null,
+        'has_rec' => invoiceFileAbs($r['rec_file_path'] ?? null) !== null,
+        'rec_file_name' => (string)($r['rec_file_name'] ?? ''),
+        'recovery_pending' => !empty($r['recovery_pending']),
+        'generated' => !empty($r['gen_data']),
         'file_name' => (string)($r['file_name'] ?? ''),
         'uploaded_at' => !empty($r['uploaded_at']) ? date('d M Y H:i', strtotime($r['uploaded_at'])) : '',
         'invoice_no' => (string)($r['invoice_no'] ?? ''),
@@ -186,8 +234,15 @@ function invoiceListFilters(array $g): array {
     return [$st, implode(' AND ', $where), $params];
 }
 
-/** ORDER BY for the list: newest Survey Completed Date first, vessels without one last. */
-function invoiceListOrderSql(): string {
+/**
+ * ORDER BY for the list. Pending: newest Survey Completed Date first, vessels without one last.
+ * Completed: by invoice number (the running number at the end of YMR-<code>-<n>), invoices
+ * without a number last.
+ */
+function invoiceListOrderSql(string $view = 'pending'): string {
+    if ($view === 'completed') {
+        return "(i.invoice_no IS NULL OR i.invoice_no = '') ASC, CAST(SUBSTRING_INDEX(i.invoice_no, '-', -1) AS UNSIGNED) ASC, i.invoice_no ASC, i.id ASC";
+    }
     $scd = '(CASE WHEN YEAR(s.survey_completed_date) > 0 THEN s.survey_completed_date END)';
     return "($scd IS NULL) ASC, $scd DESC, i.id DESC";
 }

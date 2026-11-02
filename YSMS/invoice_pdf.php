@@ -11,7 +11,14 @@
  *
  * Invoice number: YMR-<client short code>-<n> (includes/invoice_helpers.php), given to the
  * vessel the first time an invoice is downloaded and kept; the recovery invoice is that
- * number + "B". Downloading saves only that number; survey data is only read.
+ * number + "B". Survey data is only read.
+ *
+ * Download stores the PDF (uploads/invoices/, served by ajax/invoices.php?a=file) and the form
+ * (gen_data / rec_gen_data, so Modify re-opens it filled in). Before the vessel invoice
+ * downloads, the page asks whether a recovery invoice is needed too:
+ *   - no  (with_recovery=0) → the invoice is Completed straight away
+ *   - yes (with_recovery=1) → it is Completed once the recovery invoice is downloaded as well
+ * A recovery invoice download completes it when the vessel invoice is already there.
  */
 require_once 'config/config.php';
 require_once 'includes/invoice_helpers.php';
@@ -64,6 +71,20 @@ $serviceDesc = trim($type . ' of ' . $vessel . ($inv['port_name'] ? ' at ' . $in
 $serviceRate = (string)($inv['invoice_amount'] ?? '');
 $invoiceNo = invoicePeekNumber($db, $inv) . ($isRecovery ? 'B' : '');
 $noFixed = trim((string)($inv['invoice_no'] ?? '')) !== '';
+$hasVesselFile = invoiceFileAbs($inv['file_path'] ?? null) !== null;
+$hasRecFile = invoiceFileAbs($inv['rec_file_path'] ?? null) !== null;
+// The form as last downloaded (Modify); the recovery form borrows the vessel invoice's header
+// fields (client, references…) until it has been downloaded itself.
+$savedVessel = json_decode((string)($inv['gen_data'] ?? ''), true) ?: [];
+$saved = $isRecovery ? (json_decode((string)($inv['rec_gen_data'] ?? ''), true) ?: []) : $savedVessel;
+$savedHdr = $saved ?: $savedVessel;
+$sv = function (string $k, $def, bool $hdr = false) use ($saved, $savedHdr) {
+    $src = $hdr ? $savedHdr : $saved;
+    return isset($src[$k]) && is_scalar($src[$k]) ? (string)$src[$k] : (string)$def;
+};
+foreach (['invoice_date', 'client', 'client_addr1', 'client_addr2', 'supplier_ref', 'other_ref', 'vessel', 'survey_type', 'port', 'survey_completed'] as $k) {
+    $defaults[$k] = $sv($k, $defaults[$k], true);
+}
 // Recovery quantities recorded on the vessel (MT, stored positive)
 $recQty = [];
 foreach (['vlsfo', 'hsfo', 'lsmgo'] as $fuel) {
@@ -157,21 +178,66 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $pdf->loadHtml(invoicePdfHtml($d), 'UTF-8');
     $pdf->setPaper('A4', 'portrait');
     $pdf->render();
-    if ($download) {
-        // A downloaded invoice is done: its invoice status becomes Completed (survey status untouched).
-        try {
-            $db->prepare("UPDATE invoices SET invoice_status = 'Completed', status_updated_by = ?, status_updated_at = NOW() WHERE id = ? AND invoice_status <> 'Completed'")
-               ->execute([(int)($_SESSION['user_id'] ?? 0), $id]);
-        } catch (Throwable $e) {
-            error_log('invoice download status: ' . $e->getMessage());
-        }
-    }
     $name = preg_replace('/[^A-Za-z0-9 ._\-]/', '_', trim($d['invoice_no'] . ' ' . $d['vessel'] . ($isRecovery ? ' - Recovery Invoice' : ' - Invoice'))) . '.pdf';
+    $out = $pdf->output();
+    $state = '';
+    if ($download) {
+        // Keep the PDF and the form, then work out whether the invoice is now Completed.
+        $form = [];
+        foreach ($_POST as $k => $v) {
+            if (in_array($k, ['csrf_token', 'mode', 'with_recovery'], true)) continue;
+            $form[$k] = is_array($v) ? array_map(fn($x) => is_scalar($x) ? mb_substr((string)$x, 0, 2000) : '', array_slice($v, 0, 30, true)) : mb_substr((string)$v, 0, 2000);
+        }
+        $rel = invoiceStoreGenerated($id, $out, $isRecovery ? 'rec' : 'gen');
+        if (!$rel) {
+            http_response_code(500);
+            exit('The invoice PDF could not be saved. Please try again.');
+        }
+        $uid = (int)($_SESSION['user_id'] ?? 0);
+        $amount = array_sum(array_map('invoicePdfLineAmount', $items));
+        try {
+            $db->beginTransaction();
+            $cur = $db->prepare('SELECT file_path, rec_file_path, invoice_status FROM invoices WHERE id = ? FOR UPDATE');
+            $cur->execute([$id]);
+            $cur = $cur->fetch(PDO::FETCH_ASSOC) ?: [];
+            $old = $cur[$isRecovery ? 'rec_file_path' : 'file_path'] ?? null;
+            if ($isRecovery) {
+                $complete = invoiceFileAbs($cur['file_path'] ?? null) !== null; // vessel invoice already made
+                $db->prepare('UPDATE invoices SET rec_file_name = ?, rec_file_path = ?, rec_generated_at = NOW(), rec_gen_data = ? WHERE id = ?')
+                   ->execute([$name, $rel, json_encode($form), $id]);
+                $state = $complete ? 'completed' : 'vessel-next';
+            } else {
+                $withRec = ($_POST['with_recovery'] ?? '') === '1';
+                $complete = !$withRec || invoiceFileAbs($cur['rec_file_path'] ?? null) !== null;
+                $db->prepare('UPDATE invoices SET file_name = ?, file_path = ?, file_size = ?, uploaded_by = ?, uploaded_at = NOW(),
+                        invoice_date = ?, invoice_amount = ?, gen_data = ?, recovery_pending = ? WHERE id = ?')
+                   ->execute([$name, $rel, strlen($out), $uid, $d['invoice_date'] !== '' ? $d['invoice_date'] : null, round($amount, 2), json_encode($form), $complete ? 0 : 1, $id]);
+                $state = $complete ? 'completed' : 'recovery-next';
+            }
+            if ($complete) {
+                // SET runs left to right: the status changes last.
+                $db->prepare("UPDATE invoices SET recovery_pending = 0,
+                        status_updated_by = IF(invoice_status = 'Completed', status_updated_by, ?),
+                        status_updated_at = IF(invoice_status = 'Completed', status_updated_at, NOW()),
+                        invoice_status = 'Completed' WHERE id = ?")
+                   ->execute([$uid, $id]);
+            }
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            @unlink(__DIR__ . '/' . $rel);
+            error_log('invoice download save: ' . $e->getMessage());
+            http_response_code(500);
+            exit('The invoice could not be saved. Please try again.');
+        }
+        if ($old && $old !== $rel) invoiceRemoveFileIfUnused($db, $old);
+    }
     header('Content-Type: application/pdf');
     header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="' . $name . '"');
     header('X-Invoice-No: ' . $d['invoice_no']);
+    if ($state !== '') header('X-Invoice-State: ' . $state);
     header('Cache-Control: private, no-store');
-    echo $pdf->output();
+    echo $out;
     exit;
 }
 
@@ -224,32 +290,32 @@ include 'includes/header.php';
         </div>
         <label>Client</label><input class="form-control" name="client" value="<?= sanitize($defaults['client']) ?>" data-testid="ig-client">
         <label>Client address</label>
-        <input class="form-control mb-1" name="client_addr1" value="<?= sanitize($addr1) ?>" placeholder="Address line 1">
-        <input class="form-control" name="client_addr2" value="<?= sanitize($addr2) ?>" placeholder="Address line 2">
+        <input class="form-control mb-1" name="client_addr1" value="<?= sanitize($defaults['client_addr1']) ?>" placeholder="Address line 1">
+        <input class="form-control" name="client_addr2" value="<?= sanitize($defaults['client_addr2']) ?>" placeholder="Address line 2">
         <div class="ig-row">
             <div><label>Supplier's Ref.</label><input class="form-control" name="supplier_ref" value="<?= sanitize($defaults['supplier_ref']) ?>"></div>
-            <div><label>Other Reference(s)</label><input class="form-control" name="other_ref" value=""></div>
+            <div><label>Other Reference(s)</label><input class="form-control" name="other_ref" value="<?= sanitize($defaults['other_ref']) ?>"></div>
         </div>
         <div class="ig-row">
-            <div><label>Vessel</label><input class="form-control" name="vessel" value="<?= sanitize($vessel) ?>" data-testid="ig-vessel"></div>
-            <div><label>Survey Type</label><input class="form-control" name="survey_type" value="<?= sanitize($type) ?>"></div>
+            <div><label>Vessel</label><input class="form-control" name="vessel" value="<?= sanitize($defaults['vessel']) ?>" data-testid="ig-vessel"></div>
+            <div><label>Survey Type</label><input class="form-control" name="survey_type" value="<?= sanitize($defaults['survey_type']) ?>"></div>
         </div>
         <div class="ig-row">
             <div><label>Port</label><input class="form-control" name="port" value="<?= sanitize($defaults['port']) ?>"></div>
-            <div><label>Survey Completed</label><input class="form-control" name="survey_completed" value="<?= sanitize($completed) ?>"></div>
+            <div><label>Survey Completed</label><input class="form-control" name="survey_completed" value="<?= sanitize($defaults['survey_completed']) ?>"></div>
         </div>
         <input type="hidden" name="report_no" value="<?= sanitize($reportNo) ?>">
 <?php if ($isRecovery): ?>
         <label>Description</label>
-        <textarea class="form-control" name="service_desc" rows="3" data-testid="ig-service-desc"><?= sanitize('Recovery of bunkers — ' . $serviceDesc) ?></textarea>
+        <textarea class="form-control" name="service_desc" rows="3" data-testid="ig-service-desc"><?= sanitize($sv('service_desc', 'Recovery of bunkers — ' . $serviceDesc)) ?></textarea>
         <label>Agreed recovery % <span class="ig-req">*</span></label>
-        <input class="form-control" name="recovery_pct" inputmode="decimal" placeholder="e.g. 8" required data-ig-pct data-testid="ig-recovery-pct" style="max-width:140px">
+        <input class="form-control" name="recovery_pct" inputmode="decimal" placeholder="e.g. 8" value="<?= sanitize($sv('recovery_pct', '')) ?>" required data-ig-pct data-testid="ig-recovery-pct" style="max-width:140px">
         <label>Recovery <span class="ig-hint">(unit = CP price, quantity = MT recovered)</span></label>
         <div class="ig-svc" data-testid="ig-recovery">
             <?php foreach (IG_FUELS as $k => $label): ?>
             <div class="ig-svc-row">
                 <div class="ig-svc-fixed">Recovery of <?= $label ?> <span class="ig-req">*</span></div>
-                <div class="ig-svc-nums"><input class="form-control" name="<?= $k ?>_rate" inputmode="decimal" placeholder="Unit" required data-ig-rate data-testid="ig-<?= $k ?>-rate"><input class="form-control" name="<?= $k ?>_qty" inputmode="decimal" placeholder="Qty" value="<?= sanitize($recQty[$k]) ?>" required data-ig-qty data-testid="ig-<?= $k ?>-qty"></div>
+                <div class="ig-svc-nums"><input class="form-control" name="<?= $k ?>_rate" inputmode="decimal" placeholder="Unit" value="<?= sanitize($sv($k . '_rate', '')) ?>" required data-ig-rate data-testid="ig-<?= $k ?>-rate"><input class="form-control" name="<?= $k ?>_qty" inputmode="decimal" placeholder="Qty" value="<?= sanitize($sv($k . '_qty', $recQty[$k])) ?>" required data-ig-qty data-testid="ig-<?= $k ?>-qty"></div>
             </div>
             <?php endforeach; ?>
             <div class="ig-total">Total <b data-ig-total>0.00</b></div>
@@ -258,21 +324,32 @@ include 'includes/header.php';
         <label>Services</label>
         <div class="ig-svc" data-testid="ig-services">
             <div class="ig-svc-row main">
-                <textarea class="form-control" name="service_desc" rows="3" data-testid="ig-service-desc"><?= sanitize($serviceDesc) ?></textarea>
-                <div class="ig-svc-nums"><input class="form-control" name="service_rate" inputmode="decimal" placeholder="Unit" value="<?= sanitize($serviceRate) ?>" data-ig-rate data-testid="ig-rate"><input class="form-control" name="service_qty" inputmode="decimal" placeholder="Qty" value="1" data-ig-qty></div>
+                <textarea class="form-control" name="service_desc" rows="3" data-testid="ig-service-desc"><?= sanitize($sv('service_desc', $serviceDesc)) ?></textarea>
+                <div class="ig-svc-nums"><input class="form-control" name="service_rate" inputmode="decimal" placeholder="Unit" value="<?= sanitize($sv('service_rate', $serviceRate)) ?>" data-ig-rate data-testid="ig-rate"><input class="form-control" name="service_qty" inputmode="decimal" placeholder="Qty" value="<?= sanitize($sv('service_qty', '1')) ?>" data-ig-qty></div>
             </div>
             <?php foreach (['travel' => 'Travel Cost', 'launch' => 'Launch Cost'] as $k => $label): ?>
             <div class="ig-svc-row">
                 <div class="ig-svc-fixed"><?= $label ?> <span class="ig-req" title="Required">*</span></div>
-                <div class="ig-svc-nums"><input class="form-control" name="<?= $k ?>_rate" inputmode="decimal" placeholder="Unit" required data-ig-rate data-testid="ig-<?= $k ?>-rate"><input class="form-control" name="<?= $k ?>_qty" inputmode="decimal" placeholder="Qty" value="1" required data-ig-qty></div>
+                <div class="ig-svc-nums"><input class="form-control" name="<?= $k ?>_rate" inputmode="decimal" placeholder="Unit" value="<?= sanitize($sv($k . '_rate', '')) ?>" required data-ig-rate data-testid="ig-<?= $k ?>-rate"><input class="form-control" name="<?= $k ?>_qty" inputmode="decimal" placeholder="Qty" value="<?= sanitize($sv($k . '_qty', '1')) ?>" required data-ig-qty></div>
             </div>
             <?php endforeach; ?>
-            <div data-ig-extras style="display:grid;gap:8px"></div>
+            <div data-ig-extras style="display:grid;gap:8px"><?php
+                $xn = 0;
+                foreach ((array)($saved['extra_desc'] ?? []) as $xi => $xd):
+                    $xr = $saved['extra_rate'][$xi] ?? ''; $xq = $saved['extra_qty'][$xi] ?? '1';
+                    if (!is_scalar($xd) || (trim((string)$xd) === '' && trim((string)$xr) === '')) continue; ?>
+                <div class="ig-svc-row extra"><input class="form-control" name="extra_desc[<?= $xn ?>]" placeholder="Service description" value="<?= sanitize((string)$xd) ?>" data-testid="ig-extra-desc"><div class="ig-svc-nums"><input class="form-control" name="extra_rate[<?= $xn ?>]" inputmode="decimal" placeholder="Unit" value="<?= sanitize((string)$xr) ?>" data-ig-rate data-testid="ig-extra-rate"><input class="form-control" name="extra_qty[<?= $xn ?>]" inputmode="decimal" placeholder="Qty" value="<?= sanitize((string)$xq) ?>" data-ig-qty></div><button type="button" class="ig-x" title="Remove" aria-label="Remove service"><i class="fa-solid fa-xmark"></i></button></div>
+            <?php $xn++; endforeach; ?></div>
             <button type="button" class="ig-add" data-ig-add data-testid="ig-add-service"><i class="fa-solid fa-plus"></i> Add service</button>
             <div class="ig-total">Total <b data-ig-total>0.00</b></div>
         </div>
 <?php endif; ?>
-        <div class="ig-hint" style="margin-top:12px"><i class="fa-solid fa-circle-info"></i> Download PDF marks this invoice <b>Completed</b> (it moves to the Completed invoices list).</div>
+        <div class="ig-hint" style="margin-top:12px" data-testid="ig-state-hint"><i class="fa-solid fa-circle-info"></i> <?php
+            if ($isRecovery) echo $hasVesselFile ? 'Downloading the recovery invoice completes this invoice (Completed list).' : 'Download the vessel invoice too — the invoice is completed once both are downloaded.';
+            elseif ($hasRecFile) echo 'Recovery invoice already downloaded — downloading this completes the invoice.';
+            else echo 'On download you will be asked whether a recovery invoice is needed too; the invoice moves to Completed once everything is downloaded.';
+        ?></div>
+        <?php if ($saved): ?><div class="ig-hint" data-testid="ig-modify-hint"><i class="fa-solid fa-pen"></i> Showing the details last downloaded — download again to replace the saved PDF.</div><?php endif; ?>
         <div class="ig-actions">
             <button type="submit" class="ig-btn pv" data-testid="ig-preview"><i class="fa-solid fa-eye"></i> Preview</button>
             <button type="button" class="ig-btn dl" id="igDownload" data-testid="ig-download"><i class="fa-solid fa-file-arrow-down"></i> Download PDF</button>
@@ -282,16 +359,59 @@ include 'includes/header.php';
     <div class="ig-card" style="padding:10px"><iframe name="igPreview" class="ig-frame" title="Invoice preview" data-testid="ig-frame"></iframe></div>
 </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 (function () {
   var f = document.getElementById('igForm'), mode = document.getElementById('igMode');
-  document.getElementById('igDownload').addEventListener('click', function () {
+  var IS_REC = <?= $isRecovery ? 'true' : 'false' ?>, HAS_REC = <?= $hasRecFile ? 'true' : 'false' ?>;
+  var REC_URL = 'invoice_pdf.php?id=<?= (int)$id ?>&type=recovery', VESSEL_URL = 'invoice_pdf.php?id=<?= (int)$id ?>';
+  var dlBtn = document.getElementById('igDownload'), dlHtml = dlBtn.innerHTML;
+  // Download: the PDF is saved on the server and handed to the browser; the reply says what is next.
+  function download(withRec) {
+    var data = new FormData(f);
+    data.set('mode', 'download');
+    if (!IS_REC) data.set('with_recovery', withRec ? '1' : '0');
+    dlBtn.disabled = true; dlBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Downloading';
+    return fetch(f.action, { method: 'POST', body: data, credentials: 'same-origin' }).then(function (r) {
+      if (!r.ok) return r.text().then(function (t) { throw new Error(t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || ('Error ' + r.status)); });
+      var m = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || ''), state = r.headers.get('X-Invoice-State') || '';
+      return r.blob().then(function (b) {
+        var a = document.createElement('a'), u = URL.createObjectURL(b);
+        a.href = u; a.download = m ? m[1] : 'invoice.pdf'; document.body.appendChild(a); a.click();
+        setTimeout(function () { URL.revokeObjectURL(u); a.remove(); }, 4000);
+        return state;
+      });
+    }).then(function (state) {
+      if (state === 'recovery-next') {
+        return Swal.fire({ icon: 'success', title: 'Vessel invoice downloaded', text: 'Now fill in the recovery invoice — the invoice moves to Completed once it is downloaded.', confirmButtonText: 'Open Recovery Invoice', confirmButtonColor: '#6C4CF1', allowOutsideClick: false })
+          .then(function () { location.href = REC_URL; });
+      }
+      if (state === 'vessel-next') {
+        return Swal.fire({ icon: 'success', title: 'Recovery invoice downloaded', text: 'The vessel invoice is still to be downloaded — the invoice moves to Completed once both are done.', confirmButtonText: 'Open Vessel Invoice', confirmButtonColor: '#6C4CF1', allowOutsideClick: false })
+          .then(function () { location.href = VESSEL_URL; });
+      }
+      return Swal.fire({ icon: 'success', title: 'Invoice completed', text: 'Downloaded and moved to Completed invoices.', showCancelButton: true, confirmButtonText: 'Go to Completed', cancelButtonText: 'Stay here', confirmButtonColor: '#6C4CF1' })
+        .then(function (r) { if (r.isConfirmed) location.href = 'invoices.php?view=completed'; else location.reload(); });
+    }).catch(function (e) {
+      Swal.fire({ icon: 'error', title: 'Not downloaded', text: e.message || 'Please try again.' });
+    }).then(function () { dlBtn.disabled = false; dlBtn.innerHTML = dlHtml; });
+  }
+  dlBtn.addEventListener('click', function () {
     if (!f.reportValidity()) return;
-    mode.value = 'download'; f.target = '_self'; f.submit();
-    setTimeout(function () { mode.value = 'preview'; f.target = 'igPreview'; }, 300);
+    if (IS_REC || HAS_REC) { download(false); return; }
+    Swal.fire({
+      icon: 'question', title: 'Recovery invoice too?',
+      html: 'Will you also make a <b>Recovery Invoice</b> for this vessel?<br><small style="color:#64748b">Yes: this invoice downloads now and the recovery invoice opens next; it moves to Completed after both are downloaded.<br>No: it downloads and moves to Completed now.</small>',
+      showDenyButton: true, showCancelButton: true,
+      confirmButtonText: '<i class="fa-solid fa-droplet"></i> Yes, recovery invoice too', denyButtonText: 'No, continue', cancelButtonText: 'Cancel',
+      confirmButtonColor: '#6C4CF1', denyButtonColor: '#00A3DF'
+    }).then(function (r) {
+      if (r.isConfirmed) download(true);
+      else if (r.isDenied) download(false);
+    });
   });
   // Services: added rows + live total
-  var box = document.querySelector('[data-ig-extras]'), n = 0;
+  var box = document.querySelector('[data-ig-extras]'), n = box ? box.children.length : 0;
   function num(v) { v = String(v || '').replace(/[, ]/g, ''); return v === '' || isNaN(v) ? 0 : parseFloat(v); }
   function total() {
     var t = 0;
