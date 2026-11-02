@@ -11,6 +11,9 @@
  *                                          A Completed invoice goes back to the pending list
  *                                          (Pending for CP Prices) so it can be made again.
  *   GET  a=file    id, mode=view|download, which=recovery (optional) → the stored PDF
+ *   GET  a=list    view, status, q, type, month, client, port, vessel, scd_from, scd_to, sort
+ *                  (JSON), page, per → grid rows, total, pages, per-status counts
+ *   POST a=prefs   prefs (JSON: order, hidden, widths, sort, per) → this user's grid layout
  *
  * Nothing here reads or writes survey status, report fields or the survey's own uploads.
  */
@@ -32,6 +35,56 @@ $db = getDB();
 invoiceEnsureTable($db);
 $action = (string)($_REQUEST['a'] ?? '');
 $id = (int)($_REQUEST['id'] ?? 0);
+
+// ---------- grid (no invoice id) ----------
+function invPrefsTable(PDO $db): void {
+    $db->exec("CREATE TABLE IF NOT EXISTS `invoice_list_prefs` (`user_id` int(11) NOT NULL, `prefs` text NOT NULL,
+        `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (`user_id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+if ($action === 'list') {
+    require_once __DIR__ . '/../includes/list_filters.php';
+    [$f, $where, $params] = invoiceListFilters($_GET);
+    $from = "FROM invoices i LEFT JOIN surveys s ON s.id = i.survey_id LEFT JOIN clients c ON c.id = s.client_id
+             LEFT JOIN survey_types st ON st.id = s.survey_type_id LEFT JOIN ports p ON p.id = s.port_id";
+    $per = (int)($_GET['per'] ?? 50);
+    if (!in_array($per, [25, 50, 100, 200], true)) $per = 50;
+    $cnt = $db->prepare("SELECT COUNT(*) $from WHERE $where");
+    $cnt->execute($params);
+    $total = (int)$cnt->fetchColumn();
+    $pages = max(1, (int)ceil($total / $per));
+    $page = min(max(1, (int)($_GET['page'] ?? 1)), $pages);
+    $order = invoiceGridOrderSql(json_decode((string)($_GET['sort'] ?? '[]'), true), $f['view']);
+    $st = $db->prepare(invoiceRowSql() . " WHERE $where ORDER BY $order LIMIT $per OFFSET " . (($page - 1) * $per));
+    $st->execute($params);
+    $rows = array_map(fn($r) => invoiceGridRow($db, $r), $st->fetchAll(PDO::FETCH_ASSOC));
+    // counters per status for the same search / filters
+    [, $w2, $p2] = invoiceListFiltersNoStatus($_GET);
+    $c = $db->prepare("SELECT i.invoice_status, COUNT(*) n $from WHERE $w2 GROUP BY i.invoice_status");
+    $c->execute($p2);
+    $counts = array_fill_keys(INVOICE_STATUSES, 0);
+    foreach ($c->fetchAll(PDO::FETCH_ASSOC) as $r) $counts[$r['invoice_status']] = (int)$r['n'];
+    invJson(200, ['ok' => true, 'rows' => $rows, 'total' => $total, 'page' => $page, 'pages' => $pages, 'per' => $per, 'view' => $f['view'],
+        'counts' => $counts, 'pending' => $counts['Pending for CP Prices'] + $counts['Pending for Cost'] + $counts['Pending for Other Reason']]);
+}
+if ($action === 'prefs' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $p = json_decode((string)($_POST['prefs'] ?? ''), true);
+    if (!is_array($p)) invJson(422, ['ok' => false, 'error' => 'Bad layout.']);
+    $cols = ['vessel', 'report_no', 'client', 'type', 'port', 'survey_completed', 'status', 'actions', 'document', 'invoice_date', 'amount'];
+    $clean = [
+        'order' => array_values(array_intersect(array_map('strval', (array)($p['order'] ?? [])), $cols)),
+        'hidden' => array_values(array_intersect(array_map('strval', (array)($p['hidden'] ?? [])), $cols)),
+        'widths' => [], 'sort' => [],
+        'per' => in_array((int)($p['per'] ?? 50), [25, 50, 100, 200], true) ? (int)$p['per'] : 50,
+    ];
+    foreach ((array)($p['widths'] ?? []) as $k => $w) if (in_array($k, $cols, true) || $k === 'invoice_no') $clean['widths'][$k] = max(60, min(600, (int)$w));
+    foreach (array_slice((array)($p['sort'] ?? []), 0, 3) as $x) {
+        if (is_array($x) && isset(INVOICE_LIST_SORTS[$x['f'] ?? ''])) $clean['sort'][] = ['f' => $x['f'], 'd' => ($x['d'] ?? '') === 'desc' ? 'desc' : 'asc'];
+    }
+    invPrefsTable($db);
+    $db->prepare('INSERT INTO invoice_list_prefs (user_id, prefs) VALUES (?, ?) ON DUPLICATE KEY UPDATE prefs = VALUES(prefs)')
+       ->execute([(int)($_SESSION['user_id'] ?? 0), json_encode($clean)]);
+    invJson(200, ['ok' => true, 'prefs' => $clean]);
+}
 
 $load = function (int $id) use ($db): ?array {
     $st = $db->prepare(invoiceRowSql() . ' WHERE i.id = ?');
@@ -82,14 +135,14 @@ switch ($action) {
         if (!in_array($status, INVOICE_STATUSES, true)) invJson(422, ['ok' => false, 'error' => 'Unknown status.']);
         $db->prepare('UPDATE invoices SET invoice_status = ?, status_updated_by = ?, status_updated_at = NOW() WHERE id = ?')
            ->execute([$status, $uid, $id]);
-        invJson(200, ['ok' => true, 'row' => invoiceRowJson($db, $load($id))]);
+        invJson(200, ['ok' => true, 'row' => invoiceGridRow($db, $load($id))]);
 
     case 'meta':
         [$ok, $m] = $meta();
         if (!$ok) invJson(422, ['ok' => false, 'error' => $m]);
         $db->prepare('UPDATE invoices SET invoice_no = ?, invoice_date = ?, invoice_amount = ?, invoice_notes = ? WHERE id = ?')
            ->execute([$m[0], $m[1], $m[2], $m[3], $id]);
-        invJson(200, ['ok' => true, 'row' => invoiceRowJson($db, $load($id))]);
+        invJson(200, ['ok' => true, 'row' => invoiceGridRow($db, $load($id))]);
 
     case 'upload':
         $err = null;
@@ -118,7 +171,7 @@ switch ($action) {
         }
         // The previous PDF goes only after the new one is saved, and only if no other row uses it.
         if ($old && $old !== $rel) invoiceRemoveFileIfUnused($db, $old);
-        invJson(200, ['ok' => true, 'replaced' => (bool)$old, 'row' => invoiceRowJson($db, $load($id))]);
+        invJson(200, ['ok' => true, 'replaced' => (bool)$old, 'row' => invoiceGridRow($db, $load($id))]);
 
     case 'delete':
         $old = [$row['file_path'] ?? null, $row['rec_file_path'] ?? null];
@@ -134,6 +187,6 @@ switch ($action) {
                 invoice_status = IF(invoice_status = 'Completed', ?, invoice_status) WHERE id = ?")
            ->execute([$uid, INVOICE_DEFAULT_STATUS, $id]);
         foreach ($old as $o) invoiceRemoveFileIfUnused($db, $o);
-        invJson(200, ['ok' => true, 'moved' => $wasDone, 'row' => invoiceRowJson($db, $load($id))]);
+        invJson(200, ['ok' => true, 'moved' => $wasDone, 'row' => invoiceGridRow($db, $load($id))]);
 }
 invJson(400, ['ok' => false, 'error' => 'Unknown action.']);
