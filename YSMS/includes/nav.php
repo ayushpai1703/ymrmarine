@@ -146,6 +146,10 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-file-invoice-dollar"></i>
             <span>Invoices</span>
         </a>
+        <a href="invoices_airtable.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= in_array($current_page, ['invoices_airtable.php', 'invoice_table.php'], true) ? 'active' : '' ?>" data-testid="navigation-invoice-airtable-link">
+            <i class="fa-solid fa-table-cells"></i>
+            <span>Invoice Airtable</span>
+        </a>
         <?php endif; ?>
         <a href="completed.php" class="nav-item-btn <?= ($current_page == 'completed.php') ? 'active' : '' ?>" data-testid="navigation-completed-link">
             <i class="fa-solid fa-circle-check"></i>

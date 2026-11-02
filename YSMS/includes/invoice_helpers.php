@@ -68,6 +68,7 @@ function invoiceEnsureTable(PDO $db): void {
  *   gen_data / rec_gen_data   — the Generate Invoice / Recovery Invoice form as last downloaded
  *                               (JSON), so Modify re-opens it filled in
  *   rec_file_*                — the stored Recovery Invoice PDF (the vessel invoice uses file_*)
+ *   rec_invoice_date / _amount — the recovery invoice's date and total (payment tracking)
  *   recovery_pending          — 1 when the Admin chose "Recovery invoice too": the invoice is
  *                               Completed only once the recovery invoice is downloaded as well
  */
@@ -80,6 +81,8 @@ function invoiceEnsureGenColumns(PDO $db): void {
         'rec_file_path' => 'VARCHAR(255) NULL',
         'rec_generated_at' => 'DATETIME NULL',
         'recovery_pending' => 'TINYINT(1) NOT NULL DEFAULT 0',
+        'rec_invoice_date' => 'DATE NULL',          // recovery invoice's own date and total
+        'rec_invoice_amount' => 'DECIMAL(14,2) NULL', // (Invoice Airtable payment tracking)
     ];
     foreach ($add as $col => $def) {
         if (!isset($have[$col])) $db->exec("ALTER TABLE invoices ADD COLUMN `$col` $def");

@@ -203,8 +203,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $old = $cur[$isRecovery ? 'rec_file_path' : 'file_path'] ?? null;
             if ($isRecovery) {
                 $complete = invoiceFileAbs($cur['file_path'] ?? null) !== null; // vessel invoice already made
-                $db->prepare('UPDATE invoices SET rec_file_name = ?, rec_file_path = ?, rec_generated_at = NOW(), rec_gen_data = ? WHERE id = ?')
-                   ->execute([$name, $rel, json_encode($form), $id]);
+                $db->prepare('UPDATE invoices SET rec_file_name = ?, rec_file_path = ?, rec_generated_at = NOW(), rec_gen_data = ?,
+                        rec_invoice_date = ?, rec_invoice_amount = ? WHERE id = ?')
+                   ->execute([$name, $rel, json_encode($form), $d['invoice_date'] !== '' ? $d['invoice_date'] : null, round($amount, 2), $id]);
                 $state = $complete ? 'completed' : 'vessel-next';
             } else {
                 $withRec = ($_POST['with_recovery'] ?? '') === '1';
