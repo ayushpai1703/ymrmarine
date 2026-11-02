@@ -25,8 +25,7 @@ $rtOffset = ($rtPage - 1) * RT_PER_PAGE;
 $rtOpts = rtOptions($db, $rtScopeWhere, $rtScopeParams, $is_full_access);
 $rtYears = rtYears($db, $rtScopeWhere, $rtScopeParams, $rt['date']);
 $rtBase = 'reports.php';
-$rtHeadHtml = rtHeader('Pending Reports', 'fa-solid fa-file-lines', $rtBase, $rt, rtUrl('export_reports.php', $rt),
-    [[(string)$rtTotal, $rtTotal === 1 ? 'Pending Report' : 'Pending Reports']]);
+$rtExport = rtUrl('export_reports.php', $rt);
 $rtChipsHtml = rtChips($rtBase, $rt);
 
 // 🌟 Desktop hero banner stat + surveyor avatar helpers — display only,
@@ -518,7 +517,7 @@ include 'includes/header.php';
 
     <div class="list-mobile-view">
     <div class="rt-mobile-top">
-        <?= $rtHeadHtml ?>
+        <?= rtMobileSearch($rtBase, $rt, $rtExport) ?>
         <?= rtMobileBar($rt, $is_full_access) ?>
         <?= $rtChipsHtml ?>
         <?= rtMeta($rt, $rtTotal, $rtOffset, count($rtRows)) ?>
@@ -574,7 +573,26 @@ include 'includes/header.php';
     <div class="list-desktop-view vessels-desktop-view">
         <div class="vd-wrap">
 
-            <?= $rtHeadHtml ?>
+            <div class="vd-hero" data-testid="pending-reports-hero">
+                <i class="fa-solid fa-file-lines vd-hero-icon-bg" aria-hidden="true"></i>
+                <div>
+                    <div class="vd-hero-title">Pending Reports</div>
+                    <div class="vd-hero-sub"><?= (int)$rtTotal ?> report<?= $rtTotal === 1 ? '' : 's' ?> awaiting completion</div>
+                </div>
+                <div class="vd-hero-stats">
+                    <div class="vd-hero-stat">
+                        <div class="n" data-testid="rt-total"><?= (int)$rtTotal ?></div>
+                        <div class="l">Total</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="vd-toolbar">
+                <div class="vd-toolbar-inner">
+                    <?= rtDeskSearch($rtBase, $rt) ?>
+                </div>
+                <a href="<?= sanitize($rtExport) ?>" class="btn-export" data-testid="rt-download"><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Download</a>
+            </div>
             <?= $rtChipsHtml ?>
             <?= rtMeta($rt, $rtTotal, $rtOffset, count($rtRows)) ?>
             <div class="vd-table-card">

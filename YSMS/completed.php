@@ -78,10 +78,7 @@ $recStmt = $db->prepare('SELECT s.recovery_amount, s.survey_type_ids, st.type_na
 $recStmt->execute($rtParams);
 $cvRecoveryTotal = array_sum(array_map('cvRecovery', $recStmt->fetchAll(PDO::FETCH_ASSOC)));
 $cvRecoveryLabel = $rt['ym'] !== '' ? date('M Y', strtotime($rt['ym'] . '-01')) . ' Recovery' : 'Total Recovery';
-$rtHeadHtml = rtHeader('Completed Vessels', 'fa-solid fa-circle-check', $rtBase, $rt, rtUrl('export_completed.php', $rt),
-    [[(string)$rtTotal, $rtTotal === 1 ? 'Completed Vessel' : 'Completed Vessels'],
-     [number_format($cvRecoveryTotal, 3) . ' <small>MT</small>', $cvRecoveryLabel, 'cyan']],
-    $is_full_access ? '<a class="rt-btn ghost" href="completed_import.php" title="Bulk import completed vessels from Excel" data-testid="completed-import-desktop"><i class="fa-solid fa-file-import"></i> Import Excel</a>' : '');
+$rtExport = rtUrl('export_completed.php', $rt);
 $rtChipsHtml = rtChips($rtBase, $rt);
 
 // 🌟 Desktop hero banner stat + surveyor avatar helpers — display only,
@@ -476,7 +473,12 @@ include 'includes/header.php';
 
     <div class="list-mobile-view">
     <div class="rt-mobile-top">
-        <?= $rtHeadHtml ?>
+        <?= rtMobileSearch($rtBase, $rt, $rtExport) ?>
+        <div class="cv-rec-summary" data-testid="cv-recovery-mobile">
+            <span><i class="fa-solid fa-droplet"></i> <?= sanitize($cvRecoveryLabel) ?></span>
+            <b><?= number_format($cvRecoveryTotal, 3) ?> MT</b>
+            <small><?= (int)$rtTotal ?> vessels</small>
+        </div>
         <?= rtMobileBar($rt, $is_full_access) ?>
         <?= $rtChipsHtml ?>
         <?= rtMeta($rt, $rtTotal, $rtOffset, count($rtRows)) ?>
@@ -553,7 +555,35 @@ include 'includes/header.php';
     <div class="list-desktop-view vessels-desktop-view">
         <div class="vd-wrap">
 
-            <?= $rtHeadHtml ?>
+            <div class="vd-hero" data-testid="completed-hero">
+                <i class="fa-solid fa-circle-check vd-hero-icon-bg" aria-hidden="true"></i>
+                <div>
+                    <div class="vd-hero-title">Completed Vessels</div>
+                    <div class="vd-hero-sub"><?= (int)$rtTotal ?> survey<?= $rtTotal === 1 ? '' : 's' ?> completed</div>
+                </div>
+                <div class="vd-hero-stats">
+                    <div class="vd-hero-stat">
+                        <div class="n" data-testid="rt-total"><?= (int)$rtTotal ?></div>
+                        <div class="l">Total</div>
+                    </div>
+                    <div class="vd-hero-stat" data-testid="cv-recovery-desktop">
+                        <div class="n"><?= number_format($cvRecoveryTotal, 3) ?> <small style="font-size:11px;opacity:.7">MT</small></div>
+                        <div class="l"><?= sanitize($cvRecoveryLabel) ?></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="vd-toolbar">
+                <div class="vd-toolbar-inner">
+                    <?= rtDeskSearch($rtBase, $rt) ?>
+                    <?php if ($is_full_access): ?>
+                    <button type="button" class="vd-dd-trigger rt-tb-dd<?= $rt['surveyor'] ? ' has-value' : '' ?>" data-rt-open="surveyor" data-testid="rt-surveyor-filter">
+                        <i class="fa-solid fa-user-tie vd-dd-icon"></i><span class="vd-dd-label"><?= $rt['surveyor'] ? (count($rt['surveyor']) === 1 ? sanitize($rt['surveyor'][0]) : count($rt['surveyor']) . ' surveyors') : 'All surveyors' ?></span><i class="fa-solid fa-chevron-down vd-dd-chevron"></i>
+                    </button>
+                    <?php endif; ?>
+                </div>
+                <a href="<?= sanitize($rtExport) ?>" class="btn-export" data-testid="rt-download"><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Download</a>
+            </div>
             <?= $rtChipsHtml ?>
             <?= rtMeta($rt, $rtTotal, $rtOffset, count($rtRows)) ?>
             <div class="vd-table-card">
@@ -569,7 +599,6 @@ include 'includes/header.php';
                                 <?= rtHead($rt, 'client', 'Client / Agent') ?>
                                 <?= rtHead($rt, 'type', 'Survey Type') ?>
                                 <?= rtHead($rt, 'port', 'Port') ?>
-                                <?php if ($is_full_access): ?><?= rtHead($rt, 'surveyor', 'Surveyor') ?><?php endif; ?>
                                 <th class="rt-th static">Recovery</th>
                                 <?= rtHead($rt, 'date', 'Date', rtDateShort($rt['date'])) ?>
                                 <th class="rt-th static">Actions</th>
@@ -618,14 +647,6 @@ include 'includes/header.php';
                                         <span><?= sanitize($survey['port_name'] ?? 'N/A') ?></span>
                                     </div>
                                 </td>
-                                <?php if ($is_full_access): ?>
-                                <td>
-                                    <div class="vd-avatar-cell">
-                                        <div class="vd-avatar" style="background: <?= pvAvatarGradient($surveyorNames) ?>;"><?= sanitize(pvInitials($surveyorNames)) ?></div>
-                                        <span><?= sanitize($surveyorNames) ?></span>
-                                    </div>
-                                </td>
-                                <?php endif; ?>
                                 <?php $rp = recoveryDisplayParts($survey); ?>
                                 <td>
                                     <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-desktop">
@@ -697,4 +718,10 @@ include 'includes/header.php';
 </script>
 
 
+<style>
+.cv-rec-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; padding: 10px 14px; border-radius: 14px; background: linear-gradient(120deg,#ECFDF5,#F0FDFA); border: 1px solid #A7F3D0; color: #065F46; font-size: 12.5px; }
+.cv-rec-summary b { font-size: 15px; color: #047857; }
+.cv-rec-summary small { margin-left: auto; color: #64748b; font-weight: 600; }
+.rt-tb-dd.has-value { border-color: #A78BFA; background: #F3EEFE; color: #5B2DEE; }
+</style>
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>
