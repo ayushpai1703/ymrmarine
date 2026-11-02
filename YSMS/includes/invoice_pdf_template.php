@@ -7,7 +7,12 @@
  *
  * invoicePdfHtml($d) — $d keys: invoice_no, invoice_date (Y-m-d), client, client_addr1,
  * client_addr2, supplier_ref, other_ref, vessel, survey_type, port, survey_completed,
- * report_no, description, rate, quantity.
+ * report_no, items: [['desc' => …, 'rate' => float, 'qty' => float], …] (survey service first,
+ * then Travel Cost, Launch Cost and any added services).
+ *
+ * The signatory's name is also printed as a handwritten-style signature, in the font from
+ * assets/fonts/signature/ (DannyBrassco.ttf/.otf when its licensed file is placed there,
+ * otherwise the free Great Vibes — see the README in that folder).
  */
 
 const INVOICE_COMPANY = [
@@ -27,15 +32,32 @@ const INVOICE_COMPANY = [
     'signatory' => 'Gaurav Yadav',
 ];
 
+/** Signature font file (absolute path) — Danny Brassco when its licensed file is present. */
+function invoicePdfSignatureFont(): ?string {
+    $dir = dirname(__DIR__) . '/assets/fonts/signature/';
+    foreach (['DannyBrassco.ttf', 'DannyBrassco.otf', 'GreatVibes-Regular.ttf'] as $f) {
+        if (is_file($dir . $f)) return $dir . $f;
+    }
+    return null;
+}
+
 function invoicePdfMoney(float $v): string {
     return number_format($v, 2, '.', ',');
 }
 
 function invoicePdfHtml(array $d): string {
     $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); };
-    $rate = (float)$d['rate'];
-    $qty = (float)$d['quantity'];
-    $amount = round($rate * $qty, 2);
+    $itemRows = '';
+    $total = 0.0;
+    foreach (array_values($d['items']) as $n => $it) {
+        $amt = round((float)$it['rate'] * (float)$it['qty'], 2);
+        $total += $amt;
+        $qtyTxt = rtrim(rtrim(number_format((float)$it['qty'], 3, '.', ''), '0'), '.');
+        $itemRows .= '<tr><td>' . ($n + 1) . '</td><td>' . nl2br($h($it['desc'])) . '</td><td class="num">' . invoicePdfMoney((float)$it['rate'])
+            . '</td><td class="num">' . $h($qtyTxt) . '</td><td class="num">' . invoicePdfMoney($amt) . '</td></tr>';
+    }
+    $sigFont = invoicePdfSignatureFont();
+    $sigCss = $sigFont ? "@font-face { font-family: 'InvSign'; src: url('" . str_replace("'", '', $sigFont) . "') format('truetype'); font-weight: normal; font-style: normal; }" : '';
     $date = $d['invoice_date'] !== '' && ($t = strtotime($d['invoice_date'])) ? strtoupper(date('d F Y', $t)) : '';
     $logo = __DIR__ . '/../assets/images/invoice-header.png';
     $logoSrc = is_file($logo) ? 'data:image/png;base64,' . base64_encode((string)file_get_contents($logo)) : '';
@@ -46,8 +68,8 @@ function invoicePdfHtml(array $d): string {
     foreach ([['Vessel', $d['vessel']], ['Survey Type', $d['survey_type']], ['Port', $d['port']], ['Survey Completed', $d['survey_completed']], ['Report No.', $d['report_no']]] as [$k, $v]) {
         if (trim((string)$v) !== '') $vesselRows .= '<tr><td class="vk">' . $h($k) . '</td><td>' . $h($v) . '</td></tr>';
     }
-    $qtyTxt = rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.');
-    return '<!doctype html><html><head><meta charset="utf-8"><style>
+    return '<!doctype html><html><head><meta charset="utf-8"><style>' . $sigCss . '
+        .sig { font-family: InvSign, DejaVu Sans, sans-serif; font-size: 30px; color: #1e3a8a; line-height: 1; margin: 0 0 2px; }
         @page { margin: 22px 28px 26px; }
         body { font-family: DejaVu Sans, sans-serif; font-size: 10.5px; color: #0f172a; }
         .banner { width: 100%; }
@@ -74,12 +96,12 @@ function invoicePdfHtml(array $d): string {
         . ($d['client_addr1'] !== '' ? $h($d['client_addr1']) . '<br>' : '') . ($d['client_addr2'] !== '' ? $h($d['client_addr2']) : '') . '</td>'
         . '<td colspan="2"><div class="lbl">Vessel details</div><table class="vd">' . $vesselRows . '</table></td></tr></table>'
         . '<br><table class="items"><thead><tr><th style="width:28px">Sl.</th><th>Description of Services</th><th class="num" style="width:80px">Unit</th><th class="num" style="width:60px">Quantity</th><th class="num" style="width:95px">Amount</th></tr></thead><tbody>'
-        . '<tr style="height:150px"><td>1</td><td>' . nl2br($h($d['description'])) . '</td><td class="num">' . invoicePdfMoney($rate) . '</td><td class="num">' . $h($qtyTxt) . '</td><td class="num">' . invoicePdfMoney($amount) . '</td></tr>'
-        . '<tr class="tot"><td></td><td>Total</td><td></td><td></td><td class="num">' . invoicePdfMoney($amount) . '</td></tr></tbody></table>'
+        . $itemRows
+        . '<tr class="tot"><td></td><td>Total</td><td></td><td></td><td class="num">' . invoicePdfMoney($total) . '</td></tr></tbody></table>'
         . '<div class="small" style="text-align:right;margin-top:4px">E. &amp; O.E</div>'
         . '<p style="margin:14px 0 4px"><b><u>BANK DETAILS</u></b></p><table class="bank">' . $bank . '</table>'
         . '<p class="small" style="margin-top:14px">*We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</p>'
-        . '<table style="margin-top:10px"><tr><td><b>' . $h($co['for']) . '</b></td><td style="text-align:right;width:220px"><br><br><b>' . $h($co['signatory']) . '</b><br>Authorised Signatory</td></tr></table>'
+        . '<table style="margin-top:10px"><tr><td><b>' . $h($co['for']) . '</b></td><td style="text-align:right;width:240px"><div class="sig">' . $h($co['signatory']) . '</div><b>' . $h($co['signatory']) . '</b><br>Authorised Signatory</td></tr></table>'
         . '<p class="small" style="text-align:center;margin-top:16px">This is a Computer Generated Invoice</p>'
         . '</body></html>';
 }

@@ -44,18 +44,48 @@ $defaults = [
     'port' => (string)($inv['port_name'] ?? ''),
     'survey_completed' => $completed,
     'report_no' => $reportNo,
-    'description' => trim($type . ' of ' . $vessel . ($inv['port_name'] ? ' at ' . $inv['port_name'] : '') . ($completed ? ' on ' . $completed : '')),
-    'rate' => (string)($inv['invoice_amount'] ?? ''),
-    'quantity' => '1',
 ];
+$serviceDesc = trim($type . ' of ' . $vessel . ($inv['port_name'] ? ' at ' . $inv['port_name'] : '') . ($completed ? ' on ' . $completed : ''));
+$serviceRate = (string)($inv['invoice_amount'] ?? '');
+
+/** A posted amount / quantity: float, or null when not a valid number ≥ 0. */
+function igNum($v): ?float {
+    $v = str_replace([',', ' '], '', trim((string)$v));
+    return ($v !== '' && is_numeric($v) && (float)$v >= 0) ? (float)$v : null;
+}
 
 // ---------- PDF (POST from the form: preview in the frame, or download) ----------
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $d = [];
-    foreach ($defaults as $k => $v) $d[$k] = mb_substr(trim((string)($_POST[$k] ?? $v)), 0, $k === 'description' ? 2000 : 255);
-    $d['rate'] = is_numeric(str_replace(',', '', $d['rate'])) ? (float)str_replace(',', '', $d['rate']) : 0;
-    $d['quantity'] = is_numeric($d['quantity']) ? (float)$d['quantity'] : 1;
+    foreach ($defaults as $k => $v) $d[$k] = mb_substr(trim((string)($_POST[$k] ?? $v)), 0, 255);
     if ($d['invoice_date'] !== '' && !DateTime::createFromFormat('!Y-m-d', $d['invoice_date'])) $d['invoice_date'] = '';
+    // Services: the survey service, then Travel Cost and Launch Cost (always on the invoice),
+    // then any services added on the form.
+    $errors = [];
+    $items = [];
+    $desc = mb_substr(trim((string)($_POST['service_desc'] ?? '')), 0, 2000);
+    $items[] = ['desc' => $desc !== '' ? $desc : $serviceDesc, 'rate' => igNum($_POST['service_rate'] ?? '') ?? 0.0, 'qty' => igNum($_POST['service_qty'] ?? '') ?? 1.0];
+    foreach (['travel' => 'Travel Cost', 'launch' => 'Launch Cost'] as $k => $label) {
+        $rate = igNum($_POST[$k . '_rate'] ?? '');
+        $qty = igNum($_POST[$k . '_qty'] ?? '');
+        if ($rate === null || $qty === null) { $errors[] = $label . ' (enter 0 if there is none)'; continue; }
+        $items[] = ['desc' => $label, 'rate' => $rate, 'qty' => $qty];
+    }
+    $ed = (array)($_POST['extra_desc'] ?? []);
+    foreach (array_slice(array_keys($ed), 0, 30) as $i) {
+        $xd = mb_substr(trim((string)$ed[$i]), 0, 500);
+        $xr = igNum($_POST['extra_rate'][$i] ?? '');
+        $xq = igNum($_POST['extra_qty'][$i] ?? '');
+        if ($xd === '' && $xr === null) continue; // empty added row
+        if ($xd === '' || $xr === null) { $errors[] = 'Added service (description and unit)'; continue; }
+        $items[] = ['desc' => $xd, 'rate' => $xr, 'qty' => $xq ?? 1.0];
+    }
+    if ($errors) {
+        http_response_code(422);
+        header('Content-Type: text/html; charset=utf-8');
+        exit('<div style="font-family:sans-serif;padding:24px;color:#991b1b"><b>Please fill in:</b><ul><li>' . implode('</li><li>', array_map('sanitize', $errors)) . '</li></ul></div>');
+    }
+    $d['items'] = $items;
     @include_once __DIR__ . '/vendor/autoload.php';
     if (!class_exists(\Dompdf\Dompdf::class)) {
         http_response_code(500);
@@ -64,6 +94,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $opt = new \Dompdf\Options();
     $opt->set('isRemoteEnabled', false);
     $opt->set('defaultFont', 'DejaVu Sans');
+    $opt->setChroot(__DIR__); // the signature font lives under assets/fonts/signature/
+    $fontTmp = sys_get_temp_dir() . '/ysms-dompdf-fonts';
+    if (!is_dir($fontTmp)) @mkdir($fontTmp, 0775, true);
+    if (is_dir($fontTmp) && is_writable($fontTmp)) $opt->setFontCache($fontTmp);
     $pdf = new \Dompdf\Dompdf($opt);
     $pdf->loadHtml(invoicePdfHtml($d), 'UTF-8');
     $pdf->setPaper('A4', 'portrait');
@@ -90,6 +124,15 @@ include 'includes/header.php';
 .ig-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .ig-btn { border: 0; border-radius: 10px; padding: 9px 14px; font-weight: 700; font-size: 13px; display: inline-flex; gap: 7px; align-items: center; text-decoration: none; }
 .ig-btn.pv { background: #6C4CF1; color: #fff; } .ig-btn.dl { background: #00A3DF; color: #fff; } .ig-btn.bk { background: #f1f5f9; color: #334155; }
+.ig-svc { display: grid; gap: 8px; }
+.ig-svc-row { display: grid; grid-template-columns: 1fr 170px; gap: 8px; align-items: start; background: #f8fafc; border: 1px solid #eef1f6; border-radius: 10px; padding: 8px; position: relative; }
+.ig-svc-nums { display: grid; grid-template-columns: 1fr 64px; gap: 6px; }
+.ig-svc-fixed { font-size: 13px; font-weight: 700; color: #334155; align-self: center; }
+.ig-req { color: #dc2626; }
+.ig-svc-row .ig-x { border: 0; background: #fff; color: #94a3b8; width: 24px; height: 24px; border-radius: 50%; position: absolute; right: -8px; top: -9px; box-shadow: 0 1px 3px rgba(15,23,42,.15); font-size: 11px; }
+.ig-svc-row .ig-x:hover { background: #fee2e2; color: #dc2626; }
+.ig-add { justify-self: start; border: 1.5px dashed #c4b5fd; background: #faf8ff; color: #6C4CF1; font-weight: 700; font-size: 12.5px; border-radius: 10px; padding: 7px 12px; }
+.ig-total { text-align: right; font-size: 13px; color: #475569; } .ig-total b { font-size: 15px; color: #0f172a; margin-left: 6px; }
 .ig-frame { width: 100%; height: calc(100vh - 140px); min-height: 520px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
 @media (max-width: 991.98px) { .ig-wrap { grid-template-columns: 1fr; padding: 12px; padding-top: 84px; } .ig-frame { height: 70vh; } }
 </style>
@@ -122,10 +165,21 @@ include 'includes/header.php';
             <div><label>Survey Completed</label><input class="form-control" name="survey_completed" value="<?= sanitize($completed) ?>"></div>
         </div>
         <input type="hidden" name="report_no" value="<?= sanitize($reportNo) ?>">
-        <label>Description of Services</label><textarea class="form-control" name="description" rows="3"><?= sanitize($defaults['description']) ?></textarea>
-        <div class="ig-row">
-            <div><label>Unit (rate)</label><input class="form-control" name="rate" inputmode="decimal" value="<?= sanitize($defaults['rate']) ?>" data-testid="ig-rate"></div>
-            <div><label>Quantity</label><input class="form-control" name="quantity" inputmode="decimal" value="1"></div>
+        <label>Services</label>
+        <div class="ig-svc" data-testid="ig-services">
+            <div class="ig-svc-row main">
+                <textarea class="form-control" name="service_desc" rows="3" data-testid="ig-service-desc"><?= sanitize($serviceDesc) ?></textarea>
+                <div class="ig-svc-nums"><input class="form-control" name="service_rate" inputmode="decimal" placeholder="Unit" value="<?= sanitize($serviceRate) ?>" data-ig-rate data-testid="ig-rate"><input class="form-control" name="service_qty" inputmode="decimal" placeholder="Qty" value="1" data-ig-qty></div>
+            </div>
+            <?php foreach (['travel' => 'Travel Cost', 'launch' => 'Launch Cost'] as $k => $label): ?>
+            <div class="ig-svc-row">
+                <div class="ig-svc-fixed"><?= $label ?> <span class="ig-req" title="Required">*</span></div>
+                <div class="ig-svc-nums"><input class="form-control" name="<?= $k ?>_rate" inputmode="decimal" placeholder="Unit" required data-ig-rate data-testid="ig-<?= $k ?>-rate"><input class="form-control" name="<?= $k ?>_qty" inputmode="decimal" placeholder="Qty" value="1" required data-ig-qty></div>
+            </div>
+            <?php endforeach; ?>
+            <div data-ig-extras style="display:grid;gap:8px"></div>
+            <button type="button" class="ig-add" data-ig-add data-testid="ig-add-service"><i class="fa-solid fa-plus"></i> Add service</button>
+            <div class="ig-total">Total <b data-ig-total>0.00</b></div>
         </div>
         <div class="ig-actions">
             <button type="submit" class="ig-btn pv" data-testid="ig-preview"><i class="fa-solid fa-eye"></i> Preview</button>
@@ -140,10 +194,31 @@ include 'includes/header.php';
 (function () {
   var f = document.getElementById('igForm'), mode = document.getElementById('igMode');
   document.getElementById('igDownload').addEventListener('click', function () {
+    if (!f.reportValidity()) return;
     mode.value = 'download'; f.target = '_self'; f.submit();
     setTimeout(function () { mode.value = 'preview'; f.target = 'igPreview'; }, 300);
   });
-  f.submit(); // first preview straight away
+  // Services: added rows + live total
+  var box = document.querySelector('[data-ig-extras]'), n = 0;
+  function num(v) { v = String(v || '').replace(/[, ]/g, ''); return v === '' || isNaN(v) ? 0 : parseFloat(v); }
+  function total() {
+    var t = 0;
+    document.querySelectorAll('.ig-svc-row').forEach(function (r) { var a = r.querySelector('[data-ig-rate]'), q = r.querySelector('[data-ig-qty]'); if (a) t += num(a.value) * (q && q.value !== '' ? num(q.value) : 1); });
+    document.querySelector('[data-ig-total]').textContent = t.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  document.querySelector('[data-ig-add]').addEventListener('click', function () {
+    var r = document.createElement('div');
+    r.className = 'ig-svc-row extra';
+    r.innerHTML = '<input class="form-control" name="extra_desc[' + n + ']" placeholder="Service description" data-testid="ig-extra-desc">' +
+      '<div class="ig-svc-nums"><input class="form-control" name="extra_rate[' + n + ']" inputmode="decimal" placeholder="Unit" data-ig-rate data-testid="ig-extra-rate"><input class="form-control" name="extra_qty[' + n + ']" inputmode="decimal" placeholder="Qty" value="1" data-ig-qty></div>' +
+      '<button type="button" class="ig-x" title="Remove" aria-label="Remove service"><i class="fa-solid fa-xmark"></i></button>';
+    n++; box.appendChild(r); r.querySelector('input').focus();
+  });
+  box.addEventListener('click', function (ev) { var x = ev.target.closest('.ig-x'); if (x) { x.closest('.ig-svc-row').remove(); total(); } });
+  f.addEventListener('input', total);
+  total();
+  f.addEventListener('submit', function (ev) { if (!f.checkValidity()) { ev.preventDefault(); f.reportValidity(); } });
+  f.submit(); // first preview straight away (shows what is still missing)
 })();
 </script>
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>
