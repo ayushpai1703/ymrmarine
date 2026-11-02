@@ -362,6 +362,14 @@ require_once __DIR__ . '/../includes/upload_email_outbox.php'; // admin email se
         }
         $update = $db->prepare("UPDATE surveys SET status = 'Pending Report', survey_completed_date = ?, status_updated_by = ? WHERE id = ?");
         $update->execute([$completed_at, $_SESSION['user_id'], $survey_id]);
+        // Invoices module: register this vessel once (its own row and status; nothing in
+        // the survey workflow above depends on it, so a failure is only logged).
+        try {
+            require_once __DIR__ . '/../includes/invoice_helpers.php';
+            invoiceRegister($db, (int)$survey_id, 'upload');
+        } catch (Throwable $e) {
+            error_log('upload_handler invoice register: ' . $e->getMessage());
+        }
         $_SESSION['flash_msg'] = "Pending vessel is uploaded and moved to pending report";
         if ($excel_failed_this_request) {
             $_SESSION['flash_msg'] .= ' (Calculation Sheet could not be saved — must be .xlsx/.xls; you can add it later.)';
