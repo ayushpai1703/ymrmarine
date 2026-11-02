@@ -171,7 +171,7 @@ function ledgerBaseSql(PDO $db, string $today): string {
 /** Filters from the request → [state, whereSql, params] on alias x. */
 function ledgerFilters(array $g): array {
     $date = fn($v) => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$v) && strtotime((string)$v) ? (string)$v : '';
-    $num = function ($v) { $v = str_replace([',', ' ', '₹'], '', trim((string)$v)); return $v !== '' && is_numeric($v) ? (float)$v : null; };
+    $num = function ($v) { $v = str_replace([',', ' ', '$', '$'], '', trim((string)$v)); return $v !== '' && is_numeric($v) ? (float)$v : null; };
     $st = [
         'q' => mb_substr(trim((string)($g['q'] ?? '')), 0, 100),
         'status' => in_array($g['status'] ?? '', LEDGER_STATUSES, true) ? (string)$g['status'] : '',

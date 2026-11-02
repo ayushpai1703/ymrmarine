@@ -145,10 +145,12 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         <a href="invoices.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'invoices.php') ? 'active' : '' ?>" data-testid="navigation-invoices-link">
             <i class="fa-solid fa-file-invoice-dollar"></i>
             <span>Invoices</span>
+            <b class="badge rounded-pill ms-auto nav-tag-badge" style="background:#16A34A;font-size:9.5px;letter-spacing:.04em" data-testid="nav-invoices-new-badge">NEW</b>
         </a>
         <a href="invoices_airtable.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= in_array($current_page, ['invoices_airtable.php', 'invoice_table.php'], true) ? 'active' : '' ?>" data-testid="navigation-invoice-airtable-link">
             <i class="fa-solid fa-table-cells"></i>
-            <span>Invoice Airtable</span>
+            <span style="white-space:nowrap">Invoice Airtable</span>
+            <b class="badge rounded-pill ms-auto nav-tag-badge" style="background:#F59E0B;color:#1f2937;font-size:8.5px;letter-spacing:.03em;padding:3px 6px" data-testid="nav-airtable-testing-badge">TESTING</b>
         </a>
         <?php endif; ?>
         <a href="completed.php" class="nav-item-btn <?= ($current_page == 'completed.php') ? 'active' : '' ?>" data-testid="navigation-completed-link">

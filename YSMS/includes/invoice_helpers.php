@@ -122,16 +122,42 @@ function invoiceRegister(PDO $db, int $surveyId, string $via = 'upload'): bool {
 }
 
 /**
- * One-time (and repeatable) backfill: every survey already in Pending Reports or Completed
- * that has no invoice row yet. Survey rows are only read. Returns the number added.
+ * Repeatable backfill: every survey now in Pending Reports that has no invoice row yet (a
+ * vessel that reached Pending Reports some other way than the document upload). Vessels
+ * already Completed are not added. Survey rows are only read. Returns the number added.
  */
 function invoiceBackfill(PDO $db): int {
     invoiceEnsureTable($db);
+    invoiceCleanupCompletedBackfill($db);
     $st = $db->prepare("INSERT IGNORE INTO invoices (survey_id, vessel_name, report_number, invoice_status, registered_via)
         SELECT s.id, s.vessel_name, s.report_number, ?, 'backfill' FROM surveys s
-        WHERE s.status IN ('Pending Report', 'Completed')");
+        WHERE s.status = 'Pending Report'");
     $st->execute([INVOICE_DEFAULT_STATUS]);
     return $st->rowCount();
+}
+
+/**
+ * Runs once: the first version of the backfill also added vessels whose survey was already
+ * Completed. Those rows are taken out again, but only when nobody has worked on them — added
+ * by the backfill, survey Completed on or before the row was added, still the default status,
+ * no invoice number, file, recovery invoice or payment. Survey rows are only read.
+ */
+function invoiceCleanupCompletedBackfill(PDO $db): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    $db->exec("CREATE TABLE IF NOT EXISTS `invoice_meta` (`k` varchar(64) NOT NULL, `v` varchar(255) DEFAULT NULL,
+        `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`k`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    if ($db->query("SELECT COUNT(*) FROM invoice_meta WHERE k = 'cleanup_completed_backfill'")->fetchColumn()) return;
+    $hasPay = (bool)$db->query("SHOW TABLES LIKE 'invoice_payments'")->fetchColumn();
+    $sql = "DELETE i FROM invoices i JOIN surveys s ON s.id = i.survey_id
+        WHERE i.registered_via = 'backfill' AND s.status = 'Completed'
+          AND (s.report_uploaded_date IS NULL OR YEAR(s.report_uploaded_date) = 0 OR DATE(s.report_uploaded_date) <= DATE(i.created_at))
+          AND i.invoice_status = " . $db->quote(INVOICE_DEFAULT_STATUS) . "
+          AND (i.invoice_no IS NULL OR i.invoice_no = '') AND i.file_path IS NULL AND i.rec_file_path IS NULL"
+        . ($hasPay ? " AND NOT EXISTS (SELECT 1 FROM invoice_payments p WHERE p.invoice_id = i.id)" : '');
+    $n = $db->exec($sql);
+    $db->prepare("INSERT IGNORE INTO invoice_meta (k, v) VALUES ('cleanup_completed_backfill', ?)")->execute([date('Y-m-d H:i:s') . ' removed ' . (int)$n]);
 }
 
 /** Absolute path of a stored invoice file, only when it is inside uploads/invoices/. */

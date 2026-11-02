@@ -92,7 +92,7 @@ try {
     $sheet->getStyle("A1:{$lastCol}1")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
     $sheet->getStyle("A1:{$lastCol}1")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('4B2FD6');
     $sheet->getStyle('A1:' . $last)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('CBD5E1');
-    foreach ($moneyCols as $c) $sheet->getStyle($c . '2:' . $c . max(2, $r - 1))->getNumberFormat()->setFormatCode('[$₹-4009]#,##0.00');
+    foreach ($moneyCols as $c) $sheet->getStyle($c . '2:' . $c . max(2, $r - 1))->getNumberFormat()->setFormatCode('[$$-409]#,##0.00');
     foreach (range('A', $lastCol) as $col) $sheet->getColumnDimension($col)->setAutoSize(true);
     $sheet->freezePane('A2');
 

@@ -95,3 +95,17 @@ Also checked:
 - On a phone, the page does not scroll sideways.
 - No JavaScript errors.
 - The existing Invoices tests still pass (78/78).
+
+## Invoices list contents
+
+- Invoices lists vessels that are in Pending Reports at go-live, plus every vessel that moves from
+  Pending Vessels to Pending Reports after that (registered at upload; the page also adds any
+  Pending Reports vessel it does not have yet). Completed vessels are not added.
+- A one-time cleanup (marker `invoice_meta.cleanup_completed_backfill`) removes rows the first
+  backfill added for vessels that were already Completed. It removes a row only when nobody has
+  worked on it:
+  - still the default status
+  - no invoice number, PDF, recovery invoice or payment
+  - the survey was completed on or before the day the row was added
+- Amounts are in USD ($): Invoice Airtable, Excel exports, invoice PDF ("Unit (USD)",
+  "Amount (USD)", "Total (USD)") and the upload form.

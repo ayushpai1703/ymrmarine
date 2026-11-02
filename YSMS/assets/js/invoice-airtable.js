@@ -15,9 +15,9 @@
     vessel:       { label: 'Vessel Name', icon: 'fa-ship', w: 170, sort: 'vessel' },
     port:         { label: 'Port', icon: 'fa-location-dot', w: 150, sort: 'port' },
     survey_ref:   { label: 'Survey Reference', icon: 'fa-file-lines', w: 150 },
-    amount:       { label: 'Invoice Amount', icon: 'fa-indian-rupee-sign', w: 140, sort: 'amount', num: true },
-    received:     { label: 'Amount Received', icon: 'fa-indian-rupee-sign', w: 140, sort: 'received', num: true },
-    outstanding:  { label: 'Outstanding Amount', icon: 'fa-indian-rupee-sign', w: 150, sort: 'outstanding', num: true },
+    amount:       { label: 'Invoice Amount', icon: 'fa-dollar-sign', w: 140, sort: 'amount', num: true },
+    received:     { label: 'Amount Received', icon: 'fa-dollar-sign', w: 140, sort: 'received', num: true },
+    outstanding:  { label: 'Outstanding Amount', icon: 'fa-dollar-sign', w: 150, sort: 'outstanding', num: true },
     due_date:     { label: 'Payment Due Date', icon: 'fa-regular fa-calendar-check', w: 170, sort: 'due_date' },
     last_paid:    { label: 'Last Payment Date', icon: 'fa-regular fa-calendar', w: 130, sort: 'last_paid' },
     status:       { label: 'Payment Status', icon: 'fa-circle-half-stroke', w: 135, sort: 'status' },
@@ -39,8 +39,8 @@
   };
 
   // ---------- helpers ----------
-  var money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  function inr(v) { return v === null || v === undefined || v === '' ? '' : money.format(+v); }
+  var money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function usd(v) { return v === null || v === undefined || v === '' ? '' : money.format(+v); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   function fdate(d) { if (!d) return ''; var p = String(d).slice(0, 10).split('-'); return p.length === 3 ? p[2] + ' ' + MON[+p[1] - 1] + ' ' + p[0] : esc(d); }
@@ -100,11 +100,11 @@
     var s = S.summary || {};
     var set = function (k, v) { var el = $('[data-sum="' + k + '"]'); if (el) el.textContent = v; };
     var sub = function (k, v) { var el = $('[data-sum-sub="' + k + '"]'); if (el) el.textContent = v; };
-    set('invoices', (s.invoices || 0).toLocaleString('en-IN'));
+    set('invoices', (s.invoices || 0).toLocaleString('en-US'));
     sub('invoices', (s.paid || 0) + ' paid' + (s.cancelled ? ' · ' + s.cancelled + ' cancelled (not counted)' : ''));
-    set('amount', inr(s.amount || 0)); set('received', inr(s.received || 0)); set('outstanding', inr(s.outstanding || 0));
-    set('overdue', inr(s.overdue || 0)); sub('overdue', (s.overdue_count || 0) + ' invoice' + (s.overdue_count === 1 ? '' : 's') + ' past due');
-    set('due_soon', (s.due_soon || 0).toLocaleString('en-IN')); sub('due_soon', 'within ' + C.dueSoonDays + ' days · ' + inr(s.due_soon_amount || 0));
+    set('amount', usd(s.amount || 0)); set('received', usd(s.received || 0)); set('outstanding', usd(s.outstanding || 0));
+    set('overdue', usd(s.overdue || 0)); sub('overdue', (s.overdue_count || 0) + ' invoice' + (s.overdue_count === 1 ? '' : 's') + ' past due');
+    set('due_soon', (s.due_soon || 0).toLocaleString('en-US')); sub('due_soon', 'within ' + C.dueSoonDays + ' days · ' + usd(s.due_soon_amount || 0));
   }
 
   // ---------- grid ----------
@@ -129,9 +129,9 @@
       case 'vessel': return r.vessel ? esc(r.vessel) : muted();
       case 'port': return r.port ? esc(r.port) : muted();
       case 'survey_ref': return r.survey_ref ? esc(r.survey_ref) : muted();
-      case 'amount': return r.amount === null ? muted('Add amount') : inr(r.amount);
-      case 'received': return inr(r.received || 0);
-      case 'outstanding': return r.outstanding === null ? muted() : inr(r.outstanding);
+      case 'amount': return r.amount === null ? muted('Add amount') : usd(r.amount);
+      case 'received': return usd(r.received || 0);
+      case 'outstanding': return r.outstanding === null ? muted() : usd(r.outstanding);
       case 'due_date': return dueCell(r);
       case 'last_paid': return r.last_paid ? fdate(r.last_paid) : muted();
       case 'status': return pill(r.status);
@@ -179,14 +179,14 @@
     var sm = S.summary || {};
     $('[data-foot]').innerHTML = S.rows.length ? '<tr><td class="c-no"></td>' + cols.map(function (k) {
       var v = '';
-      if (k === 'invoice_no') v = '<b>' + S.total.toLocaleString('en-IN') + '</b> record' + (S.total === 1 ? '' : 's');
-      if (k === 'amount') v = 'Sum <b>' + inr(sm.amount || 0) + '</b>';
-      if (k === 'received') v = 'Sum <b>' + inr(sm.received || 0) + '</b>';
-      if (k === 'outstanding') v = 'Sum <b>' + inr(sm.outstanding || 0) + '</b>';
+      if (k === 'invoice_no') v = '<b>' + S.total.toLocaleString('en-US') + '</b> record' + (S.total === 1 ? '' : 's');
+      if (k === 'amount') v = 'Sum <b>' + usd(sm.amount || 0) + '</b>';
+      if (k === 'received') v = 'Sum <b>' + usd(sm.received || 0) + '</b>';
+      if (k === 'outstanding') v = 'Sum <b>' + usd(sm.outstanding || 0) + '</b>';
       return '<td class="' + (COLS[k].pk ? 'c-pk ' : '') + (COLS[k].num ? 'num-r' : '') + '">' + v + '</td>';
     }).join('') + '</tr>' : '';
     var from = S.total ? off + 1 : 0, to = off + S.rows.length;
-    $('[data-count]').innerHTML = 'Showing <b>' + from + '–' + to + '</b> of <b>' + S.total.toLocaleString('en-IN') + '</b> invoice' + (S.total === 1 ? '' : 's') + (S.sort.length ? ' · sorted by ' + S.sort.map(function (s) { return SORT_LABEL[s.f] + (s.d === 'desc' ? ' ↓' : ' ↑'); }).join(', ') : ' · newest invoice first');
+    $('[data-count]').innerHTML = 'Showing <b>' + from + '–' + to + '</b> of <b>' + S.total.toLocaleString('en-US') + '</b> invoice' + (S.total === 1 ? '' : 's') + (S.sort.length ? ' · sorted by ' + S.sort.map(function (s) { return SORT_LABEL[s.f] + (s.d === 'desc' ? ' ↓' : ' ↑'); }).join(', ') : ' · newest invoice first');
     $('[data-pginfo]').textContent = S.page + ' / ' + S.pages;
     $('[data-pg="-1"]').disabled = S.page <= 1; $('[data-pg="1"]').disabled = S.page >= S.pages;
     $('[data-per]').value = String(S.per);
@@ -420,21 +420,21 @@
       '<div>Invoice Date</div><div><input type="date" data-e="invoice_date" value="' + esc(r.invoice_date) + '" data-testid="at-e-invoice-date"></div>' +
       '<div>Due Date</div><div><input type="date" data-e="due_date" value="' + esc(r.due_date) + '" data-testid="at-e-due-date"><span class="at-quickdue">' +
         [15, 30, 45].map(function (n) { return '<button type="button" data-plus="' + n + '" title="Invoice date + ' + n + ' days">+' + n + 'd</button>'; }).join('') + '</span></div>' +
-      '<div>Invoice Amount</div><div><input inputmode="decimal" data-e="amount" value="' + (r.amount === null ? '' : r.amount.toFixed(2)) + '" placeholder="Enter amount (₹)" data-testid="at-e-amount"></div>' +
+      '<div>Invoice Amount</div><div><input inputmode="decimal" data-e="amount" value="' + (r.amount === null ? '' : r.amount.toFixed(2)) + '" placeholder="Enter amount ($)" data-testid="at-e-amount"></div>' +
       '<div>Remarks</div><div><textarea rows="2" data-e="remarks" placeholder="Add remarks…" data-testid="at-e-remarks">' + esc(r.remarks) + '</textarea></div>' +
       '<div>Document</div><div>' + (r.has_doc ? '<a class="at-btn" href="' + u + '&mode=view" target="_blank" rel="noopener" data-testid="at-p-view"><i class="fa-solid fa-file-pdf" style="color:#b42318"></i> View</a>&nbsp;<a class="at-btn" href="' + u + '&mode=download" data-testid="at-p-download"><i class="fa-solid fa-download"></i> Download</a>' : muted('No file')) + '</div>' +
       '</div><div class="at-p-actions"><button type="button" class="at-btn pri" data-save disabled data-testid="at-save"><i class="fa-solid fa-floppy-disk"></i> Save changes</button><button type="button" class="at-btn" data-discard hidden>Discard</button></div></div>';
     h += '<div class="at-sec"><div class="at-sec-h">Payment summary ' + pill(r.status) + '</div><div class="at-paysum">' +
-      '<div><div class="l">Invoice Amount</div><div class="v">' + (r.amount === null ? muted() : inr(r.amount)) + '</div></div>' +
-      '<div><div class="l">Total Received</div><div class="v" style="color:#15803D" data-testid="at-p-received">' + inr(r.received || 0) + '</div></div>' +
-      '<div><div class="l">Outstanding</div><div class="v" style="color:' + (r.status === 'Overdue' ? '#B91C1C' : (r.outstanding > 0 ? '#C2410C' : '#15803D')) + '" data-testid="at-p-outstanding">' + (r.outstanding === null ? muted() : inr(r.outstanding)) + '</div></div>' +
+      '<div><div class="l">Invoice Amount</div><div class="v">' + (r.amount === null ? muted() : usd(r.amount)) + '</div></div>' +
+      '<div><div class="l">Total Received</div><div class="v" style="color:#15803D" data-testid="at-p-received">' + usd(r.received || 0) + '</div></div>' +
+      '<div><div class="l">Outstanding</div><div class="v" style="color:' + (r.status === 'Overdue' ? '#B91C1C' : (r.outstanding > 0 ? '#C2410C' : '#15803D')) + '" data-testid="at-p-outstanding">' + (r.outstanding === null ? muted() : usd(r.outstanding)) + '</div></div>' +
       '</div><div class="at-progress" title="' + pct.toFixed(0) + '% received"><i style="width:' + pct + '%"></i></div></div>';
     h += '<div class="at-sec"><div class="at-sec-h">Payment history <span>' + (!cancelled ? '<button type="button" class="at-btn pri" data-payform data-testid="at-add-payment"><i class="fa-solid fa-plus"></i> Add Payment</button>' : '') + '</span></div>';
     h += D.payments.length ? '<div style="overflow-x:auto"><table class="at-mini" data-testid="at-payments"><thead><tr><th>Payment Date</th><th>Reference</th><th>Mode</th><th>Transaction ID</th><th class="num-r">Amount</th><th>Receipt</th><th>Remarks</th><th></th></tr></thead><tbody>' +
       D.payments.map(function (p) {
         var rc = p.has_receipt ? '<a href="' + C.api + '?a=receipt&payment_id=' + p.id + '&mode=view" target="_blank" rel="noopener" data-testid="at-receipt-' + p.id + '"><i class="fa-solid fa-paperclip"></i> ' + esc(p.receipt_name || 'Receipt') + '</a>' : '<span class="muted">—</span>';
         return '<tr class="' + (p.status === 'void' ? 'void' : '') + '" data-pid="' + p.id + '"><td>' + fdate(p.date) + '</td><td>' + esc(p.reference || '—') + '</td><td>' + esc(p.mode) + '</td><td>' + esc(p.transaction_id || '—') + '</td>' +
-          '<td class="num-r"><b>' + inr(p.amount) + '</b></td><td class="keep">' + rc + '</td><td>' + esc(p.remarks) + (p.status === 'void' ? '</td><td class="keep"><small style="color:#b42318">Void: ' + esc(p.void_reason) + '</small>' : '</td><td class="keep"><button type="button" class="vd" data-void="' + p.id + '" data-testid="at-void-' + p.id + '">Void</button>') + '</td></tr>';
+          '<td class="num-r"><b>' + usd(p.amount) + '</b></td><td class="keep">' + rc + '</td><td>' + esc(p.remarks) + (p.status === 'void' ? '</td><td class="keep"><small style="color:#b42318">Void: ' + esc(p.void_reason) + '</small>' : '</td><td class="keep"><button type="button" class="vd" data-void="' + p.id + '" data-testid="at-void-' + p.id + '">Void</button>') + '</td></tr>';
       }).join('') + '</tbody></table></div>' : '<div class="muted" style="font-size:12.5px">No payments recorded yet.</div>';
     h += '<div data-payslot></div></div>';
     h += '<div class="at-sec"><div class="at-sec-h">Activity</div>' + (D.activity.length ? '<ul class="at-log" data-testid="at-activity">' + D.activity.map(function (a) {
@@ -485,7 +485,7 @@
     var req = rid();
     slot.innerHTML = '<form class="at-payform" data-pf novalidate data-testid="at-payform">' +
       '<label>Payment Date <span class="req">*</span><input type="date" name="payment_date" value="' + esc(C.today) + '" max="' + esc(C.today) + '" required data-testid="at-pay-date"></label>' +
-      '<label>Amount Received (₹) <span class="req">*</span><input name="amount" inputmode="decimal" value="' + (r.outstanding > 0 ? r.outstanding.toFixed(2) : '') + '" required data-testid="at-pay-amount"><span class="hint">Outstanding ' + inr(Math.max(0, r.outstanding || 0)) + '</span></label>' +
+      '<label>Amount Received ($) <span class="req">*</span><input name="amount" inputmode="decimal" value="' + (r.outstanding > 0 ? r.outstanding.toFixed(2) : '') + '" required data-testid="at-pay-amount"><span class="hint">Outstanding ' + usd(Math.max(0, r.outstanding || 0)) + '</span></label>' +
       '<label>Payment Mode <span class="req">*</span><select name="payment_mode" required data-testid="at-pay-mode">' + C.modes.map(function (m) { return '<option>' + esc(m) + '</option>'; }).join('') + '</select></label>' +
       '<label>Transaction Reference<input name="reference" maxlength="120" data-testid="at-pay-ref"></label>' +
       '<label>Transaction ID<input name="transaction_id" maxlength="120" data-testid="at-pay-txn"></label>' +

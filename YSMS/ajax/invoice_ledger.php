@@ -39,7 +39,7 @@ $base = ledgerBaseSql($db, $today);
 
 /** A money value from the form: float with at most 2 decimals, or null. */
 function ledMoney($v): ?float {
-    $v = str_replace([',', ' ', '₹'], '', trim((string)$v));
+    $v = str_replace([',', ' ', '$', '$'], '', trim((string)$v));
     if ($v === '' || !preg_match('/^\d{1,12}(\.\d{1,2})?$/', $v)) return null;
     return round((float)$v, 2);
 }
@@ -154,7 +154,7 @@ switch ($action) {
             $received = round((float)$rc->fetchColumn(), 2);
             if (array_key_exists('amount', $set) && $received > 0 && ($set['amount'] === null || $set['amount'] + 0.001 < $received)) {
                 $db->rollBack();
-                ledJson(422, ['ok' => false, 'error' => 'Invoice amount cannot be less than the amount already received (₹' . number_format($received, 2) . ').']);
+                ledJson(422, ['ok' => false, 'error' => 'Invoice amount cannot be less than the amount already received ($' . number_format($received, 2) . ').']);
             }
             $old = ['date' => $doc['doc_date'], 'due' => $doc['due_date'], 'amount' => $doc['amount'] !== null ? round((float)$doc['amount'], 2) : null, 'remarks' => $doc['remarks']];
             $labels = ['date' => 'Invoice date', 'due' => 'Due date', 'amount' => 'Invoice amount', 'remarks' => 'Remarks'];
@@ -166,7 +166,7 @@ switch ($action) {
                 if ($k === 'amount') $db->prepare("UPDATE invoices SET $amtCol = ? WHERE id = ?")->execute([$v, $iid]);
                 if ($k === 'due') $db->prepare('UPDATE invoice_accounts SET due_date = ?, updated_by = ? WHERE invoice_id = ? AND kind = ?')->execute([$v, $uid, $iid, $kind]);
                 if ($k === 'remarks') $db->prepare('UPDATE invoice_accounts SET remarks = ?, updated_by = ? WHERE invoice_id = ? AND kind = ?')->execute([$v, $uid, $iid, $kind]);
-                $fmt = fn($x) => $x === null || $x === '' ? '—' : ($k === 'amount' ? '₹' . number_format((float)$x, 2) : (string)$x);
+                $fmt = fn($x) => $x === null || $x === '' ? '—' : ($k === 'amount' ? '$' . number_format((float)$x, 2) : (string)$x);
                 $log[] = $labels[$k] . ': ' . ($k === 'remarks' ? 'changed' : $fmt($old[$k]) . ' → ' . $fmt($v));
             }
             if ($log) ledgerLog($db, $iid, $kind, 'edit', implode('; ', $log));
@@ -227,14 +227,14 @@ switch ($action) {
                 $db->rollBack();
                 if ($rel) @unlink(dirname(__DIR__) . '/' . $rel);
                 ledJson(422, ['ok' => false, 'code' => 'overpay', 'outstanding' => max(0, $outstanding),
-                    'error' => 'Amount is more than the outstanding balance (₹' . number_format(max(0, $outstanding), 2) . ').']);
+                    'error' => 'Amount is more than the outstanding balance ($' . number_format(max(0, $outstanding), 2) . ').']);
             }
             $db->prepare('INSERT INTO invoice_payments (invoice_id, kind, payment_date, amount, payment_mode, reference, transaction_id, remarks,
                     receipt_name, receipt_path, request_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
                ->execute([$iid, $kind, $date, number_format($amount, 2, '.', ''), $mode, $ref !== '' ? $ref : null, $txn !== '' ? $txn : null,
                    $remarks !== '' ? $remarks : null, $rname, $rel, $req, $uid ?: null]);
             $pid = (int)$db->lastInsertId();
-            ledgerLog($db, $iid, $kind, 'payment', 'Payment #' . $pid . ': ₹' . number_format($amount, 2) . ' on ' . $date . ' by ' . $mode
+            ledgerLog($db, $iid, $kind, 'payment', 'Payment #' . $pid . ': $' . number_format($amount, 2) . ' on ' . $date . ' by ' . $mode
                 . ($ref !== '' ? ', ref ' . $ref : '') . ($txn !== '' ? ', txn ' . $txn : '') . ($amount > $outstanding + 0.001 ? ' (overpayment authorised)' : ''));
             $db->commit();
         } catch (PDOException $e) {
@@ -270,7 +270,7 @@ switch ($action) {
             $p = $st->fetch(PDO::FETCH_ASSOC);
             if (!$p || $p['status'] !== 'success') { $db->rollBack(); ledJson(404, ['ok' => false, 'error' => 'Payment not found or already voided.']); }
             $db->prepare("UPDATE invoice_payments SET status = 'void', void_reason = ?, voided_by = ?, voided_at = NOW() WHERE id = ?")->execute([$reason, $uid ?: null, $pid]);
-            ledgerLog($db, (int)$p['invoice_id'], $p['kind'], 'void', 'Payment #' . $pid . ' (₹' . number_format((float)$p['amount'], 2) . ' on ' . $p['payment_date'] . ') voided: ' . $reason);
+            ledgerLog($db, (int)$p['invoice_id'], $p['kind'], 'void', 'Payment #' . $pid . ' ($' . number_format((float)$p['amount'], 2) . ' on ' . $p['payment_date'] . ') voided: ' . $reason);
             $db->commit();
         } catch (Throwable $e) {
             if ($db->inTransaction()) $db->rollBack();

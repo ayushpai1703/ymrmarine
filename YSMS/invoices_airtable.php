@@ -82,10 +82,10 @@ include 'includes/header.php';
                 <label>to<input type="date" data-f="inv_to" data-testid="at-f-inv-to"></label>
                 <label>Due date from<input type="date" data-f="due_from" data-testid="at-f-due-from"></label>
                 <label>to<input type="date" data-f="due_to" data-testid="at-f-due-to"></label>
-                <label>Received ≥ (₹)<input inputmode="decimal" data-f="rec_min" data-testid="at-f-rec-min"></label>
-                <label>Received ≤ (₹)<input inputmode="decimal" data-f="rec_max"></label>
-                <label>Outstanding ≥ (₹)<input inputmode="decimal" data-f="out_min" data-testid="at-f-out-min"></label>
-                <label>Outstanding ≤ (₹)<input inputmode="decimal" data-f="out_max"></label>
+                <label>Received ≥ ($)<input inputmode="decimal" data-f="rec_min" data-testid="at-f-rec-min"></label>
+                <label>Received ≤ ($)<input inputmode="decimal" data-f="rec_max"></label>
+                <label>Outstanding ≥ ($)<input inputmode="decimal" data-f="out_min" data-testid="at-f-out-min"></label>
+                <label>Outstanding ≤ ($)<input inputmode="decimal" data-f="out_max"></label>
             </div>
             <div class="at-pop-f"><button type="button" class="at-lnk" data-act="clear">Clear filters</button></div>
         </div>

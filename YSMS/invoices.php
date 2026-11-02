@@ -14,7 +14,7 @@ if (!invoiceCanManage()) { header('Location: index.php'); exit; }
 $db = getDB();
 invoiceEnsureTable($db);
 try {
-    invoiceBackfill($db); // registers any Pending Report / Completed vessel not yet here (never removes)
+    invoiceBackfill($db); // registers any Pending Report vessel not yet here
 } catch (Throwable $e) {
     error_log('invoices backfill: ' . $e->getMessage());
 }
@@ -365,7 +365,7 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
       html: '<form class="inv-form" onsubmit="return false">' +
         '<label>Invoice PDF' + (d.has_file ? ' (choose a new file to replace ' + esc(d.file_name) + ')' : '') + '</label><input type="file" id="invFile" accept="application/pdf,.pdf" data-testid="inv-file-input"><small>PDF only, up to ' + MAX_MB + ' MB.</small>' +
         '<div class="two"><div><label>Invoice No.</label><input id="invNo" value="' + esc(d.invoice_no) + '" data-testid="inv-no-input"></div><div><label>Invoice Date</label><input type="date" id="invDate" value="' + esc(d.invoice_date) + '"></div></div>' +
-        '<label>Amount</label><input id="invAmt" inputmode="decimal" value="' + esc(d.invoice_amount) + '" data-testid="inv-amount-input">' +
+        '<label>Amount (USD)</label><input id="invAmt" inputmode="decimal" value="' + esc(d.invoice_amount) + '" data-testid="inv-amount-input">' +
         '<label>Notes</label><textarea id="invNotes" rows="2">' + esc(d.invoice_notes) + '</textarea></form>',
       preConfirm: function () {
         var f = document.getElementById('invFile').files[0];

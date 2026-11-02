@@ -36,13 +36,14 @@ CREATE TABLE IF NOT EXISTS `invoices` (
     KEY `idx_invoices_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Backfill: every vessel already in Pending Reports or Completed gets its invoice row
+-- Backfill: every vessel now in Pending Reports gets its invoice row (Completed vessels are
+-- not added; later vessels are added when they move to Pending Reports)
 -- (status Pending for CP Prices). INSERT IGNORE + the unique survey_id make this safe to
 -- run any number of times; survey rows are only read.
 INSERT IGNORE INTO `invoices` (`survey_id`, `vessel_name`, `report_number`, `invoice_status`, `registered_via`)
 SELECT s.`id`, s.`vessel_name`, s.`report_number`, 'Pending for CP Prices', 'backfill'
 FROM `surveys` s
-WHERE s.`status` IN ('Pending Report', 'Completed');
+WHERE s.`status` = 'Pending Report';
 
 -- Generated invoices (Generate Invoice / Recovery Invoice download): the saved form, the
 -- stored recovery PDF and the "recovery invoice too" flag. Also added at runtime
