@@ -19,6 +19,7 @@ require 'vendor/autoload.php';
 require_once 'config/config.php';
 require_once __DIR__ . '/includes/excel_export_helpers.php';
 require_once __DIR__ . '/includes/list_filters.php';
+require_once __DIR__ . '/includes/cancelled_list.php';
 checkAuth();
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -47,9 +48,9 @@ try {
     @set_time_limit(120);
     @ini_set('memory_limit', '256M');
 
-    // 🌟 Mirror cancelled.php's own filter UI (search/type/place/client/
-    // surveyor) so the export matches whatever's currently on screen: no
-    // filter applied → every param below is empty → identical to the old
+    // 🌟 Mirror cancelled.php's own filter UI (search/place/client/surveyor)
+    // so the export matches whatever's currently on screen: no filter
+    // applied → every param below is empty → identical to the old
     // always-full export. The surveyor filter stays Admin-only gated, same
     // as cancelled.php's own dropdown (it isn't shown to Super Admin there).
     $q = trim((string)($_GET['q'] ?? ''));
@@ -62,41 +63,16 @@ try {
     $filter_client = implode(', ', $filter_clients);
     $filter_surveyor = implode(', ', $filter_surveyors);
 
-    $where = ["s.status = 'Cancelled'"];
-    $params = [];
-    if ($is_full_access) {
-        // no extra scoping
-    } elseif ($role === 'Client') {
-        $where[] = 's.client_id = ?';
-        $params[] = $client_row_id;
-    } else {
-        $where[] = '(s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))';
-        $params[] = $user_id;
-        $params[] = $user_id;
-    }
-    if ($q !== '') {
-        $where[] = '(s.vessel_name LIKE ? OR c.company_name LIKE ? OR s.agent_name LIKE ? OR t.type_name LIKE ? OR p.port_name LIKE ? OR u.full_name LIKE ?)';
-        $like = '%' . $q . '%';
-        array_push($params, $like, $like, $like, $like, $like, $like);
-    }
-    if ($filter_types) { $where[] = listFilterTypeSql($filter_types, $params); }
-    if ($filter_places) { $where[] = listFilterInSql('p.port_name', $filter_places, $params); }
-    if ($filter_clients) { $where[] = listFilterInSql('c.company_name', $filter_clients, $params); }
-    if ($role === 'Admin' && $filter_surveyors) {
-        $where[] = listFilterSurveyorNameSql($filter_surveyors, $params);
-    }
-    $whereSql = implode(' AND ', $where);
+    // Same visibility, filters and order as the grid (includes/cancelled_list.php); ids = the ticked rows.
+    [, $whereSql, $params] = cancelledFilters($db, $_GET);
+
 
     $baseSql = "
-        SELECT s.id, s.vessel_name, s.agent_name, c.company_name, t.type_name, s.survey_type_ids, u.full_name as surveyor_name, s.assign_date, s.report_number,
+        SELECT s.id, s.vessel_name, s.agent_name, c.company_name, st.type_name, s.survey_type_ids, u.full_name as surveyor_name, s.assign_date, s.report_number,
                p.port_name, p.country
-        FROM surveys s
-        LEFT JOIN clients c ON s.client_id = c.id
-        LEFT JOIN survey_types t ON s.survey_type_id = t.id
-        LEFT JOIN users u ON s.surveyor_id = u.id
-        LEFT JOIN ports p ON s.port_id = p.id
+        " . CANCELLED_FROM . "
         WHERE $whereSql
-        ORDER BY s.id DESC
+        ORDER BY " . cancelledOrderSql(json_decode((string)($_GET['sort'] ?? '[]'), true)) . "
     ";
     $stmt = $db->prepare($baseSql);
     $stmt->execute($params);
