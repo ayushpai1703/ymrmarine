@@ -266,34 +266,34 @@ include 'includes/header.php';
         }
 
         /* ── Completed card (numbered header + label / value rows) ── */
-        .vessel-list-container .vessel-card { border-radius: 22px !important; box-shadow: 0 10px 28px rgba(30,58,138,.09) !important; padding: 14px 12px 14px !important; }
-        .cc-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px 12px; min-width: 0; }
-        .cc-num { flex: none; width: 30px; height: 30px; border-radius: 50%; background: #F1F5F9; color: #0f172a; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
-        .cc-ship { flex: none; width: 44px; height: 44px; border-radius: 14px; background: #d1fae5; color: #047857; font-size: 19px; display: flex; align-items: center; justify-content: center; }
-        .cc-div { flex: none; width: 2px; height: 26px; border-radius: 2px; background: #cbd5e1; }
-        .cc-name { flex: 1 1 auto; min-width: 0; font-size: 17px; font-weight: 800; color: #0f172a; line-height: 1.2; letter-spacing: .01em; text-transform: uppercase; overflow-wrap: break-word; }
-        .cc-rows { display: grid; gap: 7px; }
-        .cc-row { display: grid; grid-template-columns: 40% 12px minmax(0, 1fr); align-items: stretch; background: #F3F6FB; border-radius: 12px; overflow: visible; min-height: 40px; }
-        .cc-k { display: flex; align-items: center; gap: 9px; padding: 8px 10px; background: #E8EEF8; border-radius: 12px 0 0 12px; min-width: 0; }
-        .cc-k i { flex: none; width: 18px; text-align: center; color: #1D4ED8; font-size: 14px; }
-        .cc-k span { font-size: 12.5px; font-weight: 600; color: #1e3a6e; line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
+        .vessel-list-container .vessel-card { border-radius: 20px !important; box-shadow: 0 6px 18px rgba(30,58,138,.07) !important; padding: 10px 10px 10px !important; margin-bottom: 12px !important; }
+        .cc-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 8px; min-width: 0; }
+        .cc-num { flex: none; min-width: 34px; height: 30px; padding: 0 8px; border-radius: 12px; background: #F1F4F9; color: #0f172a; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+        .cc-ship { flex: none; width: 48px; height: 32px; border-radius: 12px; background: #d1fae5; color: #047857; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+        .cc-div { flex: none; width: 1.5px; height: 22px; border-radius: 2px; background: #cbd5e1; }
+        .cc-name { flex: 1 1 auto; min-width: 0; font-size: 16px; font-weight: 800; color: #0f172a; line-height: 1.2; letter-spacing: .01em; text-transform: uppercase; overflow-wrap: break-word; }
+        .cc-rows { display: grid; gap: 5px; }
+        .cc-row { display: grid; grid-template-columns: 38% 12px minmax(0, 1fr); align-items: center; background: #F1F4F9; border-radius: 12px; overflow: visible; min-height: 32px; }
+        .cc-k { display: flex; align-items: center; gap: 8px; padding: 5px 8px 5px 10px; min-width: 0; }
+        .cc-k i { flex: none; width: 17px; text-align: center; color: #1D4ED8; font-size: 13px; }
+        .cc-k span { font-size: 12.5px; font-weight: 700; color: #1e3a6e; line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
         .cc-c { display: flex; align-items: center; justify-content: center; font-weight: 800; color: #334155; font-size: 13px; }
-        .cc-v { display: flex; align-items: center; padding: 7px 10px 7px 4px; min-width: 0; }
+        .cc-v { display: flex; align-items: center; padding: 5px 10px 5px 4px; min-width: 0; }
         .cc-v b { font-size: 12.5px; font-weight: 800; color: #0f172a; text-transform: uppercase; overflow-wrap: anywhere; line-height: 1.25; }
         .cc-v b.cc-date { text-transform: none; font-size: 13px; }
         .cc-v .recovery-total b, .cc-v .recovery-total.na b { color: inherit; text-transform: none; font-size: inherit; overflow-wrap: normal; }
-        .cc-row .cc-type.pv-type-pill { align-self: center; text-align: left; border-radius: 14px; font-size: 10.5px; font-weight: 800; padding: 5px 12px; letter-spacing: .02em; }
-        .cc-row.recovery-row .cc-v { padding-top: 8px; padding-bottom: 8px; }
+        .cc-row .cc-type.pv-type-pill { align-self: center; text-align: left; border-radius: 12px; font-size: 10.5px; font-weight: 800; padding: 3px 11px; letter-spacing: .02em; }
+        .cc-row.recovery-row .cc-v { padding-top: 6px; padding-bottom: 6px; }
         .cc-row .recovery-cell { display: block; min-width: 0; }
-        .cc-row .recovery-total { font-size: 12.5px; padding: 6px 12px; }
-        .cc-parts { display: flex !important; flex-wrap: wrap; gap: 2px 6px; margin-top: 6px !important; font-size: 10.5px !important; color: #475569 !important; font-weight: 600 !important; }
+        .cc-row .recovery-total { font-size: 12px; padding: 4px 11px; }
+        .cc-parts { display: flex !important; flex-wrap: wrap; gap: 1px 6px; margin-top: 4px !important; font-size: 10.5px !important; color: #475569 !important; font-weight: 600 !important; }
         .cc-parts i { font-style: normal; color: #94a3b8; }
-        .cc-port { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; background: #ECFDF5; color: #047857; border: 1.5px solid #86EFAC; border-radius: 16px; padding: 4px 12px; font-size: 12px; font-weight: 800; text-transform: uppercase; line-height: 1.25; overflow-wrap: anywhere; }
+        .cc-port { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; background: #ECFDF5; color: #047857; border: 1.5px solid #86EFAC; border-radius: 14px; padding: 2px 11px; font-size: 11.5px; font-weight: 800; text-transform: uppercase; line-height: 1.25; overflow-wrap: anywhere; }
         .cc-port i { font-size: 11px; }
-        .cc-status { display: inline-flex; align-items: center; gap: 6px; background: #ECFDF5; color: #15803D; border: 1.5px solid #6EE7B7; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 800; }
+        .cc-status { display: inline-flex; align-items: center; gap: 6px; background: #ECFDF5; color: #15803D; border: 1.5px solid #6EE7B7; border-radius: 999px; padding: 2px 11px; font-size: 11.5px; font-weight: 800; }
         .cc-status i { font-size: 11px; }
-        .cc-foot { display: flex; justify-content: flex-end; padding-top: 4px; }
-        .cc-edit { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; border: 1.5px solid #FED7AA; color: #C2410C; background: #FFF7ED; font-size: 12px; font-weight: 700; text-decoration: none; }
+        .cc-foot { display: flex; justify-content: flex-end; padding-top: 3px; }
+        .cc-edit { display: inline-flex; align-items: center; gap: 6px; padding: 4px 13px; border-radius: 999px; border: 1.5px solid #FED7AA; color: #C2410C; background: #FFF7ED; font-size: 12px; font-weight: 700; text-decoration: none; }
         @media (max-width: 360px) { .cc-row { grid-template-columns: 42% 10px minmax(0, 1fr); } .cc-k span { font-size: 11px; } .cc-k { gap: 6px; padding: 8px 7px; } .cc-name { font-size: 15.5px; } }
     }
 
