@@ -162,6 +162,7 @@ $pv_total = count($surveys);
 
 include 'includes/header.php';
 ?>
+<link rel="stylesheet" href="assets/css/report-table.css?v=<?= @filemtime(__DIR__ . '/assets/css/report-table.css') ?>">
 
 <style>
 
