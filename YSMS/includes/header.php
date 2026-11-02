@@ -17,11 +17,15 @@ require_once __DIR__ . '/../config/config.php';
     <style>
         :root {
             --primary-bg: #0b1e46;
-            --app-bg: #f4f6fa;
+            --app-bg: #F7F8FC;
             --card-bg: #ffffff;
             --text-dark: #1e293b;
             --text-muted: #64748b;
-            --accent-purple: #3b32b3;
+            --accent-purple: #5B2DEE;
+            --accent-purple2: #6C4CF1;
+            --accent-blue: #2563EB;
+            --accent-green: #16A34A;
+            --accent-orange: #EA580C;
             --btn-blue: #1e3a8a;
             --border-color: #e2e8f0;
             --font-primary: 'Lexend', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -66,31 +70,33 @@ require_once __DIR__ . '/../config/config.php';
 
         /* Dashboard Header */
         .dash-header {
-            background: white;
-            padding: 20px;
+            background: transparent;
+            padding: 22px 20px 6px;
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
         }
 
         .user-welcome h2 {
-            font-size: 20px;
-            font-weight: 700;
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -.005em;
             margin: 0;
-            color: var(--text-dark);
+            color: #111827;
         }
 
         .user-welcome p {
-            font-size: 13px;
-            color: var(--text-muted);
-            margin: 0;
+            font-size: 14px;
+            color: #6B7280;
+            margin: 4px 0 0;
         }
 
         .profile-avatar {
-            width: 45px;
-            height: 45px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             object-fit: cover;
+            box-shadow: 0 2px 8px rgba(15,23,42,.1);
         }
 
         .profile-menu-wrap { position: relative; flex: 0 0 45px; z-index: 1200; }
@@ -122,10 +128,43 @@ require_once __DIR__ . '/../config/config.php';
         }
 
 
-        .hamburger-menu-btn { width: 42px; height: 42px; border: 1px solid var(--border-color); border-radius: 12px; background: #fff; color: var(--text-dark); display: inline-flex; align-items: center; justify-content: center; font-size: 17px; cursor: pointer; transition: background-color .2s ease, transform .2s ease; }
-        .hamburger-menu-btn:hover { background: #f1f5f9; transform: translateY(-1px); }
+        /* ── Hamburger — premium glass circular button with animated 3-line → X icon ── */
+        .hamburger-menu-btn {
+            width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+            border: 1px solid rgba(15,23,42,.08);
+            border-radius: 14px;
+            background: rgba(255,255,255,.72);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            color: var(--text-dark);
+            display: inline-flex; align-items: center; justify-content: center;
+            cursor: pointer; padding: 0;
+            box-shadow: 0 2px 10px rgba(15,23,42,.06);
+            transition: background-color .2s ease, box-shadow .2s ease, transform .15s ease;
+        }
+        .hamburger-menu-btn:hover { background: #fff; box-shadow: 0 4px 14px rgba(15,23,42,.1); }
+        .hamburger-menu-btn:active { transform: scale(.93); }
+        .hamburger-lines { position: relative; width: 18px; height: 13px; display: inline-block; }
+        .hb-line {
+            position: absolute; left: 0; width: 18px; height: 2px; border-radius: 2px;
+            background: var(--text-dark);
+            transition: transform .3s cubic-bezier(.4,0,.2,1), opacity .2s ease, top .3s cubic-bezier(.4,0,.2,1);
+        }
+        .hb-line-top { top: 0; }
+        .hb-line-mid { top: 5.5px; }
+        .hb-line-bottom { top: 11px; }
+        .hamburger-menu-btn.is-open .hb-line-top { top: 5.5px; transform: rotate(45deg); }
+        .hamburger-menu-btn.is-open .hb-line-mid { opacity: 0; transform: scale(0); }
+        .hamburger-menu-btn.is-open .hb-line-bottom { top: 5.5px; transform: rotate(-45deg); }
         .detail-back-btn { width: 28px; height: 38px; display: inline-flex; align-items: center; text-decoration: none; }
         .sidebar-screen-overlay { display: none; }
+        .drawer-close-btn {
+            width: 34px; height: 34px; min-width: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14);
+            background: rgba(255,255,255,.08); color: #fff; display: none; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 14px; transition: background-color .18s ease, transform .15s ease;
+        }
+        .drawer-close-btn:hover { background: rgba(255,255,255,.16); }
+        .drawer-close-btn:active { transform: scale(.92); }
 
         /* Overview Grid */
         .overview-section {
@@ -142,17 +181,42 @@ require_once __DIR__ . '/../config/config.php';
 
         .section-title {
             font-size: 16px;
-            font-weight: 700;
-            color: var(--text-dark);
+            font-weight: 600;
+            letter-spacing: -.005em;
+            color: #111827;
         }
 
         .date-select-badge {
             background: #ffffff;
-            border: 1px solid var(--border-color);
-            padding: 4px 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            color: var(--text-dark);
+            border: 1px solid #E5E7EB;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 12.5px;
+            font-weight: 500;
+            color: #374151;
+            box-shadow: 0 1px 3px rgba(15,23,42,.04);
+        }
+
+        /* Premium rounded search bar — scoped to the dashboard's own global
+           search (.global-search-wrap) only, so vessels.php/reports.php/etc's
+           own per-page filter search bars (same .search-control class,
+           different wrapper) are untouched. */
+        .global-search-wrap .search-input-wrapper i {
+            left: 18px; color: #9CA3AF; font-size: 15px; padding-top: 8px;
+        }
+        .global-search-wrap .search-control {
+            background: #fff;
+            border: 1px solid #EEF0F6;
+            border-radius: 18px;
+            padding: 15px 16px 15px 46px;
+            font-size: 14px;
+            box-shadow: 0 2px 10px rgba(15,23,42,.05);
+            transition: box-shadow .18s ease, border-color .18s ease;
+        }
+        .global-search-wrap .search-control:focus {
+            outline: none;
+            border-color: rgba(91,45,238,.35);
+            box-shadow: 0 4px 16px rgba(91,45,238,.12);
         }
 
         .overview-grid {
@@ -163,21 +227,33 @@ require_once __DIR__ . '/../config/config.php';
 
         .ov-card {
             background: white;
-            border-radius: 16px;
-            padding: 15px 10px;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            border-radius: 20px;
+            padding: 18px 12px;
+            text-align: left;
+            box-shadow: 0 2px 10px rgba(15,23,42,.04);
             cursor: pointer;
+            transition: transform .15s ease, box-shadow .15s ease;
         }
+        .ov-card:active { transform: scale(.97); }
 
-        .ov-card.pending-vessel { background: #eff6ff; }
-        .ov-card.pending-report { background: #fff7ed; }
-        .ov-card.completed { background: #f0fdf4; }
+        .ov-card.pending-vessel { background: #EEF2FF; }
+        .ov-card.pending-report { background: #FFF1E8; }
+        .ov-card.completed { background: #ECFDF3; }
+
+        .ov-icon {
+            width: 38px; height: 38px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px; margin-bottom: 14px;
+        }
+        .ov-card.pending-vessel .ov-icon { background: rgba(37,99,235,.14); color: #2563EB; }
+        .ov-card.pending-report .ov-icon { background: rgba(234,88,12,.14); color: #EA580C; }
+        .ov-card.completed .ov-icon { background: rgba(22,163,74,.16); color: #16A34A; }
 
         .ov-count {
-            font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 2px;
+            font-size: 26px;
+            font-weight: 650;
+            letter-spacing: -.005em;
+            margin-bottom: 4px;
         }
 
         .ov-card.pending-vessel .ov-count { color: #1e40af; }
@@ -185,47 +261,83 @@ require_once __DIR__ . '/../config/config.php';
         .ov-card.completed .ov-count { color: #166534; }
 
         .ov-label {
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--text-dark);
-            line-height: 1.2;
+            font-size: 11.5px;
+            font-weight: 500;
+            color: #4B5563;
+            line-height: 1.25;
         }
 
         /* Statistics Grid */
         .stat-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
+            gap: 14px;
             padding: 0 20px;
         }
 
         .stat-card {
             background: white;
-            border-radius: 16px;
-            padding: 15px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            border-radius: 20px;
+            padding: 16px;
+            box-shadow: 0 2px 10px rgba(15,23,42,.04);
         }
 
+        /* Small pastel icon + label pill. Color defaults to green; a
+           stat-title--blue/orange/purple modifier (added in index.php per
+           metric) overrides it — this replaces the old odd/even nth-child
+           alternation with colors that actually match each metric. */
         .stat-title {
+            display: inline-flex; align-items: center; gap: 6px;
             font-size: 11px;
             color: #166534;
-            background: #f0fdf4;
-            padding: 3px 8px;
-            border-radius: 6px;
-            display: inline-block;
-            font-weight: 600;
+            background: #ECFDF3;
+            padding: 4px 10px 4px 4px;
+            border-radius: 999px;
+            font-weight: 550;
+        }
+        .stat-title-icon {
+            width: 20px; height: 20px; border-radius: 50%; flex: none;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 10px;
+            background: rgba(22,163,74,.16); color: #16A34A;
         }
 
-        .stat-card:nth-child(2n) .stat-title {
-            color: #1e40af;
-            background: #eff6ff;
+        /* Recovery Analytics row — Recovery by Surveyor/Port/Country/Client.
+           Ships Completed row — by Country/Port. Both stacked single column
+           on mobile; forced into one fixed row on desktop (see the
+           min-width:992px override below). */
+        .recovery-row-grid, .ships-row-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            padding: 0 20px;
         }
+        .recovery-row-card {
+            background: white;
+            border-radius: 20px;
+            padding: 16px;
+            box-shadow: 0 2px 10px rgba(15,23,42,.04);
+            border: 1px solid var(--border-color);
+        }
+        .recovery-row-card-title {
+            margin-bottom: 10px;
+        }
+        .recovery-row-card-title .stat-title {
+            font-size: 12px;
+        }
+        .stat-title.stat-title--blue { color: #1e40af; background: #EEF2FF; }
+        .stat-title.stat-title--blue .stat-title-icon { background: rgba(37,99,235,.14); color: #2563EB; }
+        .stat-title.stat-title--orange { color: #c2410c; background: #FFF1E8; }
+        .stat-title.stat-title--orange .stat-title-icon { background: rgba(234,88,12,.14); color: #EA580C; }
+        .stat-title.stat-title--purple { color: #5B21B6; background: #F3EEFE; }
+        .stat-title.stat-title--purple .stat-title-icon { background: rgba(91,45,238,.14); color: #5B2DEE; }
 
         .stat-val {
-            font-size: 18px;
-            font-weight: 700;
-            margin: 8px 0 2px 0;
-            color: var(--text-dark);
+            font-size: 19px;
+            font-weight: 600;
+            letter-spacing: -.005em;
+            margin: 10px 0 2px 0;
+            color: #111827;
         }
 
         .stat-change {
@@ -235,15 +347,22 @@ require_once __DIR__ . '/../config/config.php';
         }
 
         /* Bottom Nav Fixed - విండో/స్క్రీన్ బాటమ్‌కి ఎప్పుడూ ఫిక్స్‌గా ఉండటానికి position: fixed వాడాం
-           (position: absolute వాడితే పేజీ కంటెంట్ ఎక్కువగా ఉన్నప్పుడు నావ్‌బార్ కిందకి జారిపోతుంది) */
+           (position: absolute వాడితే పేజీ కంటెంట్ ఎక్కువగా ఉన్నప్పుడు నావ్‌బార్ కిందకి జారిపోతుంది)
+           Premium floating card: rounded top corners, subtle shadow, blur —
+           default (closed) mobile state only; the drawer/desktop-sidebar
+           states below fully override this via more specific selectors. */
         .bottom-nav-bar {
             position: fixed;
             bottom: 0; left: 0; right: 0;
             max-width: 100%;
             margin: 0 auto;
-            height: 70px;
-            background: #ffffff;
-            border-top: 1px solid var(--border-color);
+            height: 76px;
+            background: rgba(255,255,255,.92);
+            -webkit-backdrop-filter: saturate(180%) blur(16px);
+            backdrop-filter: saturate(180%) blur(16px);
+            border-top: 1px solid rgba(15,23,42,.06);
+            border-radius: 22px 22px 0 0;
+            box-shadow: 0 -8px 28px rgba(15,23,42,.08);
             display: flex;
             justify-content: space-around;
             align-items: center;
@@ -252,38 +371,64 @@ require_once __DIR__ . '/../config/config.php';
         }
 
         .nav-item-btn {
+            position: relative;
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
+            gap: 2px;
+            height: 58px;
             color: var(--text-muted);
-            font-size: 10px;
+            font-size: 10.5px;
             font-weight: 600;
+            line-height: 1.15;
+            text-align: center;
             text-decoration: none;
+            padding: 6px 8px;
+            border-radius: 12px;
+            transition: color .18s ease;
         }
 
         .nav-item-btn.active {
             color: var(--accent-purple);
         }
+        /* Understated active indicator — a small pill under the icon, not a big block */
+        .nav-item-btn.active::before {
+            content: '';
+            position: absolute;
+            top: -2px; left: 50%; transform: translateX(-50%);
+            width: 18px; height: 3px; border-radius: 3px;
+            background: var(--accent-purple);
+        }
 
         .nav-item-btn i {
             font-size: 18px;
-            margin-bottom: 3px;
+            margin-bottom: 1px;
         }
 
         .center-fab-btn {
-            width: 56px;
-            height: 56px;
-            background: var(--accent-purple);
+            width: 58px;
+            height: 58px;
+            background: linear-gradient(155deg, #4d43d6, var(--accent-purple));
             border-radius: 50%;
             display: flex;
             justify-content: center;
             align-items: center;
             color: white;
-            font-size: 24px;
-            margin-top: -32px;
-            box-shadow: 0 4px 10px rgba(59, 50, 179, 0.4);
+            font-size: 22px;
+            margin-top: -34px;
+            box-shadow: 0 8px 20px rgba(59, 50, 179, .42), 0 0 0 5px rgba(255,255,255,.9);
             cursor: pointer;
             border: none;
+            transition: transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s ease;
+        }
+        .center-fab-btn:active { transform: scale(.93); }
+        .center-fab-btn.fab-tap { animation: fabTap .38s cubic-bezier(.34,1.56,.64,1); }
+        @keyframes fabTap {
+            0% { transform: scale(1); }
+            35% { transform: scale(.92); }
+            70% { transform: scale(1.03); }
+            100% { transform: scale(1); }
         }
 
         /* List Items CSS */
@@ -377,13 +522,157 @@ require_once __DIR__ . '/../config/config.php';
         .list-empty-state { display: none; }
 
         @media (max-width: 991px) {
-            .mobile-container.sidebar-page .bottom-nav-bar { display: flex; position: fixed; top: 0; bottom: 0; left: 0; right: auto; width: min(82vw, 300px); height: 100vh; padding: 86px 20px 30px; flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 10px; border: 0; box-shadow: 14px 0 35px rgba(15,23,42,.2); transform: translateX(-105%); transition: transform .3s ease; z-index: 1100; }
-            .mobile-container.sidebar-page .bottom-nav-bar.open { transform: translateX(0); }
-            .mobile-container.sidebar-page .nav-item-btn { flex-direction: row; justify-content: flex-start; gap: 14px; width: 100%; padding: 12px 14px; border-radius: 10px; font-size: 14px; }
-            .mobile-container.sidebar-page .nav-item-btn i { margin: 0; width: 22px; }
-            .mobile-container.sidebar-page .center-fab-btn { order: 5; width: 100%; height: 45px; margin: 12px 0 0; border-radius: 10px; }
-            .mobile-container.sidebar-page .sidebar-screen-overlay { position: fixed; inset: 0; display: block; background: rgba(11,30,70,.52); opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility .3s ease; z-index: 1050; }
-            .mobile-container.sidebar-page .sidebar-screen-overlay.open { opacity: 1; visibility: visible; }
+            /* The drawer (z-index 1100) sits above the top app bar's normal
+               z-index (850) — without this, the drawer would visually cover the
+               hamburger button once open, making it impossible to tap the now-X
+               icon again to close it. */
+            .top-app-bar { z-index: 1150; }
+
+            /* ── Premium slide-in drawer ── the same .bottom-nav-bar element that
+               renders the bottom bar becomes the drawer. Gated behind .drawer-mode
+               (added by JS only while opening/closing) rather than the permanent
+               .sidebar-page marker — .sidebar-page never toggles off once the page
+               loads, so gating the fixed/off-screen positioning on it directly
+               would leave the horizontal bottom bar permanently transformed
+               off-screen (verified: it never shows). JS adds .drawer-mode, forces
+               a reflow, then adds .open on the next frame so the slide-in still
+               animates from off-screen; on close it removes .open, waits for the
+               transition to finish, then removes .drawer-mode so the element
+               returns to being the normal fixed bottom bar. */
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode {
+                display: flex; position: fixed; top: 0; bottom: 0; left: 0; right: auto;
+                width: min(86vw, 360px); height: 100vh;
+                padding: 20px 0 24px;
+                flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 0;
+                border: 0; border-radius: 0 22px 22px 0;
+                background: linear-gradient(180deg, #0f172a 0%, #0b1e46 55%, #071428 100%);
+                -webkit-backdrop-filter: none; backdrop-filter: none;
+                box-shadow: 18px 0 40px rgba(4,10,24,.35);
+                transform: translate3d(-105%, 0, 0);
+                transition: transform .4s cubic-bezier(0.22, 1, 0.36, 1);
+                will-change: transform;
+                z-index: 1100;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open { transform: translate3d(0, 0, 0); }
+
+            /* Reveal the brand/profile/section-label/quick-action blocks that
+               are hidden by default on mobile — only inside the open drawer. */
+            .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-brand,
+            .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-footer {
+                display: flex !important;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.open .desktop-sidebar-section-label.drawer-reveal {
+                display: block !important;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.open a.drawer-reveal,
+            .mobile-container.sidebar-page .bottom-nav-bar.open .nav-item-btn.drawer-reveal,
+            .mobile-container.sidebar-page .bottom-nav-bar.open .mobile-drawer-support-link {
+                display: flex !important;
+            }
+
+            .mobile-container.sidebar-page .desktop-sidebar-brand {
+                justify-content: space-between; padding: 4px 18px 18px; border-bottom-color: rgba(255,255,255,.08);
+            }
+            .mobile-container.sidebar-page .drawer-close-btn { display: inline-flex; }
+
+            /* Everything below this point styles the vertical drawer ROW look for
+               nav-item-btn/section-label/fab/nav-scroll. These are only requested
+               while .drawer-mode is present (added by JS only during open/close),
+               because .desktop-sidebar-nav-scroll is display:contents — its
+               children (nav-item-btn, the FAB) are the SAME elements the closed
+               bottom bar shows horizontally, so an ungated rule here would also
+               restyle the always-visible bottom bar. */
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll {
+                display: flex; flex-direction: column;
+                flex: 1 1 auto; min-height: 0;
+                padding: 8px 12px; gap: 2px; overflow-y: auto; overflow-x: hidden;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn {
+                position: relative;
+                flex-direction: row; justify-content: flex-start; gap: 14px;
+                width: 100%; height: auto; padding: 12px 14px; border-radius: 12px; font-size: 14px; font-weight: 550;
+                color: rgba(255,255,255,.72);
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn i { margin: 0; width: 22px; font-size: 16px; color: rgba(255,255,255,.5); }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn::before { display: none; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn::after {
+                content: '\f054'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 10px;
+                margin-left: auto; color: rgba(255,255,255,.28); transition: transform .18s ease;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn:active { transform: scale(.98); background: rgba(255,255,255,.05); }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn.active {
+                background: linear-gradient(90deg, rgba(99,102,241,.32), rgba(99,102,241,.06));
+                color: #fff; box-shadow: inset 3px 0 0 #818cf8;
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .nav-item-btn.active i { color: #a5b4fc; }
+            .mobile-container.sidebar-page .desktop-sidebar-section-label {
+                font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+                color: rgba(255,255,255,.35); padding: 14px 14px 6px; margin: 0;
+            }
+
+            /* The "+" stays a bottom-bar-only action — it's not shown as a
+               drawer menu row (the drawer already lists everything it opens). */
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .center-fab-btn {
+                display: none;
+            }
+
+            /* These are the desktop sidebar's own footer/avatar/logout styles,
+               normally scoped to @media (min-width:992px) — duplicated here
+               (not modified there) so the same footer block also looks right
+               revealed inside the mobile drawer, without touching desktop. */
+            .mobile-container.sidebar-page .desktop-sidebar-footer {
+                flex-direction: column; gap: 10px; padding: 14px 18px 4px;
+                border-top: 1px solid rgba(255,255,255,.08);
+                background: transparent;
+            }
+            .mobile-container.sidebar-page .desktop-sidebar-user {
+                display: flex; align-items: center; gap: 10px; min-width: 0;
+                text-decoration: none; color: inherit; border-radius: 10px; padding: 4px; margin: -4px;
+            }
+            .mobile-container.sidebar-page .desktop-sidebar-user-avatar {
+                width: 36px; height: 36px; border-radius: 10px;
+                background: linear-gradient(135deg, #6366f1, #3b32b3);
+                color: #fff; font-weight: 700; font-size: 14px;
+                display: flex; align-items: center; justify-content: center; flex: none;
+            }
+            .mobile-container.sidebar-page .desktop-sidebar-user-avatar-img {
+                width: 36px; height: 36px; border-radius: 10px; object-fit: cover; flex: none;
+                border: 2px solid rgba(255,255,255,.2);
+            }
+            .mobile-container.sidebar-page .desktop-sidebar-user-meta { min-width: 0; flex: 1; }
+            .mobile-container.sidebar-page .desktop-sidebar-user-name {
+                color: #fff; font-size: 13px; font-weight: 650;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            .mobile-container.sidebar-page .desktop-sidebar-user-role { color: rgba(255,255,255,.45); font-size: 11px; margin-top: 1px; }
+            .mobile-container.sidebar-page .desktop-sidebar-logout {
+                display: flex; align-items: center; justify-content: center; gap: 8px;
+                padding: 10px 12px; border-radius: 10px;
+                background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.25);
+                color: #fca5a5; text-decoration: none; font-size: 13px; font-weight: 650;
+            }
+            .mobile-container.sidebar-page .mobile-drawer-support-link {
+                align-items: center; justify-content: center; gap: 8px;
+                padding: 10px 12px; border-radius: 10px;
+                background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+                color: rgba(255,255,255,.7); text-decoration: none;
+                font-size: 13px; font-weight: 650;
+                transition: background-color .18s ease, color .18s ease;
+            }
+            .mobile-container.sidebar-page .mobile-drawer-support-link:hover { background: rgba(255,255,255,.1); color: #fff; }
+
+            .mobile-container.sidebar-page .sidebar-screen-overlay {
+                position: fixed; inset: 0; display: block;
+                background: rgba(5,20,40,.45);
+                -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0);
+                opacity: 0; visibility: hidden;
+                transition: opacity .35s ease, visibility .35s ease, -webkit-backdrop-filter .35s ease, backdrop-filter .35s ease;
+                z-index: 1050;
+            }
+            .mobile-container.sidebar-page .sidebar-screen-overlay.open {
+                opacity: 1; visibility: visible;
+                -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+            }
 
             /* Admin: hide Cancelled on mobile bottom bar only; show again in open sidebar drawer */
             .bottom-nav-bar:not(.open) .hide-cancelled-on-mobile-bn {
@@ -391,6 +680,47 @@ require_once __DIR__ . '/../config/config.php';
             }
             .bottom-nav-bar.open .hide-cancelled-on-mobile-bn {
                 display: flex !important;
+            }
+
+            /* Staggered reveal — GPU-friendly opacity/transform only, and only
+               while .drawer-mode is present (see note above: nav-scroll's
+               children are shared with the always-visible bottom bar, so this
+               must never apply to the plain closed bottom-bar state). Two
+               nth-child scopes because .desktop-sidebar-nav-scroll is
+               display:contents outside of drawer-mode (children lay out as
+               direct bottom-bar siblings there); inside drawer-mode it's now a
+               real flex column, so its children are staggered relative to each
+               other, while the true direct children of .bottom-nav-bar
+               (brand/footer) are staggered separately. */
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-brand,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-footer,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > * {
+                opacity: 0; transform: translate3d(-12px, 0, 0);
+                transition: opacity .3s ease, transform .3s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open > .desktop-sidebar-brand,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open > .desktop-sidebar-footer,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode.open .desktop-sidebar-nav-scroll > * {
+                opacity: 1; transform: translate3d(0, 0, 0);
+            }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-brand { transition-delay: .04s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode > .desktop-sidebar-footer { transition-delay: .3s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(1) { transition-delay: .13s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(2) { transition-delay: .16s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(3) { transition-delay: .19s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(4) { transition-delay: .22s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(5) { transition-delay: .25s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(6) { transition-delay: .28s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(7) { transition-delay: .31s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(8) { transition-delay: .34s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(9) { transition-delay: .37s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(10) { transition-delay: .4s; }
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode .desktop-sidebar-nav-scroll > *:nth-child(n+11) { transition-delay: .42s; }
+
+            /* Closing: fade/slide back out quickly, no stagger needed */
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode:not(.open) > *,
+            .mobile-container.sidebar-page .bottom-nav-bar.drawer-mode:not(.open) .desktop-sidebar-nav-scroll > * {
+                transition-delay: 0s !important;
             }
         }
 
@@ -497,6 +827,27 @@ require_once __DIR__ . '/../config/config.php';
 .desktop-sidebar-section-label {
     display: none !important;
 }
+.mobile-drawer-support-link {
+    display: none !important;
+}
+/* Brand badge/logo/text visuals — identical on the desktop sidebar and the
+   mobile drawer (both navy), so these are unconditional (single source of
+   truth) rather than duplicated inside each breakpoint's block. Only
+   .desktop-sidebar-brand's own display/show-hide stays breakpoint-gated. */
+.desktop-sidebar-brand { align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.08); flex: 0 0 auto; }
+.desktop-sidebar-mark {
+    width: 40px; height: 40px; border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1, #3b32b3);
+    color: #fff; font-weight: 800; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 16px rgba(59,50,179,.45);
+    flex: none; overflow: hidden;
+}
+.desktop-sidebar-mark.has-logo { background: #fff; box-shadow: 0 2px 8px rgba(15,23,42,.18); }
+.desktop-sidebar-mark i { font-size: 18px; color: #fff; }
+.desktop-sidebar-logo-img { width: 100%; height: 100%; object-fit: contain; display: block; padding: 4px; }
+.desktop-sidebar-brand-text b { display: block; color: #fff; font-size: 15px; font-weight: 700; line-height: 1.2; }
+.desktop-sidebar-brand-text span { display: block; color: rgba(255,255,255,.5); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; margin-top: 2px; }
 /* On mobile, unwrap scroll container so bottom-nav stays horizontal flex */
 .desktop-sidebar-nav-scroll {
     display: contents;
@@ -735,8 +1086,38 @@ require_once __DIR__ . '/../config/config.php';
         grid-template-columns: repeat(3, 1fr);
         gap: 14px;
     }
-    .ov-card { padding: 18px 14px; border-radius: 14px; }
-    .ov-count { font-size: 30px; }
+    /* Desktop only: icon top-left, count below it, label to the right in a
+       larger font — plus a stylish accent border + lifted shadow on hover. */
+    .ov-card {
+        padding: 18px 16px;
+        border-radius: 14px;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        grid-template-areas: "icon label" "count label";
+        align-items: center;
+        column-gap: 16px;
+        border: 1px solid transparent;
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .ov-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 28px rgba(15,23,42,.10);
+    }
+    .ov-card.pending-vessel:hover { border-color: rgba(37,99,235,.3); }
+    .ov-card.pending-report:hover { border-color: rgba(234,88,12,.3); }
+    .ov-card.completed:hover { border-color: rgba(22,163,74,.3); }
+    .ov-icon { grid-area: icon; margin-bottom: 0; }
+    .ov-count { font-size: 30px; grid-area: count; margin-bottom: 0; }
+    .ov-label {
+        grid-area: label;
+        font-size: 25px;
+        font-weight: 650;
+        line-height: 1.25;
+        padding-left: 50px;
+    }
+    .ov-card.pending-vessel .ov-label { color: #1e40af; }
+    .ov-card.pending-report .ov-label { color: #c2410c; }
+    .ov-card.completed .ov-label { color: #166534; }
     .stat-grid {
         grid-template-columns: repeat(4, 1fr);
         gap: 14px;
@@ -744,6 +1125,19 @@ require_once __DIR__ . '/../config/config.php';
         max-width: 1200px;
     }
     .stat-card { padding: 16px; border-radius: 14px; }
+    .recovery-row-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+        padding: 12px 8px 0;
+        max-width: 1200px;
+    }
+    .ships-row-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+        padding: 12px 8px 0;
+        max-width: 1200px;
+    }
+    .recovery-row-card { padding: 16px; border-radius: 14px; }
     .search-filter-row { padding: 14px 16px 10px; max-width: none; width: 100%; }
     .vessel-list-container { padding: 0 16px 12px; max-width: none; width: 100%; }
     .list-controls-panel {

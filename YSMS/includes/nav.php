@@ -47,6 +47,9 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <b>YMR</b>
             <span>SURVEY MANAGEMENT</span>
         </div>
+        <button type="button" class="drawer-close-btn" id="drawerCloseBtn" aria-label="Close navigation menu" data-testid="drawer-close-button">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
     </div>
 
     <div class="desktop-sidebar-nav-scroll">
@@ -54,7 +57,6 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         // Inbox (Admin, Surveyor): every in-app notification, with an unread badge.
         // Team Chat: members see it with an unread badge; Admin/Super Admin
         // always see it so they can set up membership. Never shown to Clients.
-        // On mobile both are hidden from the bottom bar and shown in the drawer.
         $inbox_unread = null;
         if (!empty($_SESSION['user_id']) && in_array($user_role, ['Admin', 'Surveyor'], true)) {
             if (!function_exists('getUnreadNotificationCount')) {
@@ -74,9 +76,9 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             || ($team_chat_nav !== null && $team_chat_nav['unread'] > 0 && $current_page !== 'team_chat.php');
         if ($inbox_unread !== null || $team_chat_nav !== null):
         ?>
-        <div class="desktop-sidebar-section-label">Messages</div>
+        <div class="desktop-sidebar-section-label desktop-only-nav drawer-reveal">Messages</div>
         <?php if ($inbox_unread !== null): ?>
-        <a href="inbox.php" class="nav-item-btn hide-cancelled-on-mobile-bn <?= ($current_page == 'inbox.php') ? 'active' : '' ?>" data-testid="sidebar-inbox-link">
+        <a href="inbox.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'inbox.php') ? 'active' : '' ?>" data-testid="sidebar-inbox-link">
             <i class="fa-solid fa-inbox"></i>
             <span>Inbox</span>
             <?php if ($inbox_unread > 0): ?>
@@ -85,7 +87,7 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         </a>
         <?php endif; ?>
         <?php if ($team_chat_nav !== null): ?>
-        <a href="team_chat.php" class="nav-item-btn hide-cancelled-on-mobile-bn <?= ($current_page == 'team_chat.php') ? 'active' : '' ?>" data-testid="sidebar-team-chat-link">
+        <a href="team_chat.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'team_chat.php') ? 'active' : '' ?>" data-testid="sidebar-team-chat-link">
             <i class="fa-solid fa-comments"></i>
             <span>Team Chat</span>
             <?php if ($team_chat_nav['unread'] > 0): ?>
@@ -110,7 +112,7 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         <?php endif; ?>
         <?php endif; ?>
 
-        <div class="desktop-sidebar-section-label">Main</div>
+        <div class="desktop-sidebar-section-label drawer-reveal">Main</div>
         <a href="index.php" class="nav-item-btn <?= ($current_page == 'index.php') ? 'active' : '' ?>" data-testid="navigation-home-link">
             <i class="fa-solid fa-house"></i>
             <span>Home</span>
@@ -172,33 +174,32 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         </a>
 
         <?php if ($user_role === 'Admin'): ?>
-        <!-- Desktop only: FAB Quick Actions as sidebar links -->
-        <div class="desktop-sidebar-section-label desktop-only-nav">Quick Actions</div>
-        <a href="assign_vessel.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'assign_vessel.php') ? 'active' : '' ?>" data-testid="sidebar-assign-vessel-link">
+        <!-- Desktop sidebar + mobile drawer: FAB Quick Actions as menu links -->
+        <div class="desktop-sidebar-section-label desktop-only-nav drawer-reveal">Quick Actions</div>
+        <a href="assign_vessel.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'assign_vessel.php') ? 'active' : '' ?>" data-testid="sidebar-assign-vessel-link">
             <i class="fa-solid fa-ship"></i>
             <span>Assign Vessel</span>
         </a>
-        <a href="add_surveyor.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'add_surveyor.php') ? 'active' : '' ?>" data-testid="sidebar-add-surveyor-link">
+        <a href="add_surveyor.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'add_surveyor.php') ? 'active' : '' ?>" data-testid="sidebar-add-surveyor-link">
             <i class="fa-solid fa-user-gear"></i>
             <span>Add Surveyor</span>
         </a>
-        <a href="add_client.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'add_client.php') ? 'active' : '' ?>" data-testid="sidebar-add-client-link">
+        <a href="add_client.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'add_client.php') ? 'active' : '' ?>" data-testid="sidebar-add-client-link">
             <i class="fa-solid fa-user-plus"></i>
             <span>Add Client</span>
         </a>
-        <a href="admin_controls.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'admin_controls.php') ? 'active' : '' ?>" data-testid="sidebar-admin-controls-link">
+        <a href="admin_controls.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'admin_controls.php') ? 'active' : '' ?>" data-testid="sidebar-admin-controls-link">
             <i class="fa-solid fa-user-shield"></i>
             <span>Admin Controls</span>
         </a>
 
         <!-- Inside the navbar.php file, inside the <ul> tag, add this li: -->
 
-    <a href="manage_templates.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'manage_templates.php') ? 'active' : '' ?>" data-testid="sidebar-manage-templates-link">
+    <a href="manage_templates.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'manage_templates.php') ? 'active' : '' ?>" data-testid="sidebar-manage-templates-link">
         <i class="fa-solid fa-file-contract"></i>
         <span>Manage Templates</span>
     </a>
-
-        <a href="login_activity.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'login_activity.php') ? 'active' : '' ?>" data-testid="sidebar-login-activity-link">
+        <a href="login_activity.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'login_activity.php') ? 'active' : '' ?>" data-testid="sidebar-login-activity-link">
             <i class="fa-solid fa-shield-halved"></i>
             <span>Login Activity</span>
         </a>
@@ -211,22 +212,22 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         <!-- Desktop sidebar + mobile drawer: Client-only section. Request
              Survey mirrors the mobile FAB's "Request Survey" option so it's
              reachable from the desktop sidebar too (desktop hides the FAB
-             trigger entirely). -->
+             entirely — see the "+" trigger comment below). -->
         <div class="desktop-sidebar-section-label desktop-only-nav drawer-reveal">Client</div>
         <a href="assign_vessel.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'assign_vessel.php') ? 'active' : '' ?>" data-testid="sidebar-request-survey-link">
             <i class="fa-solid fa-ship"></i>
             <span>Request Survey</span>
         </a>
         <?php elseif ($user_role === 'Super Admin'): ?>
-        <!-- Desktop only: Super Admin Quick Actions — Add Client + Add Admin only
-             (Assign Vessel / Admin Controls / Manage Templates / Add Surveyor stay
-             Admin-only, both here and server-side on those pages). -->
-        <div class="desktop-sidebar-section-label desktop-only-nav">Quick Actions</div>
-        <a href="add_client.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'add_client.php') ? 'active' : '' ?>" data-testid="sidebar-add-client-link">
+        <!-- Desktop sidebar + mobile drawer: Super Admin Quick Actions — Add Client +
+             Add Admin only (Assign Vessel / Admin Controls / Manage Templates /
+             Add Surveyor stay Admin-only, both here and server-side on those pages). -->
+        <div class="desktop-sidebar-section-label desktop-only-nav drawer-reveal">Quick Actions</div>
+        <a href="add_client.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'add_client.php') ? 'active' : '' ?>" data-testid="sidebar-add-client-link">
             <i class="fa-solid fa-user-plus"></i>
             <span>Add Client</span>
         </a>
-        <a href="add_admin.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'add_admin.php') ? 'active' : '' ?>" data-testid="sidebar-add-admin-link">
+        <a href="add_admin.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'add_admin.php') ? 'active' : '' ?>" data-testid="sidebar-add-admin-link">
             <i class="fa-solid fa-user-shield"></i>
             <span>Add Admin</span>
         </a>
@@ -240,7 +241,7 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         </a>
         <!-- 🌟 TEMPORARY — remove this link (and super_admin_controls.php) once
              go-live test-data cleanup is done. -->
-        <a href="super_admin_controls.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'super_admin_controls.php') ? 'active' : '' ?>" data-testid="sidebar-data-cleanup-link">
+        <a href="super_admin_controls.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'super_admin_controls.php') ? 'active' : '' ?>" data-testid="sidebar-data-cleanup-link">
             <i class="fa-solid fa-trash"></i>
             <span>Data Cleanup (Temp)</span>
         </a>
@@ -249,8 +250,8 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         <?php if ($user_role === 'Admin'): ?>
         <!-- Admin: sidebar "My Profile" is replaced with a shortcut to Formats
              (upload/manage the format files Surveyors see on formats_download.php). -->
-        <div class="desktop-sidebar-section-label desktop-only-nav">Formats</div>
-        <a href="formats_download.php" class="nav-item-btn desktop-only-nav <?= ($current_page == 'formats_download.php') ? 'active' : '' ?>" data-testid="sidebar-formats-link">
+        <div class="desktop-sidebar-section-label desktop-only-nav drawer-reveal">Formats</div>
+        <a href="formats_download.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'formats_download.php') ? 'active' : '' ?>" data-testid="sidebar-formats-link">
             <i class="fa-solid fa-file-excel"></i>
             <span>Formats</span>
         </a>
@@ -275,6 +276,10 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
                 <div class="desktop-sidebar-user-name" title="<?= htmlspecialchars($sidebar_user_name, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($sidebar_user_name, ENT_QUOTES, 'UTF-8') ?></div>
                 <div class="desktop-sidebar-user-role"><?= htmlspecialchars($user_role ?: 'User', ENT_QUOTES, 'UTF-8') ?></div>
             </div>
+        </a>
+        <a href="coming_soon.php?feature=Support" class="mobile-drawer-support-link" data-testid="drawer-support-link">
+            <i class="fa-solid fa-circle-question"></i>
+            <span>Support</span>
         </a>
         <a href="logout.php" class="desktop-sidebar-logout" data-testid="sidebar-logout-link">
             <i class="fa-solid fa-arrow-right-from-bracket"></i>

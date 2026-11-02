@@ -38,10 +38,12 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $pending_reports = $db->query("SELECT COUNT(*) FROM surveys WHERE status = 'Pending Report'")->fetchColumn();
     $completed_vessels = $db->query("SELECT COUNT(*) FROM surveys WHERE status = 'Completed'")->fetchColumn();
 
-    // అడ్మిన్ కి మొత్తం వెసెల్స్ లోని O21 రికవరీ సమ్ (అన్ని అప్‌లోడ్ అయిన ఎక్సెల్ రిపోర్ట్స్ నుండి)
+    // Total Recovery: every vessel that has left Pending Vessels (Pending Report +
+    // Completed). One row per vessel, so a vessel is counted once whatever stage it is in;
+    // the stored value is the Excel-extracted or manually entered recovery.
     $total_recovery = $db->query("SELECT SUM(ABS(recovery_amount)) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . "")->fetchColumn();
     
-    // ఈ కరెంట్ మంత్ కి సంబంధించిన రికవరీ సమ్ మాత్రమే (రిపోర్ట్ అప్‌లోడ్ అయిన నెల ఆధారంగా)
+    // This Month Recovery: same vessels, Survey Completed Date in the current calendar month.
     $month_recovery = $db->query("SELECT SUM(ABS(recovery_amount)) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND " . surveyCompletedDateSql('surveys') . " >= '$cm_start' AND " . surveyCompletedDateSql('surveys') . " < '$cm_end'")->fetchColumn();
 
 
@@ -179,6 +181,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $avg_ships_per_month = $months_span > 0 ? round(((float)$avg_ships) / (float)$months_span, 1) : 0;
     $avg_recovery_per_ship = $db->query("SELECT AVG(ABS(recovery_amount)) FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND ABS(recovery_amount) > 0")->fetchColumn();
     $avg_recovery_per_surveyor = $db->query("SELECT AVG(t.s) FROM (SELECT SUM(ABS(recovery_amount)) AS s FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " GROUP BY surveyor_id) t")->fetchColumn();
+    $avg_ships_per_surveyor = $db->query("SELECT AVG(t.cnt) FROM (SELECT COUNT(*) AS cnt FROM surveys WHERE status = 'Completed' GROUP BY surveyor_id) t")->fetchColumn();
 } elseif ($role === 'Client') {
     $stmt_recent = $db->prepare("SELECT vessel_name, survey_type_ids, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND client_id = ? ORDER BY survey_completed_date DESC, id DESC LIMIT 1");
     $stmt_recent->execute([$client_row_id]);
@@ -193,6 +196,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $avg_ships_per_month = $months_span > 0 ? round(((float)$avg_ships) / (float)$months_span, 1) : 0;
     $avg_recovery_per_ship = null;
     $avg_recovery_per_surveyor = null;
+    $avg_ships_per_surveyor = null;
 } else {
     $assignedSql = "(surveyor_id = ? OR id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))";
     $stmt_recent = $db->prepare("SELECT vessel_name, survey_type_ids, vlsfo_recovery, lsmgo_recovery, hsfo_recovery, recovery_amount FROM surveys WHERE status IN ('Pending Report','Completed') AND recovery_amount IS NOT NULL AND " . recoveryAppliesSql('surveys') . " AND $assignedSql ORDER BY survey_completed_date DESC, id DESC LIMIT 1");
@@ -207,6 +211,7 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $avg_ships_per_month = $months_span > 0 ? round(((float)$avg_ships) / (float)$months_span, 1) : 0;
     $avg_recovery_per_ship = null;
     $avg_recovery_per_surveyor = null;
+    $avg_ships_per_surveyor = null;
 }
 $recent_vessel_name = $recent_row['vessel_name'] ?? '—';
 // Onhire survey → its recovery is shown with a minus sign (display only)
@@ -305,14 +310,17 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         
         <div class="overview-grid">
             <div class="ov-card pending-vessel" onclick="location.href='vessels.php'">
+                <div class="ov-icon"><i class="fa-solid fa-ship"></i></div>
                 <div class="ov-count"><?= $pending_vessels ?></div>
-                <div class="ov-label">Pending<br>Vessel's</div>
+                <div class="ov-label">Pending<br>Vessels</div>
             </div>
             <div class="ov-card pending-report" onclick="location.href='reports.php'">
+                <div class="ov-icon"><i class="fa-solid fa-file-lines"></i></div>
                 <div class="ov-count"><?= $pending_reports ?></div>
                 <div class="ov-label">Pending<br>Reports</div>
             </div>
             <div class="ov-card completed" onclick="location.href='completed.php'">
+                <div class="ov-icon"><i class="fa-solid fa-check"></i></div>
                 <div class="ov-count"><?= $completed_vessels ?></div>
                 <div class="ov-label">Completed<br>Vessels</div>
             </div>
@@ -327,22 +335,22 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
 
     <div class="stat-grid">
         <div class="stat-card" role="button" style="cursor:pointer;" onclick="openRecoveryModal('total')" data-testid="total-recovery-card">
-            <span class="stat-title">Total Recovery</span>
+            <span class="stat-title"><i class="fa-solid fa-arrow-trend-up stat-title-icon"></i>Total Recovery</span>
             <!-- 🌟 $ సింబల్ తీసివేసి కేవలం వాల్యూ (MT తో కలిపి) డిస్‌ప్లే అవుతుంది -->
             <div class="stat-val"><?= $total_recovery ?></div>
             <div class="mt-2" style="height: 30px; overflow: hidden;">
                 <svg viewBox="0 0 100 30" width="100%" height="100%" preserveAspectRatio="none">
-                    <path d="M0,25 Q15,5 30,20 T60,10 T90,15 T100,5" fill="none" stroke="#166534" stroke-width="2"/>
+                    <path d="M0,25 Q15,5 30,20 T60,10 T90,15 T100,5" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round"/>
                 </svg>
             </div>
         </div>
         <div class="stat-card" role="button" style="cursor:pointer;" onclick="openRecoveryModal('month')" data-testid="month-recovery-card">
-            <span class="stat-title">This Month Recovery</span>
+            <span class="stat-title stat-title--blue"><i class="fa-solid fa-chart-column stat-title-icon"></i>This Month Recovery</span>
             <!-- 🌟 $ సింబల్ తీసివేసి కేవలం వాల్యూ (MT తో కలిపి) డిస్‌ప్లే అవుతుంది -->
             <div class="stat-val"><?= $month_recovery ?></div>
             <div class="mt-2" style="height: 30px; overflow: hidden;">
                 <svg viewBox="0 0 100 30" width="100%" height="100%" preserveAspectRatio="none">
-                    <path d="M0,20 Q20,25 40,10 T70,18 T100,8" fill="none" stroke="#1e40af" stroke-width="2"/>
+                    <path d="M0,20 Q20,25 40,10 T70,18 T100,8" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/>
                 </svg>
             </div>
         </div>
@@ -370,27 +378,34 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             </div>
         </div>
         <div class="stat-card" data-testid="recent-survey-recovery-card">
-            <span class="stat-title">Recent Survey Recovery</span>
+            <span class="stat-title stat-title--purple"><i class="fa-solid fa-ship stat-title-icon"></i>Recent Survey Recovery</span>
             <div class="stat-val" style="font-size:14px;"><?= sanitize($recent_vessel_name) ?></div>
             <div class="text-muted mt-1" style="font-size:11px;">VLSFO: <?= $recent_vlsfo ?> · LSMGO: <?= $recent_lsmgo ?> · HSFO: <?= $recent_hsfo ?></div>
         </div>
         <div class="stat-card" data-testid="avg-ships-per-month-card">
-            <span class="stat-title">Average Ships Per Month</span>
+            <span class="stat-title stat-title--blue"><i class="fa-solid fa-calendar-days stat-title-icon"></i>Average Ships Per Month</span>
             <div class="stat-val"><?= $avg_ships_per_month_disp ?></div>
         </div>
         <?php if (in_array($role, ['Admin', 'Super Admin'], true)): ?>
         <div class="stat-card" data-testid="avg-recovery-per-ship-card">
-            <span class="stat-title">Average Recovery Per Ship</span>
+            <span class="stat-title"><i class="fa-solid fa-anchor stat-title-icon"></i>Average Recovery Per Ship</span>
             <div class="stat-val"><?= $avg_recovery_per_ship_disp ?></div>
         </div>
         <div class="stat-card" data-testid="avg-recovery-per-surveyor-card">
-            <span class="stat-title">Average Recovery Per Surveyor</span>
+            <span class="stat-title stat-title--purple"><i class="fa-solid fa-user-tie stat-title-icon"></i>Average Recovery Per Surveyor</span>
             <div class="stat-val"><?= $avg_recovery_per_surveyor_disp ?></div>
         </div>
         <?php endif; ?>
     </div>
 
     <?php if ($role === 'Super Admin'):
+        // 🌟 Super Admin analytics — Recovery by Surveyor (Top 10), Recovery by
+        // Port/Country/Client (Top 5 each), Top 5 completed ships by
+        // country/port, and average ships per year/month/day/surveyor. All
+        // computed live from the same `surveys`/`ports`/`clients`/`users`
+        // tables used everywhere else on this dashboard — no hardcoded values.
+        ensurePortsCountryColumn($db);
+
         $recovery_by_surveyor = $db->query("
             SELECT u.full_name, SUM(ABS(s.recovery_amount)) AS total
             FROM surveys s
@@ -398,33 +413,8 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             WHERE s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed') AND " . recoveryAppliesSql('s') . "
             GROUP BY s.surveyor_id, u.full_name
             ORDER BY total DESC
+            LIMIT 10
         ")->fetchAll(PDO::FETCH_ASSOC);
-    ?>
-    <div class="overview-section mt-4">
-        <div class="section-title-row">
-            <span class="section-title">Recovery by Surveyor</span>
-        </div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="recovery-by-surveyor-card">
-            <?php if (!empty($recovery_by_surveyor)): ?>
-                <?php foreach ($recovery_by_surveyor as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['full_name']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
-            <?php endif; ?>
-        </div>
-    </div>
-    <?php endif; ?>
-
-    <?php if ($role === 'Super Admin'):
-        // 🌟 Super Admin analytics — Recovery by Port/Country/Client, Top 5
-        // completed ships by country/port, and average ships per year/month/day.
-        // All computed live from the same `surveys`/`ports`/`clients` tables used
-        // everywhere else on this dashboard — no hardcoded values.
-        ensurePortsCountryColumn($db);
 
         $recovery_by_port = $db->query("
             SELECT p.port_name, SUM(ABS(s.recovery_amount)) AS total
@@ -433,6 +423,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             WHERE s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed') AND " . recoveryAppliesSql('s') . "
             GROUP BY s.port_id, p.port_name
             ORDER BY total DESC
+            LIMIT 5
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         $recovery_by_country = $db->query("
@@ -442,6 +433,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             WHERE s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed') AND " . recoveryAppliesSql('s') . "
             GROUP BY COALESCE(NULLIF(p.country, ''), 'India')
             ORDER BY total DESC
+            LIMIT 5
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         $recovery_by_client = $db->query("
@@ -451,6 +443,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             WHERE s.recovery_amount IS NOT NULL AND s.status IN ('Pending Report','Completed') AND " . recoveryAppliesSql('s') . "
             GROUP BY s.client_id, c.company_name
             ORDER BY total DESC
+            LIMIT 5
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         $ships_by_country_top5 = $db->query("
@@ -503,96 +496,126 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
 
     <div class="stat-grid" data-testid="super-admin-average-ships-grid">
         <div class="stat-card" data-testid="avg-ships-per-year-card">
-            <span class="stat-title">Average Ships Per Year</span>
+            <span class="stat-title stat-title--blue"><i class="fa-solid fa-calendar stat-title-icon"></i>Average Ships Per Year</span>
             <div class="stat-val"><?= number_format($sa_avg_per_year, 1) ?></div>
         </div>
         <div class="stat-card" data-testid="avg-ships-per-month-super-card">
-            <span class="stat-title">Average Ships Per Month</span>
+            <span class="stat-title"><i class="fa-solid fa-calendar-days stat-title-icon"></i>Average Ships Per Month</span>
             <div class="stat-val"><?= number_format($sa_avg_per_month, 1) ?></div>
         </div>
         <div class="stat-card" data-testid="avg-ships-per-day-card">
-            <span class="stat-title">Average Ships Per Day</span>
+            <span class="stat-title stat-title--orange"><i class="fa-solid fa-calendar-day stat-title-icon"></i>Average Ships Per Day</span>
             <div class="stat-val"><?= number_format($sa_avg_per_day, 2) ?></div>
         </div>
-    </div>
-
-    <div class="overview-section mt-4">
-        <div class="section-title-row"><span class="section-title">Recovery by Port</span></div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="recovery-by-port-card">
-            <?php if (!empty($recovery_by_port)): ?>
-                <?php foreach ($recovery_by_port as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['port_name']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
-            <?php endif; ?>
+        <div class="stat-card" data-testid="avg-ships-per-surveyor-card">
+            <span class="stat-title stat-title--purple"><i class="fa-solid fa-user-tie stat-title-icon"></i>Average Ships Per Surveyor</span>
+            <div class="stat-val"><?= number_format((float)$avg_ships_per_surveyor, 1) ?></div>
         </div>
     </div>
 
     <div class="overview-section mt-4">
-        <div class="section-title-row"><span class="section-title">Recovery by Country</span></div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="recovery-by-country-card">
-            <?php if (!empty($recovery_by_country)): ?>
-                <?php foreach ($recovery_by_country as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['country']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
-            <?php endif; ?>
+        <div class="section-title-row"><span class="section-title">Recovery Analytics</span></div>
+        <div class="recovery-row-grid" data-testid="recovery-row-grid">
+            <div class="recovery-row-card" data-testid="recovery-by-surveyor-card">
+                <div class="recovery-row-card-title"><span class="stat-title stat-title--purple"><i class="fa-solid fa-user-tie stat-title-icon"></i>Recovery by Surveyor — Top 10</span></div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($recovery_by_surveyor)): ?>
+                        <?php foreach ($recovery_by_surveyor as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['full_name']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="recovery-row-card" data-testid="recovery-by-port-card">
+                <div class="recovery-row-card-title"><span class="stat-title"><i class="fa-solid fa-anchor stat-title-icon"></i>Recovery by Port — Top 5</span></div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($recovery_by_port)): ?>
+                        <?php foreach ($recovery_by_port as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['port_name']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="recovery-row-card" data-testid="recovery-by-country-card">
+                <div class="recovery-row-card-title"><span class="stat-title stat-title--blue"><i class="fa-solid fa-earth-asia stat-title-icon"></i>Recovery by Country — Top 5</span></div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($recovery_by_country)): ?>
+                        <?php foreach ($recovery_by_country as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['country']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="recovery-row-card" data-testid="recovery-by-client-card">
+                <div class="recovery-row-card-title"><span class="stat-title stat-title--orange"><i class="fa-solid fa-building stat-title-icon"></i>Recovery by Client — Top 5</span></div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($recovery_by_client)): ?>
+                        <?php foreach ($recovery_by_client as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['company_name']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </div>
 
     <div class="overview-section mt-4">
-        <div class="section-title-row"><span class="section-title">Recovery by Client</span></div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="recovery-by-client-card">
-            <?php if (!empty($recovery_by_client)): ?>
-                <?php foreach ($recovery_by_client as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['company_name']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['total'], 3) ?> MT</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No recovery data yet.</div>
-            <?php endif; ?>
-        </div>
-    </div>
+        <div class="section-title-row"><span class="section-title">Ships Completed Analytics</span></div>
+        <div class="ships-row-grid" data-testid="ships-completed-row-grid">
+            <div class="recovery-row-card" data-testid="ships-by-country-top5-card">
+                <div class="recovery-row-card-title"><span class="stat-title"><i class="fa-solid fa-earth-americas stat-title-icon"></i>Ships Completed by Country — Top 5</span></div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($ships_by_country_top5)): ?>
+                        <?php foreach ($ships_by_country_top5 as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['country']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= (int)$row['cnt'] ?> ships</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No completed vessels yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
 
-    <div class="overview-section mt-4">
-        <div class="section-title-row"><span class="section-title">Ships Completed by Country — Top 5</span></div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="ships-by-country-top5-card">
-            <?php if (!empty($ships_by_country_top5)): ?>
-                <?php foreach ($ships_by_country_top5 as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['country']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= (int)$row['cnt'] ?> ships</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No completed vessels yet.</div>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <div class="overview-section mt-4">
-        <div class="section-title-row"><span class="section-title">Ships Completed by Port — Top 5</span></div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="ships-by-port-top5-card">
-            <?php if (!empty($ships_by_port_top5)): ?>
-                <?php foreach ($ships_by_port_top5 as $row): ?>
-                    <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
-                        <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['port_name']) ?></span>
-                        <span class="fw-bold text-primary" style="font-size:13.5px;"><?= (int)$row['cnt'] ?> ships</span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="text-muted text-center py-2" style="font-size:12.5px;">No completed vessels yet.</div>
-            <?php endif; ?>
+            <div class="recovery-row-card" data-testid="ships-by-port-top5-card">
+                <div class="recovery-row-card-title"><span class="stat-title stat-title--blue"><i class="fa-solid fa-ship stat-title-icon"></i>Ships Completed by Port — Top 5</span></div>
+                <div class="recovery-row-card-body">
+                    <?php if (!empty($ships_by_port_top5)): ?>
+                        <?php foreach ($ships_by_port_top5 as $row): ?>
+                            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid var(--border-color);">
+                                <span class="fw-semibold" style="font-size:13.5px;"><?= sanitize($row['port_name']) ?></span>
+                                <span class="fw-bold text-primary" style="font-size:13.5px;"><?= (int)$row['cnt'] ?> ships</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="text-muted text-center py-2" style="font-size:12.5px;">No completed vessels yet.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </div>
     <?php endif; ?>
@@ -603,45 +626,47 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             <span class="section-title">Surveyor Performance — Full Report</span>
             <a href="recovery.php" class="sfr-link" data-testid="sfr-recovery-link">Recovery details <i class="fa-solid fa-chevron-right"></i></a>
         </div>
-        <div class="bg-white rounded-4 shadow-sm border p-3" data-testid="surveyor-full-report-card">
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Surveyor</th>
-                            <th class="text-end">Ships Attended<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">As of Now</span></th>
-                            <th class="text-end">Ships Attended<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">This Month</span></th>
-                            <th class="text-end">Total Recovery<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">As of Now</span></th>
-                            <th class="text-end">Total Recovery<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">This Month</span></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (!empty($surveyor_full_report)): ?>
-                            <?php foreach ($surveyor_full_report as $row): ?>
+        <div class="recovery-row-grid" data-testid="surveyor-full-report-grid">
+            <div class="recovery-row-card" data-testid="surveyor-full-report-card">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
                             <tr>
-                                <td class="fw-semibold" style="font-size:13.5px;"><a href="recovery.php?surveyor=<?= (int)$row['id'] ?>" class="text-reset text-decoration-none"><?= sanitize($row['full_name']) ?></a><?php if (($row['user_status'] ?? '') === 'Inactive'): ?> <span class="text-muted" style="font-weight:400;font-size:11px;">(Inactive)</span><?php endif; ?></td>
-                                <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_total'] ?></td>
-                                <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_month'] ?></td>
-                                <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_total'], 3) ?> MT</td>
-                                <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_month'], 3) ?> MT</td>
+                                <th>Surveyor</th>
+                                <th class="text-end">Ships Attended<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">As of Now</span></th>
+                                <th class="text-end">Ships Attended<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">This Month</span></th>
+                                <th class="text-end">Total Recovery<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">As of Now</span></th>
+                                <th class="text-end">Total Recovery<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">This Month</span></th>
                             </tr>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <tr><td colspan="5" class="text-muted text-center py-3" style="font-size:12.5px;">No surveyors found.</td></tr>
+                        </thead>
+                        <tbody>
+                            <?php if (!empty($surveyor_full_report)): ?>
+                                <?php foreach ($surveyor_full_report as $row): ?>
+                                <tr>
+                                    <td class="fw-semibold" style="font-size:13.5px;"><a href="recovery.php?surveyor=<?= (int)$row['id'] ?>" class="text-reset text-decoration-none"><?= sanitize($row['full_name']) ?></a><?php if (($row['user_status'] ?? '') === 'Inactive'): ?> <span class="text-muted" style="font-weight:400;font-size:11px;">(Inactive)</span><?php endif; ?></td>
+                                    <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_total'] ?></td>
+                                    <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_month'] ?></td>
+                                    <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_total'], 3) ?> MT</td>
+                                    <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_month'], 3) ?> MT</td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr><td colspan="5" class="text-muted text-center py-3" style="font-size:12.5px;">No surveyors found.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                        <?php if (!empty($sfr_total)): ?>
+                        <tfoot>
+                            <tr class="sfr-total" data-testid="sfr-total-row">
+                                <td style="font-size:13.5px;">All vessels<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">each vessel once</span></td>
+                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-total-ships"><?= (int)$sfr_total['ships_total'] ?></td>
+                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-month-ships"><?= (int)$sfr_total['ships_month'] ?></td>
+                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-total-recovery"><?= number_format((float)$sfr_total['recovery_total'], 3) ?> MT</td>
+                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-month-recovery"><?= number_format((float)$sfr_total['recovery_month'], 3) ?> MT</td>
+                            </tr>
+                        </tfoot>
                         <?php endif; ?>
-                    </tbody>
-                    <?php if (!empty($sfr_total)): ?>
-                    <tfoot>
-                        <tr class="sfr-total" data-testid="sfr-total-row">
-                            <td style="font-size:13.5px;">All vessels<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">each vessel once</span></td>
-                            <td class="text-end" style="font-size:13.5px;" data-testid="sfr-total-ships"><?= (int)$sfr_total['ships_total'] ?></td>
-                            <td class="text-end" style="font-size:13.5px;" data-testid="sfr-month-ships"><?= (int)$sfr_total['ships_month'] ?></td>
-                            <td class="text-end" style="font-size:13.5px;" data-testid="sfr-total-recovery"><?= number_format((float)$sfr_total['recovery_total'], 3) ?> MT</td>
-                            <td class="text-end" style="font-size:13.5px;" data-testid="sfr-month-recovery"><?= number_format((float)$sfr_total['recovery_month'], 3) ?> MT</td>
-                        </tr>
-                    </tfoot>
-                    <?php endif; ?>
-                </table>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

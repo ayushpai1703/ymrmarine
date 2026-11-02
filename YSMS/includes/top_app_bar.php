@@ -5,8 +5,12 @@ $page_testid = isset($page_testid) ? $page_testid : 'page';
 ?>
 <div class="top-app-bar" data-testid="<?= sanitize($page_testid) ?>-top-app-bar">
     <div class="top-app-bar-left">
-        <button type="button" class="hamburger-menu-btn" aria-label="Open navigation" aria-expanded="false" data-testid="<?= sanitize($page_testid) ?>-hamburger-button">
-            <i class="fa-solid fa-bars"></i>
+        <button type="button" class="hamburger-menu-btn" aria-label="Open navigation menu" aria-expanded="false" data-testid="<?= sanitize($page_testid) ?>-hamburger-button">
+            <span class="hamburger-lines" aria-hidden="true">
+                <span class="hb-line hb-line-top"></span>
+                <span class="hb-line hb-line-mid"></span>
+                <span class="hb-line hb-line-bottom"></span>
+            </span>
         </button>
         <?php if ($back_url): ?>
             <a href="<?= sanitize($back_url) ?>" class="text-dark detail-back-btn" aria-label="Back" data-testid="<?= sanitize($page_testid) ?>-back-link"><i class="fa-solid fa-chevron-left"></i></a>
