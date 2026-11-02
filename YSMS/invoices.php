@@ -20,28 +20,12 @@ try {
 }
 
 // ---------- filters (GET) ----------
-$q = mb_substr(trim((string)($_GET['q'] ?? '')), 0, 100);
-$fStatus = in_array($_GET['status'] ?? '', INVOICE_STATUSES, true) ? (string)$_GET['status'] : '';
-$fType = mb_substr(trim((string)($_GET['type'] ?? '')), 0, 100);
-$fMonth = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', (string)($_GET['month'] ?? '')) ? (string)$_GET['month'] : '';
+// Opens on the pending invoices (every status except Completed); ?view=completed shows the rest.
+[$f, $whereSql, $params] = invoiceListFilters($_GET);
+$view = $f['view'];
+$q = $f['q']; $fStatus = $f['status']; $fType = $f['type']; $fMonth = $f['month'];
 $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 25;
-
-$where = ['1=1'];
-$params = [];
-if ($q !== '') {
-    $like = '%' . addcslashes($q, '%_\\') . '%';
-    $where[] = '(COALESCE(s.vessel_name, i.vessel_name) LIKE ? OR c.company_name LIKE ? OR p.port_name LIKE ? OR COALESCE(s.report_number, i.report_number) LIKE ? OR i.invoice_no LIKE ?)';
-    array_push($params, $like, $like, $like, $like, $like);
-}
-if ($fStatus !== '') { $where[] = 'i.invoice_status = ?'; $params[] = $fStatus; }
-if ($fType !== '') { $where[] = listFilterTypeSql([$fType], $params); }
-if ($fMonth !== '') {
-    $where[] = "s.survey_completed_date >= ? AND s.survey_completed_date < ?";
-    $params[] = $fMonth . '-01';
-    $params[] = date('Y-m-d', strtotime($fMonth . '-01 +1 month'));
-}
-$whereSql = implode(' AND ', $where);
 $from = "FROM invoices i LEFT JOIN surveys s ON s.id = i.survey_id LEFT JOIN clients c ON c.id = s.client_id
          LEFT JOIN survey_types st ON st.id = s.survey_type_id LEFT JOIN ports p ON p.id = s.port_id";
 $cnt = $db->prepare("SELECT COUNT(*) $from WHERE $whereSql");
@@ -50,8 +34,7 @@ $total = (int)$cnt->fetchColumn();
 $pages = max(1, (int)ceil($total / $perPage));
 $page = min($page, $pages);
 $offset = ($page - 1) * $perPage;
-$scd = "(CASE WHEN YEAR(s.survey_completed_date) > 0 THEN s.survey_completed_date END)";
-$list = $db->prepare(invoiceRowSql() . " WHERE $whereSql ORDER BY ($scd IS NULL) ASC, $scd DESC, i.id DESC LIMIT $perPage OFFSET $offset");
+$list = $db->prepare(invoiceRowSql() . " WHERE $whereSql ORDER BY " . invoiceListOrderSql() . " LIMIT $perPage OFFSET $offset");
 $list->execute($params);
 $rows = $list->fetchAll(PDO::FETCH_ASSOC);
 
@@ -59,13 +42,15 @@ $rows = $list->fetchAll(PDO::FETCH_ASSOC);
 $byStatus = array_fill_keys(INVOICE_STATUSES, 0);
 foreach ($db->query('SELECT invoice_status, COUNT(*) n FROM invoices GROUP BY invoice_status')->fetchAll(PDO::FETCH_ASSOC) as $r) $byStatus[$r['invoice_status']] = (int)$r['n'];
 $allCount = array_sum($byStatus);
+$pendingCount = $allCount - $byStatus['Completed'];
 $types = $db->query("SELECT type_name FROM survey_types WHERE type_name <> '' ORDER BY type_name")->fetchAll(PDO::FETCH_COLUMN);
 $months = $db->query("SELECT DISTINCT DATE_FORMAT(s.survey_completed_date, '%Y-%m') m FROM invoices i JOIN surveys s ON s.id = i.survey_id
     WHERE YEAR(s.survey_completed_date) > 0 ORDER BY m DESC")->fetchAll(PDO::FETCH_COLUMN);
 $filtered = $q !== '' || $fStatus !== '' || $fType !== '' || $fMonth !== '';
 
 function invQs(array $set = []): string {
-    $base = ['q' => $_GET['q'] ?? '', 'status' => $_GET['status'] ?? '', 'type' => $_GET['type'] ?? '', 'month' => $_GET['month'] ?? '', 'page' => $_GET['page'] ?? ''];
+    global $f;
+    $base = ['view' => $f['view'] === 'completed' ? 'completed' : '', 'q' => $f['q'], 'status' => $f['status'], 'type' => $f['type'], 'month' => $f['month'], 'page' => $_GET['page'] ?? ''];
     return http_build_query(array_filter(array_merge($base, $set), fn($v) => $v !== '' && $v !== null));
 }
 function invPageUrl(int $p): string {
@@ -87,6 +72,12 @@ include 'includes/header.php';
 .inv-stat { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.16); border-radius: 14px; padding: 7px 14px; text-align: center; min-width: 68px; text-decoration: none; }
 .inv-stat .n { font-size: 17px; font-weight: 800; color: #fff; line-height: 1.1; }
 .inv-stat .l { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.6); margin-top: 2px; white-space: nowrap; }
+.inv-stat.on { background: rgba(255,255,255,.24); border-color: rgba(255,255,255,.55); box-shadow: 0 0 0 2px rgba(255,255,255,.18); }
+.inv-stat:hover { background: rgba(255,255,255,.18); }
+.inv-dl { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; flex: none; background: linear-gradient(120deg, #14B8A6, #0D9488); color: #fff; padding: 0 16px; border-radius: 999px; font-weight: 700; font-size: 12.5px; height: 34px; text-decoration: none; box-shadow: 0 6px 16px rgba(13,148,136,.3); white-space: nowrap; }
+.inv-dl:hover { color: #fff; box-shadow: 0 10px 22px rgba(13,148,136,.4); }
+.inv-dl span { width: 18px; height: 18px; border-radius: 50%; background: rgba(255,255,255,.22); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; }
+.inv-row-out { transition: opacity .35s ease, transform .35s ease; opacity: 0; transform: translateX(16px); }
 .inv-stat.cp .n { color: #FDBA74; } .inv-stat.cost .n { color: #93C5FD; } .inv-stat.other .n { color: #CBD5E1; } .inv-stat.done .n { color: #86EFAC; }
 .inv-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 9px 14px; box-shadow: 0 2px 10px rgba(15,23,42,.05); }
 .inv-search { display: flex; align-items: center; gap: 7px; background: #F8FAFC; border: 1.5px solid #e2e8f0; border-radius: 999px; padding: 0 12px; height: 34px; flex: 0 1 260px; min-width: 160px; }
@@ -161,7 +152,8 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
 }
 @media (max-width: 991.98px) {
     .inv-wrap { padding: 4px 12px 110px; }
-    .inv-stats { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; }
+    .inv-stats { display: grid; grid-template-columns: repeat(5, 1fr); width: 100%; gap: 6px; }
+    .inv-dl { margin-left: 0; flex: 1 1 100%; justify-content: center; }
     .inv-stat { min-width: 0; padding: 6px 4px; }
     .inv-stat .l { white-space: normal; font-size: 8px; }
     .inv-d { display: none; }
@@ -179,21 +171,26 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
         <i class="fa-solid fa-file-invoice-dollar inv-hero-bg" aria-hidden="true"></i>
         <div>
             <div class="inv-hero-title">Invoices</div>
-            <div class="inv-hero-sub"><?= $allCount ?> vessel<?= $allCount === 1 ? '' : 's' ?> registered for invoicing</div>
+            <div class="inv-hero-sub"><?= $view === 'completed' ? $byStatus['Completed'] . ' completed invoice' . ($byStatus['Completed'] === 1 ? '' : 's') : $pendingCount . ' pending invoice' . ($pendingCount === 1 ? '' : 's') ?></div>
         </div>
         <div class="inv-stats">
-            <?php foreach (INVOICE_STATUSES as $s): $qs = invQs(['status' => $s, 'page' => '']); ?>
-            <a class="inv-stat <?= invoiceStatusClass($s) ?>" href="invoices.php?<?= sanitize($qs) ?>" title="Show <?= sanitize($s) ?>" data-testid="inv-stat-<?= invoiceStatusClass($s) ?>"><div class="n"><?= $byStatus[$s] ?></div><div class="l"><?= sanitize(str_replace('Pending for ', '', $s)) ?></div></a>
+            <a class="inv-stat pend<?= $view === 'pending' && $fStatus === '' ? ' on' : '' ?>" href="invoices.php" title="All pending invoices" data-testid="inv-stat-pending"><div class="n" data-count="pending"><?= $pendingCount ?></div><div class="l">Pending</div></a>
+            <?php foreach (INVOICE_STATUSES as $s): if ($s === 'Completed') continue; ?>
+            <a class="inv-stat <?= invoiceStatusClass($s) ?><?= $view === 'pending' && $fStatus === $s ? ' on' : '' ?>" href="invoices.php?status=<?= urlencode($s) ?>" title="Show <?= sanitize($s) ?>" data-testid="inv-stat-<?= invoiceStatusClass($s) ?>"><div class="n" data-count="<?= sanitize($s) ?>"><?= $byStatus[$s] ?></div><div class="l"><?= sanitize(str_replace('Pending for ', '', $s)) ?></div></a>
             <?php endforeach; ?>
+            <a class="inv-stat done<?= $view === 'completed' ? ' on' : '' ?>" href="invoices.php?view=completed" title="Completed invoices" data-testid="inv-stat-done"><div class="n" data-count="Completed"><?= $byStatus['Completed'] ?></div><div class="l">Completed</div></a>
         </div>
     </div>
 
     <form class="inv-toolbar" method="get" action="invoices.php" id="invFilters" data-testid="inv-filters">
+        <?php if ($view === 'completed'): ?><input type="hidden" name="view" value="completed"><?php endif; ?>
         <div class="inv-search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" name="q" value="<?= sanitize($q) ?>" placeholder="Search vessel, client, port, report no…" aria-label="Search" data-testid="inv-search"></div>
+        <?php if ($view === 'pending'): ?>
         <select name="status" class="inv-sel<?= $fStatus ? ' on' : '' ?>" aria-label="Invoice status" data-testid="inv-f-status">
-            <option value="">All statuses</option>
-            <?php foreach (INVOICE_STATUSES as $s): ?><option value="<?= sanitize($s) ?>"<?= $fStatus === $s ? ' selected' : '' ?>><?= sanitize($s) ?></option><?php endforeach; ?>
+            <option value="">All pending statuses</option>
+            <?php foreach (INVOICE_STATUSES as $s): if ($s === 'Completed') continue; ?><option value="<?= sanitize($s) ?>"<?= $fStatus === $s ? ' selected' : '' ?>><?= sanitize($s) ?></option><?php endforeach; ?>
         </select>
+        <?php endif; ?>
         <select name="type" class="inv-sel<?= $fType ? ' on' : '' ?>" aria-label="Survey type" data-testid="inv-f-type">
             <option value="">All survey types</option>
             <?php foreach ($types as $t): ?><option value="<?= sanitize($t) ?>"<?= $fType === $t ? ' selected' : '' ?>><?= sanitize($t) ?></option><?php endforeach; ?>
@@ -202,12 +199,14 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
             <option value="">Survey completed — any month</option>
             <?php foreach ($months as $m): ?><option value="<?= sanitize($m) ?>"<?= $fMonth === $m ? ' selected' : '' ?>><?= date('F Y', strtotime($m . '-01')) ?></option><?php endforeach; ?>
         </select>
-        <?php if ($filtered): ?><a class="inv-reset" href="invoices.php" data-testid="inv-reset"><i class="fa-solid fa-rotate-left"></i> Reset filters</a><?php endif; ?>
+        <?php if ($filtered): ?><a class="inv-reset" href="invoices.php<?= $view === 'completed' ? '?view=completed' : '' ?>" data-testid="inv-reset"><i class="fa-solid fa-rotate-left"></i> Reset filters</a><?php endif; ?>
+        <?php $expQs = invQs(['page' => '']); ?>
+        <a class="inv-dl" href="export_invoices.php<?= $expQs !== '' ? '?' . sanitize($expQs) : '' ?>" data-testid="inv-download"><span><i class="fa-solid fa-arrow-down"></i></span> Download</a>
     </form>
-    <div class="inv-meta" data-testid="inv-meta">Showing <b><?= $total ? ($offset + 1) . '–' . ($offset + count($rows)) : 0 ?></b> of <b><?= $total ?></b><?= $filtered ? ' (filtered)' : '' ?> · newest Survey Completed Date first</div>
+    <div class="inv-meta" data-testid="inv-meta">Showing <b><?= $total ? ($offset + 1) . '–' . ($offset + count($rows)) : 0 ?></b> of <b><?= $total ?></b> <?= $view === 'completed' ? 'completed' : 'pending' ?> invoice<?= $total === 1 ? '' : 's' ?><?= $filtered ? ' (filtered)' : '' ?> · newest Survey Completed Date first</div>
 
     <?php if (!$rows): ?>
-    <div class="inv-card"><div class="inv-empty" data-testid="inv-empty"><i class="fa-solid fa-file-invoice"></i><?= $filtered ? 'No invoices match these filters.' : 'No vessels registered for invoicing yet. Vessels appear here when their survey documents are submitted.' ?></div></div>
+    <div class="inv-card"><div class="inv-empty" data-testid="inv-empty"><i class="fa-solid fa-file-invoice"></i><?= $filtered ? 'No invoices match these filters.' : ($view === 'completed' ? 'No completed invoices yet.' : 'No pending invoices. Vessels appear here as soon as their survey is completed (documents submitted).') ?></div></div>
     <?php else: ?>
     <div class="inv-card inv-d">
         <div style="overflow-x:auto">
@@ -286,6 +285,7 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
   var CSRF = <?= json_encode(csrf_token()) ?>;
   var MAX_MB = <?= (int)(invoiceMaxBytes() / 1048576) ?>;
   var API = 'ajax/invoices.php';
+  var VIEW = <?= json_encode($view) ?>;
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function toast(icon, title) { Swal.fire({ toast: true, position: 'top-end', icon: icon, title: title, showConfirmButton: false, timer: 2600, timerProgressBar: true }); }
@@ -316,6 +316,14 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
     var info = d.has_file ? '<div class="inv-file" title="' + esc(d.file_name) + '"><i class="fa-solid fa-file-pdf" style="color:#DC2626"></i> ' + esc(d.file_name) +
       (d.invoice_no ? ' · No. ' + esc(d.invoice_no) : '') + (d.uploaded_at ? ' · ' + esc(d.uploaded_at) : '') + '</div>' : '';
     el.querySelector('[data-inv-actions]').innerHTML = '<div class="inv-actions">' + a + '</div>' + info;
+  }
+  // Header counters (data-count="<status>" and "pending").
+  function bump(status, by) {
+    [status, status === 'Completed' ? null : 'pending'].forEach(function (k) {
+      if (!k) return;
+      var n = document.querySelector('[data-count="' + k + '"]');
+      if (n) n.textContent = Math.max(0, (parseInt(n.textContent, 10) || 0) + by);
+    });
   }
   function update(id, row) { holders(id).forEach(function (el) { el._inv = row; el.setAttribute('data-inv', JSON.stringify(row)); render(el); }); }
 
@@ -361,7 +369,15 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
       b.disabled = true; b.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving';
       post(fd({ a: 'status', id: d.id, status: want })).then(function (res) {
         if (!res.ok) throw new Error(res.error || 'Could not update the status.');
-        update(d.id, res.row); toast('success', 'Status updated: ' + res.row.status);
+        var moved = (VIEW === 'pending') === (res.row.status === 'Completed');
+        bump(d.status, -1); bump(res.row.status, +1);
+        if (moved) {
+          // The invoice now belongs to the other list (pending ↔ completed): take it off this one.
+          holders(d.id).forEach(function (el) { el.classList.add('inv-row-out'); setTimeout(function () { el.remove(); }, 380); });
+          toast('success', res.row.status === 'Completed' ? 'Marked Completed — moved to Completed invoices' : 'Moved back to pending invoices (' + res.row.status + ')');
+        } else {
+          update(d.id, res.row); toast('success', 'Status updated: ' + res.row.status);
+        }
       }).catch(function (e) {
         update(d.id, d); // back to the saved status
         Swal.fire({ icon: 'error', title: 'Status not saved', text: e.message || 'Please try again.' });

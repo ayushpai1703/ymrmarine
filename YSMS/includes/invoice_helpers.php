@@ -153,3 +153,41 @@ function invoiceRowJson(PDO $db, array $r): array {
 function invoiceStatusClass(string $s): string {
     return ['Pending for CP Prices' => 'cp', 'Pending for Cost' => 'cost', 'Pending for Other Reason' => 'other', 'Completed' => 'done'][$s] ?? 'other';
 }
+
+/**
+ * Invoices list filters from the query string (invoices.php and export_invoices.php):
+ *   view   — 'pending' (default: every status except Completed) or 'completed'
+ *   status — one pending status (pending view only), q, type, month (survey completed, YYYY-MM)
+ * Returns [state, whereSql, params]; the SQL uses the aliases of invoiceRowSql().
+ */
+function invoiceListFilters(array $g): array {
+    $st = [
+        'view' => ($g['view'] ?? '') === 'completed' ? 'completed' : 'pending',
+        'q' => mb_substr(trim((string)($g['q'] ?? '')), 0, 100),
+        'status' => '',
+        'type' => mb_substr(trim((string)($g['type'] ?? '')), 0, 100),
+        'month' => preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', (string)($g['month'] ?? '')) ? (string)$g['month'] : '',
+    ];
+    if ($st['view'] === 'pending' && in_array($g['status'] ?? '', INVOICE_STATUSES, true) && $g['status'] !== 'Completed') $st['status'] = (string)$g['status'];
+    $where = [$st['view'] === 'completed' ? "i.invoice_status = 'Completed'" : "i.invoice_status <> 'Completed'"];
+    $params = [];
+    if ($st['q'] !== '') {
+        $like = '%' . addcslashes($st['q'], '%_\\') . '%';
+        $where[] = '(COALESCE(s.vessel_name, i.vessel_name) LIKE ? OR c.company_name LIKE ? OR p.port_name LIKE ? OR COALESCE(s.report_number, i.report_number) LIKE ? OR i.invoice_no LIKE ?)';
+        array_push($params, $like, $like, $like, $like, $like);
+    }
+    if ($st['status'] !== '') { $where[] = 'i.invoice_status = ?'; $params[] = $st['status']; }
+    if ($st['type'] !== '') { $where[] = listFilterTypeSql([$st['type']], $params); }
+    if ($st['month'] !== '') {
+        $where[] = 's.survey_completed_date >= ? AND s.survey_completed_date < ?';
+        $params[] = $st['month'] . '-01';
+        $params[] = date('Y-m-d', strtotime($st['month'] . '-01 +1 month'));
+    }
+    return [$st, implode(' AND ', $where), $params];
+}
+
+/** ORDER BY for the list: newest Survey Completed Date first, vessels without one last. */
+function invoiceListOrderSql(): string {
+    $scd = '(CASE WHEN YEAR(s.survey_completed_date) > 0 THEN s.survey_completed_date END)';
+    return "($scd IS NULL) ASC, $scd DESC, i.id DESC";
+}
