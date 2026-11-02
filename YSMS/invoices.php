@@ -150,6 +150,15 @@ button.inv-btn { height: 28px !important; min-height: 0 !important; padding: 0 9
 .swal2-popup .inv-form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .swal2-popup .inv-form small { display: block; text-align: left; color: #64748b; font-size: 11px; margin-top: 4px; }
 @media (min-width: 992px) { .top-app-bar { display: none !important; } }
+@media (min-width: 992px) and (max-width: 1499.98px) {
+    .inv-table thead th, .inv-table tbody td { padding-left: 8px; padding-right: 8px; }
+    .inv-table thead th { white-space: normal; }
+    .inv-actions { flex-direction: column; align-items: stretch; min-width: 0; max-width: 150px; }
+    .inv-btn { justify-content: center; }
+    .inv-vessel b { white-space: normal; max-width: 160px; }
+    .inv-vessel-ic { display: none; }
+    .inv-status { max-width: 160px; }
+}
 @media (max-width: 991.98px) {
     .inv-wrap { padding: 4px 12px 110px; }
     .inv-stats { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; }

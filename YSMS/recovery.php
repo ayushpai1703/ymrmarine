@@ -71,7 +71,12 @@ include 'includes/header.php';
 .rc-btn-dl { background: #ECFDF5; color: #047857; border-color: #A7F3D0; margin-left: auto; }
 .rc-btn-dl:hover { background: #047857; color: #fff; }
 .rc-table-wrap { background: #fff; border: 1px solid var(--border-color); border-radius: 14px; margin-top: 12px; overflow-x: auto; }
-.rc-table { width: 100%; border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
+.rc-table { width: 100%; border-collapse: collapse; font-size: 12.5px; white-space: normal; }
+/* Text columns wrap so the whole table fits the page; numbers, dates and status stay on one line. */
+.rc-table td:first-child, .rc-table td.num, .rc-table td:nth-child(9), .rc-table td:nth-child(10) { white-space: nowrap; }
+.rc-table td:nth-child(2) { min-width: 110px; }
+.rc-table td:nth-child(3) { overflow-wrap: anywhere; min-width: 80px; }
+@media (max-width: 1499.98px) { .rc-table th, .rc-table td { padding-left: 6px; padding-right: 6px; } .rc-table th { font-size: 9.5px; letter-spacing: 0; } .rc-table td { font-size: 11px; } }
 .rc-table th { background: #F8FAFC; color: #475569; font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 9px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; }
 .rc-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #0f172a; }
 .rc-table .num { text-align: right; }
