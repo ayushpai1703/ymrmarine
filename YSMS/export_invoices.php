@@ -31,11 +31,11 @@ try {
     $db = getDB();
     invoiceEnsureTable($db);
     [$f, $whereSql, $params] = invoiceListFilters($_GET);
-    $st = $db->prepare(invoiceRowSql() . " WHERE $whereSql ORDER BY " . invoiceListOrderSql($f['view']));
+    $st = $db->prepare(invoiceRowSql() . " WHERE $whereSql ORDER BY " . invoiceGridOrderSql(json_decode((string)($_GET['sort'] ?? '[]'), true), $f['view']));
     $st->execute($params);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
 
-    $title = $f['view'] === 'completed' ? 'Completed Invoices' : 'Pending Invoices';
+    $title = $f['ids'] ? 'Selected Invoices' : ($f['view'] === 'all' ? 'All Invoices' : ($f['view'] === 'completed' ? 'Completed Invoices' : 'Pending Invoices'));
     $book = new Spreadsheet();
     $sheet = $book->getActiveSheet();
     $sheet->setTitle($title);

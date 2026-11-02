@@ -226,6 +226,20 @@ function invoiceRowJson(PDO $db, array $r): array {
     ];
 }
 
+/** One Invoices grid row: invoiceRowJson() plus the display columns. */
+function invoiceGridRow(PDO $db, array $r): array {
+    $j = invoiceRowJson($db, $r);
+    $j['vessel'] = (string)($r['s_vessel_name'] ?? $r['vessel_name'] ?? '');
+    $j['report_no'] = (string)($r['s_report_number'] ?? $r['report_number'] ?? '');
+    $j['client'] = (string)($r['company_name'] ?? '');
+    $j['type'] = !empty($r['sid']) ? (string)getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? '') : '';
+    $j['port'] = (string)($r['port_name'] ?? '');
+    $j['survey_deleted'] = empty($r['sid']);
+    $j['survey_completed_ymd'] = !empty($r['survey_completed_date']) && strpos((string)$r['survey_completed_date'], '0000') !== 0 ? substr((string)$r['survey_completed_date'], 0, 10) : '';
+    $j['amount'] = $r['invoice_amount'] !== null ? round((float)$r['invoice_amount'], 2) : null;
+    return $j;
+}
+
 /** Bootstrap badge colour for a status. */
 function invoiceStatusClass(string $s): string {
     return ['Pending for CP Prices' => 'cp', 'Pending for Cost' => 'cost', 'Pending for Other Reason' => 'other', 'Completed' => 'done'][$s] ?? 'other';
@@ -239,14 +253,22 @@ function invoiceStatusClass(string $s): string {
  */
 function invoiceListFilters(array $g): array {
     $st = [
-        'view' => ($g['view'] ?? '') === 'completed' ? 'completed' : 'pending',
+        'view' => in_array($g['view'] ?? '', ['completed', 'all'], true) ? (string)$g['view'] : 'pending',
         'q' => mb_substr(trim((string)($g['q'] ?? '')), 0, 100),
         'status' => '',
         'type' => mb_substr(trim((string)($g['type'] ?? '')), 0, 100),
         'month' => preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', (string)($g['month'] ?? '')) ? (string)$g['month'] : '',
+        'client' => max(0, (int)($g['client'] ?? 0)),
+        'port' => max(0, (int)($g['port'] ?? 0)),
+        'vessel' => mb_substr(trim((string)($g['vessel'] ?? '')), 0, 100),
+        'scd_from' => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($g['scd_from'] ?? '')) ? (string)$g['scd_from'] : '',
+        'scd_to' => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($g['scd_to'] ?? '')) ? (string)$g['scd_to'] : '',
+        'ids' => [],
     ];
+    foreach (explode(',', (string)($g['ids'] ?? '')) as $x) if (ctype_digit(trim($x))) $st['ids'][] = (int)trim($x);
+    $st['ids'] = array_slice(array_values(array_unique($st['ids'])), 0, 5000);
     if ($st['view'] === 'pending' && in_array($g['status'] ?? '', INVOICE_STATUSES, true) && $g['status'] !== 'Completed') $st['status'] = (string)$g['status'];
-    $where = [$st['view'] === 'completed' ? "i.invoice_status = 'Completed'" : "i.invoice_status <> 'Completed'"];
+    $where = [$st['view'] === 'completed' ? "i.invoice_status = 'Completed'" : ($st['view'] === 'all' ? '1=1' : "i.invoice_status <> 'Completed'")];
     $params = [];
     if ($st['q'] !== '') {
         $like = '%' . addcslashes($st['q'], '%_\\') . '%';
@@ -260,7 +282,50 @@ function invoiceListFilters(array $g): array {
         $params[] = $st['month'] . '-01';
         $params[] = date('Y-m-d', strtotime($st['month'] . '-01 +1 month'));
     }
+    if ($st['client'] > 0) { $where[] = 's.client_id = ?'; $params[] = $st['client']; }
+    if ($st['port'] > 0) { $where[] = 's.port_id = ?'; $params[] = $st['port']; }
+    if ($st['vessel'] !== '') { $where[] = 'COALESCE(s.vessel_name, i.vessel_name) LIKE ?'; $params[] = '%' . addcslashes($st['vessel'], '%_\\') . '%'; }
+    if ($st['scd_from'] !== '') { $where[] = 's.survey_completed_date >= ?'; $params[] = $st['scd_from']; }
+    if ($st['scd_to'] !== '') { $where[] = 's.survey_completed_date < ?'; $params[] = date('Y-m-d', strtotime($st['scd_to'] . ' +1 day')); }
+    if ($st['ids']) { $where[] = 'i.id IN (' . implode(',', $st['ids']) . ')'; }
     return [$st, implode(' AND ', $where), $params];
+}
+
+/** The filters without view / status (for the per-status counters). */
+function invoiceListFiltersNoStatus(array $g): array {
+    $g['view'] = 'pending'; $g['status'] = '';
+    [$st, $where, $params] = invoiceListFilters($g);
+    // drop the leading view condition ("i.invoice_status <> 'Completed'")
+    $where = preg_replace("/^i\.invoice_status <> 'Completed'( AND )?/", '', $where);
+    return [$st, $where !== '' ? $where : '1=1', $params];
+}
+
+/** Sortable columns of the Invoices grid → SQL (aliases of invoiceRowSql()). */
+const INVOICE_LIST_SORTS = [
+    'invoice_no' => "CAST(SUBSTRING_INDEX(i.invoice_no, '-', -1) AS UNSIGNED)",
+    'vessel' => 'COALESCE(s.vessel_name, i.vessel_name)',
+    'report_no' => 'COALESCE(s.report_number, i.report_number)',
+    'client' => 'c.company_name',
+    'type' => 'st.type_name',
+    'port' => 'p.port_name',
+    'survey_completed' => '(CASE WHEN YEAR(s.survey_completed_date) > 0 THEN s.survey_completed_date END)',
+    'status' => "FIELD(i.invoice_status, 'Pending for CP Prices', 'Pending for Cost', 'Pending for Other Reason', 'Completed')",
+    'invoice_date' => 'i.invoice_date',
+    'amount' => 'i.invoice_amount',
+];
+
+/** ORDER BY from [{f, d}] (up to 3 levels, empty values last); falls back to the view's default order. */
+function invoiceGridOrderSql($sorts, string $view): string {
+    $parts = [];
+    foreach (array_slice(is_array($sorts) ? $sorts : [], 0, 3) as $x) {
+        $f = is_array($x) ? (string)($x['f'] ?? '') : '';
+        if (!isset(INVOICE_LIST_SORTS[$f])) continue;
+        $e = INVOICE_LIST_SORTS[$f];
+        $dir = strtolower((string)($x['d'] ?? 'asc')) === 'desc' ? 'DESC' : 'ASC';
+        $parts[] = "($e IS NULL) ASC, $e $dir";
+        if ($f === 'invoice_no') $parts[] = "i.invoice_no $dir";
+    }
+    return $parts ? implode(', ', $parts) . ', i.id DESC' : invoiceListOrderSql($view);
 }
 
 /**
