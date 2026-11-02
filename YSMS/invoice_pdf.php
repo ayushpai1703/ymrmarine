@@ -157,6 +157,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $pdf->loadHtml(invoicePdfHtml($d), 'UTF-8');
     $pdf->setPaper('A4', 'portrait');
     $pdf->render();
+    if ($download) {
+        // A downloaded invoice is done: its invoice status becomes Completed (survey status untouched).
+        try {
+            $db->prepare("UPDATE invoices SET invoice_status = 'Completed', status_updated_by = ?, status_updated_at = NOW() WHERE id = ? AND invoice_status <> 'Completed'")
+               ->execute([(int)($_SESSION['user_id'] ?? 0), $id]);
+        } catch (Throwable $e) {
+            error_log('invoice download status: ' . $e->getMessage());
+        }
+    }
     $name = preg_replace('/[^A-Za-z0-9 ._\-]/', '_', trim($d['invoice_no'] . ' ' . $d['vessel'] . ($isRecovery ? ' - Recovery Invoice' : ' - Invoice'))) . '.pdf';
     header('Content-Type: application/pdf');
     header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="' . $name . '"');
@@ -263,6 +272,7 @@ include 'includes/header.php';
             <div class="ig-total">Total <b data-ig-total>0.00</b></div>
         </div>
 <?php endif; ?>
+        <div class="ig-hint" style="margin-top:12px"><i class="fa-solid fa-circle-info"></i> Download PDF marks this invoice <b>Completed</b> (it moves to the Completed invoices list).</div>
         <div class="ig-actions">
             <button type="submit" class="ig-btn pv" data-testid="ig-preview"><i class="fa-solid fa-eye"></i> Preview</button>
             <button type="button" class="ig-btn dl" id="igDownload" data-testid="ig-download"><i class="fa-solid fa-file-arrow-down"></i> Download PDF</button>
