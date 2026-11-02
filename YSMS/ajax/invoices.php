@@ -128,6 +128,7 @@ switch ($action) {
         $db->prepare("UPDATE invoices SET file_name = NULL, file_path = NULL, file_size = NULL, uploaded_by = NULL, uploaded_at = NULL,
                 invoice_date = NULL, invoice_amount = NULL, invoice_notes = NULL,
                 gen_data = NULL, rec_gen_data = NULL, rec_file_name = NULL, rec_file_path = NULL, rec_generated_at = NULL, recovery_pending = 0,
+                rec_invoice_date = NULL, rec_invoice_amount = NULL,
                 status_updated_by = IF(invoice_status = 'Completed', ?, status_updated_by),
                 status_updated_at = IF(invoice_status = 'Completed', NOW(), status_updated_at),
                 invoice_status = IF(invoice_status = 'Completed', ?, invoice_status) WHERE id = ?")

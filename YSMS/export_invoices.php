@@ -39,7 +39,7 @@ try {
     $book = new Spreadsheet();
     $sheet = $book->getActiveSheet();
     $sheet->setTitle($title);
-    $headers = ['S.No', 'Vessel', 'Report No', 'Client Name', 'Survey Type', 'Port Name', 'Invoice Status', 'Survey Completed Date', 'Invoice No', 'Invoice Date', 'Amount', 'Invoice PDF'];
+    $headers = ['S.No', 'Vessel', 'Report No', 'Client Name', 'Survey Type', 'Port Name', 'Invoice Status', 'Survey Completed Date', 'Invoice No', 'Invoice Date', 'Amount (USD)', 'Invoice PDF'];
     $sheet->fromArray($headers, null, 'A1');
     $r = 2;
     foreach ($rows as $i => $row) {
@@ -64,7 +64,7 @@ try {
     $sheet->getStyle('A1:L1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
     $sheet->getStyle('A1:L1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('4B2FD6');
     $sheet->getStyle('A1:' . $last)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('CBD5E1');
-    $sheet->getStyle('K2:K' . max(2, $r - 1))->getNumberFormat()->setFormatCode('#,##0.00');
+    $sheet->getStyle('K2:K' . max(2, $r - 1))->getNumberFormat()->setFormatCode('[$$-409]#,##0.00');
     foreach (range('A', 'L') as $col) $sheet->getColumnDimension($col)->setAutoSize(true);
     $sheet->freezePane('A2');
 

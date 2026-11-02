@@ -107,9 +107,9 @@ function invoicePdfHtml(array $d): string {
         . '<tr><td><div class="lbl">Client</div><div class="val" style="font-size:11.5px">' . $h($d['client']) . '</div>'
         . ($d['client_addr1'] !== '' ? $h($d['client_addr1']) . '<br>' : '') . ($d['client_addr2'] !== '' ? $h($d['client_addr2']) : '') . '</td>'
         . '<td colspan="2"><div class="lbl">Vessel details</div><table class="vd">' . $vesselRows . '</table></td></tr></table>'
-        . '<br><table class="items"><thead><tr><th style="width:24px">Sl.</th><th>Description of Services</th><th class="num" style="width:75px">Unit</th><th class="num" style="width:55px">Quantity</th><th class="num" style="width:85px">Amount</th></tr></thead><tbody>'
+        . '<br><table class="items"><thead><tr><th style="width:24px">Sl.</th><th>Description of Services</th><th class="num" style="width:75px">Unit (USD)</th><th class="num" style="width:55px">Quantity</th><th class="num" style="width:85px">Amount (USD)</th></tr></thead><tbody>'
         . $itemRows
-        . '<tr class="tot"><td></td><td>Total</td><td></td><td></td><td class="num">' . invoicePdfMoney($total) . '</td></tr></tbody></table>'
+        . '<tr class="tot"><td></td><td>Total (USD)</td><td></td><td></td><td class="num">$' . invoicePdfMoney($total) . '</td></tr></tbody></table>'
         . '<div class="small" style="text-align:right;margin-top:3px">E. &amp; O.E</div>'
         . '<p style="margin:8px 0 3px"><b><u>BANK DETAILS</u></b></p><table class="bank">' . $bank . '</table>'
         . '<p class="small" style="margin-top:8px">*We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</p>'

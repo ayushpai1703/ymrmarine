@@ -203,8 +203,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $old = $cur[$isRecovery ? 'rec_file_path' : 'file_path'] ?? null;
             if ($isRecovery) {
                 $complete = invoiceFileAbs($cur['file_path'] ?? null) !== null; // vessel invoice already made
-                $db->prepare('UPDATE invoices SET rec_file_name = ?, rec_file_path = ?, rec_generated_at = NOW(), rec_gen_data = ? WHERE id = ?')
-                   ->execute([$name, $rel, json_encode($form), $id]);
+                $db->prepare('UPDATE invoices SET rec_file_name = ?, rec_file_path = ?, rec_generated_at = NOW(), rec_gen_data = ?,
+                        rec_invoice_date = ?, rec_invoice_amount = ? WHERE id = ?')
+                   ->execute([$name, $rel, json_encode($form), $d['invoice_date'] !== '' ? $d['invoice_date'] : null, round($amount, 2), $id]);
                 $state = $complete ? 'completed' : 'vessel-next';
             } else {
                 $withRec = ($_POST['with_recovery'] ?? '') === '1';
@@ -318,7 +319,7 @@ include 'includes/header.php';
                 <div class="ig-svc-nums"><input class="form-control" name="<?= $k ?>_rate" inputmode="decimal" placeholder="Unit" value="<?= sanitize($sv($k . '_rate', '')) ?>" required data-ig-rate data-testid="ig-<?= $k ?>-rate"><input class="form-control" name="<?= $k ?>_qty" inputmode="decimal" placeholder="Qty" value="<?= sanitize($sv($k . '_qty', $recQty[$k])) ?>" required data-ig-qty data-testid="ig-<?= $k ?>-qty"></div>
             </div>
             <?php endforeach; ?>
-            <div class="ig-total">Total <b data-ig-total>0.00</b></div>
+            <div class="ig-total">Total <b data-ig-total>$0.00</b></div>
         </div>
 <?php else: ?>
         <label>Services</label>
@@ -341,7 +342,7 @@ include 'includes/header.php';
                 <div class="ig-svc-row extra"><input class="form-control" name="extra_desc[<?= $xn ?>]" placeholder="Service description" value="<?= sanitize((string)$xd) ?>" data-testid="ig-extra-desc"><div class="ig-svc-nums"><input class="form-control" name="extra_rate[<?= $xn ?>]" inputmode="decimal" placeholder="Unit" value="<?= sanitize((string)$xr) ?>" data-ig-rate data-testid="ig-extra-rate"><input class="form-control" name="extra_qty[<?= $xn ?>]" inputmode="decimal" placeholder="Qty" value="<?= sanitize((string)$xq) ?>" data-ig-qty></div><button type="button" class="ig-x" title="Remove" aria-label="Remove service"><i class="fa-solid fa-xmark"></i></button></div>
             <?php $xn++; endforeach; ?></div>
             <button type="button" class="ig-add" data-ig-add data-testid="ig-add-service"><i class="fa-solid fa-plus"></i> Add service</button>
-            <div class="ig-total">Total <b data-ig-total>0.00</b></div>
+            <div class="ig-total">Total <b data-ig-total>$0.00</b></div>
         </div>
 <?php endif; ?>
         <div class="ig-hint" style="margin-top:12px" data-testid="ig-state-hint"><i class="fa-solid fa-circle-info"></i> <?php
@@ -416,7 +417,7 @@ include 'includes/header.php';
   function total() {
     var t = 0;
     document.querySelectorAll('.ig-svc-row').forEach(function (r) { var a = r.querySelector('[data-ig-rate]'), q = r.querySelector('[data-ig-qty]'); if (a) t += num(a.value) * (q && q.value !== '' ? num(q.value) : 1); });
-    document.querySelector('[data-ig-total]').textContent = t.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    document.querySelector('[data-ig-total]').textContent = '$' + t.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   var add = document.querySelector('[data-ig-add]');
   if (add) add.addEventListener('click', function () {
