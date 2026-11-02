@@ -138,6 +138,13 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-file-invoice"></i>
             <span>Pending Reports</span>
         </a>
+        <?php if ($user_role === 'Admin'): ?>
+        <!-- Invoices (Admin): sidebar + drawer only, so the phone bottom bar keeps its 5 slots -->
+        <a href="invoices.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'invoices.php') ? 'active' : '' ?>" data-testid="navigation-invoices-link">
+            <i class="fa-solid fa-file-invoice-dollar"></i>
+            <span>Invoices</span>
+        </a>
+        <?php endif; ?>
         <a href="completed.php" class="nav-item-btn <?= ($current_page == 'completed.php') ? 'active' : '' ?>" data-testid="navigation-completed-link">
             <i class="fa-solid fa-circle-check"></i>
             <span>Completed</span>
