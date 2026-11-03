@@ -1,0 +1,42 @@
+/* Mobile list cards (phone width only) — Pending Vessels, Pending Reports, Completed.
+   Numbered header with ship tile and vessel name, then label : value rows separated by
+   thin lines (no row backgrounds). Desktop tables and the Android app are not affected. */
+@media (max-width: 991.98px) {
+    .vessel-list-container .vessel-card.cc-card {
+        display: block !important; border: 1px solid #eef1f5 !important; border-radius: 20px !important; background: #fff !important;
+        box-shadow: 0 6px 18px rgba(15,23,42,.06) !important; padding: 12px 14px 10px !important; margin: 0 0 12px !important; width: 100%;
+    }
+    .cc-head { display: flex; align-items: center; gap: 10px; padding: 0 0 10px; min-width: 0; }
+    .cc-num { flex: none; width: 32px; height: 32px; border-radius: 50%; background: #EEF0F3; color: #0f172a; font-size: 13.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+    .cc-num:empty { display: none; }
+    .cc-ship { flex: none; width: 48px; height: 38px; border-radius: 14px; background: #d1fae5; color: #047857; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+    .cc-div { flex: none; width: 2px; height: 26px; border-radius: 2px; background: #d6dbe3; }
+    .cc-name { flex: 1 1 auto; min-width: 0; font-size: 17px; font-weight: 800; color: #0f172a; line-height: 1.2; letter-spacing: .01em; text-transform: uppercase; overflow-wrap: break-word; }
+    .cc-rows { display: block; }
+    .cc-row { display: grid; grid-template-columns: 38% 14px minmax(0, 1fr); align-items: center; border-top: 1px solid #E5E8EE; padding: 8px 0; min-height: 40px; }
+    .cc-k { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .cc-k i { flex: none; width: 18px; text-align: center; color: #1D4ED8; font-size: 15px; }
+    .cc-k span { font-size: 13px; font-weight: 700; color: #0f1e46; line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
+    .cc-c { display: flex; align-items: center; justify-content: center; font-weight: 800; color: #0f172a; font-size: 13px; }
+    .cc-v { display: flex; align-items: center; min-width: 0; padding-left: 4px; }
+    .cc-v b { font-size: 13px; font-weight: 800; color: #0f172a; text-transform: uppercase; overflow-wrap: anywhere; line-height: 1.25; }
+    .cc-v b.cc-date { text-transform: none; font-size: 13.5px; }
+    .cc-v .recovery-total b, .cc-v .recovery-total.na b { color: inherit; text-transform: none; font-size: inherit; overflow-wrap: normal; }
+    .cc-type { display: inline-block; max-width: 100%; background: #6b8e23; color: #fff; border-radius: 12px; font-size: 11px; font-weight: 800; padding: 4px 12px; letter-spacing: .02em; text-transform: uppercase; line-height: 1.35; overflow-wrap: anywhere; }
+    .cc-row .recovery-cell { display: block; min-width: 0; }
+    .cc-row .recovery-total { font-size: 12.5px; padding: 5px 12px; }
+    .cc-parts { display: flex !important; flex-wrap: wrap; gap: 1px 6px; margin-top: 5px !important; font-size: 11px !important; color: #475569 !important; font-weight: 700 !important; }
+    .cc-parts i { font-style: normal; color: #94a3b8; }
+    .cc-port { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; background: #fff; color: #047857; border: 2px solid #4ADE80; border-radius: 14px; padding: 2px 12px; font-size: 12px; font-weight: 800; text-transform: uppercase; line-height: 1.3; overflow-wrap: anywhere; }
+    .cc-port i { font-size: 11px; }
+    .cc-status { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 2px solid; border-radius: 999px; padding: 2px 12px; font-size: 12px; font-weight: 800; }
+    .cc-status i { font-size: 11px; }
+    .cc-status.done { color: #15803D; border-color: #22C55E; }
+    .cc-status.pending { color: #B45309; border-color: #F59E0B; }
+    .cc-status.report { color: #C2410C; border-color: #FB923C; }
+    .cc-note { border-top: 1px solid #E5E8EE; padding: 8px 0 2px; }
+    .cc-foot { display: flex; justify-content: flex-end; border-top: 1px solid #E5E8EE; padding-top: 8px; }
+    .cc-edit { display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px; border-radius: 999px; border: 1.5px solid #FED7AA; color: #C2410C; background: #FFF7ED; font-size: 12px; font-weight: 700; text-decoration: none; }
+    .cc-card .vessel-live-status-bar { margin: 4px -14px -10px !important; width: calc(100% + 28px) !important; box-sizing: border-box; border-radius: 0 0 20px 20px; }
+    @media (max-width: 360px) { .cc-row { grid-template-columns: 40% 12px minmax(0, 1fr); } .cc-k { gap: 7px; } .cc-k span { font-size: 12px; } .cc-name { font-size: 15.5px; } }
+}
