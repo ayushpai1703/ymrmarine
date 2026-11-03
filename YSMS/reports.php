@@ -55,6 +55,7 @@ $pv_total = $rtTotal;
 include 'includes/header.php';
 ?>
 <link rel="stylesheet" href="assets/css/report-table.css?v=<?= @filemtime(__DIR__ . '/assets/css/report-table.css') ?>">
+<link rel="stylesheet" href="assets/css/mobile-card.css?v=<?= @filemtime(__DIR__ . '/assets/css/mobile-card.css') ?>">
 
 <style>
 
@@ -528,7 +529,7 @@ include 'includes/header.php';
             $typeLabel = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
             $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
         ?>
-        <div class="vessel-card" onclick="location.href='report_detail.php?id=<?= (int)$survey['id'] ?>'" data-survey-card
+        <div class="vessel-card cc-card" onclick="location.href='report_detail.php?id=<?= (int)$survey['id'] ?>'" data-survey-card
              data-name="<?= sanitize(strtolower($vessel_name)) ?>"
              data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>"
              data-place="<?= sanitize($survey['port_name'] ?? '') ?>"
@@ -537,26 +538,26 @@ include 'includes/header.php';
              data-status="pending"
              data-date="<?= surveyCompletedTs($survey) ?>"
              data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '']))) ?>">
-            <div class="pv-card-top">
-                <div class="pv-card-headline">
-                    <span class="pv-row-num" data-testid="pv-row-num"><?= $rtOffset + $rtI + 1 ?></span>
-                    <div class="pv-ship-icon"><i class="fa-solid fa-ship"></i></div>
-                    <div class="pv-vessel-name"><?= sanitize($vessel_name) ?></div>
-                </div>
-                <span class="badge-assigned pv-type-pill"><?= sanitize($typeLabel) ?></span>
+            <div class="cc-head">
+                <span class="cc-num" data-testid="pv-row-num"><?= $rtOffset + $rtI + 1 ?></span>
+                <span class="cc-ship"><i class="fa-solid fa-ship"></i></span>
+                <span class="cc-div" aria-hidden="true"></span>
+                <span class="cc-name"><?= sanitize($vessel_name) ?></span>
             </div>
-            <div class="pv-info-rows">
-                <div class="pv-info-row"><i class="fa-solid fa-user"></i><span class="pv-info-label">Client</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['company_name'] ?? '') ?></span></div>
-                <div class="pv-info-row"><i class="fa-solid fa-people-group"></i><span class="pv-info-label">Agent</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['agent_name'] ?? '') ?></span></div>
+            <div class="cc-rows">
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user"></i><span>Client</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div></div>
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-people-group"></i><span>Agent</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b></div></div>
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-layer-group"></i><span>Survey Type</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-type"><?= sanitize($typeLabel) ?></span></div></div>
                 <?php if ($is_full_access): ?>
-                    <div class="pv-info-row"><i class="fa-solid fa-user-tie"></i><span class="pv-info-label">Surveyor</span><span>:</span><span class="pv-info-val"><?= sanitize($surveyorNames) ?></span></div>
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user-tie"></i><span>Surveyor</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($surveyorNames) ?></b></div></div>
                 <?php endif; ?>
-                <div class="pv-info-row"><i class="fa-solid fa-location-dot"></i><span class="pv-info-label">Port</span><span>:</span><span class="badge-place"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-location-dot"></i><span>Port</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-port"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div></div>
                 <?php $rtD = rtRowDate($survey, $rt['date']); ?>
-                <div class="pv-info-row" data-testid="pr-completed-date"><i class="fa-solid fa-calendar-check"></i><span class="pv-info-label"><?= sanitize($rt['date'] === 'survey' ? 'Completed' : rtDateShort($rt['date'])) ?></span><span>:</span><span class="pv-info-val"><?= $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—' ?></span></div>
+                <div class="cc-row" data-testid="pr-completed-date"><div class="cc-k"><i class="fa-solid fa-calendar-check"></i><span><?= sanitize($rt['date'] === 'survey' ? 'Survey Completed' : rtDateShort($rt['date'])) ?></span></div><span class="cc-c">:</span><div class="cc-v"><b class="cc-date"><?= $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—' ?></b></div></div>
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-circle-check"></i><span>Status</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-status report"><i class="fa-solid fa-hourglass-half"></i> Pending Report</span></div></div>
                 <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
-                <div class="pv-info-row" style="justify-content:flex-end;border-top:1px dashed #e2e8f0;padding-top:8px;margin-top:2px;">
-                    <a href="report_detail.php?id=<?= (int)$survey['id'] ?>" onclick="event.stopPropagation();" data-testid="pr-edit-<?= (int)$survey['id'] ?>" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1.5px solid #FED7AA;color:#C2410C;background:#FFF7ED;font-size:12px;font-weight:700;text-decoration:none;"><i class="fa-solid fa-pen"></i> Edit</a>
+                <div class="cc-foot">
+                    <a href="report_detail.php?id=<?= (int)$survey['id'] ?>" onclick="event.stopPropagation();" data-testid="pr-edit-<?= (int)$survey['id'] ?>" class="cc-edit"><i class="fa-solid fa-pen"></i> Edit</a>
                 </div>
                 <?php endif; ?>
             </div>

@@ -108,6 +108,7 @@ $pv_total = $rtTotal;
 include 'includes/header.php';
 ?>
 <link rel="stylesheet" href="assets/css/report-table.css?v=<?= @filemtime(__DIR__ . '/assets/css/report-table.css') ?>">
+<link rel="stylesheet" href="assets/css/mobile-card.css?v=<?= @filemtime(__DIR__ . '/assets/css/mobile-card.css') ?>">
 
 <style>
 
@@ -264,37 +265,6 @@ include 'includes/header.php';
             background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7;
             font-size: 10px; padding: 4px 9px; border-radius: 50px; font-weight: 700;
         }
-
-        /* ── Completed card (numbered header + label / value rows) ── */
-        .vessel-list-container .vessel-card { border-radius: 20px !important; box-shadow: 0 6px 18px rgba(30,58,138,.07) !important; padding: 10px 10px 10px !important; margin-bottom: 12px !important; }
-        .cc-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 8px; min-width: 0; }
-        .cc-num { flex: none; min-width: 34px; height: 30px; padding: 0 8px; border-radius: 12px; background: #F1F4F9; color: #0f172a; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
-        .cc-ship { flex: none; width: 48px; height: 32px; border-radius: 12px; background: #d1fae5; color: #047857; font-size: 15px; display: flex; align-items: center; justify-content: center; }
-        .cc-div { flex: none; width: 1.5px; height: 22px; border-radius: 2px; background: #cbd5e1; }
-        .cc-name { flex: 1 1 auto; min-width: 0; font-size: 16px; font-weight: 800; color: #0f172a; line-height: 1.2; letter-spacing: .01em; text-transform: uppercase; overflow-wrap: break-word; }
-        .cc-rows { display: grid; gap: 5px; }
-        .cc-row { display: grid; grid-template-columns: 38% 12px minmax(0, 1fr); align-items: center; background: #F1F4F9; border-radius: 12px; overflow: visible; min-height: 32px; }
-        .cc-k { display: flex; align-items: center; gap: 8px; padding: 5px 8px 5px 10px; min-width: 0; }
-        .cc-k i { flex: none; width: 17px; text-align: center; color: #1D4ED8; font-size: 13px; }
-        .cc-k span { font-size: 12.5px; font-weight: 700; color: #1e3a6e; line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
-        .cc-c { display: flex; align-items: center; justify-content: center; font-weight: 800; color: #334155; font-size: 13px; }
-        .cc-v { display: flex; align-items: center; padding: 5px 10px 5px 4px; min-width: 0; }
-        .cc-v b { font-size: 12.5px; font-weight: 800; color: #0f172a; text-transform: uppercase; overflow-wrap: anywhere; line-height: 1.25; }
-        .cc-v b.cc-date { text-transform: none; font-size: 13px; }
-        .cc-v .recovery-total b, .cc-v .recovery-total.na b { color: inherit; text-transform: none; font-size: inherit; overflow-wrap: normal; }
-        .cc-row .cc-type.pv-type-pill { align-self: center; text-align: left; border-radius: 12px; font-size: 10.5px; font-weight: 800; padding: 3px 11px; letter-spacing: .02em; }
-        .cc-row.recovery-row .cc-v { padding-top: 6px; padding-bottom: 6px; }
-        .cc-row .recovery-cell { display: block; min-width: 0; }
-        .cc-row .recovery-total { font-size: 12px; padding: 4px 11px; }
-        .cc-parts { display: flex !important; flex-wrap: wrap; gap: 1px 6px; margin-top: 4px !important; font-size: 10.5px !important; color: #475569 !important; font-weight: 600 !important; }
-        .cc-parts i { font-style: normal; color: #94a3b8; }
-        .cc-port { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; background: #ECFDF5; color: #047857; border: 1.5px solid #86EFAC; border-radius: 14px; padding: 2px 11px; font-size: 11.5px; font-weight: 800; text-transform: uppercase; line-height: 1.25; overflow-wrap: anywhere; }
-        .cc-port i { font-size: 11px; }
-        .cc-status { display: inline-flex; align-items: center; gap: 6px; background: #ECFDF5; color: #15803D; border: 1.5px solid #6EE7B7; border-radius: 999px; padding: 2px 11px; font-size: 11.5px; font-weight: 800; }
-        .cc-status i { font-size: 11px; }
-        .cc-foot { display: flex; justify-content: flex-end; padding-top: 3px; }
-        .cc-edit { display: inline-flex; align-items: center; gap: 6px; padding: 4px 13px; border-radius: 999px; border: 1.5px solid #FED7AA; color: #C2410C; background: #FFF7ED; font-size: 12px; font-weight: 700; text-decoration: none; }
-        @media (max-width: 360px) { .cc-row { grid-template-columns: 42% 10px minmax(0, 1fr); } .cc-k span { font-size: 11px; } .cc-k { gap: 6px; padding: 8px 7px; } .cc-name { font-size: 15.5px; } }
     }
 
     .list-desktop-view { display: none; }
@@ -522,7 +492,7 @@ include 'includes/header.php';
             $card_ts = (!empty($card_date_src) && $card_date_src !== '0000-00-00' && $card_date_src !== '0000-00-00 00:00:00')
                 ? strtotime($card_date_src) : false;
         ?>
-        <div class="vessel-card" onclick="location.href='completed_detail.php?id=<?= (int)$survey['id'] ?>'"
+        <div class="vessel-card cc-card" onclick="location.href='completed_detail.php?id=<?= (int)$survey['id'] ?>'"
              data-survey-card
              data-name="<?= sanitize(strtolower($survey['vessel_name'] ?? '')) ?>"
              data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>"
@@ -543,7 +513,7 @@ include 'includes/header.php';
             <div class="cc-rows">
                 <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user"></i><span>Client</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div></div>
                 <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-people-group"></i><span>Agent</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b></div></div>
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-layer-group"></i><span>Survey Type</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-type pv-type-pill"><?= sanitize($typeLabel) ?></span></div></div>
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-layer-group"></i><span>Survey Type</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-type"><?= sanitize($typeLabel) ?></span></div></div>
                 <?php $rp = recoveryDisplayParts($survey); ?>
                 <div class="cc-row recovery-row"><div class="cc-k"><i class="fa-solid fa-droplet"></i><span>Recovery</span></div><span class="cc-c">:</span>
                     <div class="cc-v">
@@ -563,7 +533,7 @@ include 'includes/header.php';
                 <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-location-dot"></i><span>Port</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-port"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div></div>
                 <?php $rtD = rtRowDate($survey, $rt['date']); ?>
                 <div class="cc-row" data-testid="cv-date"><div class="cc-k"><i class="fa-solid fa-calendar-check"></i><span><?= sanitize(rtDateShort($rt['date'])) ?></span></div><span class="cc-c">:</span><div class="cc-v"><b class="cc-date"><?= $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—' ?></b></div></div>
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-circle-check"></i><span>Status</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-status"><i class="fa-solid fa-check"></i> Completed</span></div></div>
+                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-circle-check"></i><span>Status</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-status done"><i class="fa-solid fa-check"></i> Completed</span></div></div>
                 <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
                 <div class="cc-foot">
                     <a href="completed_detail.php?id=<?= (int)$survey['id'] ?>" onclick="event.stopPropagation();" data-testid="cv-edit-<?= (int)$survey['id'] ?>" class="cc-edit"><i class="fa-solid fa-pen"></i> Edit</a>

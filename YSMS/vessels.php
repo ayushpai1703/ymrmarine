@@ -233,6 +233,7 @@ foreach ($surveys as $pv_row) {
 include 'includes/header.php';
 ?>
 <link rel="stylesheet" href="assets/css/report-table.css?v=<?= @filemtime(__DIR__ . '/assets/css/report-table.css') ?>">
+<link rel="stylesheet" href="assets/css/mobile-card.css?v=<?= @filemtime(__DIR__ . '/assets/css/mobile-card.css') ?>">
 
 <style>
     /* ═══ MOBILE card styles (unchanged) ═══ */
@@ -693,25 +694,25 @@ include 'includes/header.php';
                         $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
                         $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                     ?>
-                    <div class="vessel-card vessel-card--stacked" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
-                        <div class="pv-card-top">
-                            <div class="pv-card-headline">
-                                <span class="pv-row-num" data-row-num data-testid="pv-row-num"></span>
-                                <div class="pv-ship-icon"><i class="fa-solid fa-ship"></i></div>
-                                <div class="pv-vessel-name"><?= sanitize($vessel_name) ?></div>
-                            </div>
-                            <span class="badge-assigned pv-type-pill"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A')) ?></span>
+                    <div class="vessel-card vessel-card--stacked cc-card" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
+                        <div class="cc-head">
+                            <span class="cc-num" data-row-num data-testid="pv-row-num"></span>
+                            <span class="cc-ship"><i class="fa-solid fa-ship"></i></span>
+                            <span class="cc-div" aria-hidden="true"></span>
+                            <span class="cc-name"><?= sanitize($vessel_name) ?></span>
                         </div>
-                        <div class="pv-info-rows">
-                            <div class="pv-info-row"><i class="fa-solid fa-user"></i><span class="pv-info-label">Client</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['company_name']) ?></span></div>
-                            <div class="pv-info-row"><i class="fa-solid fa-people-group"></i><span class="pv-info-label">Agent</span><span>:</span><span class="pv-info-val"><?= sanitize($survey['agent_name']) ?></span></div>
+                        <div class="cc-rows">
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user"></i><span>Client</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-people-group"></i><span>Agent</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b></div></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-layer-group"></i><span>Survey Type</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-type"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A')) ?></span></div></div>
                             <?php if ($is_full_access): ?>
-                                <div class="pv-info-row"><i class="fa-solid fa-user-tie"></i><span class="pv-info-label">Surveyor</span><span>:</span><span class="pv-info-val"><?= sanitize($surveyorNames) ?></span></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user-tie"></i><span>Surveyor</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($surveyorNames) ?></b></div></div>
                             <?php endif; ?>
-                            <div class="pv-info-row"><i class="fa-solid fa-location-dot"></i><span class="pv-info-label">Port</span><span>:</span><span class="badge-place" data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
-                            <div class="pv-info-row"><i class="fa-solid fa-calendar-day"></i><span class="pv-info-label">Appointment</span><span>:</span><span class="pv-info-val"><?= !empty($survey['appointment_date']) ? sanitize(date('d M Y', strtotime($survey['appointment_date']))) : '—' ?></span></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-location-dot"></i><span>Port</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-port" data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-calendar-day"></i><span>Appointment</span></div><span class="cc-c">:</span><div class="cc-v"><b class="cc-date"><?= !empty($survey['appointment_date']) ? sanitize(date('d M Y', strtotime($survey['appointment_date']))) : '—' ?></b></div></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-circle-check"></i><span>Status</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-status pending"><i class="fa-solid fa-clock"></i> Pending</span></div></div>
                             <?php if ($needsSurveyor): ?>
-                                <span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span>
+                            <div class="cc-note"><span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span></div>
                             <?php endif; ?>
                         </div>
                         <div class="vessel-live-status-bar">
