@@ -8,7 +8,7 @@
  *
  * invoicePdfHtml($d) — $d keys: invoice_no, invoice_date (Y-m-d), client, client_addr1,
  * client_addr2, supplier_ref, other_ref, vessel, survey_type, port, survey_completed,
- * report_no, note (optional description line shown above the items, no amount),
+ * note (optional description line shown above the items, no amount),
  * items: [['desc' => …, 'rate' => float, 'qty' => float], …]; each amount is rate × qty.
  *
  * The signatory's name is also printed as a handwritten-style signature, in the font from
@@ -74,7 +74,7 @@ function invoicePdfHtml(array $d): string {
     $bank = '';
     foreach ($co['bank'] as $k => $v) $bank .= '<tr><td class="bk">' . $h($k) . '</td><td class="bc">:</td><td>' . $h($v) . '</td></tr>';
     $vesselRows = '';
-    foreach ([['Vessel', $d['vessel']], ['Survey Type', $d['survey_type']], ['Port', $d['port']], ['Survey Completed', $d['survey_completed']], ['Report No.', $d['report_no']]] as [$k, $v]) {
+    foreach ([['Vessel', $d['vessel']], ['Survey Type', $d['survey_type']], ['Port', $d['port']], ['Survey Completed', $d['survey_completed']]] as [$k, $v]) {
         if (trim((string)$v) !== '') $vesselRows .= '<tr><td class="vk">' . $h($k) . '</td><td>' . $h($v) . '</td></tr>';
     }
     // The letterhead fills the page; @page margins keep the text clear of its header (top),

@@ -341,12 +341,15 @@ function invoiceListOrderSql(string $view = 'pending'): string {
     return "($scd IS NULL) ASC, $scd DESC, i.id DESC";
 }
 
-/* ---------- Invoice numbers: YMR-<client short code>-<n>, n from 1000, +1 per invoice ----------
+/* ---------- Invoice numbers: YMR-<client short code>-<n>, n from 963, +1 per invoice ----------
    A vessel's number is fixed the first time its invoice is downloaded (preview never uses a
    number up) and kept on its invoices row; generating again reuses it. Its Recovery Invoice
    is the same number with "B" at the end. Client short codes are the ones the report
-   numbers already use (clients.short_code, includes/report_number.php). */
-const INVOICE_FIRST_NUMBER = 1000;
+   numbers already use (clients.short_code, includes/report_number.php).
+   The series was moved from 1000 to 963: the counter is set back to 963 once (row id 2 of
+   invoice_number_seq records that this was done) and a number another invoice already
+   carries (e.g. 1000 given before the change) is skipped, so no number is issued twice. */
+const INVOICE_FIRST_NUMBER = 963;
 
 function invoiceEnsureSequence(PDO $db): void {
     static $done = false;
@@ -355,7 +358,21 @@ function invoiceEnsureSequence(PDO $db): void {
         `id` tinyint NOT NULL, `next_no` int NOT NULL, PRIMARY KEY (`id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $db->exec('INSERT IGNORE INTO invoice_number_seq (id, next_no) VALUES (1, ' . INVOICE_FIRST_NUMBER . ')');
+    // one-time restart of the series at 963 (only the first time this code runs)
+    if ($db->exec('INSERT IGNORE INTO invoice_number_seq (id, next_no) VALUES (2, ' . INVOICE_FIRST_NUMBER . ')') === 1) {
+        $db->exec('UPDATE invoice_number_seq SET next_no = ' . INVOICE_FIRST_NUMBER . ' WHERE id = 1');
+    }
     $done = true;
+}
+
+/** $n, or the first number after it that no invoice carries yet. */
+function invoiceFirstFreeNumber(PDO $db, int $n): int {
+    $q = $db->prepare("SELECT 1 FROM invoices WHERE invoice_no LIKE ? OR invoice_no LIKE ? LIMIT 1");
+    for ($i = 0; $i < 100000; $i++, $n++) {
+        $q->execute(['%-' . $n, '%-' . $n . 'B']);
+        if (!$q->fetchColumn()) return $n;
+    }
+    return $n;
 }
 
 /** The client's short code for invoice numbers (e.g. BB for Bainbridge). */
@@ -372,7 +389,7 @@ function invoicePeekNumber(PDO $db, array $inv): string {
     if (trim((string)($inv['invoice_no'] ?? '')) !== '') return (string)$inv['invoice_no'];
     invoiceEnsureSequence($db);
     $n = (int)$db->query('SELECT next_no FROM invoice_number_seq WHERE id = 1')->fetchColumn();
-    return 'YMR-' . invoiceClientCode($db, (int)$inv['survey_id']) . '-' . max(INVOICE_FIRST_NUMBER, $n);
+    return 'YMR-' . invoiceClientCode($db, (int)$inv['survey_id']) . '-' . invoiceFirstFreeNumber($db, max(INVOICE_FIRST_NUMBER, $n));
 }
 
 /** Gives the invoice its number if it has none yet (one transaction) and returns it. */
@@ -388,7 +405,7 @@ function invoiceAllocateNumber(PDO $db, int $invoiceId): string {
         $row = $q->fetch(PDO::FETCH_ASSOC);
         if (!$row) throw new RuntimeException('Invoice not found.');
         if (trim((string)$row['invoice_no']) !== '') { $db->commit(); return (string)$row['invoice_no']; }
-        $n = max(INVOICE_FIRST_NUMBER, (int)$db->query('SELECT next_no FROM invoice_number_seq WHERE id = 1 FOR UPDATE')->fetchColumn());
+        $n = invoiceFirstFreeNumber($db, max(INVOICE_FIRST_NUMBER, (int)$db->query('SELECT next_no FROM invoice_number_seq WHERE id = 1 FOR UPDATE')->fetchColumn()));
         $no = 'YMR-' . $code . '-' . $n;
         $db->prepare('UPDATE invoices SET invoice_no = ? WHERE id = ?')->execute([$no, $invoiceId]);
         $db->prepare('UPDATE invoice_number_seq SET next_no = ? WHERE id = 1')->execute([$n + 1]);

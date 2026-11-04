@@ -51,7 +51,6 @@ if (!empty($inv['sid'])) {
 $vessel = (string)($inv['s_vessel_name'] ?? $inv['vessel_name'] ?? '');
 $type = !empty($inv['sid']) ? getCombinedSurveyTypeNames($db, $inv['survey_type_ids'] ?? '', $inv['type_name'] ?? '') : '';
 $completed = !empty($inv['survey_completed_date']) && strpos((string)$inv['survey_completed_date'], '0000') !== 0 ? date('d M Y', strtotime($inv['survey_completed_date'])) : '';
-$reportNo = (string)($inv['s_report_number'] ?? $inv['report_number'] ?? '');
 
 $defaults = [
     'invoice_no' => (string)($inv['invoice_no'] ?? ''),
@@ -65,7 +64,6 @@ $defaults = [
     'survey_type' => $type,
     'port' => (string)($inv['port_name'] ?? ''),
     'survey_completed' => $completed,
-    'report_no' => $reportNo,
 ];
 $serviceDesc = trim($type . ' of ' . $vessel . ($inv['port_name'] ? ' at ' . $inv['port_name'] : '') . ($completed ? ' on ' . $completed : ''));
 $serviceRate = (string)($inv['invoice_amount'] ?? '');
@@ -147,6 +145,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $items[] = ['desc' => $xd, 'rate' => $xr, 'qty' => $xq ?? 1.0];
         }
     }
+    // A corrected number for a vessel invoice that already has one (e.g. 1000 → 962): the
+    // client prefix is kept when only digits are typed; it must not be another invoice's.
+    $fixNo = null;
+    if (!$isRecovery && $noFixed && isset($_POST['invoice_no_fix'])) {
+        $want = strtoupper(preg_replace('/\s+/', '', (string)$_POST['invoice_no_fix']));
+        if (ctype_digit($want)) $want = preg_replace('/-[0-9]+$/', '', (string)$inv['invoice_no']) . '-' . ltrim($want, '0');
+        if ($want !== '' && $want !== strtoupper((string)$inv['invoice_no'])) {
+            if (!preg_match('/^[A-Z0-9][A-Z0-9\-\/]{0,58}[0-9]$/', $want)) {
+                $errors[] = 'Invoice No. (letters, digits and - only, ending in its number, e.g. YMR-BB-962)';
+            } else {
+                $num = preg_replace('/^.*?([0-9]+)$/', '$1', $want);
+                $u = $db->prepare("SELECT invoice_no FROM invoices WHERE id <> ? AND (invoice_no = ? OR invoice_no LIKE ? OR invoice_no LIKE ?) LIMIT 1");
+                $u->execute([$id, $want, '%-' . $num, '%-' . $num . 'B']);
+                if ($other = $u->fetchColumn()) $errors[] = 'Invoice No. — number ' . $num . ' is already used by invoice ' . $other;
+                else $fixNo = $want;
+            }
+        }
+    }
     if ($errors) {
         http_response_code(422);
         header('Content-Type: text/html; charset=utf-8');
@@ -155,7 +171,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     // Number: the vessel's (fixed on its first download; preview shows the next free one)
     $download = ($_POST['mode'] ?? '') === 'download';
     try {
-        $d['invoice_no'] = ($download ? invoiceAllocateNumber($db, $id) : invoicePeekNumber($db, $inv)) . ($isRecovery ? 'B' : '');
+        if ($fixNo !== null) {
+            $d['invoice_no'] = $fixNo; // saved with the PDF below
+        } else {
+            $d['invoice_no'] = ($download ? invoiceAllocateNumber($db, $id) : invoicePeekNumber($db, $inv)) . ($isRecovery ? 'B' : '');
+        }
     } catch (Throwable $e) {
         error_log('invoice number: ' . $e->getMessage());
         http_response_code(500);
@@ -185,7 +205,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         // Keep the PDF and the form, then work out whether the invoice is now Completed.
         $form = [];
         foreach ($_POST as $k => $v) {
-            if (in_array($k, ['csrf_token', 'mode', 'with_recovery'], true)) continue;
+            if (in_array($k, ['csrf_token', 'mode', 'with_recovery', 'invoice_no_fix'], true)) continue;
             $form[$k] = is_array($v) ? array_map(fn($x) => is_scalar($x) ? mb_substr((string)$x, 0, 2000) : '', array_slice($v, 0, 30, true)) : mb_substr((string)$v, 0, 2000);
         }
         $rel = invoiceStoreGenerated($id, $out, $isRecovery ? 'rec' : 'gen');
@@ -211,8 +231,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 $withRec = ($_POST['with_recovery'] ?? '') === '1';
                 $complete = !$withRec || invoiceFileAbs($cur['rec_file_path'] ?? null) !== null;
                 $db->prepare('UPDATE invoices SET file_name = ?, file_path = ?, file_size = ?, uploaded_by = ?, uploaded_at = NOW(),
-                        invoice_date = ?, invoice_amount = ?, gen_data = ?, recovery_pending = ? WHERE id = ?')
-                   ->execute([$name, $rel, strlen($out), $uid, $d['invoice_date'] !== '' ? $d['invoice_date'] : null, round($amount, 2), json_encode($form), $complete ? 0 : 1, $id]);
+                        invoice_date = ?, invoice_amount = ?, gen_data = ?, recovery_pending = ?, invoice_no = COALESCE(?, invoice_no) WHERE id = ?')
+                   ->execute([$name, $rel, strlen($out), $uid, $d['invoice_date'] !== '' ? $d['invoice_date'] : null, round($amount, 2), json_encode($form), $complete ? 0 : 1, $fixNo, $id]);
                 $state = $complete ? 'completed' : 'recovery-next';
             }
             if ($complete) {
@@ -237,6 +257,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="' . $name . '"');
     header('X-Invoice-No: ' . $d['invoice_no']);
     if ($state !== '') header('X-Invoice-State: ' . $state);
+    if ($download && $fixNo !== null) header('X-Invoice-Renumbered: 1');
     header('Cache-Control: private, no-store');
     echo $out;
     exit;
@@ -285,8 +306,13 @@ include 'includes/header.php';
         <h2><?= $isRecovery ? 'Recovery Invoice' : 'Generate Invoice' ?></h2>
         <div class="ig-sub"><?= sanitize($vessel) ?><?= $defaults['port'] ? ' · ' . sanitize($defaults['port']) : '' ?> — details are filled from the vessel record; change anything before downloading.</div>
         <div class="ig-row">
+<?php if ($noFixed && !$isRecovery): ?>
+            <div><label>Invoice No.</label><input class="form-control" name="invoice_no_fix" value="<?= sanitize($invoiceNo) ?>" maxlength="60" data-testid="ig-invoice-no">
+                <div class="ig-hint">This vessel's number — correct it here if needed (the Recovery Invoice follows it with B)</div></div>
+<?php else: ?>
             <div><label>Invoice No.</label><input class="form-control" value="<?= sanitize($invoiceNo) ?>" readonly data-testid="ig-invoice-no">
                 <div class="ig-hint"><?= $noFixed ? 'This vessel\'s number' : 'Assigned when you download' ?><?= $isRecovery ? ' (+ B for recovery)' : '' ?></div></div>
+<?php endif; ?>
             <div><label>Invoice Date</label><input class="form-control" type="date" name="invoice_date" value="<?= sanitize($defaults['invoice_date']) ?>"></div>
         </div>
         <label>Client</label><input class="form-control" name="client" value="<?= sanitize($defaults['client']) ?>" data-testid="ig-client">
@@ -305,7 +331,6 @@ include 'includes/header.php';
             <div><label>Port</label><input class="form-control" name="port" value="<?= sanitize($defaults['port']) ?>"></div>
             <div><label>Survey Completed</label><input class="form-control" name="survey_completed" value="<?= sanitize($defaults['survey_completed']) ?>"></div>
         </div>
-        <input type="hidden" name="report_no" value="<?= sanitize($reportNo) ?>">
 <?php if ($isRecovery): ?>
         <label>Description</label>
         <textarea class="form-control" name="service_desc" rows="3" data-testid="ig-service-desc"><?= sanitize($sv('service_desc', 'Recovery of bunkers — ' . $serviceDesc)) ?></textarea>
@@ -376,6 +401,7 @@ include 'includes/header.php';
     return fetch(f.action, { method: 'POST', body: data, credentials: 'same-origin' }).then(function (r) {
       if (!r.ok) return r.text().then(function (t) { throw new Error(t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || ('Error ' + r.status)); });
       var m = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || ''), state = r.headers.get('X-Invoice-State') || '';
+      if (r.headers.get('X-Invoice-Renumbered') && HAS_REC) state = 'renumbered';
       return r.blob().then(function (b) {
         var a = document.createElement('a'), u = URL.createObjectURL(b);
         a.href = u; a.download = m ? m[1] : 'invoice.pdf'; document.body.appendChild(a); a.click();
@@ -383,6 +409,10 @@ include 'includes/header.php';
         return state;
       });
     }).then(function (state) {
+      if (state === 'renumbered') {
+        return Swal.fire({ icon: 'success', title: 'Invoice number changed', text: 'The vessel invoice was downloaded with the new number. The saved Recovery Invoice still shows the old number — open it and click Download PDF again to get it with the new number + B.', confirmButtonText: 'Open Recovery Invoice', confirmButtonColor: '#6C4CF1', allowOutsideClick: false })
+          .then(function () { location.href = REC_URL; });
+      }
       if (state === 'recovery-next') {
         return Swal.fire({ icon: 'success', title: 'Vessel invoice downloaded', text: 'Now fill in the recovery invoice — the invoice moves to Completed once it is downloaded.', confirmButtonText: 'Open Recovery Invoice', confirmButtonColor: '#6C4CF1', allowOutsideClick: false })
           .then(function () { location.href = REC_URL; });
