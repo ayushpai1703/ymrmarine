@@ -1047,6 +1047,11 @@ include 'includes/header.php';
 .me-msg { border-radius: 10px; padding: 10px 12px; font-weight: 600; }
 .me-warn { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
 .me-src { margin-top: 10px; font-size: 11.5px; color: #64748b; overflow-wrap: anywhere; }
+.me-p { font-size: 13px; color: #475569; margin: 0 0 12px; }
+.me-drop { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 2px dashed #99f6e4; background: #f0fdfa; border-radius: 12px; padding: 18px 12px; cursor: pointer; color: #0f766e; font-weight: 700; font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+.me-drop i { font-size: 24px; }
+.me-drop input { display: block; margin-top: 6px; font-size: 12px; max-width: 100%; }
+.me-link { display: block; margin: 12px auto 0; border: 0; background: none; color: #0f766e; font-size: 12.5px; font-weight: 700; text-decoration: underline; cursor: pointer; }
 </style>
 <script>
 // "Send Email to Master for Redelivery" — an optional "Your Gmail address"
@@ -1056,12 +1061,13 @@ include 'includes/header.php';
 // On phones this opens the Gmail app directly (already signed in) instead
 // of a browser tab that would ask the user to log in again; desktop keeps
 // opening the Gmail web compose tab as before.
-// Additionally the Master's email is read from the Ship's Particulars in this vessel's
-// attachments (ajax/master_email.php) and shown with a Copy button; when there is no Ship's
-// Particulars the user is told so. Desktop: Gmail opens straight away and the result shows
-// on this page. Phones: the result shows first with an "Open Gmail" button (the Gmail app
-// would otherwise hide this page).
-var meCache = null;
+// The button first asks for the Ship's Particulars (pop-up upload), reads the Master's email
+// from it (ajax/master_email.php — the file is read once and not kept) and shows it with a
+// Copy button; "Open Gmail" then opens the usual redelivery compose (web / iPhone: with the
+// Master's email already in To). "Skip" opens Gmail straight away as before. The vessel's own
+// attachments can be searched instead.
+var ME_API = 'ajax/master_email.php?survey_id=<?= (int)$survey['id'] ?>';
+var ME_CSRF = <?= json_encode(csrf_token()) ?>;
 function meEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function meCopy(text, btn) {
     var done = function () { if (btn) { var h = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied'; setTimeout(function () { btn.innerHTML = h; }, 1600); } };
@@ -1072,15 +1078,9 @@ function meCopyFallback(text) {
     var t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
     document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch (e) {} t.remove();
 }
-function meFetch() {
-    if (meCache) return Promise.resolve(meCache);
-    return fetch('ajax/master_email.php?survey_id=<?= (int)$survey['id'] ?>', { credentials: 'same-origin' })
-        .then(function (r) { return r.json().catch(function () { return { ok: false, message: 'Unexpected server response (' + r.status + ').' }; }); })
-        .then(function (d) { if (d && d.ok) meCache = d; return d; })
-        .catch(function () { return { ok: false, message: 'Network error — could not read the attachments.' }; });
-}
+function meJson(r) { return r.json().catch(function () { return { ok: false, message: 'Unexpected server response (' + r.status + ').' }; }); }
 function meHtml(d) {
-    if (!d.ok) return '<div class="me-msg me-warn">' + meEsc(d.message || 'Could not read the attachments.') + '</div>';
+    if (!d.ok) return '<div class="me-msg me-warn">' + meEsc(d.message || 'Could not read the file.') + '</div>';
     if (!d.found) return '<div class="me-msg me-warn" data-testid="me-no-particulars"><i class="fa-solid fa-triangle-exclamation"></i> ' + meEsc(d.message) + '</div>';
     var h = '';
     if (d.master) {
@@ -1091,27 +1091,75 @@ function meHtml(d) {
     }
     var others = (d.emails || []).filter(function (e) { return e.email !== d.master; });
     if (others.length) {
-        h += '<div class="me-label">' + (d.master ? 'Other emails on the Ship\'s Particulars' : 'Emails on the Ship\'s Particulars') + '</div>' +
+        h += '<div class="me-label">' + (d.master ? 'Other emails on the Ship\'s Particulars' : 'Emails found in the file') + '</div>' +
             others.map(function (e) { return '<div class="me-row"><span class="me-email">' + meEsc(e.email) + '</span><button type="button" class="me-copy" data-me-copy="' + meEsc(e.email) + '"><i class="fa-regular fa-copy"></i> Copy</button></div>'; }).join('');
     }
-    h += '<div class="me-src"><i class="fa-solid fa-paperclip"></i> From: ' + (d.sources || []).map(meEsc).join(', ') + '</div>';
+    if ((d.sources || []).length) h += '<div class="me-src"><i class="fa-solid fa-paperclip"></i> From: ' + d.sources.map(meEsc).join(', ') + '</div>';
     return h;
 }
-function meShow(openGmail) {
-    if (!window.Swal) { meFetch().then(function (d) { alert(d.master ? 'Master email: ' + d.master : (d.message || '')); if (openGmail) openGmail(); }); return; }
-    Swal.fire({ title: 'Master\'s email', html: '<div class="me-box">Reading the Ship\'s Particulars in the attachments…</div>', allowOutsideClick: true, showConfirmButton: false, showCloseButton: true,
-        didOpen: function () { Swal.showLoading(); } });
-    meFetch().then(function (d) {
-        if (!Swal.isVisible()) return;
-        Swal.hideLoading();
-        Swal.update({
-            icon: d.ok && d.found ? (d.master ? 'success' : 'info') : 'warning',
-            title: d.ok && d.found ? 'Master\'s email' : 'No Ship\'s Particulars',
-            html: '<div class="me-box" data-testid="me-result">' + meHtml(d) + '</div>',
-            showConfirmButton: !!openGmail, confirmButtonText: '<i class="fa-solid fa-envelope"></i> Open Gmail', confirmButtonColor: '#0f766e',
-            showCancelButton: !openGmail, cancelButtonText: 'Close'
-        });
-        if (openGmail) { var c = Swal.getConfirmButton(); c.onclick = function () { Swal.close(); openGmail(); }; }
+function meOpenGmail(btn, to) {
+    var block = btn.closest('.redelivery-block');
+    var input = block ? block.querySelector('[data-redelivery-from]') : null;
+    var email = input ? input.value.trim() : '';
+    var toq = to ? '&to=' + encodeURIComponent(to) : '';
+    var webUrl = btn.getAttribute('data-base-url') + toq + (email ? '&authuser=' + encodeURIComponent(email) : '');
+    var ua = navigator.userAgent || '';
+    if (/Android/i.test(ua)) { window.location.href = btn.getAttribute('data-android-url'); return; }
+    if (/iPhone|iPad|iPod/i.test(ua)) {
+        var appOpened = false;
+        var onBlur = function () { appOpened = true; window.removeEventListener('blur', onBlur); };
+        window.addEventListener('blur', onBlur);
+        window.location.href = btn.getAttribute('data-ios-url') + toq;
+        setTimeout(function () { window.removeEventListener('blur', onBlur); if (!appOpened) window.location.href = webUrl; }, 1500);
+        return;
+    }
+    window.open(webUrl, '_blank', 'noopener');
+}
+function meResult(btn, d) {
+    var found = d.ok && d.found;
+    Swal.fire({
+        icon: found ? (d.master ? 'success' : 'info') : 'warning',
+        title: !d.ok ? 'Could not read the file' : (!d.found ? 'No Ship\'s Particulars' : (d.master ? 'Master\'s email' : 'No Master email found')),
+        html: '<div class="me-box" data-testid="me-result">' + meHtml(d) + '</div>',
+        showConfirmButton: true, confirmButtonText: '<i class="fa-solid fa-envelope"></i> Open Gmail', confirmButtonColor: '#0f766e',
+        showDenyButton: true, denyButtonText: '<i class="fa-solid fa-upload"></i> Upload another file', denyButtonColor: '#64748b',
+        showCloseButton: true
+    }).then(function (r) {
+        if (r.isConfirmed) meOpenGmail(btn, d.master || '');
+        else if (r.isDenied) meAsk(btn);
+    });
+}
+function meAsk(btn) {
+    if (!window.Swal) { meOpenGmail(btn, ''); return; }
+    Swal.fire({
+        title: 'Ship\'s Particulars',
+        html: '<div class="me-box"><p class="me-p">Upload the vessel\'s <b>Ship\'s Particulars</b> — the Master\'s email is read from it for you to copy into the redelivery email. The file is only read, not saved.</p>' +
+            '<label class="me-drop" data-testid="me-drop"><i class="fa-solid fa-file-arrow-up"></i><span data-me-fname>Choose file — PDF, Word, Excel, image or ZIP</span>' +
+            '<input type="file" id="meFile" accept=".pdf,.docx,.xlsx,.xls,.txt,.csv,.jpg,.jpeg,.png,.webp,.zip" data-testid="me-file"></label>' +
+            '<button type="button" class="me-link" data-me-attachments data-testid="me-search-attachments"><i class="fa-solid fa-folder-open"></i> Search this vessel\'s attachments instead</button></div>',
+        showConfirmButton: true, confirmButtonText: '<i class="fa-solid fa-magnifying-glass"></i> Read Master email', confirmButtonColor: '#0f766e',
+        showDenyButton: true, denyButtonText: 'Skip — open Gmail', denyButtonColor: '#64748b',
+        showCloseButton: true, showLoaderOnConfirm: true,
+        didOpen: function () {
+            var inp = document.getElementById('meFile');
+            inp.addEventListener('change', function () { var n = inp.files[0] ? inp.files[0].name : 'Choose file — PDF, Word, Excel, image or ZIP'; document.querySelector('[data-me-fname]').textContent = n; });
+            document.querySelector('[data-me-attachments]').addEventListener('click', function () {
+                Swal.fire({ title: 'Searching the attachments…', html: '<div class="me-box">Reading the Ship\'s Particulars in this vessel\'s attachments…</div>', showConfirmButton: false, allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+                fetch(ME_API, { credentials: 'same-origin' }).then(meJson).catch(function () { return { ok: false, message: 'Network error — please try again.' }; }).then(function (d) { meResult(btn, d); });
+            });
+        },
+        preConfirm: function () {
+            var f = document.getElementById('meFile').files[0];
+            if (!f) { Swal.showValidationMessage('Choose the Ship\'s Particulars file first.'); return false; }
+            if (f.size > 20 * 1024 * 1024) { Swal.showValidationMessage('The file is too large (20 MB max).'); return false; }
+            var fd = new FormData(); fd.append('particulars', f); fd.append('csrf_token', ME_CSRF);
+            return fetch(ME_API, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF-Token': ME_CSRF } }).then(meJson)
+                .catch(function () { return { ok: false, message: 'Network error — please try again.' }; });
+        },
+        allowOutsideClick: function () { return !Swal.isLoading(); }
+    }).then(function (r) {
+        if (r.isConfirmed && r.value) meResult(btn, r.value);
+        else if (r.isDenied) meOpenGmail(btn, '');
     });
 }
 document.addEventListener('click', function (ev) {
@@ -1122,31 +1170,7 @@ document.addEventListener('click', function (ev) {
     var btn = ev.target.closest('[data-redelivery-open]');
     if (!btn) return;
     ev.preventDefault();
-    var block = btn.closest('.redelivery-block');
-    var input = block ? block.querySelector('[data-redelivery-from]') : null;
-    var email = input ? input.value.trim() : '';
-    var webUrl = btn.getAttribute('data-base-url') + (email ? '&authuser=' + encodeURIComponent(email) : '');
-    var ua = navigator.userAgent || '';
-
-    if (/Android/i.test(ua)) {
-        meShow(function () { window.location.href = btn.getAttribute('data-android-url'); });
-        return;
-    }
-    if (/iPhone|iPad|iPod/i.test(ua)) {
-        meShow(function () {
-            var appOpened = false;
-            var onBlur = function () { appOpened = true; window.removeEventListener('blur', onBlur); };
-            window.addEventListener('blur', onBlur);
-            window.location.href = btn.getAttribute('data-ios-url');
-            setTimeout(function () {
-                window.removeEventListener('blur', onBlur);
-                if (!appOpened) window.location.href = webUrl;
-            }, 1500);
-        });
-        return;
-    }
-    window.open(webUrl, '_blank', 'noopener');
-    meShow(null);
+    meAsk(btn);
 });
 </script>
 

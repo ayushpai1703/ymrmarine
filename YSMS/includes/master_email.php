@@ -155,7 +155,7 @@ function meAiRead(string $mime, string $bytes): array {
  * Looks through the survey's uploads. $files: [['name' => shown name, 'path' => absolute path], …]
  * Returns ['found' => bool, 'sources' => [names], 'master' => email|null, 'emails' => [...], 'note' => string]
  */
-function meFindMasterEmail(array $files): array {
+function meFindMasterEmail(array $files, bool $assume = false): array {
     $docs = []; // ['name', 'ext', 'bytes'] — files and ZIP entries
     foreach ($files as $f) {
         if (!is_file($f['path']) || filesize($f['path']) > ME_MAX_FILE) continue;
@@ -179,11 +179,23 @@ function meFindMasterEmail(array $files): array {
     // files named as particulars first
     usort($docs, fn($a, $b) => (int)$b['named'] <=> (int)$a['named']);
 
+    // $assume: the user uploaded this file as the Ship's Particulars — read every document
+    // in it (inside a ZIP, only the ones recognised as particulars when there are any)
+    $texts = [];
+    foreach ($docs as $i => $d) $texts[$i] = in_array($d['ext'], ['jpg', 'jpeg', 'png', 'webp'], true) ? '' : meText($d['ext'], $d['bytes']);
+    $recognised = [];
+    foreach ($docs as $i => $d) if ($d['named'] || ($texts[$i] !== '' && meTextIsParticulars($texts[$i]))) $recognised[$i] = true;
+    if ($assume && !$recognised) $recognised = array_fill_keys(array_keys($docs), true);
+
     $sources = []; $emails = []; $scans = [];
-    foreach ($docs as $d) {
-        $text = in_array($d['ext'], ['jpg', 'jpeg', 'png', 'webp'], true) ? '' : meText($d['ext'], $d['bytes']);
-        $isPart = $d['named'] || ($text !== '' && meTextIsParticulars($text));
-        if (!$isPart) continue;
+    foreach ($docs as $i => $d) {
+        $text = $texts[$i];
+        if (empty($recognised[$i])) continue;
+        if ($assume && trim($text) !== '' && !meTextIsParticulars($text)) { // whole file is the particulars
+            $sources[] = $d['name'];
+            foreach (meEmails($text) as $e) $emails[] = $e + ['source' => $d['name']];
+            continue;
+        }
         if (trim($text) === '') { $scans[] = $d; $sources[] = $d['name']; continue; } // scan / photo: AI below
         $sources[] = $d['name'];
         foreach (meEmails(meParticularsPart($text)) as $e) $emails[] = $e + ['source' => $d['name']];
@@ -197,6 +209,7 @@ function meFindMasterEmail(array $files): array {
             if (!$mime) continue;
             $r = meAiRead($mime, $d['bytes']);
             if (!$r['ok']) { $note = geminiApiKey() === '' ? 'The Ship\'s Particulars is a scan / photo and AI reading is not set up on this server.' : 'The scanned Ship\'s Particulars could not be read.'; continue; }
+            if ($assume && !$r['particulars'] && !$r['emails']) { $note = 'This file does not look like a Ship\'s Particulars.'; continue; }
             foreach ($r['emails'] as $e) $emails[] = $e + ['source' => $d['name']];
             if ($master === null) foreach ($r['emails'] as $e) if ($e['master']) { $master = $e['email']; break; }
             if ($master) break;
