@@ -6,6 +6,21 @@ PDF from that workbook.
 
 - **Survey Reports** (`survey_reports.php`, sidebar) — Admin, Super Admin (view only), Surveyor
   (only the vessels assigned to them). Making a report never changes the vessel's status or files.
+  The report page asks one question at a time, in the SHIP DETAILS order:
+  - Vessel Name, IMO, Flag, Port of Registry, GRT, NRT, Voyage No., Owners, Charterers Name;
+  - **FWE** (date, time, ROB VLSFO / HSFO / LSMGO);
+  - **Survey Started** (date, time, ROB);
+  - **Survey Completed** (date, time);
+  - Place of Survey, Drafts, Master, Chief Engineer, Surveyor, List, Holds, Builder, Keel laid,
+    Manager/Operator, Callsign, LOA, Breadth, Depth, Summer Draft, Summer Deadweight, Class,
+    Alongside;
+  - then the **Tanks**, and the last step makes the Excel + PDF.
+
+  Nothing else is asked:
+  - the Offhire redelivery texts and the remarks keep the template's own wording;
+  - the RESULTS block and the REPORT sheet's typed values are left empty.
+
+  Back / Next or the step list moves between questions. Enter goes to the next box.
 - **Report Templates** (`admin_report_templates.php`, Admin) — upload, versions, checks, cell
   mapping, PDF sheets and test generation.
 

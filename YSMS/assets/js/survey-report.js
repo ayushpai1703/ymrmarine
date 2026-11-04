@@ -59,7 +59,7 @@
       else return conflictLocal(local, res);
     }
     $('[data-title]').textContent = res.report.vessel;
-    $('[data-subtitle]').innerHTML = 'Offhire report · template v' + esc(S.cfg.template.version) + ' (' + esc(S.cfg.template.name) + ') · vessel status ' + esc(res.report.status);
+    $('[data-subtitle]').textContent = 'Offhire report';
     render();
     saveState(S.dirty ? (online() ? 'Saving…' : 'Changes on this device') : 'Saved', S.dirty ? 'dirty' : '');
     if (S.dirty && online() && !fromCache) saveNow();
@@ -101,49 +101,113 @@
     caches.open(TPL_CACHE).then(function (c) { return c.match(url).then(function (hit) { if (!hit) return fetch(url, { credentials: 'same-origin' }).then(function (r) { if (r.ok) c.put(url, r); }); }); }).catch(function () {});
   }
 
-  // ---------- render ----------
+  // ---------- render: one question at a time ----------
   var MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
-  function fieldHtml(f) {
+  // The questions, in the order of the SHIP DETAILS sheet. FWE / Survey Started ask date, time and ROB together.
+  var QUESTIONS = [
+    ['vessel_name', 'Vessel Name'], ['imo', 'IMO'], ['flag', 'Flag'], ['port_of_registry', 'Port of Registry'], ['grt', 'GRT'], ['nrt', 'NRT'],
+    ['voyage_no', 'Voyage No.'], ['owners', 'Owners'], ['charterers', 'Charterers Name'],
+    ['fwe', 'FWE', ['fwe_date', 'fwe_time', 'brob_fwe_vlsfo', 'brob_fwe_hsfo', 'brob_fwe_lsmgo']],
+    ['started', 'Survey Started', ['started_date', 'started_time', 'brob_started_vlsfo', 'brob_started_hsfo', 'brob_started_lsmgo']],
+    ['completed', 'Survey Completed', ['completed_date', 'completed_time']],
+    ['place', 'Place of Survey'], ['draft_aft', 'Draft Aft', null, 'm'], ['draft_fwd', 'Draft Fwd', null, 'm'], ['master', 'Master Name'],
+    ['chief_engineer', 'Chief Engineer Name'], ['surveyor_name', 'Surveyor Name'], ['list', 'List', null, 'degrees'], ['holds', 'No. Of Holds'],
+    ['builder', 'Builder'], ['keel_month', 'Keel laid Month'], ['keel_year', 'Keel laid Year'], ['operator', 'Manager/Operator Name'],
+    ['callsign', 'Callsign'], ['loa', 'LOA', null, 'm'], ['breadth', 'Breadth Moulded', null, 'm'], ['depth', 'Depth Moulded', null, 'm'],
+    ['summer_draft', 'Summer Draft', null, 'm'], ['summer_dwt', 'Summer Deadweight', null, 'MT'], ['class', 'Class'], ['alongside', 'Alongside']
+  ];
+  var STEPS = [];
+  function buildSteps() {
+    var have = {}; S.cfg.fields.forEach(function (f) { have[f.key] = f; });
+    STEPS = [];
+    QUESTIONS.forEach(function (q) {
+      var keys = (q[2] || [q[0]]).filter(function (k) { return have[k]; });
+      if (keys.length) STEPS.push({ id: q[0], title: q[1], keys: keys, unit: q[3] || '' });
+    });
+    STEPS.push({ id: 'tanks', title: 'Tanks' });
+    STEPS.push({ id: 'finish', title: 'Report' });
+    var saved = +(read(LS + '_step') || 0);
+    S.step = Math.min(Math.max(0, saved), STEPS.length - 1);
+  }
+  function subLabel(key) {
+    if (/_date$/.test(key)) return 'Date';
+    if (/_time$/.test(key)) return 'Time';
+    var m = /^brob_\w+_(vlsfo|hsfo|lsmgo)$/.exec(key);
+    if (m) { var sec = S.cfg.sections.filter(function (x) { return x.key === m[1]; })[0]; return 'ROB ' + (sec ? sec.short : m[1].toUpperCase()) + ' (MT)'; }
+    return '';
+  }
+  function inputHtml(f, label) {
     var v = S.data.fields[f.key] == null ? '' : String(S.data.fields[f.key]), dis = S.canEdit ? '' : ' disabled', inp;
     var attrs = ' data-f="' + f.key + '" data-testid="sr-f-' + f.key + '"' + dis;
-    if (f.type === 'long') inp = '<textarea' + attrs + ' maxlength="3000">' + esc(v) + '</textarea>';
-    else if (f.type === 'month') inp = '<select' + attrs + '><option value=""></option>' + MONTHS.map(function (m) { return '<option' + (m === v ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select>';
+    if (f.type === 'month') inp = '<select' + attrs + '><option value=""></option>' + MONTHS.map(function (m) { return '<option' + (m === v ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select>';
     else {
-      var t = f.type === 'date' || f.type === 'xdate' ? 'date' : f.type === 'time' ? 'time' : 'text';
-      var mode = /^num|int|imo/.test(f.type) ? ' inputmode="decimal"' : '';
-      inp = '<input type="' + t + '"' + mode + attrs + ' value="' + esc(v) + '" maxlength="200">';
+      var t = f.type === 'date' ? 'date' : f.type === 'time' ? 'time' : 'text';
+      var mode = /^(num|int|imo)/.test(f.type) ? ' inputmode="decimal"' : '';
+      inp = '<input type="' + t + '"' + mode + attrs + ' value="' + esc(v) + '" maxlength="200" autocomplete="off">';
     }
-    return '<label class="sr-f' + (f.type === 'long' ? ' wide' : '') + '" data-fw="' + f.key + '"><span>' + esc(f.label) + '<i>' + esc(f.cell) + '</i></span>' + inp + '<em data-err="' + f.key + '"></em></label>';
+    return '<label class="sr-f" data-fw="' + f.key + '">' + (label ? '<span>' + esc(label) + '</span>' : '') + inp + '<em data-err="' + f.key + '"></em></label>';
   }
   function render() {
-    var c = S.cfg, groups = {};
-    c.fields.forEach(function (f) { (groups[f.group] = groups[f.group] || []).push(f); });
-    var banners = '';
-    if (!S.canEdit) banners += '<div class="sr-note warn"><i class="fa-solid fa-lock"></i> View only — ' + (S.report.status === 'Completed' || S.report.status === 'Cancelled' ? 'the vessel is ' + esc(S.report.status) + '.' : 'you can download the files.') + '</div>';
-    if (S.offlineMode) banners += '<div class="sr-note warn"><i class="fa-solid fa-plane"></i> Offline copy — changes are kept on this device and saved when you are back online.</div>';
-    (c.flags || []).forEach(function (fl) { banners += '<div class="sr-note err"><i class="fa-solid fa-triangle-exclamation"></i> Template check: <b>' + esc(fl.where) + '</b> — ' + esc(fl.text) + '</div>'; });
-    $('[data-banners]').innerHTML = banners;
-    var order = Object.keys(c.groups), h = '';
-    order.forEach(function (g) {
-      if (!groups[g]) return;
-      if (g === 'report') return;
-      h += '<div class="sr-card"><h2>' + esc(c.groups[g]) + (g === 'results' ? ' <small>outside the printed page</small>' : '') + '</h2><div class="sr-grid">' + groups[g].map(fieldHtml).join('') + '</div></div>';
-      if (g === 'drafts') h += tanksHtml();
-    });
-    if (groups.report) h += '<details class="sr-card"><summary>REPORT sheet data <small class="sr-muted">(' + groups.report.length + ' fields, used by other documents)</small></summary><div class="sr-grid" style="margin-top:10px">' + groups.report.map(fieldHtml).join('') + '</div></details>';
-    if (h.indexOf('data-tanks') < 0) h = tanksHtml() + h;
-    h += summaryHtml() + outputHtml();
-    $('[data-form]').innerHTML = h;
+    if (!STEPS.length) buildSteps();
+    var note = '';
+    if (!S.canEdit) note = '<div class="sr-note warn"><i class="fa-solid fa-lock"></i> View only.</div>';
+    else if (S.offlineMode) note = '<div class="sr-note warn"><i class="fa-solid fa-plane"></i> Offline — saved on this device, sent when you are back online.</div>';
+    $('[data-banners]').innerHTML = note;
+    var st = STEPS[S.step], n = STEPS.length, body;
+    var have = {}; S.cfg.fields.forEach(function (f) { have[f.key] = f; });
+    if (st.id === 'tanks') body = '<h2 class="sr-qt" data-testid="sr-step-title">Tanks</h2>' + tanksHtml();
+    else if (st.id === 'finish') body = '<h2 class="sr-qt" data-testid="sr-step-title">Report</h2>' + summaryHtml() + outputHtml();
+    else {
+      var multi = st.keys.length > 1;
+      body = '<h2 class="sr-qt" data-testid="sr-step-title">' + esc(st.title) + (st.unit ? ' <small>(' + esc(st.unit) + ')</small>' : '') + '</h2>' +
+        '<div class="sr-qf' + (multi ? ' multi' : '') + '">' + st.keys.map(function (k) { return inputHtml(have[k], multi ? subLabel(k) : ''); }).join('') + '</div>';
+    }
+    var jump = '<select class="sr-jump" data-jump aria-label="Go to" data-testid="sr-jump">' + STEPS.map(function (x, i) { return '<option value="' + i + '"' + (i === S.step ? ' selected' : '') + '>' + (i + 1) + '. ' + esc(x.title) + '</option>'; }).join('') + '</select>';
+    $('[data-form]').innerHTML =
+      '<div class="sr-wiz" data-testid="sr-wizard"><div class="sr-wiz-top"><span data-testid="sr-step-no">Step ' + (S.step + 1) + ' of ' + n + '</span>' + jump + '</div>' +
+      '<div class="sr-bar"><i style="width:' + Math.round((S.step + 1) / n * 100) + '%"></i></div>' +
+      '<div class="sr-q' + (st.id === 'tanks' ? ' wide' : '') + '">' + body + '</div>' +
+      '<div class="sr-wiz-nav"><button type="button" class="sr-btn" data-back' + (S.step ? '' : ' disabled') + ' data-testid="sr-back"><i class="fa-solid fa-arrow-left"></i> Back</button>' +
+      (st.id === 'finish' ? '<span></span>' : '<button type="button" class="sr-btn pri" data-next data-testid="sr-next">Next <i class="fa-solid fa-arrow-right"></i></button>') + '</div></div>';
     renderErrors(); calcAll(); netState();
+    var first = $('.sr-q input:not([disabled]), .sr-q select:not([disabled])');
+    if (first && st.id !== 'finish' && st.id !== 'tanks') first.focus();
   }
+  function go(i) {
+    S.step = Math.min(Math.max(0, i), STEPS.length - 1); store(LS + '_step', S.step);
+    render(); window.scrollTo(0, 0);
+  }
+  /** Quick check of the step's values before moving on (the server checks again). */
+  function stepOk() {
+    var st = STEPS[S.step], ok = true;
+    (st.keys || []).forEach(function (k) {
+      var f = S.cfg.fields.filter(function (x) { return x.key === k; })[0], v = String(S.data.fields[k] || '').trim(), msg = '';
+      if (v !== '') {
+        if (f.type === 'imo' && !/^(IMO\s*)?\d{7}$/i.test(v)) msg = 'IMO number has 7 digits.';
+        else if (f.type === 'int' && !/^\d+$/.test(v.replace(/,/g, ''))) msg = 'Whole number only.';
+        else if (/^num/.test(f.type) && isNaN(v.replace(/,/g, ''))) msg = 'Numbers only.';
+      }
+      var w = $('[data-fw="' + k + '"]');
+      if (w) { w.classList.toggle('bad', !!msg); $('[data-err]', w).textContent = msg || (S.errors['f:' + k] || ''); }
+      if (msg) ok = false;
+    });
+    return ok;
+  }
+  document.addEventListener('click', function (ev) {
+    if (ev.target.closest('[data-next]')) { if (stepOk()) go(S.step + 1); }
+    else if (ev.target.closest('[data-back]')) go(S.step - 1);
+  });
+  document.addEventListener('change', function (ev) { if (ev.target.matches('[data-jump]')) go(+ev.target.value); });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && ev.target.matches('.sr-q [data-f]')) { ev.preventDefault(); var all = $$('.sr-q [data-f]'), i = all.indexOf(ev.target); if (i < all.length - 1) all[i + 1].focus(); else if (stepOk()) go(S.step + 1); }
+  });
   function tanksHtml() {
     return S.cfg.sections.map(function (s) {
       var rows = S.data.tanks[s.key];
-      return '<div class="sr-card" data-tanks="' + s.key + '" data-testid="sr-tanks-' + s.key + '"><h2><i class="fa-solid fa-oil-can"></i> ' + esc(s.label) + ' <small>TABLES 54B · ' + rows.length + ' tank' + (rows.length === 1 ? '' : 's') + '</small></h2>' +
-        '<div class="sr-tk-wrap"><table class="sr-tk"><thead><tr>' + S.cfg.tank_cols.map(function (tc) { return '<th>' + esc(tc.label) + '</th>'; }).join('') + '<th>V.C.F.</th><th>G.S.V. m³@15°C</th><th>Metric Tons</th><th></th></tr></thead><tbody>' +
+      return '<div class="sr-card" data-tanks="' + s.key + '" data-testid="sr-tanks-' + s.key + '"><h2>' + esc(s.short) + ' <small>' + esc(s.label) + '</small></h2>' +
+        '<div class="sr-tk-wrap"><table class="sr-tk"><thead><tr>' + S.cfg.tank_cols.map(function (tc) { return '<th>' + esc(tc.label) + '</th>'; }).join('') + '<th>V.C.F.</th><th>G.S.V.</th><th>M. Tons</th><th></th></tr></thead><tbody>' +
         rows.map(function (r, i) { return rowHtml(s.key, r, i); }).join('') + '</tbody><tfoot><tr><td colspan="' + (S.cfg.tank_cols.length + 1) + '">TOTAL</td><td data-tot-gsv="' + s.key + '"></td><td data-tot-mt="' + s.key + '" data-testid="sr-total-' + s.key + '"></td><td></td></tr></tfoot></table></div>' +
-        '<div class="sr-tk-f">' + (S.canEdit ? '<button type="button" class="sr-btn sm" data-add="' + s.key + '" data-testid="sr-add-' + s.key + '"><i class="fa-solid fa-plus"></i> Add tank</button>' : '<span></span>') +
-        '<small>Tip: copy rows from Excel and paste into a tank name cell. Rows without a temperature are not calculated (as in the template).</small></div></div>';
+        (S.canEdit ? '<div class="sr-tk-f"><button type="button" class="sr-btn sm" data-add="' + s.key + '" data-testid="sr-add-' + s.key + '"><i class="fa-solid fa-plus"></i> Add tank</button></div>' : '') + '</div>';
     }).join('');
   }
   function rowHtml(sec, r, i) {
@@ -153,17 +217,15 @@
     }).join('') + '<td class="calc" data-c="vcf"></td><td class="calc" data-c="gsv"></td><td class="calc mt" data-c="mt"></td><td>' + (S.canEdit ? '<button type="button" class="x" data-del="' + sec + ':' + i + '" title="Remove tank" aria-label="Remove tank"><i class="fa-solid fa-xmark"></i></button>' : '') + '</td></tr>';
   }
   function summaryHtml() {
-    return '<div class="sr-card"><h2><i class="fa-solid fa-scale-balanced"></i> Quantities found <small>certificate figures</small></h2><div class="sr-sum">' + S.cfg.sections.map(function (s) {
-      return '<div><div class="l">' + esc(s.short) + '</div><div class="v" data-sum="' + s.key + '" data-testid="sr-sum-' + s.key + '">—</div><div class="s">' + esc(s.label) + '</div></div>';
-    }).join('') + '</div>' + (S.cfg.calc ? '' : '<div class="sr-note warn" style="margin-top:10px">The template\'s tank formulas are not the standard pattern, so the figures are calculated only when the Excel is made on the server.</div>') + '</div>';
+    return '<div class="sr-sum">' + S.cfg.sections.map(function (s) {
+      return '<div><div class="l">' + esc(s.short) + '</div><div class="v" data-sum="' + s.key + '" data-testid="sr-sum-' + s.key + '">—</div></div>';
+    }).join('') + '</div>';
   }
   function outputHtml() {
-    return '<div class="sr-card" data-testid="sr-output"><h2><i class="fa-solid fa-file-export"></i> Report files</h2><div class="sr-out">' +
+    return '<div class="sr-out" style="margin-top:14px" data-testid="sr-output">' +
       '<button type="button" class="sr-btn pri" data-gen data-online-only data-testid="sr-generate"><i class="fa-solid fa-file-excel"></i> Make Excel + PDF</button>' +
-      '<button type="button" class="sr-btn" data-offline-xlsx data-testid="sr-offline-xlsx"><i class="fa-solid fa-download"></i> Excel on this device (works offline)</button></div>' +
-      '<ul class="sr-lim"><li><b>Make Excel + PDF</b>: the company template, filled on the server — the final report.</li>' +
-      '<li><b>Excel on this device</b>: same template, filled in this browser (also offline). Kept: all sheets, layout, fonts, borders, merged cells, logo, print area, formulas. Not kept: the arrows on SHIP DETAILS, printer driver settings and three broken old link names (#REF!) — make the final report on the server when online.</li></ul>' +
-      '<div class="sr-files" data-files>' + filesHtml() + '</div></div>';
+      '<button type="button" class="sr-btn" data-offline-xlsx data-testid="sr-offline-xlsx" title="Works without internet"><i class="fa-solid fa-download"></i> Excel on this device</button></div>' +
+      '<div class="sr-files" data-files>' + filesHtml() + '</div>';
   }
   function filesHtml() {
     if (!S.files.length) return '<span class="sr-muted">No files made yet.</span>';

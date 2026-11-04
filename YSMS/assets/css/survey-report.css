@@ -78,3 +78,21 @@ details.sr-card > summary { cursor: pointer; font-size: 14px; font-weight: 800; 
     .sr-t { display: block; overflow-x: auto; }
 }
 @media (max-width: 420px) { .sr-grid { grid-template-columns: 1fr; } }
+/* one question at a time */
+.sr-wiz { max-width: 640px; margin: 0 auto; }
+.sr-wiz-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 700; color: #64748b; margin-bottom: 6px; }
+.sr-jump { border: 1px solid #d1d5db; border-radius: 8px; padding: 4px 8px; font-size: 12.5px; color: #334155; background: #fff; max-width: 60%; }
+.sr-bar { height: 6px; background: #e2e8f0; border-radius: 999px; overflow: hidden; margin-bottom: 14px; }
+.sr-bar i { display: block; height: 100%; background: #00A3DF; border-radius: 999px; transition: width .2s; }
+.sr-q { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 22px 20px; box-shadow: 0 4px 14px rgba(15,23,42,.05); }
+.sr-q .sr-qt { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 14px; }
+.sr-q .sr-qt small { font-size: 14px; color: #94a3b8; font-weight: 600; }
+.sr-qf .sr-f input, .sr-qf .sr-f select { font-size: 17px; padding: 11px 12px; border-radius: 10px; }
+.sr-qf.multi { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.sr-qf.multi .sr-f > span { font-size: 12.5px; }
+.sr-wiz-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 14px; }
+.sr-wiz-nav .sr-btn { height: 44px; padding: 0 20px; font-size: 15px; border-radius: 10px; }
+.sr-wiz:has(.sr-q.wide) { max-width: 1200px; }
+.sr-q.wide { padding: 16px; }
+.sr-q.wide .sr-card { box-shadow: none; }
+@media (max-width: 575.98px) { .sr-qf.multi { grid-template-columns: 1fr; } .sr-q .sr-qt { font-size: 19px; } }
