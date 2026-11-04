@@ -9,6 +9,7 @@
  * Making a report never changes the vessel's status or its files.
  */
 require_once __DIR__ . '/report_templates.php';
+require_once __DIR__ . '/gemini_json.php';
 
 function srRole(): string { return (string)($_SESSION['role'] ?? ''); }
 function srCanUse(): bool { return in_array(srRole(), ['Admin', 'Super Admin', 'Surveyor'], true); }
@@ -107,4 +108,68 @@ function srFiles(PDO $db, int $reportId): array {
         FROM survey_report_files f LEFT JOIN report_templates t ON t.id = f.template_id LEFT JOIN users u ON u.id = f.created_by WHERE f.report_id = ? ORDER BY f.id DESC');
     $q->execute([$reportId]);
     return $q->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** Vessel particulars the "Vessel lookup" button may fill (field key => what the prompt asks for). */
+const SR_LOOKUP_FIELDS = [
+    'vessel_name' => 'current ship name',
+    'flag' => 'flag state (country)',
+    'port_of_registry' => 'port of registry',
+    'grt' => 'gross tonnage (whole number)',
+    'nrt' => 'net tonnage (whole number)',
+    'owners' => 'registered owner company',
+    'operator' => 'ship manager / operator company',
+    'builder' => 'shipbuilder (yard name)',
+    'keel_month' => 'keel laid month (month name, e.g. MAY)',
+    'keel_year' => 'keel laid year (4 digits; if only the build year is known, null)',
+    'callsign' => 'call sign',
+    'loa' => 'length overall in metres',
+    'breadth' => 'breadth moulded in metres',
+    'depth' => 'depth moulded in metres',
+    'summer_draft' => 'summer draft in metres',
+    'summer_dwt' => 'summer deadweight in tonnes (whole number)',
+    'class' => 'classification society abbreviation (e.g. LR, DNV, ABS, BV, NK, KR, CCS, RINA, IRS)',
+    'holds' => 'number of cargo holds (whole number)',
+];
+
+/**
+ * Look up a vessel's particulars by IMO number with Gemini + Google Search. Only values the web
+ * sources state for this IMO are returned (each checked against the field's type); nothing is
+ * saved here — the page puts them into the form for the surveyor to check.
+ * → ['ok', 'fields' => [key => value], 'sources' => [[title, uri]]] | ['ok' => false, 'error']
+ */
+function srVesselLookup(string $imoRaw, array $types): array {
+    [$imo, $err] = sfValidate('imo', $imoRaw);
+    if ($imo === '' || $err) return ['ok' => false, 'error' => $err ?: 'Enter the IMO number first.'];
+    if (geminiApiKey() === '') return ['ok' => false, 'error' => 'Vessel lookup is not set up on this server (Gemini API key missing). Fill the fields by hand.'];
+    $want = [];
+    foreach (SR_LOOKUP_FIELDS as $k => $d) if (isset($types[$k])) $want[$k] = $d;
+    $prompt = "VESSEL LOOKUP BY IMO NUMBER.\nSearch the web for the merchant ship with IMO number $imo (e.g. on Equasis-like registries, MarineTraffic, VesselFinder, BalticShipping, classification society registers, shipbuilder pages).\n"
+        . "Return ONE JSON object only, no other text, with these keys:\n"
+        . "  \"found\": true/false, \"imo\": the IMO number of the ship the values belong to,\n";
+    foreach ($want as $k => $d) $prompt .= "  \"$k\": $d,\n";
+    $prompt .= "Rules: use only values a source states for THIS IMO number. If a value is not found or sources disagree, use null. Never guess or estimate. Numbers without units or thousands separators. Text in UPPER CASE.";
+    $res = geminiJson([['text' => $prompt]], 90, 'vessel lookup', ['search' => true]);
+    if (!$res['ok']) return ['ok' => false, 'error' => $res['message'] ?? 'Vessel lookup failed. Please try again.'];
+    $d = $res['data'];
+    if (empty($d['found']) || preg_replace('/\D/', '', (string)($d['imo'] ?? '')) !== $imo) {
+        return ['ok' => false, 'error' => 'No vessel particulars were found for IMO ' . $imo . '. Fill the fields by hand.'];
+    }
+    $out = [];
+    foreach ($want as $k => $_) {
+        $v = $d[$k] ?? null;
+        if ($v === null || is_array($v) || is_bool($v)) continue;
+        $v = (string)$v;
+        if ($types[$k] === 'int' || strpos($types[$k], 'num:') === 0) {
+            $v = str_replace(',', '', $v);
+            if (strpos($types[$k], 'num:') === 0 && is_numeric($v)) $v = rtrim(rtrim(number_format((float)$v, (int)substr($types[$k], 4), '.', ''), '0'), '.');
+            if ($types[$k] === 'int' && is_numeric($v)) $v = (string)(int)round((float)$v);
+        } else {
+            $v = mb_strtoupper($v);
+        }
+        [$clean, $e] = sfValidate($types[$k], $v);
+        if ($clean !== '' && !$e) $out[$k] = $clean;
+    }
+    if (!$out) return ['ok' => false, 'error' => 'No vessel particulars were found for IMO ' . $imo . '. Fill the fields by hand.'];
+    return ['ok' => true, 'imo' => $imo, 'fields' => $out, 'sources' => array_slice($res['sources'] ?? [], 0, 8)];
 }

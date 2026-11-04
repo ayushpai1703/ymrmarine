@@ -10,6 +10,7 @@
  *   POST a=save    id, version, data  saves the draft (refused when someone saved meanwhile)
  *   POST a=generate id, pdf=1         Excel (+ PDF) from the saved data
  *   POST a=use_latest id              move the report to the active template version
+ *   POST a=lookup  id, imo            vessel particulars by IMO (AI + web search); nothing is saved
  *   GET  a=file&id=<file id>          download a generated file
  *   GET  a=template&id=<report id>    the report's template workbook (for the offline Excel)
  */
@@ -143,6 +144,14 @@ try {
         $g = srGenerate($db, $r, !empty($_POST['pdf']), $uid);
         if (!$g['ok']) srJson(422, ['ok' => false, 'error' => $g['error'], 'errors' => (object)($g['errors'] ?? []), 'version' => $r['version']]);
         srJson(200, ['ok' => true, 'version' => $r['version'], 'files' => srFiles($db, $r['id']), 'new_files' => $g['file_ids'], 'results' => $g['results'], 'pdf_error' => $g['pdf_error']]);
+    }
+    if ($a === 'lookup') {
+        $last = (int)($_SESSION['sr_lookup_at'] ?? 0);
+        if (time() - $last < 5) srJson(429, ['ok' => false, 'error' => 'Please wait a few seconds before the next lookup.']);
+        $_SESSION['sr_lookup_at'] = time();
+        $types = array_map(fn($f) => $f['type'], $eff['fields']);
+        $res = srVesselLookup((string)($_POST['imo'] ?? ''), $types);
+        srJson($res['ok'] ? 200 : 422, $res);
     }
     if ($a === 'use_latest') {
         $active = rtActive($db, $r['kind']);

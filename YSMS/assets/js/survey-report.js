@@ -1,6 +1,7 @@
 /* Survey report editor (survey_report.php). Data: ajax/survey_reports.php.
-   - Form from the template's own fields (ship details, Offhire, BROB, drafts, crew, particulars,
-     results, remarks, REPORT sheet) and the three TABLES 54B tank sections (rows added freely).
+   - One page: the ship details (SHIP DETAILS order), the three TABLES 54B tank sections (rows
+     added freely), then the report buttons. "Vessel lookup" fills the vessel particulars from the
+     IMO number (AI + web search on the server); the filled values are highlighted, with an Undo.
    - V.C.F. / G.S.V. / metric tons and totals are shown as you type (assets/js/report-calc.js,
      the template's formulas); the Excel file itself always uses the template's formulas.
    - Saves by itself. Offline: the changes are kept on this device and saved when the connection
@@ -11,7 +12,7 @@
   'use strict';
   var P = window.SR_PAGE || {};
   var LS = 'ysms_sr_' + P.id, CACHE = 'ysms_sr_get_' + P.id, TPL_CACHE = 'ysms-sr-templates';
-  var S = { cfg: null, report: null, data: null, version: 0, canEdit: false, errors: {}, files: [], dirty: false, saving: false, timer: null, offlineMode: false };
+  var S = { cfg: null, report: null, data: null, version: 0, canEdit: false, errors: {}, files: [], dirty: false, saving: false, timer: null, offlineMode: false, ai: {}, lookup: null };
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -60,6 +61,7 @@
     }
     $('[data-title]').textContent = res.report.vessel;
     $('[data-subtitle]').textContent = 'Offhire report';
+    store(LS + '_step', null);
     render();
     saveState(S.dirty ? (online() ? 'Saving…' : 'Changes on this device') : 'Saved', S.dirty ? 'dirty' : '');
     if (S.dirty && online() && !fromCache) saveNow();
@@ -101,11 +103,11 @@
     caches.open(TPL_CACHE).then(function (c) { return c.match(url).then(function (hit) { if (!hit) return fetch(url, { credentials: 'same-origin' }).then(function (r) { if (r.ok) c.put(url, r); }); }); }).catch(function () {});
   }
 
-  // ---------- render: one question at a time ----------
+  // ---------- render: everything on one page ----------
   var MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
-  // The questions, in the order of the SHIP DETAILS sheet. FWE / Survey Started ask date, time and ROB together.
+  // The ship details, in the order of the SHIP DETAILS sheet. FWE / Survey Started take date, time and ROB together.
   var QUESTIONS = [
-    ['vessel_name', 'Vessel Name'], ['imo', 'IMO'], ['flag', 'Flag'], ['port_of_registry', 'Port of Registry'], ['grt', 'GRT'], ['nrt', 'NRT'],
+    ['vessel_name', 'Vessel Name'], ['flag', 'Flag'], ['port_of_registry', 'Port of Registry'], ['grt', 'GRT'], ['nrt', 'NRT'],
     ['voyage_no', 'Voyage No.'], ['owners', 'Owners'], ['charterers', 'Charterers Name'],
     ['fwe', 'FWE', ['fwe_date', 'fwe_time', 'brob_fwe_vlsfo', 'brob_fwe_hsfo', 'brob_fwe_lsmgo']],
     ['started', 'Survey Started', ['started_date', 'started_time', 'brob_started_vlsfo', 'brob_started_hsfo', 'brob_started_lsmgo']],
@@ -116,19 +118,8 @@
     ['callsign', 'Callsign'], ['loa', 'LOA', null, 'm'], ['breadth', 'Breadth Moulded', null, 'm'], ['depth', 'Depth Moulded', null, 'm'],
     ['summer_draft', 'Summer Draft', null, 'm'], ['summer_dwt', 'Summer Deadweight', null, 'MT'], ['class', 'Class'], ['alongside', 'Alongside']
   ];
-  var STEPS = [];
-  function buildSteps() {
-    var have = {}; S.cfg.fields.forEach(function (f) { have[f.key] = f; });
-    STEPS = [];
-    QUESTIONS.forEach(function (q) {
-      var keys = (q[2] || [q[0]]).filter(function (k) { return have[k]; });
-      if (keys.length) STEPS.push({ id: q[0], title: q[1], keys: keys, unit: q[3] || '' });
-    });
-    STEPS.push({ id: 'tanks', title: 'Tanks' });
-    STEPS.push({ id: 'finish', title: 'Report' });
-    var saved = +(read(LS + '_step') || 0);
-    S.step = Math.min(Math.max(0, saved), STEPS.length - 1);
-  }
+  var HAVE = {};
+  function fieldOf(k) { return HAVE[k]; }
   function subLabel(key) {
     if (/_date$/.test(key)) return 'Date';
     if (/_time$/.test(key)) return 'Time';
@@ -138,7 +129,7 @@
   }
   function inputHtml(f, label) {
     var v = S.data.fields[f.key] == null ? '' : String(S.data.fields[f.key]), dis = S.canEdit ? '' : ' disabled', inp;
-    var attrs = ' data-f="' + f.key + '" data-testid="sr-f-' + f.key + '"' + dis;
+    var attrs = ' data-f="' + f.key + '" data-testid="sr-f-' + f.key + '"' + dis + (S.ai[f.key] ? ' class="ai" title="Filled by Vessel lookup — please check"' : '');
     if (f.type === 'month') inp = '<select' + attrs + '><option value=""></option>' + MONTHS.map(function (m) { return '<option' + (m === v ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select>';
     else {
       var t = f.type === 'date' ? 'date' : f.type === 'time' ? 'time' : 'text';
@@ -147,59 +138,89 @@
     }
     return '<label class="sr-f" data-fw="' + f.key + '">' + (label ? '<span>' + esc(label) + '</span>' : '') + inp + '<em data-err="' + f.key + '"></em></label>';
   }
+  function detailsHtml() {
+    var imo = fieldOf('imo');
+    var top = imo ? '<div class="sr-lookup">' + inputHtml(imo, 'IMO') +
+      (S.canEdit ? '<button type="button" class="sr-btn pri" data-lookup data-online-only data-testid="sr-lookup"><i class="fa-solid fa-wand-magic-sparkles"></i> Vessel lookup</button>' : '') +
+      '</div><div data-lookup-info data-testid="sr-lookup-info">' + lookupInfoHtml() + '</div>' : '';
+    var items = QUESTIONS.map(function (q) {
+      var keys = (q[2] || [q[0]]).filter(function (k) { return HAVE[k]; });
+      if (!keys.length) return '';
+      if (keys.length === 1 && !q[2]) return inputHtml(HAVE[keys[0]], q[1] + (q[3] ? ' (' + q[3] + ')' : ''));
+      return '<fieldset class="sr-grp" data-testid="sr-grp-' + q[0] + '"><legend>' + esc(q[1]) + '</legend><div class="sr-grp-g">' +
+        keys.map(function (k) { return inputHtml(HAVE[k], subLabel(k)); }).join('') + '</div></fieldset>';
+    }).join('');
+    return '<section class="sr-card" data-testid="sr-details"><h2><i class="fa-solid fa-ship"></i> Ship details</h2>' + top + '<div class="sr-grid sr-one">' + items + '</div></section>';
+  }
+  function lookupInfoHtml() {
+    var L = S.lookup; if (!L) return '';
+    var n = Object.keys(L.prev).length;
+    return '<div class="sr-note sr-ai-note"><b><i class="fa-solid fa-wand-magic-sparkles"></i> ' + n + ' field' + (n === 1 ? '' : 's') + ' filled for IMO ' + esc(L.imo) + '</b> — found on the web; please check the highlighted values against the ship\'s documents.' +
+      (S.canEdit ? ' <button type="button" class="sr-btn sm" data-undo data-testid="sr-undo"><i class="fa-solid fa-rotate-left"></i> Undo</button>' : '') +
+      (L.sources.length ? '<div class="sr-src">Sources: ' + L.sources.map(function (s) { return '<a href="' + esc(s.uri) + '" target="_blank" rel="noopener noreferrer">' + esc(s.title || s.uri) + '</a>'; }).join(' · ') + '</div>' : '') + '</div>';
+  }
   function render() {
-    if (!STEPS.length) buildSteps();
+    HAVE = {}; S.cfg.fields.forEach(function (f) { HAVE[f.key] = f; });
     var note = '';
     if (!S.canEdit) note = '<div class="sr-note warn"><i class="fa-solid fa-lock"></i> View only.</div>';
     else if (S.offlineMode) note = '<div class="sr-note warn"><i class="fa-solid fa-plane"></i> Offline — saved on this device, sent when you are back online.</div>';
     $('[data-banners]').innerHTML = note;
-    var st = STEPS[S.step], n = STEPS.length, body;
-    var have = {}; S.cfg.fields.forEach(function (f) { have[f.key] = f; });
-    if (st.id === 'tanks') body = '<h2 class="sr-qt" data-testid="sr-step-title">Tanks</h2>' + tanksHtml();
-    else if (st.id === 'finish') body = '<h2 class="sr-qt" data-testid="sr-step-title">Report</h2>' + summaryHtml() + outputHtml();
-    else {
-      var multi = st.keys.length > 1;
-      body = '<h2 class="sr-qt" data-testid="sr-step-title">' + esc(st.title) + (st.unit ? ' <small>(' + esc(st.unit) + ')</small>' : '') + '</h2>' +
-        '<div class="sr-qf' + (multi ? ' multi' : '') + '">' + st.keys.map(function (k) { return inputHtml(have[k], multi ? subLabel(k) : ''); }).join('') + '</div>';
-    }
-    var jump = '<select class="sr-jump" data-jump aria-label="Go to" data-testid="sr-jump">' + STEPS.map(function (x, i) { return '<option value="' + i + '"' + (i === S.step ? ' selected' : '') + '>' + (i + 1) + '. ' + esc(x.title) + '</option>'; }).join('') + '</select>';
-    $('[data-form]').innerHTML =
-      '<div class="sr-wiz" data-testid="sr-wizard"><div class="sr-wiz-top"><span data-testid="sr-step-no">Step ' + (S.step + 1) + ' of ' + n + '</span>' + jump + '</div>' +
-      '<div class="sr-bar"><i style="width:' + Math.round((S.step + 1) / n * 100) + '%"></i></div>' +
-      '<div class="sr-q' + (st.id === 'tanks' ? ' wide' : '') + '">' + body + '</div>' +
-      '<div class="sr-wiz-nav"><button type="button" class="sr-btn" data-back' + (S.step ? '' : ' disabled') + ' data-testid="sr-back"><i class="fa-solid fa-arrow-left"></i> Back</button>' +
-      (st.id === 'finish' ? '<span></span>' : '<button type="button" class="sr-btn pri" data-next data-testid="sr-next">Next <i class="fa-solid fa-arrow-right"></i></button>') + '</div></div>';
+    $('[data-form]').innerHTML = '<div class="sr-page" data-testid="sr-page">' + detailsHtml() +
+      '<h2 class="sr-h">Tanks</h2>' + tanksHtml() +
+      '<section class="sr-card" data-testid="sr-finish"><h2><i class="fa-solid fa-file-excel"></i> Report</h2>' + summaryHtml() + outputHtml() + '</section></div>';
     renderErrors(); calcAll(); netState();
-    var first = $('.sr-q input:not([disabled]), .sr-q select:not([disabled])');
-    if (first && st.id !== 'finish' && st.id !== 'tanks') first.focus();
   }
-  function go(i) {
-    S.step = Math.min(Math.max(0, i), STEPS.length - 1); store(LS + '_step', S.step);
-    render(); window.scrollTo(0, 0);
+  /** Quick check of one value as it is typed (the server checks again when saving). */
+  function checkField(k) {
+    var f = HAVE[k]; if (!f) return;
+    var v = String(S.data.fields[k] || '').trim(), msg = '';
+    if (v !== '') {
+      if (f.type === 'imo' && !/^(IMO\s*)?\d{7}$/i.test(v)) msg = 'IMO number has 7 digits.';
+      else if (f.type === 'int' && !/^\d+$/.test(v.replace(/,/g, ''))) msg = 'Whole number only.';
+      else if (/^num/.test(f.type) && isNaN(v.replace(/,/g, ''))) msg = 'Numbers only.';
+    }
+    var w = $('[data-fw="' + k + '"]');
+    if (w) { w.classList.toggle('bad', !!(msg || S.errors['f:' + k])); $('[data-err]', w).textContent = msg || (S.errors['f:' + k] || ''); }
   }
-  /** Quick check of the step's values before moving on (the server checks again). */
-  function stepOk() {
-    var st = STEPS[S.step], ok = true;
-    (st.keys || []).forEach(function (k) {
-      var f = S.cfg.fields.filter(function (x) { return x.key === k; })[0], v = String(S.data.fields[k] || '').trim(), msg = '';
-      if (v !== '') {
-        if (f.type === 'imo' && !/^(IMO\s*)?\d{7}$/i.test(v)) msg = 'IMO number has 7 digits.';
-        else if (f.type === 'int' && !/^\d+$/.test(v.replace(/,/g, ''))) msg = 'Whole number only.';
-        else if (/^num/.test(f.type) && isNaN(v.replace(/,/g, ''))) msg = 'Numbers only.';
-      }
-      var w = $('[data-fw="' + k + '"]');
-      if (w) { w.classList.toggle('bad', !!msg); $('[data-err]', w).textContent = msg || (S.errors['f:' + k] || ''); }
-      if (msg) ok = false;
-    });
-    return ok;
+  document.addEventListener('change', function (ev) { if (ev.target.matches('[data-f]')) checkField(ev.target.getAttribute('data-f')); });
+  document.addEventListener('keydown', function (ev) { // Enter moves to the next box
+    if (ev.key === 'Enter' && ev.target.matches('[data-f]')) { ev.preventDefault(); var all = $$('[data-f]:not([disabled])'), i = all.indexOf(ev.target); if (i < all.length - 1) all[i + 1].focus(); }
+  });
+
+  // ---------- vessel lookup by IMO (AI + web search on the server) ----------
+  function setField(k, v) {
+    S.data.fields[k] = v;
+    var el = $('[data-f="' + k + '"]'); if (el) el.value = v;
+  }
+  function markAi() { $$('[data-f]').forEach(function (el) { var on = !!S.ai[el.getAttribute('data-f')]; el.classList.toggle('ai', on); el.title = on ? 'Filled by Vessel lookup — please check' : ''; }); }
+  function lookup() {
+    var imo = String(S.data.fields.imo || '').trim();
+    if (!/^(IMO\s*)?\d{7}$/i.test(imo)) { checkField('imo'); toast('error', 'Enter the 7-digit IMO number first.'); var i = $('[data-f=imo]'); if (i) i.focus(); return; }
+    var btn = $('[data-lookup]'); btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Looking up…';
+    post({ a: 'lookup', id: P.id, imo: imo }).then(function (res) {
+      btn.disabled = !online(); btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Vessel lookup';
+      if (!res.ok) { Swal.fire({ icon: 'info', title: 'Vessel lookup', text: res.error || 'Nothing found. Please fill the fields by hand.' }); return; }
+      var prev = {};
+      Object.keys(res.fields).forEach(function (k) {
+        if (!HAVE[k]) return;
+        var old = S.data.fields[k] == null ? '' : String(S.data.fields[k]);
+        if (old === res.fields[k]) return;
+        prev[k] = old; setField(k, res.fields[k]); S.ai[k] = true;
+      });
+      S.lookup = { imo: res.imo, prev: prev, sources: res.sources || [] };
+      $('[data-lookup-info]').innerHTML = lookupInfoHtml();
+      markAi(); Object.keys(prev).forEach(checkField);
+      if (Object.keys(prev).length) changed(); else toast('info', 'The fields already have these values.');
+    }).catch(function () { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Vessel lookup'; toast('error', 'Vessel lookup failed. Please try again.'); });
+  }
+  function undoLookup() {
+    var L = S.lookup; if (!L) return;
+    Object.keys(L.prev).forEach(function (k) { setField(k, L.prev[k]); delete S.ai[k]; checkField(k); });
+    S.lookup = null; $('[data-lookup-info]').innerHTML = ''; markAi(); changed();
   }
   document.addEventListener('click', function (ev) {
-    if (ev.target.closest('[data-next]')) { if (stepOk()) go(S.step + 1); }
-    else if (ev.target.closest('[data-back]')) go(S.step - 1);
-  });
-  document.addEventListener('change', function (ev) { if (ev.target.matches('[data-jump]')) go(+ev.target.value); });
-  document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Enter' && ev.target.matches('.sr-q [data-f]')) { ev.preventDefault(); var all = $$('.sr-q [data-f]'), i = all.indexOf(ev.target); if (i < all.length - 1) all[i + 1].focus(); else if (stepOk()) go(S.step + 1); }
+    if (ev.target.closest('[data-lookup]')) lookup();
+    else if (ev.target.closest('[data-undo]')) undoLookup();
   });
   function tanksHtml() {
     return S.cfg.sections.map(function (s) {
@@ -269,7 +290,7 @@
   // ---------- editing ----------
   document.addEventListener('input', function (ev) {
     var el = ev.target;
-    if (el.matches('[data-f]')) { S.data.fields[el.getAttribute('data-f')] = el.value; changed(); return; }
+    if (el.matches('[data-f]')) { var k = el.getAttribute('data-f'); S.data.fields[k] = el.value; if (S.ai[k]) { delete S.ai[k]; el.classList.remove('ai'); el.title = ''; } changed(); return; }
     if (el.matches('[data-t]')) {
       var p = el.getAttribute('data-t').split(':');
       S.data.tanks[p[0]][+p[1]][p[2]] = el.value;

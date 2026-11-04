@@ -6,21 +6,36 @@ PDF from that workbook.
 
 - **Survey Reports** (`survey_reports.php`, sidebar) — Admin, Super Admin (view only), Surveyor
   (only the vessels assigned to them). Making a report never changes the vessel's status or files.
-  The report page asks one question at a time, in the SHIP DETAILS order:
-  - Vessel Name, IMO, Flag, Port of Registry, GRT, NRT, Voyage No., Owners, Charterers Name;
+  The report is one page, in the SHIP DETAILS order:
+  - **IMO + Vessel lookup** on top (see below);
+  - Vessel Name, Flag, Port of Registry, GRT, NRT, Voyage No., Owners, Charterers Name;
   - **FWE** (date, time, ROB VLSFO / HSFO / LSMGO);
   - **Survey Started** (date, time, ROB);
   - **Survey Completed** (date, time);
   - Place of Survey, Drafts, Master, Chief Engineer, Surveyor, List, Holds, Builder, Keel laid,
     Manager/Operator, Callsign, LOA, Breadth, Depth, Summer Draft, Summer Deadweight, Class,
     Alongside;
-  - then the **Tanks**, and the last step makes the Excel + PDF.
+  - then the **Tanks**, and at the bottom the totals and **Make Excel + PDF**.
 
   Nothing else is asked:
   - the Offhire redelivery texts and the remarks keep the template's own wording;
   - the RESULTS block and the REPORT sheet's typed values are left empty.
 
-  Back / Next or the step list moves between questions. Enter goes to the next box.
+  Enter goes to the next box. Everything saves by itself.
+
+  **Vessel lookup.** Type the IMO number and press **Vessel lookup**. The server
+  (`srVesselLookup`, `ajax/survey_reports.php?a=lookup`) asks Gemini with Google Search
+  grounding for the particulars of that IMO: name, flag, port of registry, GRT, NRT, owners,
+  manager/operator, builder, keel laid month/year, call sign, LOA, breadth, depth, summer draft,
+  summer deadweight, class, holds.
+  - The prompt allows only values a web source states for that IMO, otherwise null (no guessing).
+    The reply must name the same IMO, and every value is checked against the field's type
+    (numbers, month names) before it is used.
+  - The filled boxes are highlighted, the web sources are listed, and **Undo** puts the earlier
+    values back. Values are saved like typed ones; check them against the ship's documents.
+  - The API key stays on the server (`YSMS_GEMINI_API_KEY`, sent as a header). One lookup per
+    5 seconds per user. Needs internet (the button is off when offline).
+
 - **Report Templates** (`admin_report_templates.php`, Admin) — upload, versions, checks, cell
   mapping, PDF sheets and test generation.
 
@@ -138,7 +153,9 @@ Open the report once while online. The page, its scripts (ExcelJS is vendored in
 
 ## Acceptance test (local test stack, MV. PROTECTOR workbook)
 
-`sr_test.js`: 31/31 checks pass.
+`sr_test.js`: 41/41 checks pass (including the one-page layout and Vessel lookup with a mock
+Gemini: unknown IMO fills nothing, known IMO fills all 18 particulars = the workbook's values,
+sources shown, Undo, highlight cleared on edit, button off offline).
 
 1. All six sheets exist, in the same order.
 2. Vessel information is populated exactly. The only differences are two trailing spaces in
@@ -192,6 +209,8 @@ New:
 
 Changed:
 - `includes/nav.php` — Survey Reports, Report Templates links.
+- `includes/gemini_json.php` — optional Google Search grounding (`['search' => true]`) for the
+  Vessel lookup; existing callers unchanged.
 - `Dockerfile` — LibreOffice.
 
 The existing Survey Form (`survey_form.php`) and its formats are not changed.
