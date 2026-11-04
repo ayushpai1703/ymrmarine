@@ -1035,6 +1035,19 @@ include 'includes/header.php';
     });
 </script>
 
+<style>
+.me-box { text-align: left; font-size: 13.5px; }
+.me-label { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #64748b; margin: 10px 0 6px; }
+.me-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; }
+.me-row.me-main { border-color: #99f6e4; background: #f0fdfa; }
+.me-email { font-weight: 700; color: #0f172a; overflow-wrap: anywhere; min-width: 0; }
+.me-main .me-email { font-size: 15px; color: #0f766e; }
+.me-copy { flex: none; border: 1px solid #0f766e; background: #fff; color: #0f766e; border-radius: 8px; padding: 4px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.me-copy:hover { background: #0f766e; color: #fff; }
+.me-msg { border-radius: 10px; padding: 10px 12px; font-weight: 600; }
+.me-warn { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+.me-src { margin-top: 10px; font-size: 11.5px; color: #64748b; overflow-wrap: anywhere; }
+</style>
 <script>
 // "Send Email to Master for Redelivery" — an optional "Your Gmail address"
 // field lets the user pick which signed-in Google account the compose
@@ -1043,6 +1056,68 @@ include 'includes/header.php';
 // On phones this opens the Gmail app directly (already signed in) instead
 // of a browser tab that would ask the user to log in again; desktop keeps
 // opening the Gmail web compose tab as before.
+// Additionally the Master's email is read from the Ship's Particulars in this vessel's
+// attachments (ajax/master_email.php) and shown with a Copy button; when there is no Ship's
+// Particulars the user is told so. Desktop: Gmail opens straight away and the result shows
+// on this page. Phones: the result shows first with an "Open Gmail" button (the Gmail app
+// would otherwise hide this page).
+var meCache = null;
+function meEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function meCopy(text, btn) {
+    var done = function () { if (btn) { var h = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied'; setTimeout(function () { btn.innerHTML = h; }, 1600); } };
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () { meCopyFallback(text); done(); }); }
+    else { meCopyFallback(text); done(); }
+}
+function meCopyFallback(text) {
+    var t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+    document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch (e) {} t.remove();
+}
+function meFetch() {
+    if (meCache) return Promise.resolve(meCache);
+    return fetch('ajax/master_email.php?survey_id=<?= (int)$survey['id'] ?>', { credentials: 'same-origin' })
+        .then(function (r) { return r.json().catch(function () { return { ok: false, message: 'Unexpected server response (' + r.status + ').' }; }); })
+        .then(function (d) { if (d && d.ok) meCache = d; return d; })
+        .catch(function () { return { ok: false, message: 'Network error — could not read the attachments.' }; });
+}
+function meHtml(d) {
+    if (!d.ok) return '<div class="me-msg me-warn">' + meEsc(d.message || 'Could not read the attachments.') + '</div>';
+    if (!d.found) return '<div class="me-msg me-warn" data-testid="me-no-particulars"><i class="fa-solid fa-triangle-exclamation"></i> ' + meEsc(d.message) + '</div>';
+    var h = '';
+    if (d.master) {
+        h += '<div class="me-label">Master\'s email</div><div class="me-row me-main"><span class="me-email" data-testid="me-master-email">' + meEsc(d.master) + '</span>' +
+            '<button type="button" class="me-copy" data-me-copy="' + meEsc(d.master) + '" data-testid="me-copy-master"><i class="fa-regular fa-copy"></i> Copy</button></div>';
+    } else {
+        h += '<div class="me-msg me-warn" data-testid="me-no-master"><i class="fa-solid fa-circle-info"></i> ' + meEsc(d.message) + '</div>';
+    }
+    var others = (d.emails || []).filter(function (e) { return e.email !== d.master; });
+    if (others.length) {
+        h += '<div class="me-label">' + (d.master ? 'Other emails on the Ship\'s Particulars' : 'Emails on the Ship\'s Particulars') + '</div>' +
+            others.map(function (e) { return '<div class="me-row"><span class="me-email">' + meEsc(e.email) + '</span><button type="button" class="me-copy" data-me-copy="' + meEsc(e.email) + '"><i class="fa-regular fa-copy"></i> Copy</button></div>'; }).join('');
+    }
+    h += '<div class="me-src"><i class="fa-solid fa-paperclip"></i> From: ' + (d.sources || []).map(meEsc).join(', ') + '</div>';
+    return h;
+}
+function meShow(openGmail) {
+    if (!window.Swal) { meFetch().then(function (d) { alert(d.master ? 'Master email: ' + d.master : (d.message || '')); if (openGmail) openGmail(); }); return; }
+    Swal.fire({ title: 'Master\'s email', html: '<div class="me-box">Reading the Ship\'s Particulars in the attachments…</div>', allowOutsideClick: true, showConfirmButton: false, showCloseButton: true,
+        didOpen: function () { Swal.showLoading(); } });
+    meFetch().then(function (d) {
+        if (!Swal.isVisible()) return;
+        Swal.hideLoading();
+        Swal.update({
+            icon: d.ok && d.found ? (d.master ? 'success' : 'info') : 'warning',
+            title: d.ok && d.found ? 'Master\'s email' : 'No Ship\'s Particulars',
+            html: '<div class="me-box" data-testid="me-result">' + meHtml(d) + '</div>',
+            showConfirmButton: !!openGmail, confirmButtonText: '<i class="fa-solid fa-envelope"></i> Open Gmail', confirmButtonColor: '#0f766e',
+            showCancelButton: !openGmail, cancelButtonText: 'Close'
+        });
+        if (openGmail) { var c = Swal.getConfirmButton(); c.onclick = function () { Swal.close(); openGmail(); }; }
+    });
+}
+document.addEventListener('click', function (ev) {
+    var cp = ev.target.closest('[data-me-copy]');
+    if (cp) { ev.preventDefault(); meCopy(cp.getAttribute('data-me-copy'), cp); }
+});
 document.addEventListener('click', function (ev) {
     var btn = ev.target.closest('[data-redelivery-open]');
     if (!btn) return;
@@ -1054,21 +1129,24 @@ document.addEventListener('click', function (ev) {
     var ua = navigator.userAgent || '';
 
     if (/Android/i.test(ua)) {
-        window.location.href = btn.getAttribute('data-android-url');
+        meShow(function () { window.location.href = btn.getAttribute('data-android-url'); });
         return;
     }
     if (/iPhone|iPad|iPod/i.test(ua)) {
-        var appOpened = false;
-        var onBlur = function () { appOpened = true; window.removeEventListener('blur', onBlur); };
-        window.addEventListener('blur', onBlur);
-        window.location.href = btn.getAttribute('data-ios-url');
-        setTimeout(function () {
-            window.removeEventListener('blur', onBlur);
-            if (!appOpened) window.location.href = webUrl;
-        }, 1500);
+        meShow(function () {
+            var appOpened = false;
+            var onBlur = function () { appOpened = true; window.removeEventListener('blur', onBlur); };
+            window.addEventListener('blur', onBlur);
+            window.location.href = btn.getAttribute('data-ios-url');
+            setTimeout(function () {
+                window.removeEventListener('blur', onBlur);
+                if (!appOpened) window.location.href = webUrl;
+            }, 1500);
+        });
         return;
     }
     window.open(webUrl, '_blank', 'noopener');
+    meShow(null);
 });
 </script>
 
@@ -1192,6 +1270,9 @@ document.addEventListener('click', function (ev) {
 })();
 </script>
 
+<?php if ($role === 'Super Admin'): // Master's email pop-up (Admin / Surveyor load it below) ?>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<?php endif; ?>
 <?php
 aieRender();
 include 'includes/nav.php';
