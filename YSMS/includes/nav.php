@@ -140,6 +140,14 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-file-invoice"></i>
             <span>Pending Reports</span>
         </a>
+        <?php if (in_array($user_role, ['Admin', 'Super Admin', 'Surveyor'], true)): ?>
+        <!-- Vessels Data: all stages in one editable grid (additional module; sidebar + drawer only, the phone bottom bar keeps its 5 slots) -->
+        <a href="vessels_data.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'vessels_data.php') ? 'active' : '' ?>" data-testid="navigation-vessels-data-link">
+            <i class="fa-solid fa-table-list"></i>
+            <span style="white-space:nowrap">Vessels Data</span>
+            <b class="badge rounded-pill ms-auto nav-tag-badge" style="background:#F59E0B;color:#1f2937;font-size:8.5px;letter-spacing:.03em;padding:3px 6px" data-testid="nav-vessels-data-testing-badge">TESTING</b>
+        </a>
+        <?php endif; ?>
         <?php if ($user_role === 'Admin'): ?>
         <!-- Invoices (Admin): sidebar + drawer only, so the phone bottom bar keeps its 5 slots -->
         <a href="invoices.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'invoices.php') ? 'active' : '' ?>" data-testid="navigation-invoices-link">
