@@ -140,6 +140,13 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-file-invoice"></i>
             <span>Pending Reports</span>
         </a>
+        <?php if (in_array($user_role, ['Admin', 'Super Admin', 'Surveyor'], true)): ?>
+        <!-- Survey Reports: bunker survey entered on the website, report made in the company's Excel template (sidebar + drawer only) -->
+        <a href="survey_reports.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= in_array($current_page, ['survey_reports.php', 'survey_report.php'], true) ? 'active' : '' ?>" data-testid="navigation-survey-reports-link">
+            <i class="fa-solid fa-file-signature"></i>
+            <span>Survey Reports</span>
+        </a>
+        <?php endif; ?>
         <?php if ($user_role === 'Admin'): ?>
         <!-- Invoices (Admin): sidebar + drawer only, so the phone bottom bar keeps its 5 slots -->
         <a href="invoices.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'invoices.php') ? 'active' : '' ?>" data-testid="navigation-invoices-link">
@@ -195,6 +202,10 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
 
         <!-- Inside the navbar.php file, inside the <ul> tag, add this li: -->
 
+    <a href="admin_report_templates.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'admin_report_templates.php') ? 'active' : '' ?>" data-testid="sidebar-report-templates-link">
+        <i class="fa-solid fa-file-excel"></i>
+        <span>Report Templates</span>
+    </a>
     <a href="manage_templates.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'manage_templates.php') ? 'active' : '' ?>" data-testid="sidebar-manage-templates-link">
         <i class="fa-solid fa-file-contract"></i>
         <span>Manage Templates</span>
