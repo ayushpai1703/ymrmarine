@@ -113,7 +113,8 @@ function invoicePdfHtml(array $d): string {
         . '<div class="small" style="text-align:right;margin-top:3px">E. &amp; O.E</div>'
         . '<p style="margin:8px 0 3px"><b><u>BANK DETAILS</u></b></p><table class="bank">' . $bank . '</table>'
         . '<p class="small" style="margin-top:8px">*We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</p>'
-        . '<table style="margin-top:4px;page-break-inside:avoid"><tr><td style="vertical-align:bottom"><b>' . $h($co['for']) . '</b></td><td style="text-align:right;width:230px"><div class="sig">' . $h($co['signatory']) . '</div><b>' . $h($co['signatory']) . '</b><br>Authorised Signatory</td></tr></table>'
+        // Signature, then FOR YMR MARINE SOLUTIONS LLP, the name and Authorized Signatory (right side)
+        . '<table style="margin-top:4px;page-break-inside:avoid"><tr><td></td><td style="text-align:right;width:260px"><div class="sig">' . $h($co['signatory']) . '</div><b>' . $h($co['for']) . '</b><br><b>' . $h($co['signatory']) . '</b><br>Authorized Signatory</td></tr></table>'
         . '<p class="small" style="text-align:center;margin-top:8px">This is a Computer Generated Invoice</p>'
         . '</body></html>';
 }
