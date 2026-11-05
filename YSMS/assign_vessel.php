@@ -4,11 +4,15 @@ require_once 'includes/mailer.php';
 require_once 'includes/report_number.php';
 require_once 'includes/notifications.php';
 checkAuth();
-if (!in_array($_SESSION['role'] ?? '', ['Admin', 'Client'], true)) {
+if (!in_array($_SESSION['role'] ?? '', ['Admin', 'Client', 'Sales'], true)) {
     header('Location: index.php');
     exit;
 }
 $is_client_role = (($_SESSION['role'] ?? '') === 'Client');
+// 🌟 Sales: requests a survey for any client (all clients listed); like a client's own
+// request, no surveyor is chosen here — the Admin assigns one (includes/sales.php).
+$is_sales_role = (($_SESSION['role'] ?? '') === 'Sales');
+$is_requester = $is_client_role || $is_sales_role;
 
 $db = getDB();
 $error = '';
@@ -325,10 +329,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $surveyor_id = (string)$all_surveyor_ids[0]; // primary = first selected, for backward compatibility
     } elseif ($is_outsourcing) {
         $surveyor_id = 'outsourcing';
-    } elseif ($is_client_role) {
-        // 🌟 Clients don't pick a surveyor — leave unassigned; Admin assigns one later via Edit.
+    } elseif ($is_requester) {
+        // 🌟 Clients / Sales don't pick a surveyor — leave unassigned; Admin assigns one later via Edit.
         $surveyor_id = 'unassigned';
-        $remarks = $remarks !== '' ? $remarks : 'Submitted by client — awaiting surveyor assignment.';
+        $remarks = $remarks !== '' ? $remarks : ($is_sales_role ? 'Requested by Sales (' . ($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Sales') . ') — awaiting surveyor assignment.' : 'Submitted by client — awaiting surveyor assignment.');
     }
 
     // Client-submitted vessels are always tied to the client's own company
@@ -506,7 +510,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $error = "Please fill all required fields.";
         }
-    } elseif (!empty($vessel_name) && $client_id > 0 && !empty($agent_name) && $port_id > 0 && !empty($survey_type_ids_arr) && ($is_client_role || !empty($surveyor_id)) && $appointment_date !== '') {
+    } elseif (!empty($vessel_name) && $client_id > 0 && !empty($agent_name) && $port_id > 0 && !empty($survey_type_ids_arr) && ($is_requester || !empty($surveyor_id)) && $appointment_date !== '') {
         // 🌟 DB ఇన్సర్ట్‌ను try/catch లో ఉంచడం — ఏదైనా DB ఎర్రర్ వస్తే (ఉదా. FK మిస్‌మ్యాచ్,
         // మిస్సింగ్ కాలమ్ మొదలైనవి) తెల్లతెరతో సైట్ క్రాష్ అవ్వకుండా, ఫారమ్ మీదే స్పష్టమైన
         // ఎర్రర్ మెసేజ్ చూపించడానికి (ఇతర పేజీల్లో — వెసెల్ డీటెయిల్ లాంటివి — ఇదే పద్ధతి వాడారు)
@@ -522,7 +526,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 'Pending Vessel', ?, ?)
                 ");
 
-                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $appointment_date, $remarks, $is_client_role ? 1 : 0])) {
+                if ($stmt->execute([$vessel_name, $report_number, $client_id, $agent_name, $final_surveyor_id, $survey_type_id, $survey_type_ids_csv, $port_id, $appointment_date, $remarks, $is_requester ? 1 : 0])) {
                     // Capture id immediately after INSERT (before any other query)
                     $new_survey_id = (int)$db->lastInsertId();
                     if ($new_survey_id <= 0) {
@@ -605,13 +609,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     // 🌟 Client submitted a vessel with no surveyor yet — alert admins
                     // to assign one, both in-app (banner) and by email, immediately.
-                    if ($is_client_role && $new_survey_id > 0) {
+                    if ($is_sales_role && $new_survey_id > 0) { // the Sales dashboard lists the requests they made
+                        try {
+                            require_once __DIR__ . '/includes/sales.php';
+                            salesEnsure($db);
+                            $db->prepare('INSERT IGNORE INTO sales_requests (survey_id, user_id) VALUES (?, ?)')->execute([$new_survey_id, (int)($_SESSION['user_id'] ?? 0)]);
+                        } catch (Throwable $sre) { error_log('sales request log: ' . $sre->getMessage()); }
+                    }
+                    if ($is_requester && $new_survey_id > 0) {
                         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
                         $base = rtrim(str_replace('\\', '/', dirname($_SERVER['PHP_SELF'] ?? '')), '/');
                         $client_vessel_url = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $base . '/vessel_detail.php?id=' . $new_survey_id;
                         try {
-                            notifyAllAdmins($db, 'New vessel from client — needs a surveyor',
-                                $vessel_name . ' (' . $report_number . ') was submitted by a client and is waiting for a surveyor to be assigned.',
+                            notifyAllAdmins($db, $is_sales_role ? 'New survey request from Sales — needs a surveyor' : 'New vessel from client — needs a surveyor',
+                                $vessel_name . ' (' . $report_number . ') was ' . ($is_sales_role ? 'requested by Sales (' . ($_SESSION['full_name'] ?? 'Sales') . ')' : 'submitted by a client') . ' and is waiting for a surveyor to be assigned.',
                                 'assign', 'vessel_detail.php?id=' . (int)$new_survey_id, (int)($_SESSION['user_id'] ?? 0));
                         } catch (Throwable $cne) { error_log('client assign notif: ' . $cne->getMessage()); }
                         try {
@@ -1039,8 +1050,8 @@ include 'includes/header.php';
 </style>
 
 <?php
-$page_title = $edit_mode ? 'Edit Vessel Assignment' : 'Assign New Vessel';
-$back_url = $edit_mode ? 'vessel_detail.php?id=' . (int)$edit_id : 'index.php';
+$page_title = $edit_mode ? 'Edit Vessel Assignment' : ($is_requester ? 'Request Survey' : 'Assign New Vessel');
+$back_url = $edit_mode ? 'vessel_detail.php?id=' . (int)$edit_id : ($is_sales_role ? 'sales_dashboard.php' : 'index.php');
 $page_testid = 'assign-vessel';
 include 'includes/top_app_bar.php';
 ?>
@@ -1052,7 +1063,7 @@ include 'includes/top_app_bar.php';
         <?php if (!empty($GLOBALS['ysms_mail_failed'])): ?>
             <div class="alert alert-warning mx-3 py-2" style="font-size:12px;">
                 <strong>Email notification could not be sent.</strong>
-                <?php if (!$is_client_role): ?>
+                <?php if (!$is_requester): ?>
                     <div class="mt-1 text-muted">The surveyor can still be reached via WhatsApp below. If this keeps happening, check the mail settings or run <a href="test_email.php">the mail test page</a>.</div>
                 <?php else: ?>
                     <div class="mt-1 text-muted">The surveyor can still be reached via WhatsApp below, or the office can follow up directly.</div>
@@ -1132,7 +1143,7 @@ include 'includes/top_app_bar.php';
                             <?php foreach($clients as $client): ?>
                                 <li class="ss-option<?= ($edit_mode && (int)$client['id'] === $edit_client_id) ? ' ss-selected' : '' ?>" data-value="<?= $client['id'] ?>" data-name="<?= strtolower(sanitize($client['company_name'])) ?>" data-short="<?= sanitize(strtoupper(trim($client['short_code'] ?? ''))) ?>"><?= sanitize($client['company_name']) ?><?php if (!empty($client['short_code'])): ?> <span style="color:#64748b;font-weight:600;">(<?= sanitize(strtoupper($client['short_code'])) ?>)</span><?php endif; ?></li>
                             <?php endforeach; ?>
-                            <li class="ss-option ss-option-other" data-value="__add_new__"><i class="fa-solid fa-plus"></i> Add New Client</li>
+                            <?php if (!$is_sales_role): ?><li class="ss-option ss-option-other" data-value="__add_new__"><i class="fa-solid fa-plus"></i> Add New Client</li><?php endif; ?>
                         </ul>
                     </div>
                 </div>
@@ -1205,7 +1216,7 @@ include 'includes/top_app_bar.php';
                             <?php foreach($ports as $port): ?>
                                 <li class="ss-option<?= ($edit_mode && (int)$port['id'] === $edit_port_id) ? ' ss-selected' : '' ?>" data-value="<?= $port['id'] ?>" data-name="<?= strtolower(sanitize($port['port_name'])) ?>" data-country="<?= strtolower(sanitize($port['country'] ?? 'India')) ?>"><?= sanitize($port['port_name']) ?> <span class="ss-option-country"><?= sanitize($port['country'] ?? 'India') ?></span></li>
                             <?php endforeach; ?>
-                            <?php if (!$is_client_role): ?>
+                            <?php if (!$is_requester): ?>
                             <li class="ss-option ss-option-other" data-value="__add_new__"><i class="fa-solid fa-plus"></i> Add New Port</li>
                             <?php endif; ?>
                         </ul>
@@ -1217,7 +1228,7 @@ include 'includes/top_app_bar.php';
                         <option value="<?= $port['id'] ?>"<?= ($edit_mode && (int)$port['id'] === $edit_port_id) ? ' selected' : '' ?>><?= sanitize($port['port_name']) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <?php if (!$is_client_role): ?>
+                <?php if (!$is_requester): ?>
                 <div class="ss-add-new-box" id="addNewBox-port" data-add-module="ports" data-ss-root="port" style="display:none;">
                     <input type="text" class="ss-add-new-input" placeholder="New port name">
                     <input type="text" class="ss-add-new-input-extra" data-field="country" placeholder="Country (leave blank for India)">
@@ -1250,14 +1261,14 @@ include 'includes/top_app_bar.php';
                                     <span class="ss-option-label"><?= sanitize($type['type_name']) ?></span>
                                 </li>
                             <?php endforeach; ?>
-                            <?php if (!$is_client_role): ?>
+                            <?php if (!$is_requester): ?>
                             <li class="ss-option ss-option-other" data-value="__add_new__"><i class="fa-solid fa-plus"></i> Add New Survey Type</li>
                             <?php endif; ?>
                         </ul>
                     </div>
                 </div>
                 <input type="hidden" name="survey_type_ids" id="surveyTypeIdsInput" value="">
-                <?php if (!$is_client_role): ?>
+                <?php if (!$is_requester): ?>
                 <div class="ss-add-new-box" id="addNewBox-surveyType" data-add-module="survey_types" data-ss-root="surveyType" style="display:none;">
                     <input type="text" class="ss-add-new-input" placeholder="New survey type name">
                     <div class="ss-add-new-actions">
@@ -1269,7 +1280,7 @@ include 'includes/top_app_bar.php';
                 <?php endif; ?>
             </div>
 
-            <?php if (!$is_client_role): ?>
+            <?php if (!$is_requester): ?>
             <div class="form-group-custom">
                 <label>Assign Surveyor(s) * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
                 <div class="searchable-select ss-multi" data-ss-root="surveyor" data-hidden-input="surveyorIdsInput">

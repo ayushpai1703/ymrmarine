@@ -14,7 +14,7 @@ require_once __DIR__ . '/../config/config.php';
 checkAuth();
 header('Content-Type: application/json; charset=utf-8');
 
-if (!in_array($_SESSION['role'] ?? '', ['Admin', 'Client'], true)) {
+if (!in_array($_SESSION['role'] ?? '', ['Admin', 'Client', 'Sales'], true)) {
     http_response_code(403);
     echo json_encode(['exists' => false, 'error' => 'Not authorized.']);
     exit;

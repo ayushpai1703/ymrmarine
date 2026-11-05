@@ -18,6 +18,13 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../includes/csrf.php';
 
+// 🌟 Sales role: deny by default — only the Sales pages / endpoints listed in
+// includes/sales.php (salesAllowedPaths) open for a signed-in Sales user.
+if (!empty($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'Sales') {
+    require_once dirname(__DIR__) . '/includes/sales.php';
+    salesGuard(dirname(__DIR__));
+}
+
 // 🌟 Uploads with a progress bar: assets/js/submit-feedback.js sends every file-upload form
 // with XMLHttpRequest (header X-YSMS-Upload) so it can show the % sent. The browser then has
 // to land on the same page a normal submit would have shown:
