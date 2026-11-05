@@ -137,12 +137,12 @@ function ledgerBaseSql(PDO $db, string $today): string {
     $docs = "SELECT i.id AS invoice_id, 'invoice' AS kind, i.invoice_no AS doc_no, i.invoice_date AS doc_date, i.invoice_amount AS amount,
                     i.file_path AS doc_path, i.file_name AS doc_name, i.survey_id, i.vessel_name AS i_vessel, i.report_number AS i_report
              FROM invoices i
-             WHERE i.file_path IS NOT NULL OR EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = i.id AND ip.kind = 'invoice')
+             WHERE i.deleted_at IS NULL AND (i.file_path IS NOT NULL OR EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = i.id AND ip.kind = 'invoice'))
              UNION ALL
              SELECT i.id, 'recovery', CONCAT(COALESCE(i.invoice_no, ''), 'B'), i.rec_invoice_date, i.rec_invoice_amount,
                     i.rec_file_path, i.rec_file_name, i.survey_id, i.vessel_name, i.report_number
              FROM invoices i
-             WHERE i.rec_file_path IS NOT NULL OR EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = i.id AND ip.kind = 'recovery')";
+             WHERE i.deleted_at IS NULL AND (i.rec_file_path IS NOT NULL OR EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = i.id AND ip.kind = 'recovery'))";
     $recv = 'COALESCE(p.received, 0)';
     $out = "(CASE WHEN d.amount IS NULL THEN NULL ELSE d.amount - $recv END)";
     $status = "(CASE WHEN COALESCE(a.cancelled, 0) = 1 THEN 'Cancelled'

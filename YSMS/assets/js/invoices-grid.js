@@ -1,5 +1,6 @@
 /* Invoices (invoices.php) — the Invoice Airtable grid for the Invoices module: summary cards,
-   quick filters (All pending / CP Prices / Cost / Other Reason / Completed), Hide fields,
+   quick filters (All pending / CP Prices / Cost / Other Reason / Completed / Deleted), Hide fields,
+   delete a wrong entry while it is still pending (no invoice made yet) and restore it,
    Filter, Sort, Export, search, resize / move columns (saved per user), paging, row panel.
    Data and actions: ajax/invoices.php. Styles: assets/css/invoice-airtable.css. */
 (function () {
@@ -31,7 +32,7 @@
   var order = (P.order || []).filter(function (k) { return COLS[k] && !COLS[k].pk; });
   DEFAULT_ORDER.forEach(function (k) { if (order.indexOf(k) < 0) order.push(k); });
   var S = {
-    view: I.view === 'completed' ? 'completed' : 'pending', q: I.q || '', f: {},
+    view: ['completed', 'deleted'].indexOf(I.view) >= 0 ? I.view : 'pending', q: I.q || '', f: {},
     sort: Array.isArray(P.sort) ? P.sort.filter(function (s) { return SORT_LABEL[s.f]; }) : [],
     page: 1, per: [25, 50, 100, 200].indexOf(+P.per) >= 0 ? +P.per : 50,
     order: order, hidden: (P.hidden || []).filter(function (k) { return COLS[k] && !COLS[k].pk; }), widths: P.widths || {},
@@ -56,7 +57,7 @@
   function fd(obj) { var f = new FormData(); Object.keys(obj).forEach(function (k) { f.append(k, obj[k]); }); return f; }
   function visible() { return ['invoice_no'].concat(S.order.filter(function (k) { return S.hidden.indexOf(k) < 0; })); }
   function width(k) { return Math.max(60, +(S.widths[k] || COLS[k].w)); }
-  function quickKey() { return S.view === 'completed' ? 'Completed' : (S.f.status || ''); }
+  function quickKey() { return S.view === 'completed' ? 'Completed' : S.view === 'deleted' ? '__deleted' : (S.f.status || ''); }
   function fileUrl(d, rec) { return C.api + '?a=file&id=' + d.id + (rec ? '&which=recovery' : ''); }
   function rowById(id) { for (var i = 0; i < S.rows.length; i++) if (S.rows[i].id === id) return S.rows[i]; return null; }
 
@@ -66,9 +67,9 @@
 
   function params(withView) {
     var u = new URLSearchParams();
-    if (withView !== false && S.view === 'completed') u.set('view', 'completed');
+    if (withView !== false && S.view !== 'pending') u.set('view', S.view);
     if (S.q) u.set('q', S.q);
-    Object.keys(S.f).forEach(function (k) { if (S.f[k] !== '' && S.f[k] != null && !(k === 'status' && S.view === 'completed')) u.set(k, S.f[k]); });
+    Object.keys(S.f).forEach(function (k) { if (S.f[k] !== '' && S.f[k] != null && !(k === 'status' && S.view !== 'pending')) u.set(k, S.f[k]); });
     return u;
   }
   function syncUrl() { try { var q = params().toString(); history.replaceState(null, '', 'invoices.php' + (q ? '?' + q : '')); } catch (e) {} }
@@ -87,7 +88,7 @@
       tbody.style.opacity = '';
       $('.at-sum').classList.remove('loading');
       if (!res.ok) { toast('error', res.error || 'Could not load invoices.'); return; }
-      S.rows = res.rows; S.total = res.total; S.pages = res.pages; S.page = res.page; S.counts = res.counts; S.pending = res.pending;
+      S.rows = res.rows; S.total = res.total; S.pages = res.pages; S.page = res.page; S.counts = res.counts; S.pending = res.pending; S.deleted = res.deleted || 0;
       render(); counters(); toolbarState();
       if (S.openId) { var r = rowById(S.openId); if (r) renderPanel(r); else closePanel(); }
     }).catch(function () { if (my === S.seq) { tbody.style.opacity = ''; toast('error', 'Network error — could not load invoices.'); } });
@@ -104,8 +105,9 @@
     var all = 0; Object.keys(c).forEach(function (k) { all += c[k]; });
     set('all', all.toLocaleString('en-US'));
     set('pending', (S.pending || 0).toLocaleString('en-US'));
+    set('deleted', (S.deleted || 0).toLocaleString('en-US'));
     Object.keys(c).forEach(function (k) { set(k, (c[k] || 0).toLocaleString('en-US')); });
-    $('[data-view-label]').textContent = S.view === 'completed' ? 'Completed invoices' : (S.f.status ? S.f.status : 'Pending invoices');
+    $('[data-view-label]').textContent = S.view === 'completed' ? 'Completed invoices' : S.view === 'deleted' ? 'Deleted entries' : (S.f.status ? S.f.status : 'Pending invoices');
   }
 
   // ---------- grid ----------
@@ -123,6 +125,7 @@
     }).join('') + '</tr>';
   }
   function statusCell(d) {
+    if (d.deleted) return '<span class="at-pill deleted" data-testid="inv-status-' + d.id + '">Deleted</span>';
     if (S.view === 'completed') return '<span class="at-pill done" data-testid="inv-status-' + d.id + '">Completed</span>';
     return '<select class="at-stsel ' + CLS[d.status] + '" aria-label="Invoice status" data-stsel data-testid="inv-status-' + d.id + '">' +
       C.statuses.map(function (s) { return '<option' + (s === d.status ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + '</select>' +
@@ -138,6 +141,9 @@
   }
   function actionsCell(d) {
     var a = '';
+    if (d.deleted) {
+      return '<span class="at-act inv-actions"><button type="button" class="rst" data-act="restore" data-testid="inv-restore-' + d.id + '"><i class="fa-solid fa-rotate-left"></i> Restore</button></span>';
+    }
     if (S.view === 'completed') {
       a += '<a class="gen" href="invoice_pdf.php?id=' + d.id + '" data-testid="inv-modify-' + d.id + '"><i class="fa-solid fa-pen-to-square"></i> Modify</a>' +
         '<button type="button" class="del" data-act="delete" data-testid="inv-delete-' + d.id + '"><i class="fa-solid fa-trash"></i> Delete</button>';
@@ -146,6 +152,7 @@
       a += d.has_file ? '<button type="button" data-act="edit" data-testid="inv-edit-' + d.id + '"><i class="fa-solid fa-pen"></i> Edit</button>' +
         '<button type="button" class="del" data-act="delete" data-testid="inv-delete-' + d.id + '"><i class="fa-solid fa-trash"></i> Delete</button>'
         : '<button type="button" data-act="upload" data-testid="inv-upload-' + d.id + '"><i class="fa-solid fa-upload"></i> Upload</button>';
+      if (d.can_remove) a += '<button type="button" class="del" data-act="remove" title="Delete this wrong entry (no invoice is made for it yet)" data-testid="inv-remove-' + d.id + '"><i class="fa-solid fa-trash-can"></i> Delete entry</button>';
     }
     return '<span class="at-act inv-actions">' + a + '</span>';
   }
@@ -180,12 +187,12 @@
         }).join('') + '</tr>';
     }).join('');
     $('[data-empty]').hidden = S.rows.length > 0;
-    $('[data-empty-text]').textContent = S.view === 'completed' ? 'No completed invoices match.' : 'No pending invoices match.';
+    $('[data-empty-text]').textContent = S.view === 'completed' ? 'No completed invoices match.' : S.view === 'deleted' ? 'No deleted entries.' : 'No pending invoices match.';
     $('[data-foot]').innerHTML = S.rows.length ? '<tr><td class="c-no"></td>' + cols.map(function (k) {
       return '<td class="' + (COLS[k].pk ? 'c-pk' : '') + '">' + (k === 'invoice_no' ? '<b>' + S.total.toLocaleString('en-US') + '</b> record' + (S.total === 1 ? '' : 's') : '') + '</td>';
     }).join('') + '</tr>' : '';
     var from = S.total ? off + 1 : 0, to = off + S.rows.length, filtered = params(false).toString() !== '';
-    $('[data-count-text]').innerHTML = 'Showing <b>' + from + '–' + to + '</b> of <b>' + S.total.toLocaleString('en-US') + '</b> ' + (S.view === 'completed' ? 'completed' : 'pending') + ' invoice' + (S.total === 1 ? '' : 's') + (filtered ? ' (filtered)' : '') +
+    $('[data-count-text]').innerHTML = 'Showing <b>' + from + '–' + to + '</b> of <b>' + S.total.toLocaleString('en-US') + '</b> ' + (S.view === 'deleted' ? 'deleted entr' + (S.total === 1 ? 'y' : 'ies') : (S.view === 'completed' ? 'completed' : 'pending') + ' invoice' + (S.total === 1 ? '' : 's')) + (filtered ? ' (filtered)' : '') +
       (S.sort.length ? ' · sorted by ' + S.sort.map(function (s) { return SORT_LABEL[s.f] + (s.d === 'desc' ? ' ↓' : ' ↑'); }).join(', ') : (S.view === 'completed' ? ' · in invoice number order' : ' · newest Survey Completed Date first'));
     $('[data-pginfo]').textContent = S.page + ' / ' + S.pages;
     $('[data-pg="-1"]').disabled = S.page <= 1; $('[data-pg="1"]').disabled = S.page >= S.pages;
@@ -212,7 +219,7 @@
     $('.at-bar [data-act="clear"]').hidden = !(activeFilters().length || S.q || (S.f.status && S.view === 'pending'));
     var qk = quickKey();
     $$('[data-quick]').forEach(function (b) { b.classList.toggle('on', qk === b.getAttribute('data-quick')); });
-    $$('[data-only-pending]').forEach(function (el) { el.hidden = S.view === 'completed'; });
+    $$('[data-only-pending]').forEach(function (el) { el.hidden = S.view !== 'pending'; });
     $$('[data-f]').forEach(function (el) { var k = el.getAttribute('data-f'); if (document.activeElement !== el) el.value = S.f[k] || ''; el.classList.toggle('on', !!S.f[k]); });
     var si = $('[data-testid="inv-search"]'); if (document.activeElement !== si) si.value = S.q;
   }
@@ -275,6 +282,7 @@
   });
   function setQuick(k) {
     if (k === 'Completed') { S.view = 'completed'; S.f.status = ''; }
+    else if (k === '__deleted') { S.view = 'deleted'; S.f.status = ''; }
     else { S.view = 'pending'; S.f.status = k; }
     S.sel = {}; toolbarState(); reload();
   }
@@ -422,6 +430,21 @@
       pdfForm(d, act === 'upload' ? 'Upload Invoice' : 'Edit Invoice').then(function (r) {
         if (r.isConfirmed && r.value && r.value.ok) { toast('success', act === 'upload' ? 'Invoice uploaded' : (r.value.replaced ? 'Invoice replaced' : 'Invoice details saved')); load(); }
       });
+    } else if (act === 'remove') {
+      Swal.fire({ icon: 'warning', title: 'Delete this entry?', width: 480,
+        html: '<b>' + esc(d.vessel || 'This vessel') + '</b>' + (d.report_no ? ' · ' + esc(d.report_no) : '') + '<br>It is removed from the Invoices list. No invoice was made for it, so no invoice number is used.' +
+          '<br><small>Survey records are not touched. You can bring it back from <b>Deleted</b> → Restore.</small>' +
+          '<input id="invDelWhy" class="swal2-input" maxlength="255" placeholder="Reason (optional), e.g. wrong entry / duplicate" data-testid="inv-remove-reason" style="font-size:14px">',
+        showCancelButton: true, confirmButtonText: 'Delete entry', confirmButtonColor: '#DC2626', showLoaderOnConfirm: true,
+        preConfirm: function () { return post(fd({ a: 'remove', id: d.id, reason: document.getElementById('invDelWhy').value })).then(function (res) { if (!res.ok) { Swal.showValidationMessage(res.error || 'Could not delete.'); return false; } return res; }); },
+        allowOutsideClick: function () { return !Swal.isLoading(); }
+      }).then(function (r) { if (r.isConfirmed && r.value && r.value.ok) { if (S.openId === d.id) closePanel(); toast('success', 'Entry deleted — see Deleted to restore it'); load(); } });
+    } else if (act === 'restore') {
+      post(fd({ a: 'restore', id: d.id })).then(function (res) {
+        if (!res.ok) { Swal.fire({ icon: 'error', title: 'Not restored', text: res.error || 'Please try again.' }); return; }
+        if (S.openId === d.id) closePanel();
+        toast('success', 'Entry restored to pending invoices'); load();
+      });
     } else if (act === 'delete') {
       var html = S.view === 'completed'
         ? 'The invoice PDF' + (d.has_rec ? 's (vessel + recovery invoice)' : '') + ' and saved details will be removed and the vessel goes back to <b>pending invoices</b> to be made again (same invoice number).<br><small>Survey records are not touched.</small>'
@@ -472,6 +495,10 @@
     $('[data-p-status]').innerHTML = '<span class="at-pill ' + CLS[d.status] + '">' + esc(d.status) + '</span>';
     var kv = function (k, v) { return '<div>' + k + '</div><div>' + v + '</div>'; };
     var h = '<div data-pid="' + d.id + '">';
+    if (d.deleted) {
+      $('[data-p-status]').innerHTML = '<span class="at-pill deleted">Deleted</span>';
+      h += '<div class="at-del-note" data-testid="inv-p-deleted"><i class="fa-solid fa-trash-can"></i> Deleted ' + esc(d.deleted_at) + (d.deleted_by ? ' by ' + esc(d.deleted_by) : '') + (d.delete_reason ? '<br>Reason: ' + esc(d.delete_reason) : '') + '</div>';
+    }
     if (d.recovery_pending) h += '<div class="at-cancel-note" style="color:#B45309;background:#FFFBEB;border-color:#FDE68A"><i class="fa-solid fa-droplet"></i> Recovery invoice pending — the invoice is completed once it is downloaded.</div>';
     h += '<div class="at-sec"><div class="at-sec-h">Vessel &amp; survey</div><div class="at-kv">' +
       kv('Vessel', d.vessel ? '<b>' + esc(d.vessel) + '</b>' : muted()) + kv('Client', d.client ? esc(d.client) : muted()) + kv('Survey Type', d.type ? '<span class="at-tag">' + esc(d.type) + '</span>' : muted()) +
@@ -483,6 +510,11 @@
       kv('Status', S.view === 'completed' ? '<span class="at-pill done">Completed</span>' : statusCell(d).replace('data-testid="inv-status-' + d.id + '"', 'data-testid="inv-p-status"').replace('data-testid="inv-update-' + d.id + '"', 'data-testid="inv-p-update"')) +
       kv('Documents', docCell(d).replace(/data-testid="inv-/g, 'data-testid="inv-p-')) + '</div>';
     h += '<div class="at-p-actions at-act">';
+    if (d.deleted) {
+      h += '<button type="button" class="at-btn" data-act="restore" data-testid="inv-p-restore"><i class="fa-solid fa-rotate-left"></i> Restore entry</button></div></div>';
+      body.innerHTML = h + '</div>';
+      return;
+    }
     if (S.view === 'completed') {
       h += '<a class="at-btn pri" href="invoice_pdf.php?id=' + d.id + '" data-testid="inv-p-modify"><i class="fa-solid fa-pen-to-square"></i> Modify</a>';
     } else {
@@ -490,6 +522,7 @@
       h += '<button type="button" class="at-btn" data-act="' + (d.has_file ? 'edit' : 'upload') + '" data-testid="inv-p-upload"><i class="fa-solid ' + (d.has_file ? 'fa-pen' : 'fa-upload') + '"></i> ' + (d.has_file ? 'Edit / Replace PDF' : 'Upload Invoice') + '</button>';
     }
     if (d.has_file || S.view === 'completed') h += '<button type="button" class="at-btn danger" data-act="delete" data-testid="inv-p-delete"><i class="fa-solid fa-trash"></i> Delete</button>';
+    if (d.can_remove) h += '<button type="button" class="at-btn danger" data-act="remove" data-testid="inv-p-remove"><i class="fa-solid fa-trash-can"></i> Delete entry</button>';
     h += '</div></div>';
     h += '<div class="at-sec"><div class="at-sec-h">Payments</div><a class="at-btn" href="invoices_airtable.php" data-testid="inv-p-airtable"><i class="fa-solid fa-table-cells"></i> Track payments in Invoice Airtable</a></div>';
     body.innerHTML = h + '</div>';

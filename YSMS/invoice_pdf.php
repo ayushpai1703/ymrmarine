@@ -34,6 +34,7 @@ $st = $db->prepare(invoiceRowSql() . ' WHERE i.id = ?');
 $st->execute([$id]);
 $inv = $st->fetch(PDO::FETCH_ASSOC);
 if (!$inv) { http_response_code(404); exit('Invoice not found.'); }
+if (!empty($inv['deleted_at'])) { http_response_code(409); exit('This entry was deleted from Invoices. Restore it on the Invoices page (Deleted) to make its invoice.'); }
 
 $addr1 = $addr2 = '';
 if (!empty($inv['sid'])) {

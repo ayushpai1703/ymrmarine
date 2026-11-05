@@ -83,6 +83,9 @@ function invoiceEnsureGenColumns(PDO $db): void {
         'recovery_pending' => 'TINYINT(1) NOT NULL DEFAULT 0',
         'rec_invoice_date' => 'DATE NULL',          // recovery invoice's own date and total
         'rec_invoice_amount' => 'DECIMAL(14,2) NULL', // (Invoice Airtable payment tracking)
+        'deleted_at' => 'DATETIME NULL',            // entry deleted from Invoices (kept, can be restored;
+        'deleted_by' => 'INT NULL',                 //  stays so the vessel is not registered again)
+        'delete_reason' => 'VARCHAR(255) NULL',
     ];
     foreach ($add as $col => $def) {
         if (!isset($have[$col])) $db->exec("ALTER TABLE invoices ADD COLUMN `$col` $def");
@@ -223,7 +226,33 @@ function invoiceRowJson(PDO $db, array $r): array {
         'invoice_amount' => $r['invoice_amount'] !== null ? (string)$r['invoice_amount'] : '',
         'invoice_notes' => (string)($r['invoice_notes'] ?? ''),
         'survey_completed' => $done ? date('d M Y', strtotime($r['survey_completed_date'])) : '',
+        'deleted' => !empty($r['deleted_at']),
+        'deleted_at' => !empty($r['deleted_at']) ? date('d M Y H:i', strtotime($r['deleted_at'])) : '',
+        'deleted_by' => !empty($r['deleted_at']) ? invoiceUserName($db, (int)($r['deleted_by'] ?? 0)) : '',
+        'delete_reason' => (string)($r['delete_reason'] ?? ''),
+        'can_remove' => invoiceRemoveBlocker($r) === '',
     ];
+}
+
+function invoiceUserName(PDO $db, int $uid): string {
+    if ($uid <= 0) return '';
+    $q = $db->prepare('SELECT full_name FROM users WHERE id = ?');
+    $q->execute([$uid]);
+    return (string)$q->fetchColumn();
+}
+
+/**
+ * Why this entry cannot be deleted from Invoices ('' = it can): only an entry still pending,
+ * before any invoice is made for it — no invoice number, no generated or uploaded PDF (vessel
+ * or recovery), not Completed. Payments are checked by the delete action itself.
+ */
+function invoiceRemoveBlocker(array $r): string {
+    if (!empty($r['deleted_at'])) return 'This entry is already deleted.';
+    if (($r['invoice_status'] ?? '') === 'Completed') return 'A completed invoice cannot be deleted.';
+    if (trim((string)($r['invoice_no'] ?? '')) !== '') return 'An invoice number (' . $r['invoice_no'] . ') is already given to this entry, so it cannot be deleted.';
+    if (!empty($r['file_path']) || !empty($r['rec_file_path'])) return 'An invoice PDF is stored for this entry — delete the PDF first.';
+    if (!empty($r['gen_data']) || !empty($r['rec_gen_data'])) return 'An invoice was already generated for this entry.';
+    return '';
 }
 
 /** One Invoices grid row: invoiceRowJson() plus the display columns. */
@@ -247,13 +276,14 @@ function invoiceStatusClass(string $s): string {
 
 /**
  * Invoices list filters from the query string (invoices.php and export_invoices.php):
- *   view   — 'pending' (default: every status except Completed) or 'completed'
+ *   view   — 'pending' (default: every status except Completed), 'completed', 'all' or 'deleted'
+ *            (entries deleted from Invoices; every other view leaves them out)
  *   status — one pending status (pending view only), q, type, month (survey completed, YYYY-MM)
  * Returns [state, whereSql, params]; the SQL uses the aliases of invoiceRowSql().
  */
 function invoiceListFilters(array $g): array {
     $st = [
-        'view' => in_array($g['view'] ?? '', ['completed', 'all'], true) ? (string)$g['view'] : 'pending',
+        'view' => in_array($g['view'] ?? '', ['completed', 'all', 'deleted'], true) ? (string)$g['view'] : 'pending',
         'q' => mb_substr(trim((string)($g['q'] ?? '')), 0, 100),
         'status' => '',
         'type' => mb_substr(trim((string)($g['type'] ?? '')), 0, 100),
@@ -268,7 +298,8 @@ function invoiceListFilters(array $g): array {
     foreach (explode(',', (string)($g['ids'] ?? '')) as $x) if (ctype_digit(trim($x))) $st['ids'][] = (int)trim($x);
     $st['ids'] = array_slice(array_values(array_unique($st['ids'])), 0, 5000);
     if ($st['view'] === 'pending' && in_array($g['status'] ?? '', INVOICE_STATUSES, true) && $g['status'] !== 'Completed') $st['status'] = (string)$g['status'];
-    $where = [$st['view'] === 'completed' ? "i.invoice_status = 'Completed'" : ($st['view'] === 'all' ? '1=1' : "i.invoice_status <> 'Completed'")];
+    $where = [$st['view'] === 'completed' ? "i.invoice_status = 'Completed'" : (in_array($st['view'], ['all', 'deleted'], true) ? '1=1' : "i.invoice_status <> 'Completed'"),
+        $st['view'] === 'deleted' ? 'i.deleted_at IS NOT NULL' : 'i.deleted_at IS NULL'];
     $params = [];
     if ($st['q'] !== '') {
         $like = '%' . addcslashes($st['q'], '%_\\') . '%';

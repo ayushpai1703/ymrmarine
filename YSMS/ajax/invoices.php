@@ -10,6 +10,11 @@
  *                                          details; the row stays and keeps its invoice number.
  *                                          A Completed invoice goes back to the pending list
  *                                          (Pending for CP Prices) so it can be made again.
+ *   POST a=remove  id, reason            → deletes a wrong entry from Invoices: only while it is
+ *                                          pending and before any invoice is made (no number,
+ *                                          PDF or payment). The row is kept (deleted_at) so the
+ *                                          vessel is not registered again; it can be restored.
+ *   POST a=restore id                    → brings a deleted entry back to the pending list
  *   GET  a=file    id, mode=view|download, which=recovery (optional) → the stored PDF
  *   GET  a=list    view, status, q, type, month, client, port, vessel, scd_from, scd_to, sort
  *                  (JSON), page, per → grid rows, total, pages, per-status counts
@@ -63,8 +68,10 @@ if ($action === 'list') {
     $c->execute($p2);
     $counts = array_fill_keys(INVOICE_STATUSES, 0);
     foreach ($c->fetchAll(PDO::FETCH_ASSOC) as $r) $counts[$r['invoice_status']] = (int)$r['n'];
+    $dq = $db->prepare("SELECT COUNT(*) $from WHERE " . str_replace('i.deleted_at IS NULL', 'i.deleted_at IS NOT NULL', $w2));
+    $dq->execute($p2);
     invJson(200, ['ok' => true, 'rows' => $rows, 'total' => $total, 'page' => $page, 'pages' => $pages, 'per' => $per, 'view' => $f['view'],
-        'counts' => $counts, 'pending' => $counts['Pending for CP Prices'] + $counts['Pending for Cost'] + $counts['Pending for Other Reason']]);
+        'counts' => $counts, 'pending' => $counts['Pending for CP Prices'] + $counts['Pending for Cost'] + $counts['Pending for Other Reason'], 'deleted' => (int)$dq->fetchColumn()]);
 }
 if ($action === 'prefs' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $p = json_decode((string)($_POST['prefs'] ?? ''), true);
@@ -129,7 +136,31 @@ $meta = function (): array {
     return [true, [$no !== '' ? $no : null, $date !== '' ? $date : null, $amt !== '' ? round((float)$amt, 2) : null, $notes !== '' ? $notes : null]];
 };
 
+if (!empty($row['deleted_at']) && $action !== 'restore') invJson(409, ['ok' => false, 'error' => 'This entry was deleted from Invoices — restore it first.']);
+
 switch ($action) {
+    case 'remove': {
+        $why = invoiceRemoveBlocker($row);
+        if ($why === '' && $db->query("SHOW TABLES LIKE 'invoice_payments'")->fetchColumn()) {
+            $q = $db->prepare('SELECT COUNT(*) FROM invoice_payments WHERE invoice_id = ?');
+            $q->execute([$id]);
+            if ((int)$q->fetchColumn() > 0) $why = 'Payments are recorded for this entry, so it cannot be deleted.';
+        }
+        if ($why !== '') invJson(409, ['ok' => false, 'error' => $why]);
+        $reason = mb_substr(trim((string)($_POST['reason'] ?? '')), 0, 255);
+        // only while still pending with no invoice made (checked again in the UPDATE itself)
+        $u = $db->prepare("UPDATE invoices SET deleted_at = NOW(), deleted_by = ?, delete_reason = ?
+            WHERE id = ? AND deleted_at IS NULL AND invoice_status <> 'Completed' AND (invoice_no IS NULL OR invoice_no = '')
+              AND file_path IS NULL AND rec_file_path IS NULL AND gen_data IS NULL AND rec_gen_data IS NULL");
+        $u->execute([$uid ?: null, $reason !== '' ? $reason : null, $id]);
+        if (!$u->rowCount()) invJson(409, ['ok' => false, 'error' => 'This entry changed meanwhile — reload the page.']);
+        invJson(200, ['ok' => true, 'row' => invoiceGridRow($db, $load($id))]);
+    }
+    case 'restore':
+        if (empty($row['deleted_at'])) invJson(409, ['ok' => false, 'error' => 'This entry is not deleted.']);
+        $db->prepare('UPDATE invoices SET deleted_at = NULL, deleted_by = NULL, delete_reason = NULL WHERE id = ?')->execute([$id]);
+        invJson(200, ['ok' => true, 'row' => invoiceGridRow($db, $load($id))]);
+
     case 'status':
         $status = (string)($_POST['status'] ?? '');
         if (!in_array($status, INVOICE_STATUSES, true)) invJson(422, ['ok' => false, 'error' => 'Unknown status.']);

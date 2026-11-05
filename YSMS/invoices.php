@@ -26,7 +26,7 @@ try {
 
 // ---------- first state from the URL (links such as invoices.php?view=completed keep working) ----------
 [$f] = invoiceListFilters($_GET);
-$init = ['view' => $f['view'] === 'completed' ? 'completed' : 'pending', 'status' => $f['status'], 'q' => $f['q'], 'type' => $f['type'], 'month' => $f['month'],
+$init = ['view' => in_array($f['view'], ['completed', 'deleted'], true) ? $f['view'] : 'pending', 'status' => $f['status'], 'q' => $f['q'], 'type' => $f['type'], 'month' => $f['month'],
     'client' => $f['client'] ?: '', 'port' => $f['port'] ?: '', 'vessel' => $f['vessel'], 'scd_from' => $f['scd_from'], 'scd_to' => $f['scd_to']];
 $types = $db->query("SELECT type_name FROM survey_types WHERE type_name <> '' ORDER BY type_name")->fetchAll(PDO::FETCH_COLUMN);
 $clients = $db->query("SELECT DISTINCT c.id, c.company_name FROM invoices i JOIN surveys s ON s.id = i.survey_id JOIN clients c ON c.id = s.client_id ORDER BY c.company_name")->fetchAll(PDO::FETCH_ASSOC);
@@ -69,6 +69,9 @@ include 'includes/header.php';
 .at-pend { font-size: 10px; font-weight: 700; color: #B45309; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 4px; padding: 0 5px; margin-left: 5px; }
 .at-act a { border: 1px solid var(--at-line); background: #fff; border-radius: 6px; height: 24px; padding: 0 7px; font-size: 11.5px; font-weight: 600; color: #4b5563; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
 .at-act a:hover { border-color: var(--at-acc); color: var(--at-acc); }
+.at-pill.deleted { background: #fee2e2; color: #b42318; }
+.at-act .rst { color: #166534; }
+.at-del-note { font-size: 12px; color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
 .at-act .gen { color: #6C4CF1; } .at-act .del { color: #b42318; } .at-act .del:hover { border-color: #b42318; color: #b42318; }
 .at-act button { height: 24px !important; min-height: 0 !important; padding: 0 7px !important; margin: 0; box-shadow: none; line-height: 1; }
 .at-doc a.rec { color: #0E7490; border-color: #a5f3fc; background: #ecfeff; }
@@ -111,6 +114,7 @@ include 'includes/header.php';
             <?php foreach ($QUICK as $k => [$l, $cls]): ?>
             <button type="button" class="at-chip" data-quick="<?= sanitize($k) ?>" data-testid="inv-stat-<?= $cls ?>"><i class="at-dot <?= $cls ?>"></i><?= sanitize($l) ?> <span class="cnt" data-count="<?= $k === '' ? 'pending' : sanitize($k) ?>"></span></button>
             <?php endforeach; ?>
+            <button type="button" class="at-chip" data-quick="__deleted" data-testid="inv-stat-deleted" title="Entries deleted from Invoices (can be restored)"><i class="fa-solid fa-trash-can" style="font-size:10px;color:#b42318"></i> Deleted <span class="cnt" data-count="deleted"></span></button>
             <span class="at-sel-info" data-sel-info hidden></span>
         </div>
 
