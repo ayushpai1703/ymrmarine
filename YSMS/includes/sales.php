@@ -7,7 +7,8 @@
  *  - sales_surveys.php    every survey, view only: vessel, client, port, type, status, dates
  *  - assign_vessel.php    Request Survey for any client; no surveyor is chosen — the Admin
  *                         assigns one (as for a client's own request)
- * No invoice, payment or recovery figures anywhere, no vessel detail pages, no uploads.
+ * Recovery figures (totals, month-wise, client-wise) are on the dashboard; no invoice or payment
+ * data anywhere, no vessel detail pages, no uploads.
  * Access is deny-by-default: config.php sends a Sales user away from every page or endpoint
  * that is not in salesAllowedPaths().
  * Admin: admin_sales.php — add / deactivate sales persons, monthly targets, achievements.
@@ -95,6 +96,44 @@ function salesMetrics(PDO $db, string $ym, int $uid): array {
         'my_requests' => $one('SELECT COUNT(*) FROM sales_requests WHERE user_id = ? AND created_at >= ? AND created_at < ?', [$uid, $from, $to]),
         'pending_vessel' => $one("SELECT COUNT(*) FROM surveys WHERE status = 'Pending Vessel'", []),
         'pending_report' => $one("SELECT COUNT(*) FROM surveys WHERE status = 'Pending Report'", []),
+    ];
+}
+
+/**
+ * Completed vessels and recovery, by the same rules as the Admin dashboard (index.php):
+ * a vessel counts once it has left Pending Vessels (Pending Report / Completed), in the month of
+ * its own Survey Completed Date; recovery = recoveryCountedSql (NOT APPLICABLE types count 0).
+ * → totals, the 12 months ending with $ym, per client and per country (month and all time).
+ */
+function salesCompletionStats(PDO $db, string $ym): array {
+    $done = "s.status IN ('Pending Report','Completed')";
+    $cd = surveyCompletedDateSql('s');
+    $rec = recoveryCountedSql('s');
+    [$from, $to] = salesMonthRange($ym);
+    $f = substr($from, 0, 10); $t = substr($to, 0, 10);
+    $inMonth = "$cd >= '$f' AND $cd < '$t'";
+    $tot = $db->query("SELECT COUNT(*) n, COALESCE(SUM($rec), 0) r, COUNT(CASE WHEN $inMonth THEN 1 END) mn, COALESCE(SUM(CASE WHEN $inMonth THEN $rec END), 0) mr FROM surveys s WHERE $done")->fetch(PDO::FETCH_ASSOC);
+    $first = date('Y-m-01', strtotime($ym . '-01 -11 month'));
+    $rows = $db->query("SELECT DATE_FORMAT($cd, '%Y-%m') ym, COUNT(*) n, COALESCE(SUM($rec), 0) r FROM surveys s WHERE $done AND $cd >= '$first' AND $cd < '$t' GROUP BY ym")->fetchAll(PDO::FETCH_ASSOC);
+    $by = []; foreach ($rows as $r) $by[$r['ym']] = $r;
+    $months = [];
+    for ($i = 11; $i >= 0; $i--) {
+        $m = date('Y-m', strtotime($ym . '-01 -' . $i . ' month'));
+        $months[] = ['ym' => $m, 'vessels' => (int)($by[$m]['n'] ?? 0), 'recovery' => round((float)($by[$m]['r'] ?? 0), 3)];
+    }
+    $clients = $db->query("SELECT COALESCE(c.company_name, '(no client)') name, COUNT(*) n, COALESCE(SUM($rec), 0) r,
+            COUNT(CASE WHEN $inMonth THEN 1 END) mn, COALESCE(SUM(CASE WHEN $inMonth THEN $rec END), 0) mr
+        FROM surveys s LEFT JOIN clients c ON c.id = s.client_id WHERE $done GROUP BY s.client_id, c.company_name ORDER BY mn DESC, n DESC, name")->fetchAll(PDO::FETCH_ASSOC);
+    $countries = $db->query("SELECT COALESCE(NULLIF(p.country, ''), 'India') name, COUNT(*) n, COUNT(CASE WHEN $inMonth THEN 1 END) mn
+        FROM surveys s LEFT JOIN ports p ON p.id = s.port_id WHERE $done GROUP BY name ORDER BY mn DESC, n DESC, name")->fetchAll(PDO::FETCH_ASSOC);
+    $num = fn($rows, $keys) => array_map(function ($r) use ($keys) { foreach ($keys as $k) $r[$k] = in_array($k, ['r', 'mr'], true) ? round((float)$r[$k], 3) : (int)$r[$k]; return $r; }, $rows);
+    return [
+        'total_clients' => (int)$db->query('SELECT COUNT(*) FROM clients')->fetchColumn(),
+        'vessels' => (int)$tot['n'], 'recovery' => round((float)$tot['r'], 3),
+        'month_vessels' => (int)$tot['mn'], 'month_recovery' => round((float)$tot['mr'], 3),
+        'months' => $months,
+        'clients' => $num($clients, ['n', 'mn', 'r', 'mr']),
+        'countries' => $num($countries, ['n', 'mn']),
     ];
 }
 

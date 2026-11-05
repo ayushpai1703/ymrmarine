@@ -2,7 +2,7 @@
 /**
  * Surveys for the Sales role, view only (includes/sales.php): every survey with vessel, client,
  * port, survey type, status and dates — to tell a client where their survey stands. No
- * recovery, invoice or report files; no links into the vessel pages.
+ * invoice data or report files; no links into the vessel pages.
  */
 require_once 'config/config.php';
 require_once 'includes/sales.php';

@@ -21,12 +21,22 @@ A login for the sales person. Decided with the user:
 The Sales sidebar has: Dashboard, Clients, Surveys, Request Survey, My Profile.
 
 - **Dashboard** (`sales_dashboard.php`):
+  - three highlighted cards: **Total Clients**, **Total Vessels Completed**,
+    **Total Recovery** (MT), each with the chosen month's figure;
   - the month's targets, with progress bars;
-  - the month's completed surveys and the person's own requests;
-  - Pending Vessels / Pending Reports now;
-  - the last 6 months against the target;
-  - the top clients of the month;
-  - the latest requests with their status.
+  - **Month-wise**: vessels completed and recovery for the 12 months ending with the chosen
+    month, with the 12-month total and the all-time total;
+  - **Client-wise**: vessels and recovery of every client, for the month and in total;
+  - **Country-wise**: vessels, for the month and in total;
+  - the person's latest survey requests with their status.
+
+  The figures use the Admin dashboard's rules (`salesCompletionStats`):
+  - a vessel counts once it has left Pending Vessels (Pending Report / Completed), in the month
+    of its own Survey Completed Date;
+  - NOT APPLICABLE survey types count no recovery;
+  - the country is the port's country (India when empty).
+
+  Pending Vessels / Pending Reports are not shown.
 - **Clients** (`sales_clients.php`):
   - every client, with contact, phone, email, total surveys, surveys this month and the last
     survey date;
@@ -63,7 +73,7 @@ All of this is created on first use. The SQL is in `database/migration_sales_rol
 the reverse in `_down.sql`.
 
 ## Test (local stack)
-- `sales_test.js` 26/26:
+- `sales_test.js` 30/30 (dashboard figures equal the Admin dashboard: month vessels, month recovery, Total Recovery):
   - Admin adds the person and sets targets;
   - Sales lands on its dashboard;
   - every other page and endpoint is refused;
