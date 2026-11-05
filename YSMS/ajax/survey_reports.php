@@ -11,6 +11,7 @@
  *   POST a=generate id, pdf=1         Excel (+ PDF) from the saved data
  *   POST a=use_latest id              move the report to the active template version
  *   POST a=lookup  id, imo            vessel particulars by IMO (AI + web search); nothing is saved
+ *   GET  a=verify&id=                server calculation of the saved data + what is still missing
  *   GET  a=file&id=<file id>          download a generated file
  *   GET  a=template&id=<report id>    the report's template workbook (for the offline Excel)
  */
@@ -94,6 +95,12 @@ try {
             'can_edit' => srCanEdit($r['survey']), 'config' => srEditorConfig($t), 'files' => srFiles($db, $r['id']),
             'newer_template' => $active && $active['id'] !== $t['id'] ? ['id' => $active['id'], 'version' => $active['version']] : null]);
     }
+    if ($a === 'verify') { // view-only users see the checked summary too
+        $r = srReport($db, (int)($_GET['id'] ?? 0));
+        $t = $r ? rtTemplate($db, $r['template_id']) : null;
+        if (!$r || !$t) srJson(404, ['ok' => false, 'error' => 'Report not found.']);
+        srJson(200, ['ok' => true] + srVerify($t, $r['data']));
+    }
     if (!$isPost) srJson(400, ['ok' => false, 'error' => 'Unknown action.']);
 
     if ($a === 'create') {
@@ -130,10 +137,8 @@ try {
             foreach ($errors as $k => $msg) {
                 if (strpos($k, 'f:') === 0) { $fk = substr($k, 2); $store['fields'][$fk] = (string)(is_array($in['fields'][$fk] ?? null) ? ($in['fields'][$fk]['v'] ?? '') : ($in['fields'][$fk] ?? '')); }
             }
-            foreach ($eff['sections'] as $sk => $sec) { // tank rows as typed (row positions must stay as the user sees them)
-                $store['tanks'][$sk] = array_values(array_map(fn($row) => array_map(fn($c) => is_scalar($row[$c] ?? '') ? mb_substr(trim((string)($row[$c] ?? '')), 0, 60) : '', array_combine(array_keys(RT_TANK_COLS), array_keys(RT_TANK_COLS))),
-                    array_slice((array)($in['tanks'][$sk] ?? []), 0, RT_MAX_TANKS)));
-            }
+            $errors = array_filter($errors, fn($k) => strpos($k, 't:') !== 0, ARRAY_FILTER_USE_KEY); // tanks are checked per tank (srTankErrors)
+            srCleanExtra($eff, $in, $store, $errors); // grades, step, extra values, tank rows of every grade as typed
             $ver = $r['version'] + 1;
             $upd = $db->prepare('UPDATE survey_reports SET data = ?, version = ?, updated_by = ?, updated_at = ? WHERE id = ? AND version = ?');
             $upd->execute([json_encode($store), $ver, $uid ?: null, date('Y-m-d H:i:s'), $r['id'], $r['version']]);
@@ -142,7 +147,7 @@ try {
         }
         if ($a === 'save') srJson(200, ['ok' => true, 'version' => $r['version'], 'errors' => (object)$errors]);
         $g = srGenerate($db, $r, !empty($_POST['pdf']), $uid);
-        if (!$g['ok']) srJson(422, ['ok' => false, 'error' => $g['error'], 'errors' => (object)($g['errors'] ?? []), 'version' => $r['version']]);
+        if (!$g['ok']) srJson(422, ['ok' => false, 'error' => $g['error'], 'issues' => $g['issues'] ?? [], 'version' => $r['version']]);
         srJson(200, ['ok' => true, 'version' => $r['version'], 'files' => srFiles($db, $r['id']), 'new_files' => $g['file_ids'], 'results' => $g['results'], 'pdf_error' => $g['pdf_error']]);
     }
     if ($a === 'lookup') {

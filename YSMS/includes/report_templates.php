@@ -545,32 +545,10 @@ function rtBuild(array $tpl, array $data): \PhpOffice\PhpSpreadsheet\Spreadsheet
     // tank sections, bottom one first so inserting rows never moves a section still to be filled
     $sections = $eff['sections'];
     uasort($sections, fn($a, $b) => $b['first'] <=> $a['first']);
-    $gsvC = $eff['sections']['vlsfo']['calc_cols']['gsv']; $mtC = $eff['sections']['vlsfo']['calc_cols']['mt'];
     $shifted = []; // rows inserted before a given template row (for field cells on TABLES 54B below)
     foreach ($sections as $s => $sec) {
-        $rows = array_values($data['tanks'][$s] ?? []);
-        $first = $sec['first'];
-        $cap = $sec['last'] - $first + 1;
-        $add = max(0, count($rows) - $cap);
-        if ($add) {
-            $t->insertNewRowBefore($sec['last'] + 1, $add);
-            sfShiftSheetRefs($book, $t->getTitle(), $sec['last'] + 1, $add);
-            $shifted[] = [$sec['last'] + 1, $add];
-        }
-        $last = $first + max($cap, count($rows)) - 1;
-        for ($r = $first; $r <= $last; $r++) {
-            $row = $rows[$r - $first] ?? [];
-            foreach (RT_TANK_COLS as $c => $d) {
-                $v = (string)($row[$c] ?? '');
-                $cell = $t->getCell($sec['cols'][$c] . $r);
-                if ($v === '') $cell->setValueExplicit(null, $DT::TYPE_NULL);
-                elseif ($d[3] === 'text' || !is_numeric($v)) $cell->setValueExplicit($v, $DT::TYPE_STRING);
-                else $cell->setValue((float)$v);
-            }
-            foreach ($eff['pattern'] as $col => $f) $t->getCell($col . $r)->setValue(str_replace('{r}', (string)$r, $f));
-        }
-        $t->getCell($gsvC . ($last + 1 + ($sec['gsv_total'] - $sec['last'] - 1)))->setValue("=SUM({$gsvC}{$first}:{$gsvC}{$last})");
-        $t->getCell($mtC . ($last + 1 + ($sec['mt_total'] - $sec['last'] - 1)))->setValue("=SUM({$mtC}{$first}:{$mtC}{$last})");
+        $add = rtFillSection($book, $t, $eff, $sec, array_values($data['tanks'][$s] ?? []));
+        if ($add) $shifted[] = [$sec['last'] + 1, $add];
     }
     // field values
     foreach ($eff['fields'] as $k => $f) {
@@ -601,6 +579,54 @@ function rtBuild(array $tpl, array $data): \PhpOffice\PhpSpreadsheet\Spreadsheet
         }
     }
     return $book;
+}
+
+/**
+ * Write one tank section on a TABLES 54B sheet: rows are inserted inside the section when there
+ * are more tanks than the template has rows (references from other sheets follow), every row
+ * gets the template's formulas, and the totals are SUM over exactly the section's rows.
+ * $sec holds the section's current rows (first, last, gsv_total, mt_total). → rows inserted.
+ */
+function rtFillSection(\PhpOffice\PhpSpreadsheet\Spreadsheet $book, \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $t, array $eff, array $sec, array $rows): int {
+    $DT = \PhpOffice\PhpSpreadsheet\Cell\DataType::class;
+    $gsvC = $sec['calc_cols']['gsv']; $mtC = $sec['calc_cols']['mt'];
+    $first = $sec['first'];
+    $cap = $sec['last'] - $first + 1;
+    $add = max(0, count($rows) - $cap);
+    if ($add) {
+        $t->insertNewRowBefore($sec['last'] + 1, $add);
+        sfShiftSheetRefs($book, $t->getTitle(), $sec['last'] + 1, $add);
+    }
+    $last = $first + max($cap, count($rows)) - 1;
+    for ($r = $first; $r <= $last; $r++) {
+        $row = $rows[$r - $first] ?? [];
+        foreach (RT_TANK_COLS as $c => $d) {
+            $v = (string)($row[$c] ?? '');
+            $cell = $t->getCell($sec['cols'][$c] . $r);
+            if ($v === '') $cell->setValueExplicit(null, $DT::TYPE_NULL);
+            elseif ($d[3] === 'text' || !is_numeric($v)) $cell->setValueExplicit($v, $DT::TYPE_STRING);
+            else $cell->setValue((float)$v);
+        }
+        foreach ($eff['pattern'] as $col => $f) $t->getCell($col . $r)->setValue(str_replace('{r}', (string)$r, $f));
+    }
+    $t->getCell($gsvC . ($sec['gsv_total'] + $add))->setValue("=SUM({$gsvC}{$first}:{$gsvC}{$last})");
+    $t->getCell($mtC . ($sec['mt_total'] + $add))->setValue("=SUM({$mtC}{$first}:{$mtC}{$last})");
+    return $add;
+}
+
+/** Rows of every section after the tanks of $counts (section => number of tanks) were written. */
+function rtSectionRows(array $eff, array $counts): array {
+    $secs = $eff['sections'];
+    uasort($secs, fn($a, $b) => $a['first'] <=> $b['first']);
+    $offset = 0; $out = [];
+    foreach ($secs as $s => $sec) {
+        $extra = max(0, (int)($counts[$s] ?? 0) - ($sec['last'] - $sec['first'] + 1));
+        foreach (['heading', 'first', 'gsv_total', 'mt_total'] as $k) $sec[$k] += $offset + ($k === 'gsv_total' || $k === 'mt_total' ? $extra : 0);
+        $sec['last'] = $sec['gsv_total'] - 1;
+        $out[$s] = $sec;
+        $offset += $extra;
+    }
+    return $out;
 }
 
 /** Calculated results of a filled workbook (the template's formulas, evaluated by PhpSpreadsheet). */

@@ -1,7 +1,8 @@
 <?php
 /**
- * One survey report: ship details, Offhire (redelivery) details, the TABLES 54B tanks per fuel
- * (add as many as needed), results and remarks — then the Excel (company template) and PDF.
+ * One survey report, as a wizard: vessel particulars (IMO lookup) → survey particulars → one
+ * step of tank cards per fuel grade on board → ROB summary with the PDF / Excel downloads
+ * (company template, includes/survey_reports.php srBuildBook).
  * Works offline after it has been opened once online (survey_report_sw.js): changes are kept on
  * the device and saved when the connection is back; the Excel can be made on the device too
  * (assets/js/report-offline-xlsx.js). Editor: assets/js/survey-report.js.

@@ -6,24 +6,71 @@ PDF from that workbook.
 
 - **Survey Reports** (`survey_reports.php`, sidebar) — Admin, Super Admin (view only), Surveyor
   (only the vessels assigned to them). Making a report never changes the vessel's status or files.
-  The report is one page, in the SHIP DETAILS order:
-  - **IMO + Vessel lookup** on top (see below);
-  - Vessel Name, Flag, Port of Registry, GRT, NRT, Voyage No., Owners, Charterers Name;
-  - **FWE** (date, time, ROB VLSFO / HSFO / LSMGO);
-  - **Survey Started** (date, time, ROB);
-  - **Survey Completed** (date, time);
-  - Place of Survey, Drafts, Master, Chief Engineer, Surveyor, List, Holds, Builder, Keel laid,
-    Manager/Operator, Callsign, LOA, Breadth, Depth, Summer Draft, Summer Deadweight, Class,
-    Alongside;
-  - then the **Tanks**, and at the bottom the totals and **Make Excel + PDF**.
+  The report is a step-by-step wizard (`assets/js/survey-report.js`). A progress bar shows the
+  current step in blue and completed steps in green with a check. A step is opened from the bar
+  when every step before it is complete, or when it was opened before. Back / Next stay at the
+  bottom: sticky on desktop, fixed above the app's bottom bar on phones. Everything saves by
+  itself, the current step included, so a refresh or reopening the draft comes back to the same
+  place.
 
-  Nothing else is asked:
-  - the Offhire redelivery texts and the remarks keep the template's own wording;
-  - the RESULTS block and the REPORT sheet's typed values are left empty.
+  1. **Vessel Particulars.**
+     - At first only the **IMO Number** and **Lookup** (button or Enter) are shown.
+     - After the lookup the 18 particulars appear below: Vessel Name, Flag, Port of Registry,
+       GRT, NRT, Owner Name, Number of Holds, Builder, Keel Laid Month / Year,
+       Manager / Operator, Callsign, LOA, Breadth, Depth, Summer Draft, Summer Deadweight, Class.
+     - Particulars that were not found are red, and a message names them. Every value can be
+       typed or corrected.
+     - A failed lookup only says so and opens manual entry. "or enter the particulars by hand"
+       does the same.
+     - Next is enabled only when all 18 particulars and the IMO number are valid.
+  2. **Survey Particulars.**
+     - **Fuel grades on board**: VLSFO, ULSFO, HSFO, LSMGO, HSMGO.
+     - **A. Engine Particulars**: FWE date, FWE time, FWE ROB of each chosen grade.
+     - **B. Survey Start**: date, time, Log Book ROB of each chosen grade (the engine-room
+       log-book ROB at survey start).
+     - **C. Survey Completion**: date, time, Surveyor Name.
+     - **D. Ship Staff**: Chief Engineer, Master.
+     - **E. Survey Location**: Port Name (from the vessel record, editable), Place of Survey.
+     - **F. Draft Particulars**: Forward, Aft, Mean Draft and Trim (worked out; Trim = Aft − Fwd
+       as on the template's TABLES 54B), List.
+     - **Other details**: Voyage No., Charterers, Alongside (the existing fields).
+     - Next checks the required values. Missing ones turn red, the page scrolls to the first,
+       and a message lists them. Survey Completed must not be before Survey Started.
+  3. **One step per chosen grade** (unchosen grades get no step).
+     - Tanks are cards one below the other, with no table and no sideways scrolling.
+     - **Add tank** / **Add another tank** adds a card with these fields:
+       - Tank Name
+       - Reference / Total Height
+       - Sounding or Ullage (switch). For ullage, Sounding = Reference height − Ullage, shown
+         and used in the report.
+       - Volume (m³)
+       - Density at 15°C
+       - Temperature (°C)
+     - V.C.F., W.C.F., G.S.V. (m³ @15°C) and MT in Air are worked out while typing.
+     - **Save tank** checks the readings and collapses the card to: Tank Name, Sounding,
+       Density, Temperature, MT in Air.
+     - **Edit**, **Expand** (ref. height, ullage, volume, V.C.F., W.C.F., G.S.V.) and **Delete**
+       (asks first) are on every card.
+     - The grade total is shown below the cards. Tanks can still be pasted from Excel (name,
+       ref. height, sounding, volume, density, temp).
+     - Next / **Next grade** needs at least one tank, with every tank complete.
+  4. **ROB Summary & Export.**
+     - Only the chosen grades with tanks are shown.
+     - Survey Completed = sum of the tanks' MT in Air. Log Book = the survey-start ROB from
+       step 2. Difference = Survey Completed − Log Book.
+     - **TOTAL DIFFERENCE** is shown with its sign.
+     - The figures are calculated again on the server from the template's formulas
+       (`a=verify`), and the page says so.
+     - Anything still missing is listed per step, with **Go to step**. While anything is
+       missing, the two buttons are off: **Download PDF Report** and **Download Excel Report**.
 
-  Enter goes to the next box. Everything saves by itself.
+  Not asked (as before):
+  - the Offhire redelivery texts and remarks keep the template's own wording;
+  - the RESULTS block and the REPORT sheet's typed values stay empty.
 
-  **Vessel lookup.** Type the IMO number and press **Vessel lookup**. The server
+  MT in Vacuum is not shown: the template has no such calculation (decided with the user).
+
+  **Lookup (IMO).** Type the IMO number and press **Lookup** (or Enter). The server
   (`srVesselLookup`, `ajax/survey_reports.php?a=lookup`) asks Gemini with Google Search
   grounding for the particulars of that IMO: name, flag, port of registry, GRT, NRT, owners,
   manager/operator, builder, keel laid month/year, call sign, LOA, breadth, depth, summer draft,
@@ -94,7 +141,37 @@ The workbook is a copy of the uploaded template version; nothing else is rebuilt
 - Calculation settings, page setup, and "no paper size" where the template has none are kept as
   in the template.
 
-Each "Make Excel + PDF" creates new files; earlier ones are kept.
+### The report workbook (`srBuildBook`, `includes/survey_reports.php`)
+
+Both downloads come from one build of the template copy, so the PDF and the Excel show the same
+values. The original template is never changed.
+
+- **Chosen grades the template has** (VLSFO, HSFO, LSMGO) are filled in their sections.
+- **Grades not on board** are hidden in the generated copy, never deleted, so no formula
+  breaks. That covers:
+  - their TABLES 54B section and their line in the totals list;
+  - their certificate lines (quantity, consumption, onboard at redelivery);
+  - their column of the BROB header.
+- **ULSFO / HSMGO** (the template has no section for them) go on a copy of TABLES 54B named
+  *TABLES 54B (ULSFO-HSMGO)*, placed after it. The copy has the same layout, logo and 54B
+  formulas:
+  - ULSFO goes in the first fuel-oil section, HSMGO in the gas-oil section;
+  - headings and totals labels are renamed;
+  - the BROB header shows their own log-book values;
+  - the unused section is hidden.
+- **ROB SUMMARY** sheet, after the tables, on the company letterhead banner
+  (`assets/images/invoice-header.png`):
+  - the particulars, with Mean Draft and Trim as formulas;
+  - per chosen grade, Survey Completed (a formula to the section total), Log Book (the cell on
+    SHIP DETAILS, or the value for ULSFO / HSMGO) and Difference;
+  - the TOTAL DIFFERENCE;
+  - signature lines for the Master, Chief Engineer and Surveyor;
+  - A4 portrait.
+- Printed: TABLES 54B, the ULSFO-HSMGO copy (when used), ROB SUMMARY, the Offhire certificate.
+- `srValidate` refuses an export while anything is missing (the same rules as the page).
+  `srResults` reads the results from the workbook's own formulas.
+
+Each download makes new files; earlier ones are kept ("Earlier files" on the summary).
 
 ## PDF — LibreOffice (`rtPdf`)
 
@@ -105,7 +182,9 @@ The filled workbook is printed exactly as laid out:
 - The template's print areas, scaling, margins, logo and fonts are used. Liberation fonts stand
   in for Arial / Times.
 - Pages are A4. Hidden columns are not printed, as in Excel.
-- The result is 2 pages: Bunker Survey Report, then the Certificate of Off-hire Bunker Quantity.
+- The result is the Bunker Survey Report, the ULSFO / HSMGO tables (when used), the ROB Summary,
+  then the Certificate of Off-hire Bunker Quantity: 3 A4 pages for VLSFO + LSMGO, 4 with ULSFO /
+  HSMGO.
 
 The Dockerfile installs `libreoffice-calc-nogui`. Without LibreOffice the Excel is still made and
 the page says that the PDF is not available.
@@ -132,8 +211,9 @@ Open the report once while online. The page, its scripts (ExcelJS is vendored in
 - **Offline entry and calculation.** Edits are stored on the device (localStorage) and sent when
   the connection is back. If someone saved the report meanwhile, you are asked which version to
   keep.
-- **Excel on this device** (`assets/js/report-offline-xlsx.js`). It is built from the same
-  template with the same layout data and gives the same values and formulas as the server file.
+- **Draft Excel on this device** (`assets/js/report-offline-xlsx.js`). It is built from the same
+  template, with the template's grades and the same values and formulas as the server file.
+  ULSFO / HSMGO and the ROB SUMMARY are only in the server report.
 - **What ExcelJS does not keep in the offline file:**
   - the arrow shapes on SHIP DETAILS;
   - printer-driver settings;
@@ -148,16 +228,43 @@ Open the report once while online. The page, its scripts (ExcelJS is vendored in
    is in `database/migration_survey_reports.sql`, reverse in `_down.sql`.
 2. As Admin, open **Report Templates** and upload the Offhire workbook. Read the checks, run
    **Generate test report**, and keep the version active.
-3. Surveyors / Admin: **Survey Reports → New report**, choose the vessel, then fill in the form.
-   Tanks can be pasted from Excel. Click **Make Excel + PDF**.
+3. Surveyors / Admin: **Survey Reports → New report**, choose the vessel, then follow the
+   steps. On the summary, click **Download PDF Report** / **Download Excel Report**.
+
+No database change: the wizard's values (grades, step, ROB of ULSFO / HSMGO, port name, tank
+mode / ullage) are kept in the report's existing JSON (`survey_reports.data`), linked to the
+survey as before.
 
 ## Acceptance test (local test stack, MV. PROTECTOR workbook)
 
-`sr_test.js`: 41/41 checks pass (including the one-page layout and Vessel lookup with a mock
-Gemini: unknown IMO fills nothing, known IMO fills all 18 particulars = the workbook's values,
-sources shown, Undo, highlight cleared on edit, button off offline).
+Two test files cover the wizard. Gemini is mocked.
 
-1. All six sheets exist, in the same order.
+`sr_test.js` (54/54) drives the wizard with VLSFO + LSMGO:
+- the lookup steps;
+- the blocked survey step;
+- the tanks pasted;
+- the summary;
+- both downloads;
+- the checks below.
+
+`sr_wizard_test.js` (39/39) covers the brief's scenarios:
+
+| Test | Result |
+|---|---|
+| 1. VLSFO + LSMGO only | 5 steps (2 grade steps); 2 grades on the summary, Excel and PDF; HSFO rows hidden |
+| 2. All five grades | 5 independent grade steps; summary, Excel (copy sheet + ROB SUMMARY) and PDF (4 pages) agree |
+| 3. Several tanks in one grade | each card = 54B formulas; grade total = sum; ullage → sounding |
+| 4. Incomplete lookup | 3 missing particulars red and named, Next off until typed in |
+| 5. Survey step incomplete | Next blocked, fields red, message |
+| 6. Edit a saved tank | live results, card, grade total and server-checked summary update |
+| 7. Refresh mid-step | reopens the same step with the half-typed tank; saved on the server; no duplicate tanks |
+| 8. PDF and Excel | the same values, only the chosen grades |
+| 9. Calculation accuracy | every numeric cell = independent LibreOffice recalculation; MV PROTECTOR totals 1029.798 / 130.042 MT |
+| 10. Mobile (iPhone 13) | no horizontal scrolling on any step; tank fields one column; Back / Next in view |
+
+Checked against the MV PROTECTOR workbook:
+
+1. All six sheets exist, in the same order (ROB SUMMARY is added after TABLES 54B).
 2. Vessel information is populated exactly. The only differences are two trailing spaces in
    template cells.
 3. All 15 tanks are populated exactly (entered by paste).
@@ -167,7 +274,7 @@ sources shown, Undo, highlight cleared on edit, button off offline).
 6. The Offhire certificate is populated (quantities, vessel / flag / registry text, signatories).
 7. Formatting and print layout are identical: styles, merges, print area, images, page setup,
    column widths.
-8. The PDF is A4, 2 pages, with the real layout.
+8. The PDF is A4, 3 pages (report, ROB summary, certificate), with the real layout.
 9. Offline: the report opens, the edit is kept on the device, and the offline Excel equals the
    server Excel except for the edit. Back online, the edit is saved.
 10. The original workbook is unchanged: the source file and the stored version are byte for
