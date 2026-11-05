@@ -242,16 +242,15 @@ function invoiceUserName(PDO $db, int $uid): string {
 }
 
 /**
- * Why this entry cannot be deleted from Invoices ('' = it can): only an entry still pending,
- * before any invoice is made for it — no invoice number, no generated or uploaded PDF (vessel
- * or recovery), not Completed. Payments are checked by the delete action itself.
+ * Why this entry cannot be deleted from Invoices ('' = it can): any entry in a pending status
+ * can be deleted, unless an invoice PDF is stored for it (vessel or recovery — delete the PDF
+ * first). Payments are checked by the delete action itself. An invoice number already given
+ * stays with the entry (it comes back with Restore; numbers are not given out again).
  */
 function invoiceRemoveBlocker(array $r): string {
     if (!empty($r['deleted_at'])) return 'This entry is already deleted.';
     if (($r['invoice_status'] ?? '') === 'Completed') return 'A completed invoice cannot be deleted.';
-    if (trim((string)($r['invoice_no'] ?? '')) !== '') return 'An invoice number (' . $r['invoice_no'] . ') is already given to this entry, so it cannot be deleted.';
-    if (!empty($r['file_path']) || !empty($r['rec_file_path'])) return 'An invoice PDF is stored for this entry — delete the PDF first.';
-    if (!empty($r['gen_data']) || !empty($r['rec_gen_data'])) return 'An invoice was already generated for this entry.';
+    if (!empty($r['file_path']) || !empty($r['rec_file_path'])) return 'An invoice PDF is stored for this entry — delete the PDF first, then the entry.';
     return '';
 }
 

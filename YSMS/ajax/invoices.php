@@ -10,10 +10,11 @@
  *                                          details; the row stays and keeps its invoice number.
  *                                          A Completed invoice goes back to the pending list
  *                                          (Pending for CP Prices) so it can be made again.
- *   POST a=remove  id, reason            → deletes a wrong entry from Invoices: only while it is
- *                                          pending and before any invoice is made (no number,
- *                                          PDF or payment). The row is kept (deleted_at) so the
- *                                          vessel is not registered again; it can be restored.
+ *   POST a=remove  id, reason            → deletes a wrong entry from Invoices: any entry in a
+ *                                          pending status with no stored invoice PDF and no
+ *                                          payment. The row is kept (deleted_at), with its invoice
+ *                                          number if it has one, so the vessel is not registered
+ *                                          again and Restore brings it back as it was.
  *   POST a=restore id                    → brings a deleted entry back to the pending list
  *   GET  a=file    id, mode=view|download, which=recovery (optional) → the stored PDF
  *   GET  a=list    view, status, q, type, month, client, port, vessel, scd_from, scd_to, sort
@@ -150,8 +151,7 @@ switch ($action) {
         $reason = mb_substr(trim((string)($_POST['reason'] ?? '')), 0, 255);
         // only while still pending with no invoice made (checked again in the UPDATE itself)
         $u = $db->prepare("UPDATE invoices SET deleted_at = NOW(), deleted_by = ?, delete_reason = ?
-            WHERE id = ? AND deleted_at IS NULL AND invoice_status <> 'Completed' AND (invoice_no IS NULL OR invoice_no = '')
-              AND file_path IS NULL AND rec_file_path IS NULL AND gen_data IS NULL AND rec_gen_data IS NULL");
+            WHERE id = ? AND deleted_at IS NULL AND invoice_status <> 'Completed' AND file_path IS NULL AND rec_file_path IS NULL");
         $u->execute([$uid ?: null, $reason !== '' ? $reason : null, $id]);
         if (!$u->rowCount()) invJson(409, ['ok' => false, 'error' => 'This entry changed meanwhile — reload the page.']);
         invJson(200, ['ok' => true, 'row' => invoiceGridRow($db, $load($id))]);

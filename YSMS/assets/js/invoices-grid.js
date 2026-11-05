@@ -152,7 +152,7 @@
       a += d.has_file ? '<button type="button" data-act="edit" data-testid="inv-edit-' + d.id + '"><i class="fa-solid fa-pen"></i> Edit</button>' +
         '<button type="button" class="del" data-act="delete" data-testid="inv-delete-' + d.id + '"><i class="fa-solid fa-trash"></i> Delete</button>'
         : '<button type="button" data-act="upload" data-testid="inv-upload-' + d.id + '"><i class="fa-solid fa-upload"></i> Upload</button>';
-      if (d.can_remove) a += '<button type="button" class="del" data-act="remove" title="Delete this wrong entry (no invoice is made for it yet)" data-testid="inv-remove-' + d.id + '"><i class="fa-solid fa-trash-can"></i> Delete entry</button>';
+      if (d.can_remove) a += '<button type="button" class="del" data-act="remove" title="Delete this wrong entry (can be restored from Deleted)" data-testid="inv-remove-' + d.id + '"><i class="fa-solid fa-trash-can"></i> Delete entry</button>';
     }
     return '<span class="at-act inv-actions">' + a + '</span>';
   }
@@ -432,7 +432,7 @@
       });
     } else if (act === 'remove') {
       Swal.fire({ icon: 'warning', title: 'Delete this entry?', width: 480,
-        html: '<b>' + esc(d.vessel || 'This vessel') + '</b>' + (d.report_no ? ' · ' + esc(d.report_no) : '') + '<br>It is removed from the Invoices list. No invoice was made for it, so no invoice number is used.' +
+        html: '<b>' + esc(d.vessel || 'This vessel') + '</b>' + (d.report_no ? ' · ' + esc(d.report_no) : '') + (d.invoice_no ? ' · <b>' + esc(d.invoice_no) + '</b>' : '') + '<br>It is removed from the Invoices list.' + (d.invoice_no ? ' Its invoice number stays with it and comes back if you restore it.' : '') +
           '<br><small>Survey records are not touched. You can bring it back from <b>Deleted</b> → Restore.</small>' +
           '<input id="invDelWhy" class="swal2-input" maxlength="255" placeholder="Reason (optional), e.g. wrong entry / duplicate" data-testid="inv-remove-reason" style="font-size:14px">',
         showCancelButton: true, confirmButtonText: 'Delete entry', confirmButtonColor: '#DC2626', showLoaderOnConfirm: true,
