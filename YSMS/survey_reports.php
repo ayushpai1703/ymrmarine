@@ -17,53 +17,56 @@ include 'includes/header.php';
 <div class="sr-wrap">
     <div class="sr-head">
         <div><h1><i class="fa-solid fa-file-signature"></i> Survey Reports</h1>
-            <div class="sr-sub">Enter the bunker survey on the website; the report is made in the company's own Excel format (and PDF).</div></div>
+            <div class="sr-sub">Choose the report type (221B / ROB, Offhire, Onhire, 3 / 4 Party); the report is made in the company's own Excel format (and PDF).</div></div>
         <button type="button" class="sr-btn pri" data-new hidden data-testid="sr-new"><i class="fa-solid fa-plus"></i> New report</button>
     </div>
-    <div class="sr-note" data-no-template hidden data-testid="sr-no-template"><i class="fa-solid fa-circle-info"></i> No report template is active yet.<?= ($_SESSION['role'] ?? '') === 'Admin' ? ' Upload the Offhire report workbook under <a href="admin_report_templates.php">Report Templates</a>.' : ' An Admin has to upload it first.' ?></div>
+    <div class="sr-note" data-no-template hidden data-testid="sr-no-template"><i class="fa-solid fa-circle-info"></i> No report template is uploaded yet.<?= ($_SESSION['role'] ?? '') === 'Admin' ? ' Upload the report workbooks under <a href="admin_report_templates.php">Report Templates</a>.' : ' An Admin has to upload it first.' ?></div>
     <div class="sr-card"><div data-list data-testid="sr-list"><span class="sr-muted">Loading…</span></div></div>
 </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.14.5/dist/sweetalert2.all.min.js"></script>
 <script>
 (function () {
-  var CSRF = <?= json_encode(csrf_token()) ?>, API = 'ajax/survey_reports.php';
+  var CSRF = <?= json_encode(csrf_token()) ?>, API = 'ajax/survey_reports.php', KINDS = [];
   var $ = function (s) { return document.querySelector(s); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  var ST = { 'Pending Vessel': 'pv', 'Pending Report': 'pr', 'Completed': 'co', 'Cancelled': 'ca' };
   fetch(API + '?a=list', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (res) {
     if (!res.ok) { $('[data-list]').textContent = res.error || 'Could not load.'; return; }
-    $('[data-new]').hidden = !res.can_create || !res.active;
+    KINDS = res.kinds || [];
+    $('[data-new]').hidden = !res.can_create;
     $('[data-no-template]').hidden = res.active;
-    $('[data-list]').innerHTML = res.reports.length ? '<table class="sr-t"><thead><tr><th>Vessel</th><th>Report No</th><th>Status</th><th>Template</th><th>Last saved</th><th>Files</th><th></th></tr></thead><tbody>' +
+    var admin = res.is_admin;
+    $('[data-list]').innerHTML = res.reports.length ? '<div style="overflow-x:auto"><table class="sr-t"><thead><tr><th>Vessel</th><th>Report type</th><th>Made by</th><th>Last saved</th><th>Files</th>' + (admin ? '<th>Tank changes</th>' : '') + '<th></th></tr></thead><tbody>' +
       res.reports.map(function (r) {
-        return '<tr data-testid="sr-row-' + r.id + '"><td><b>' + esc(r.vessel_name) + '</b></td><td>' + esc(r.report_number || '—') + '</td><td><span class="sr-st ' + (ST[r.status] || '') + '">' + esc(r.status) + '</span></td>' +
-          '<td>Offhire v' + esc(r.template_version) + '</td><td>' + esc(String(r.updated_at).slice(0, 16)) + '<br><small class="sr-muted">' + esc(r.updated_by_name || '') + '</small></td>' +
-          '<td>' + (+r.files ? r.files + ' file' + (+r.files === 1 ? '' : 's') : '<span class="sr-muted">none yet</span>') + '</td>' +
+        var dl = (r.last_pdf ? '<a href="' + API + '?a=file&id=' + r.last_pdf + '" data-testid="sr-list-pdf-' + r.id + '"><i class="fa-solid fa-file-pdf" style="color:#dc2626"></i> PDF</a> ' : '') +
+          (r.last_xlsx ? '<a href="' + API + '?a=file&id=' + r.last_xlsx + '" data-testid="sr-list-xlsx-' + r.id + '"><i class="fa-solid fa-file-excel" style="color:#16a34a"></i> Excel</a>' : '');
+        return '<tr data-testid="sr-row-' + r.id + '"><td><b>' + esc(r.vessel_name || 'Not entered yet') + '</b>' + (r.report_number ? '<br><small class="sr-muted">' + esc(r.report_number) + '</small>' : '') + '</td>' +
+          '<td>' + esc(r.kind_label) + ' <small class="sr-muted">v' + esc(r.template_version) + '</small></td><td>' + esc(r.created_by_name || '') + '</td>' +
+          '<td>' + esc(String(r.updated_at).slice(0, 16)) + '<br><small class="sr-muted">' + esc(r.updated_by_name || '') + '</small></td>' +
+          '<td>' + (+r.files ? dl + '<br><small class="sr-muted">' + r.files + ' file' + (+r.files === 1 ? '' : 's') + ', latest ' + esc(String(r.last_file).slice(0, 16)) + '</small>' : '<span class="sr-muted">none yet</span>') + '</td>' +
+          (admin ? '<td data-testid="sr-list-changes-' + r.id + '">' + (+r.tank_changes ? '<b style="color:#b45309">' + r.tank_changes + '</b> change' + (+r.tank_changes === 1 ? '' : 's') : '<span class="sr-muted">0</span>') + '</td>' : '') +
           '<td><a class="sr-btn" href="survey_report.php?id=' + r.id + '" data-testid="sr-open-' + r.id + '"><i class="fa-solid fa-pen-to-square"></i> Open</a></td></tr>';
-      }).join('') + '</tbody></table>' : '<div class="sr-empty"><i class="fa-solid fa-file-circle-plus"></i><div>No survey reports yet.</div></div>';
+      }).join('') + '</tbody></table></div>' : '<div class="sr-empty"><i class="fa-solid fa-file-circle-plus"></i><div>No survey reports yet.</div></div>';
   });
   $('[data-new]').addEventListener('click', function () {
     Swal.fire({
-      title: 'New survey report', width: 560,
-      html: '<div style="text-align:left;font-size:13px"><label style="font-weight:700">Vessel</label><input id="srQ" class="swal2-input" style="margin:6px 0;width:100%" placeholder="Search vessel or report no…" data-testid="sr-q">' +
-        '<div id="srList" class="sr-pick" data-testid="sr-pick"></div><div style="color:#64748b;font-size:12px;margin-top:8px">Report format: <b>Offhire</b> (active template version).</div></div>',
-      showCancelButton: true, confirmButtonText: 'Create report', confirmButtonColor: '#00A3DF', showLoaderOnConfirm: true,
-      didOpen: function () {
-        var q = document.getElementById('srQ'), t;
-        var find = function () { fetch(API + '?a=surveys&q=' + encodeURIComponent(q.value), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (res) {
-          document.getElementById('srList').innerHTML = (res.surveys || []).map(function (s) { return '<label><input type="radio" name="srS" value="' + s.id + '"> <b>' + esc(s.vessel_name) + '</b> <small>' + esc(s.report_number || '') + ' · ' + esc(s.port_name || '') + ' · ' + esc(s.status) + '</small></label>'; }).join('') || '<div class="sr-muted">No vessel found.</div>';
-        }); };
-        q.addEventListener('input', function () { clearTimeout(t); t = setTimeout(find, 250); }); find();
-      },
-      preConfirm: function () {
-        var s = document.querySelector('input[name=srS]:checked');
-        if (!s) { Swal.showValidationMessage('Choose the vessel.'); return false; }
-        var f = new FormData(); f.append('a', 'create'); f.append('survey_id', s.value); f.append('kind', 'offhire'); f.append('csrf_token', CSRF);
-        return fetch(API, { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-CSRF-Token': CSRF } }).then(function (r) { return r.json(); })
-          .then(function (res) { if (!res.ok) { Swal.showValidationMessage(res.error || 'Not created.'); return false; } return res; });
+      title: 'New survey report', width: 560, showConfirmButton: false, showCancelButton: true,
+      html: '<div style="font-size:13px;color:#64748b;margin-bottom:10px">Choose the report type</div><div class="sr-kinds" data-testid="sr-kinds">' + KINDS.map(function (k) {
+        return '<button type="button" class="sr-kind" data-kind="' + k.key + '"' + (k.active ? '' : ' disabled title="Template not uploaded yet"') + ' data-testid="sr-kind-' + k.key + '">' + esc(k.label) + (k.active ? '' : '<small>Template not uploaded yet</small>') + '</button>';
+      }).join('') + '</div>',
+      didOpen: function (el) {
+        el.querySelectorAll('[data-kind]:not([disabled])').forEach(function (b) {
+          b.addEventListener('click', function () {
+            Swal.showLoading();
+            var f = new FormData(); f.append('a', 'create'); f.append('kind', b.getAttribute('data-kind')); f.append('csrf_token', CSRF);
+            fetch(API, { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-CSRF-Token': CSRF } }).then(function (r) { return r.json(); }).then(function (res) {
+              if (!res.ok) { Swal.hideLoading(); Swal.showValidationMessage(res.error || 'Not created.'); return; }
+              location.href = 'survey_report.php?id=' + res.id;
+            });
+          });
+        });
       }
-    }).then(function (r) { if (r.isConfirmed && r.value) location.href = 'survey_report.php?id=' + r.value.id; });
+    });
   });
 })();
 </script>

@@ -199,3 +199,13 @@ details.sr-card > summary { cursor: pointer; font-size: 14px; font-weight: 800; 
     .sr-cmp { font-size: 13px; } .sr-cmp th, .sr-cmp td { padding: 8px 6px; }
     .sr-totdiff b { font-size: 21px; }
 }
+/* Admin: tank change history (summary step) */
+.sr-log td { font-size: 12.5px; }
+.sr-del { color: #b42318; font-weight: 700; }
+/* New report: report types */
+.sr-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; }
+.sr-kind { border: 2px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #fff; cursor: pointer; font-weight: 800; color: #0f172a; font-size: 14px; display: flex; flex-direction: column; gap: 2px; }
+.sr-kind small { font-weight: 600; color: #64748b; font-size: 11.5px; }
+.sr-kind:hover:not([disabled]) { border-color: #00A3DF; background: #f0faff; }
+.sr-kind[disabled] { opacity: .55; cursor: not-allowed; }
+@media (max-width: 480px) { .sr-kinds { grid-template-columns: 1fr; } }

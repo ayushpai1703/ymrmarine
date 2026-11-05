@@ -321,3 +321,42 @@ Changed:
 - `Dockerfile` — LibreOffice.
 
 The existing Survey Form (`survey_form.php`) and its formats are not changed.
+
+## Report types, no vessel pick, one-page tank report, tank change history
+
+**Report types.** "New report" lists the report types: 221B / ROB Survey, Offhire, Onhire,
+3 Party Offhire, 3 Party Onhire, 4 Party Offhire (`RT_KINDS`).
+- Each type has its own template. The Admin uploads it in Report Templates, which has one tab
+  per type.
+- A type without an uploaded template is shown but cannot be chosen.
+
+**No vessel is picked.** Choosing a type opens the report right away. The vessel details come
+from the IMO Lookup (`survey_reports.survey_id` is now NULL for these reports).
+- The surveyor who made the report can open and edit it, and so can the Admin.
+- The Super Admin can view it.
+
+**Workbook (`srBuildBook`).**
+- The BROB header shows the grades on board side by side, with no empty column between them
+  (`srHeaderCompact`).
+- Only the tanks entered appear: spare tank rows are hidden (`srHideEmptyTankRows`).
+- The tank report sheet(s) print on one A4 page: the print area ends at the last filled row and
+  is fitted to 1 × 1 page (`srFitOnePage`).
+- The ROB Summary and the certificate stay on their own pages.
+
+**Tank change history (Admin).**
+- When a saved tank ("Save tank") is changed and saved again, every changed value is logged:
+  tank, field, old → new, who, when. The fields covered are name, ref. height, sounding /
+  ullage, volume, density and temperature.
+- **Edit** marks the tank as being edited. A tank still being edited when the report is made is
+  logged as well, and a deleted saved tank is logged as "Tank deleted".
+- Storage: `survey_report_tank_saved` (last saved readings) and `survey_report_tank_log`.
+- The Admin sees the history on the report's summary step.
+- On the Survey Reports list, the Admin sees for every report:
+  - the report type;
+  - who made it;
+  - the number of tank changes;
+  - the latest PDF / Excel to download.
+- Every file made is kept in the report's "Earlier files".
+
+Tests: `sr_test.js` 57/57, `sr_wizard_test.js` 43/43, including the change history (a saved and
+edited tank, and an edit that was not saved, then the report made) and the list for the Admin.

@@ -71,7 +71,8 @@
       else return conflictLocal(local, res);
     }
     $('[data-title]').textContent = res.report.vessel;
-    $('[data-subtitle]').textContent = 'Offhire report';
+    $('[data-subtitle]').textContent = (res.report.kind_label || 'Survey') + ' report';
+    S.isAdmin = !!res.is_admin; S.tankLog = null;
     store(LS + '_step', null);
     var have = steps().map(function (s) { return s.id; });
     if (have.indexOf(S.data.step) < 0) S.data.step = 'vessel';
@@ -233,7 +234,7 @@
   function go(id) {
     var seen = read(LS + '_seen') || []; if (seen.indexOf(id) < 0) { seen.push(id); store(LS + '_seen', seen); }
     S.data.step = id; changed(true); render(); window.scrollTo(0, 0);
-    if (id === 'summary') verify();
+    if (id === 'summary') { S.tankLog = null; verify(); }
   }
 
   // ---------- render ----------
@@ -408,12 +409,31 @@
         '<p class="sr-muted sr-small">Survey Completed = sum of MT in Air of the tanks of each grade. Log Book = ROB at survey start (engine-room log book). Difference = Survey Completed − Log Book.</p>'
         : '<p class="sr-muted">No fuel grade with tanks yet.</p>') + '</section>' +
       (all.length ? '<section class="sr-card sr-probs" data-testid="sr-problems"><h3><i class="fa-solid fa-triangle-exclamation"></i> Before exporting, complete:</h3>' + probs + '</section>' : '') +
+      tankLogHtml() +
       '<section class="sr-card"><h3><i class="fa-solid fa-file-export"></i> Export</h3><div class="sr-out" data-testid="sr-output">' +
       '<button type="button" class="sr-btn pri big" data-gen="pdf" data-online-only' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-download-pdf"><i class="fa-solid fa-file-pdf"></i> Download PDF Report</button>' +
       '<button type="button" class="sr-btn pri big alt" data-gen="xlsx" data-online-only' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-download-xlsx"><i class="fa-solid fa-file-excel"></i> Download Excel Report</button></div>' +
       '<p class="sr-small sr-muted">Both files come from one calculation on the server (the company template with its TABLES 54B formulas), so they show the same values.</p>' +
       '<button type="button" class="sr-link" data-offline-xlsx data-testid="sr-offline-xlsx"><i class="fa-solid fa-download"></i> Draft Excel on this device (works offline)</button>' +
       '<details class="sr-files"' + (S.files.length ? '' : ' hidden') + '><summary>Earlier files (' + S.files.length + ')</summary><div data-files>' + filesHtml() + '</div></details></section>';
+  }
+  /** Admin: every change made to a tank after it was saved (who, when, old → new). */
+  function tankLogHtml() {
+    if (!S.isAdmin) return '';
+    if (S.tankLog === null) { loadTankLog(); return '<section class="sr-card" data-testid="sr-tank-log"><h3><i class="fa-solid fa-clock-rotate-left"></i> Tank change history</h3><span class="sr-muted">Loading…</span></section>'; }
+    var L = S.tankLog;
+    return '<section class="sr-card" data-testid="sr-tank-log"><h3><i class="fa-solid fa-clock-rotate-left"></i> Tank change history <small class="sr-muted">' + L.length + ' change' + (L.length === 1 ? '' : 's') + ' after the tanks were saved</small></h3>' +
+      (L.length ? '<div class="sr-cmp-wrap"><table class="sr-t sr-log"><thead><tr><th>When</th><th>Tank</th><th>Changed</th><th>From</th><th>To</th><th>By</th></tr></thead><tbody>' + L.map(function (x) {
+        return '<tr><td>' + esc(String(x.changed_at).slice(0, 16)) + '</td><td><b>' + esc(x.tank_name) + '</b> <small class="sr-muted">' + esc(x.grade_label) + '</small></td><td>' + esc(x.field_label) + '</td>' +
+          '<td>' + (x.field === 'deleted' ? '' : esc(x.old_value === '' ? '—' : x.old_value)) + '</td><td>' + (x.field === 'deleted' ? '<span class="sr-del">deleted</span>' : '<b>' + esc(x.new_value === '' ? '—' : x.new_value) + '</b>') + '</td><td>' + esc(x.changed_by_name || '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' : '<span class="sr-muted">No tank was changed after it was saved.</span>') + '</section>';
+  }
+  function loadTankLog() {
+    if (S.tankLogLoading) return; S.tankLogLoading = true;
+    fetch(P.api + '?a=tank_log&id=' + P.id, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (res) {
+      S.tankLogLoading = false; S.tankLog = res.ok ? res.log : [];
+      if (S.data.step === 'summary') render();
+    }).catch(function () { S.tankLogLoading = false; });
   }
   function filesHtml() {
     if (!S.files.length) return '<span class="sr-muted">No files made yet.</span>';
@@ -468,7 +488,7 @@
     if (t.closest('[data-manual]')) { S.manual = true; render(); var f = $('[data-f=vessel_name]'); if (f) f.focus(); return; }
     if ((b = t.closest('[data-add]'))) { var g = b.getAttribute('data-add'), row = emptyRow(); S.data.tanks[g].push(row); changed(); render(); var n = $('[data-t="' + g + ':' + (S.data.tanks[g].length - 1) + ':name"]'); if (n) { n.focus(); n.scrollIntoView({ block: 'center' }); } return; }
     if ((b = t.closest('[data-save-tank]'))) { saveTank(b.getAttribute('data-save-tank')); return; }
-    if ((b = t.closest('[data-edit]'))) { var p = b.getAttribute('data-edit').split(':'), r = S.data.tanks[p[0]][+p[1]]; S.open[r.id] = true; render(); var x = $('[data-t="' + p[0] + ':' + p[1] + ':name"]'); if (x) x.focus(); return; }
+    if ((b = t.closest('[data-edit]'))) { var p = b.getAttribute('data-edit').split(':'), r = S.data.tanks[p[0]][+p[1]]; S.open[r.id] = true; r.done = ''; changed(); render(); var x = $('[data-t="' + p[0] + ':' + p[1] + ':name"]'); if (x) x.focus(); return; }
     if ((b = t.closest('[data-expand]'))) { var q = b.getAttribute('data-expand').split(':'), rr = S.data.tanks[q[0]][+q[1]]; S.expand[rr.id] = !S.expand[rr.id]; render(); return; }
     if ((b = t.closest('[data-del]'))) { delTank(b.getAttribute('data-del')); return; }
     if ((b = t.closest('[data-mode]'))) { var m = b.getAttribute('data-mode').split(':'), tr = S.data.tanks[m[0]][+m[1]]; tr.mode = m[2]; tr.sounding = m[2] === 'ullage' ? sounding(tr) : tr.sounding; changed(); render(); return; }
@@ -669,7 +689,7 @@
         return;
       }
       if (type === 'pdf' && res.pdf_error) { Swal.fire({ icon: 'warning', title: 'PDF not available', text: res.pdf_error + ' The Excel report was made; download it below.' }); }
-      S.files = res.files; S.server = res.results;
+      S.files = res.files; S.server = res.results; S.tankLog = null;
       var c = read(CACHE); if (c) { c.files = S.files; c.report.version = S.version; store(CACHE, c); }
       render();
       var id = res.new_files && res.new_files[type];
@@ -695,7 +715,7 @@
     Swal.fire({ title: 'Making the Excel on this device…', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
     get.then(function (buf) { return ReportOfflineXlsx.build(buf, S.cfg.offline, d, S.cfg.calc, secs); })
       .then(function (blob) {
-        var a = document.createElement('a'), name = (String(S.data.fields.vessel_name || S.report.vessel).toUpperCase() + ' - OFFHIRE - FIELD REPORT (device).xlsx').replace(/[\\/:*?"<>|]+/g, '_');
+        var a = document.createElement('a'), name = (String(S.data.fields.vessel_name || S.report.vessel).toUpperCase() + ' - ' + String(S.report.kind_label || 'Survey').toUpperCase().replace(/\//g, '-') + ' - FIELD REPORT (device).xlsx').replace(/[\\/:*?"<>|]+/g, '_');
         a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
         setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
         Swal.fire({ icon: 'success', title: 'Draft Excel saved on this device', text: (extra.length ? extra.map(function (x) { return gradeInfo(x).short; }).join(' / ') + ' and the ROB summary are only in the server report. ' : '') + 'Make the final report when you are online.', timer: 5000 });

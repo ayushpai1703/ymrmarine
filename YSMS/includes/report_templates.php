@@ -22,7 +22,9 @@
  */
 require_once __DIR__ . '/survey_form.php'; // PhpSpreadsheet, SF_FIELDS, sfValidate, sfDateText, sfShiftSheetRefs
 
-const RT_KINDS = ['offhire' => 'Offhire'];
+/** Report types (one template each, uploaded by the Admin under Report Templates). */
+const RT_KINDS = ['rob' => '221B / ROB Survey', 'offhire' => 'Offhire', 'onhire' => 'Onhire',
+    'offhire3' => '3 Party Offhire', 'onhire3' => '3 Party Onhire', 'offhire4' => '4 Party Offhire'];
 const RT_MAX_UPLOAD = 20 * 1024 * 1024;
 const RT_MAX_TANKS = 60;
 const RT_REQUIRED_SHEETS = ['SHIP DETAILS', 'TABLES 54B'];
@@ -91,6 +93,21 @@ function rtEnsureTables(PDO $db): void {
         `file_name` varchar(255) NOT NULL, `file_path` varchar(255) NOT NULL, `file_size` int(11) NOT NULL DEFAULT 0,
         `created_by` int(11) DEFAULT NULL, `created_at` datetime NOT NULL,
         PRIMARY KEY (`id`), KEY `idx_srf_report` (`report_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // a report is made without choosing a vessel first (survey_id stays NULL); its maker owns it
+    foreach ($db->query("SHOW COLUMNS FROM survey_reports LIKE 'survey_id'")->fetchAll(PDO::FETCH_ASSOC) as $c) {
+        if (strtoupper((string)$c['Null']) === 'NO') $db->exec('ALTER TABLE survey_reports MODIFY `survey_id` int(11) NULL DEFAULT NULL');
+    }
+    // saved tanks: last saved readings, and every later change (shown to the Admin)
+    $db->exec("CREATE TABLE IF NOT EXISTS `survey_report_tank_saved` (
+        `report_id` int(11) NOT NULL, `tank_id` varchar(40) NOT NULL, `grade` varchar(10) NOT NULL, `vals` text NOT NULL,
+        `saved_at` datetime NOT NULL, PRIMARY KEY (`report_id`, `tank_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $db->exec("CREATE TABLE IF NOT EXISTS `survey_report_tank_log` (
+        `id` int(11) NOT NULL AUTO_INCREMENT, `report_id` int(11) NOT NULL, `grade` varchar(10) NOT NULL, `tank_id` varchar(40) NOT NULL,
+        `tank_name` varchar(100) NOT NULL, `field` varchar(20) NOT NULL, `old_value` varchar(100) DEFAULT NULL, `new_value` varchar(100) DEFAULT NULL,
+        `changed_by` int(11) DEFAULT NULL, `changed_at` datetime NOT NULL,
+        PRIMARY KEY (`id`), KEY `idx_srtl_report` (`report_id`, `changed_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $done = true;
 }

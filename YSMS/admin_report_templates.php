@@ -10,6 +10,8 @@ require_once 'config/config.php';
 require_once 'includes/report_templates.php';
 checkAuth();
 if (($_SESSION['role'] ?? '') !== 'Admin') { header('Location: index.php'); exit; }
+$kind = isset(RT_KINDS[$_GET['kind'] ?? '']) ? (string)$_GET['kind'] : 'offhire';
+$db0 = getDB(); rtEnsureTables($db0);
 $page_title = 'Report Templates';
 include 'includes/header.php';
 ?>
@@ -45,6 +47,11 @@ include 'includes/header.php';
 .rtp-frame { width: 100%; height: 760px; border: 1px solid #e5e7eb; border-radius: 10px; margin-top: 10px; }
 .rtp code.f { display: block; font-size: 11.5px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 6px; margin: 2px 0; word-break: break-all; }
 .rtp .muted { color: #94a3b8; }
+.rtp-kinds { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.rtp-kinds a { border: 1px solid #e2e8f0; border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 700; color: #334155; text-decoration: none; background: #fff; }
+.rtp-kinds a.on { background: #00A3DF; border-color: #00A3DF; color: #fff; }
+.rtp-kinds a span { font-size: 10.5px; font-weight: 700; margin-left: 4px; padding: 1px 7px; border-radius: 999px; }
+.rtp-kinds a span.ok { background: #dcfce7; color: #166534; } .rtp-kinds a span.no { background: #f1f5f9; color: #64748b; }
 @media (max-width: 991.98px) { .rtp-up, .rtp-grid2 { grid-template-columns: 1fr; } .rtp-flag { grid-template-columns: 1fr; } .rtp-t { display: block; overflow-x: auto; } }
 </style>
 <div class="scroll-content" data-testid="report-templates-page">
@@ -53,8 +60,13 @@ include 'includes/header.php';
     <h1><i class="fa-solid fa-file-excel" style="color:#16a34a"></i> Report Templates</h1>
     <div class="sub">The company's Excel report formats. Survey Reports fill the active version; every upload is kept as its own version and never changed.</div>
 
+    <div class="rtp-kinds" data-testid="rt-kinds">
+        <?php foreach (RT_KINDS as $k => $label): $on = (bool)rtActive($db0, $k); ?>
+        <a href="admin_report_templates.php?kind=<?= $k ?>" class="<?= $k === $kind ? 'on' : '' ?>" data-testid="rt-kind-<?= $k ?>"><?= sanitize($label) ?> <span class="<?= $on ? 'ok' : 'no' ?>"><?= $on ? 'active' : 'not uploaded' ?></span></a>
+        <?php endforeach; ?>
+    </div>
     <div class="rtp-card">
-        <h2><i class="fa-solid fa-upload"></i> Upload a template version — Offhire</h2>
+        <h2><i class="fa-solid fa-upload"></i> Upload a template version — <?= sanitize(RT_KINDS[$kind]) ?></h2>
         <form class="rtp-up" data-upload onsubmit="return false">
             <label>Excel workbook (.xlsx)<input type="file" accept=".xlsx" name="file" required data-testid="rt-file"></label>
             <label>Notes (optional)<input name="notes" maxlength="500" placeholder="e.g. HSFO totals added" data-testid="rt-notes"></label>
@@ -73,7 +85,7 @@ include 'includes/header.php';
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.14.5/dist/sweetalert2.all.min.js"></script>
 <script>
 (function () {
-  var CSRF = <?= json_encode(csrf_token()) ?>, API = 'ajax/report_templates.php', KIND = 'offhire';
+  var CSRF = <?= json_encode(csrf_token()) ?>, API = 'ajax/report_templates.php', KIND = <?= json_encode($kind) ?>;
   var S = { list: [], groups: {}, sel: null, soffice: false };
   var $ = function (s, r) { return (r || document).querySelector(s); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -90,7 +102,7 @@ include 'includes/header.php';
   }
   function fdt(s) { return s ? String(s).slice(0, 16) : ''; }
   function renderList() {
-    if (!S.list.length) { $('[data-versions]').innerHTML = '<span class="muted">No template uploaded yet — upload the Offhire report workbook above.</span>'; return; }
+    if (!S.list.length) { $('[data-versions]').innerHTML = '<span class="muted">No template uploaded yet — upload the <?= sanitize(RT_KINDS[$kind]) ?> report workbook above.</span>'; return; }
     $('[data-versions]').innerHTML = '<table class="rtp-t"><thead><tr><th>Version</th><th>File</th><th>Uploaded</th><th>Checks</th><th>Status</th><th></th></tr></thead><tbody>' + S.list.map(function (t) {
       var fl = t.analysis.flags || [], e = fl.filter(function (x) { return x.level === 'error'; }).length, w = fl.filter(function (x) { return x.level === 'warn'; }).length;
       return '<tr class="' + (t.id === S.sel ? 'sel' : '') + '" data-testid="rt-v-' + t.version + '"><td><b>v' + t.version + '</b></td><td>' + esc(t.original_name) + '<br><small class="muted">' + Math.round(t.file_size / 1024) + ' KB · sha256 ' + esc(t.sha256.slice(0, 12)) + '…</small>' + (t.notes ? '<br><small>' + esc(t.notes) + '</small>' : '') + '</td>' +

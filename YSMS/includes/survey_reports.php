@@ -21,26 +21,43 @@ function srReport(PDO $db, int $id): ?array {
     $q->execute([$id]);
     $r = $q->fetch(PDO::FETCH_ASSOC);
     if (!$r) return null;
-    $s = sfSurvey($db, (int)$r['survey_id']);
-    if (!$s || !sfCanAccess($db, $s)) return null;
-    $r['survey'] = $s;
+    if ($r['survey_id'] === null || (int)$r['survey_id'] === 0) {
+        // a report made without a vessel: Admin / Super Admin, and the surveyor who made it
+        if (!in_array(srRole(), ['Admin', 'Super Admin'], true) && (int)$r['created_by'] !== (int)($_SESSION['user_id'] ?? 0)) return null;
+        $r['survey'] = null;
+    } else {
+        $s = sfSurvey($db, (int)$r['survey_id']);
+        if (!$s || !sfCanAccess($db, $s)) return null;
+        $r['survey'] = $s;
+    }
     $r['data'] = json_decode((string)$r['data'], true) ?: ['fields' => [], 'tanks' => []];
     $r['id'] = (int)$r['id']; $r['version'] = (int)$r['version']; $r['template_id'] = (int)$r['template_id'];
     return $r;
 }
 
-function srCanEdit(array $survey): bool {
+function srCanEdit(?array $survey, ?array $report = null): bool {
     if (srRole() === 'Admin') return true;
-    return srRole() === 'Surveyor' && in_array((string)$survey['status'], SF_EDIT_STATUSES, true);
+    if (srRole() !== 'Surveyor') return false;
+    if ($survey === null) return $report !== null && (int)$report['created_by'] === (int)($_SESSION['user_id'] ?? 0);
+    return in_array((string)$survey['status'], SF_EDIT_STATUSES, true);
+}
+
+/** Title of a report: its vessel name, else the report type. */
+function srTitle(array $r): string {
+    $v = trim((string)($r['data']['fields']['vessel_name'] ?? ''));
+    if ($v === '' && !empty($r['survey'])) $v = (string)$r['survey']['vessel_name'];
+    return $v !== '' ? $v : 'New ' . (RT_KINDS[$r['kind']] ?? $r['kind']) . ' report';
 }
 
 /** Starting values of a new report: the template's standard texts and what the vessel record knows. */
-function srDefaults(array $eff, array $survey): array {
+function srDefaults(array $eff, ?array $survey): array {
+    $survey = $survey ?? [];
     $d = ['fields' => [], 'tanks' => array_fill_keys(array_keys($eff['sections']), [])];
     foreach ($eff['fields'] as $k => $f) {
         $d['fields'][$k] = in_array($f['group'], ['offhire', 'remarks'], true) ? (string)($eff['sample']['fields'][$k] ?? '') : '';
     }
-    foreach (sfPrefill($survey) as $k => $v) if (isset($d['fields'][$k])) $d['fields'][$k] = (string)$v;
+    if ($survey) foreach (sfPrefill($survey) as $k => $v) if (isset($d['fields'][$k])) $d['fields'][$k] = (string)$v;
+    if (isset($d['fields']['surveyor_name']) && $d['fields']['surveyor_name'] === '' && srRole() === 'Surveyor') $d['fields']['surveyor_name'] = strtoupper(trim((string)($_SESSION['full_name'] ?? '')));
     if (isset($d['fields']['place']) && !empty($survey['port_name'])) $d['fields']['place'] = strtoupper((string)$survey['port_name']);
     $d['grades'] = []; $d['step'] = 'vessel';
     $d['extra'] = array_fill_keys(array_keys(srExtraFieldDefs()), '');
@@ -73,7 +90,7 @@ function srEditorConfig(array $tpl): array {
 
 /** File name in the company's style: "MV. PROTECTOR - OFFHIRE - FIELD REPORT". */
 function srFileBase(array $report, array $tpl): string {
-    $v = trim((string)($report['data']['fields']['vessel_name'] ?? '')) ?: (string)$report['survey']['vessel_name'];
+    $v = trim((string)($report['data']['fields']['vessel_name'] ?? '')) ?: (string)($report['survey']['vessel_name'] ?? 'SURVEY');
     $base = strtoupper($v) . ' - ' . strtoupper(RT_KINDS[$tpl['kind']] ?? $tpl['kind']) . ' - FIELD REPORT';
     return trim(preg_replace('/[^A-Za-z0-9 .,()_-]+/', '_', $base)) ?: 'SURVEY REPORT';
 }
@@ -411,29 +428,79 @@ function srHideGrade(\PhpOffice\PhpSpreadsheet\Spreadsheet $book, string $tables
 }
 
 /**
- * The BROB block in the report header (labels VLSFO / HSFO / LSMGO over the log-book ROB at FWE and
- * survey start): the column of template grade $slot shows grade $as instead, or is left empty.
+ * The BROB block in the report header (labels over the log-book ROB at FWE and at survey start,
+ * one column per template grade): the grades in $grades fill the columns from the left, in order,
+ * so there is no empty column between them; the columns left over are emptied. A template
+ * grade keeps its formula to SHIP DETAILS; ULSFO / HSMGO get their typed values.
  */
-function srHeaderGrade(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, array $eff, string $slot, ?string $as, array $data): void {
+function srHeaderCompact(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, array $eff, array $grades, array $data): void {
     $top = min(array_column($eff['sections'], 'heading')) - 1;
-    $short = $eff['fuel_names'][$slot] ?? strtoupper($slot);
-    $refs = [];
-    foreach (['fwe', 'started'] as $k) {
-        $f = $eff['fields']['brob_' . $k . '_' . $slot] ?? null;
-        if ($f) $refs[$k] = "'" . $f['sheet'] . "'!" . $f['cell'];
-    }
-    foreach ($ws->getRowIterator(1, $top) as $row) {
-        foreach ($row->getCellIterator('A', 'L') as $cell) {
-            $v = $cell->getValue();
-            if (!is_string($v) || $v === '') continue;
-            if (strtoupper(trim($v)) === strtoupper(trim($short))) { $as ? $cell->setValue(SR_GRADES[$as][0]) : $cell->setValueExplicit(null, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NULL); continue; }
-            foreach ($refs as $k => $ref) {
-                if (str_replace('$', '', $v) !== '=' . $ref && str_replace('$', '', $v) !== "='" . trim(explode('!', $ref)[0], "'") . "'!" . explode('!', $ref)[1]) continue;
-                $val = $as ? srVal($data, 'brob_' . $k . '_' . $as) : '';
-                if ($val !== '' && is_numeric($val)) $cell->setValue((float)$val); else $cell->setValueExplicit(null, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NULL);
+    $DT = \PhpOffice\PhpSpreadsheet\Cell\DataType::class;
+    $norm = fn($v) => str_replace(['$', "'"], '', (string)$v);
+    $cols = [];
+    foreach (array_keys($eff['sections']) as $slot) {
+        $col = ['label' => null, 'fwe' => null, 'started' => null];
+        foreach (['fwe', 'started'] as $k) {
+            $f = $eff['fields']['brob_' . $k . '_' . $slot] ?? null;
+            if (!$f) continue;
+            $want = $norm('=' . $f['sheet'] . '!' . $f['cell']);
+            foreach ($ws->getRowIterator(1, $top) as $row) foreach ($row->getCellIterator('A', 'L') as $cell) {
+                if ($norm($cell->getValue()) === $want) $col[$k] = $cell->getCoordinate();
             }
         }
+        $any = $col['fwe'] ?? $col['started'];
+        if (!$any) continue;
+        [$c] = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::coordinateFromString($any);
+        $short = strtoupper(trim($eff['fuel_names'][$slot] ?? $slot));
+        for ($r = $top; $r >= 1; $r--) {
+            $v = $ws->getCell($c . $r)->getValue();
+            if (is_string($v) && strtoupper(trim($v)) === $short) { $col['label'] = $c . $r; break; }
+        }
+        $cols[\PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($c)] = $col;
     }
+    ksort($cols);
+    $grades = array_values($grades);
+    foreach (array_values($cols) as $i => $col) {
+        $g = $grades[$i] ?? null;
+        if ($col['label']) { $g ? $ws->getCell($col['label'])->setValueExplicit(SR_GRADES[$g][0], $DT::TYPE_STRING) : $ws->getCell($col['label'])->setValueExplicit(null, $DT::TYPE_NULL); }
+        foreach (['fwe', 'started'] as $k) {
+            if (!$col[$k]) continue;
+            $cell = $ws->getCell($col[$k]);
+            if (!$g) { $cell->setValueExplicit(null, $DT::TYPE_NULL); continue; }
+            $f = $eff['fields']['brob_' . $k . '_' . $g] ?? null;
+            if ($f) { $cell->setValue("='" . $f['sheet'] . "'!" . $f['cell']); continue; }
+            $v = srVal($data, 'brob_' . $k . '_' . $g);
+            if ($v !== '' && is_numeric($v)) $cell->setValue((float)$v); else $cell->setValueExplicit(null, $DT::TYPE_NULL);
+        }
+    }
+}
+
+/** A section shows only the tanks entered: its spare rows are hidden (totals and formulas are unchanged). */
+function srHideEmptyTankRows(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, array $sec, int $count): void {
+    if ($count < 1) return;
+    srHideRows($ws, $sec['first'] + $count, $sec['gsv_total'] - 1);
+}
+
+/** The tank report on one A4 page: print area up to the last filled row, scaled to fit one page. */
+function srFitOnePage(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws): void {
+    $ps = $ws->getPageSetup();
+    $area = $ps->getPrintArea();
+    $lastCol = 'J'; $firstCell = 'A1';
+    if ($area && preg_match('/^\'?[^!]*\'?!?\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?\d+$/', explode(',', $area)[0], $m)) { $firstCell = $m[1] . $m[2]; $lastCol = $m[3]; }
+    $maxIdx = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($lastCol);
+    $lastRow = 1;
+    foreach ($ws->getCoordinates() as $c) {
+        [$cc, $rr] = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::coordinateFromString($c);
+        if (\PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($cc) > $maxIdx) continue;
+        $v = $ws->getCell($c)->getValue();
+        if ($v === null || $v === '' || (is_string($v) && trim($v) === '')) continue;
+        if ((int)$rr > $lastRow) $lastRow = (int)$rr;
+    }
+    $ps->setPrintArea($firstCell . ':' . $lastCol . ($lastRow + 1));
+    $ps->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
+    $ps->setFitToPage(true);
+    $ps->setFitToWidth(1);
+    $ps->setFitToHeight(1);
 }
 
 function srHideRows(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, int $from, int $to): void {
@@ -489,7 +556,9 @@ function srBuildBook(array $tpl, array $data): array {
             }
         }
         foreach ($cpos as $s => $sec) if (!in_array($s, $used, true)) srHideGrade($book, SR_EXTRA_SHEET, $sec, $mtC, [SR_EXTRA_SHEET]);
-        foreach (array_keys($eff['sections']) as $s) srHeaderGrade($copy, $eff, $s, array_search($s, array_intersect_key(SR_EXTRA_SLOT, array_flip($extraGrades)), true) ?: null, $data);
+        srHeaderCompact($copy, $eff, $extraGrades, $data);
+        foreach ($extraGrades as $g) srHideEmptyTankRows($copy, $cpos[SR_EXTRA_SLOT[$g]], count($rowsFor[SR_EXTRA_SLOT[$g]]));
+        srFitOnePage($copy);
         $copy->getPageSetup()->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
         $extraTitle = SR_EXTRA_SHEET;
     }
@@ -497,8 +566,10 @@ function srBuildBook(array $tpl, array $data): array {
     foreach ($pos as $s => $sec) {
         if (in_array($s, $tplGrades, true)) continue;
         srHideGrade($book, $tn, $sec, $mtC, $printBase);
-        srHeaderGrade($t, $eff, $s, null, $data);
     }
+    srHeaderCompact($t, $eff, $tplGrades, $data); // BROB header: the grades on board side by side, no empty column between
+    foreach ($tplGrades as $g) srHideEmptyTankRows($t, $pos[$g], count($fill['tanks'][$g])); // only the tanks entered
+    srFitOnePage($t); // the tank report prints on one A4 page
     $summary = srSummarySheet($book, $eff, $data, $grades, $where);
     // printed: the report sheets in workbook order
     $print = $printBase;
@@ -655,4 +726,71 @@ function srResults(\PhpOffice\PhpSpreadsheet\Spreadsheet $book, array $eff, arra
     }
     $out['total_difference'] = round($out['total_difference'], 3);
     return $out;
+}
+
+
+// ================================================================ saved tanks: change log for the Admin
+
+const SR_TANK_FIELDS = ['name' => 'Tank name', 'ref_height' => 'Ref. height', 'mode' => 'Measured', 'sounding' => 'Sounding', 'ullage' => 'Ullage',
+    'volume' => 'Volume', 'density' => 'Density @15°C', 'temp' => 'Temperature'];
+
+/**
+ * After a save: a tank that was saved before ("Save tank") and is saved again with different
+ * readings gets one log row per changed value (old → new, who, when); a saved tank that is
+ * removed is logged as deleted. A tank being edited (not saved yet) is compared only when it
+ * is saved — or when the report is made ($final), so a change never escapes the log.
+ */
+function srLogTankChanges(PDO $db, int $reportId, array $data, bool $final, int $uid): int {
+    rtEnsureTables($db);
+    $q = $db->prepare('SELECT tank_id, grade, vals FROM survey_report_tank_saved WHERE report_id = ?');
+    $q->execute([$reportId]);
+    $saved = [];
+    foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) $saved[$r['tank_id']] = ['grade' => $r['grade'], 'vals' => json_decode((string)$r['vals'], true) ?: []];
+    $now = date('Y-m-d H:i:s');
+    $log = $db->prepare('INSERT INTO survey_report_tank_log (report_id, grade, tank_id, tank_name, field, old_value, new_value, changed_by, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $put = $db->prepare('INSERT INTO survey_report_tank_saved (report_id, tank_id, grade, vals, saved_at) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE grade = VALUES(grade), vals = VALUES(vals), saved_at = VALUES(saved_at)');
+    $n = 0; $seen = [];
+    foreach ((array)($data['tanks'] ?? []) as $g => $rows) {
+        foreach ((array)$rows as $row) {
+            $id = (string)($row['id'] ?? '');
+            if ($id === '') continue;
+            $seen[$id] = true;
+            if (($row['done'] ?? '') !== '1' && !$final) continue;
+            $vals = [];
+            foreach (array_keys(SR_TANK_FIELDS) as $f) $vals[$f] = mb_substr(trim((string)($row[$f] ?? '')), 0, 100);
+            if ($vals['mode'] !== 'ullage') { $vals['mode'] = 'sounding'; $vals['ullage'] = ''; }
+            if (isset($saved[$id])) {
+                $old = $saved[$id]['vals'];
+                $changed = false;
+                foreach ($vals as $f => $v) {
+                    $o = (string)($old[$f] ?? '');
+                    if ($o === $v) continue;
+                    $log->execute([$reportId, $g, $id, $vals['name'] !== '' ? $vals['name'] : (string)($old['name'] ?? ''), $f, $o, $v, $uid ?: null, $now]);
+                    $n++; $changed = true;
+                }
+                if (!$changed && $saved[$id]['grade'] === $g) continue;
+            }
+            if (implode('', array_diff_key($vals, ['mode' => 1])) === '') continue;
+            $put->execute([$reportId, $id, $g, json_encode($vals), $now]);
+        }
+    }
+    foreach ($saved as $id => $sv) { // a saved tank removed from the report
+        if (isset($seen[$id])) continue;
+        $log->execute([$reportId, $sv['grade'], $id, (string)($sv['vals']['name'] ?? ''), 'deleted', 'tank', null, $uid ?: null, $now]);
+        $db->prepare('DELETE FROM survey_report_tank_saved WHERE report_id = ? AND tank_id = ?')->execute([$reportId, $id]);
+        $n++;
+    }
+    return $n;
+}
+
+function srTankLog(PDO $db, int $reportId): array {
+    rtEnsureTables($db);
+    $q = $db->prepare('SELECT l.id, l.grade, l.tank_name, l.field, l.old_value, l.new_value, l.changed_at, u.full_name AS changed_by_name
+        FROM survey_report_tank_log l LEFT JOIN users u ON u.id = l.changed_by WHERE l.report_id = ? ORDER BY l.changed_at DESC, l.id DESC LIMIT 500');
+    $q->execute([$reportId]);
+    return array_map(function ($r) {
+        $r['grade_label'] = SR_GRADES[$r['grade']][0] ?? strtoupper($r['grade']);
+        $r['field_label'] = $r['field'] === 'deleted' ? 'Tank deleted' : (SR_TANK_FIELDS[$r['field']] ?? $r['field']);
+        return $r;
+    }, $q->fetchAll(PDO::FETCH_ASSOC));
 }
