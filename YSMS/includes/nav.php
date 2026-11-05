@@ -112,6 +112,26 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         <?php endif; ?>
         <?php endif; ?>
 
+        <?php if ($user_role === 'Sales'): ?>
+        <!-- Sales role (includes/sales.php): only its own pages; everything else is refused by config.php -->
+        <div class="desktop-sidebar-section-label drawer-reveal">Sales</div>
+        <a href="sales_dashboard.php" class="nav-item-btn <?= ($current_page == 'sales_dashboard.php') ? 'active' : '' ?>" data-testid="navigation-sales-dashboard-link">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="sales_clients.php" class="nav-item-btn <?= ($current_page == 'sales_clients.php') ? 'active' : '' ?>" data-testid="navigation-sales-clients-link">
+            <i class="fa-solid fa-building"></i>
+            <span>Clients</span>
+        </a>
+        <a href="sales_surveys.php" class="nav-item-btn <?= ($current_page == 'sales_surveys.php') ? 'active' : '' ?>" data-testid="navigation-sales-surveys-link">
+            <i class="fa-solid fa-ship"></i>
+            <span>Surveys</span>
+        </a>
+        <a href="assign_vessel.php" class="nav-item-btn <?= ($current_page == 'assign_vessel.php') ? 'active' : '' ?>" data-testid="navigation-sales-request-link">
+            <i class="fa-solid fa-paper-plane"></i>
+            <span>Request Survey</span>
+        </a>
+        <?php else: ?>
         <div class="desktop-sidebar-section-label drawer-reveal">Main</div>
         <a href="index.php" class="nav-item-btn <?= ($current_page == 'index.php') ? 'active' : '' ?>" data-testid="navigation-home-link">
             <i class="fa-solid fa-house"></i>
@@ -199,6 +219,10 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-user-shield"></i>
             <span>Admin Controls</span>
         </a>
+        <a href="admin_sales.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'admin_sales.php') ? 'active' : '' ?>" data-testid="sidebar-sales-team-link">
+            <i class="fa-solid fa-user-tie"></i>
+            <span>Sales Team</span>
+        </a>
 
         <!-- Inside the navbar.php file, inside the <ul> tag, add this li: -->
 
@@ -257,6 +281,8 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <span>Data Cleanup (Temp)</span>
         </a>
         <?php endif; ?>
+
+        <?php endif; /* not Sales */ ?>
 
         <?php if ($user_role === 'Admin'): ?>
         <!-- Admin: sidebar "My Profile" is replaced with a shortcut to Formats
