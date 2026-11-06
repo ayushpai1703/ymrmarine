@@ -59,6 +59,9 @@ const RT_TANK_COLS = [ // key => [label, header words, default column, type]
     'temp' => ['Temp (°C)', ['temp'], 'G', 'num:1'],
 ];
 
+/** How the readings are shown in the report, however they were typed: sounding 0.000 m, density 0.0000, temperature 00.0 °C. */
+const RT_TANK_FORMATS = ['sounding' => '0.000', 'density' => '0.0000', 'temp' => '00.0'];
+
 // ---------------------------------------------------------------- storage
 
 function rtDir(): string { return dirname(__DIR__) . '/uploads/report_templates'; }
@@ -622,7 +625,10 @@ function rtFillSection(\PhpOffice\PhpSpreadsheet\Spreadsheet $book, \PhpOffice\P
             $cell = $t->getCell($sec['cols'][$c] . $r);
             if ($v === '') $cell->setValueExplicit(null, $DT::TYPE_NULL);
             elseif ($d[3] === 'text' || !is_numeric($v)) $cell->setValueExplicit($v, $DT::TYPE_STRING);
-            else $cell->setValue((float)$v);
+            else {
+                $cell->setValue((float)$v);
+                if (isset(RT_TANK_FORMATS[$c])) $cell->getStyle()->getNumberFormat()->setFormatCode(RT_TANK_FORMATS[$c]); // as the surveyors write them
+            }
         }
         foreach ($eff['pattern'] as $col => $f) $t->getCell($col . $r)->setValue(str_replace('{r}', (string)$r, $f));
     }

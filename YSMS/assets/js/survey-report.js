@@ -21,11 +21,40 @@
   function store(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function read(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
   function toast(icon, title) { if (window.Swal) Swal.fire({ toast: true, position: 'top-end', icon: icon, title: title, showConfirmButton: false, timer: icon === 'success' ? 2000 : 4500 }); }
-  function post(d) {
+  function post(d, retried) {
     var f = new FormData(); f.append('csrf_token', P.csrf); Object.keys(d).forEach(function (k) { f.append(k, d[k]); });
     return fetch(P.api, { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-CSRF-Token': P.csrf } })
-      .then(function (r) { return r.json().then(function (j) { j._status = r.status; return j; }).catch(function () { return { ok: false, _status: r.status, error: r.status === 403 ? 'Session expired — please reload the page.' : 'Server error (' + r.status + ').' }; }); })
+      .then(function (r) {
+        return r.json().then(function (j) { j._status = r.status; return j; }).catch(function () {
+          // not JSON: the security token changed (signed in again elsewhere) or the session ended
+          if (r.status === 403 && !retried) return freshToken().then(function (ok) { return ok ? post(d, true) : signedOut(); });
+          if (r.status === 403 || r.redirected || /login/.test(r.url)) return signedOut();
+          return { ok: false, _status: r.status, error: 'Unexpected answer from the server (' + r.status + ') — your changes are kept on this device.' };
+        });
+      })
+      .then(function (j) { if (j && j._status === 401) return signedOut(); if (j && j.ok) sessionOk(); return j; })
       .catch(function () { return { ok: false, _status: 0, error: 'No connection.' }; });
+  }
+  function freshToken() {
+    return fetch(P.api + '?a=token', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+      .then(function (j) { if (j && j.ok && j.csrf) { P.csrf = j.csrf; return true; } return false; }).catch(function () { return false; });
+  }
+  /** Session ended: say so once, keep everything on the device, retry by itself after signing in (any tab). */
+  function signedOut() {
+    if (!S.signedOut) {
+      S.signedOut = true;
+      var b = document.querySelector('[data-banners]');
+      if (b) b.insertAdjacentHTML('afterbegin', signedOutHtml());
+      clearInterval(S.reauth);
+      S.reauth = setInterval(function () { freshToken().then(function (ok) { if (ok) { sessionOk(); if (S.dirty) saveNow(); } }); }, 8000);
+    }
+    return { ok: false, _status: 401, error: 'Session expired — sign in again. Your changes are kept on this device.' };
+  }
+  function signedOutHtml() { return '<div class="sr-note err" data-signed-out data-testid="sr-signed-out"><i class="fa-solid fa-right-to-bracket"></i> Your session has expired. Your changes are kept on this device. <a href="login.php" target="_blank" rel="noopener">Sign in again</a> (new tab) — saving continues by itself.</div>'; }
+  function sessionOk() {
+    if (!S.signedOut) return;
+    S.signedOut = false; clearInterval(S.reauth);
+    var n = document.querySelector('[data-signed-out]'); if (n) n.remove();
   }
   /** JSON with sorted keys and without page-only flags, to compare two copies of the data. */
   function canon(v) {
@@ -73,22 +102,22 @@
     $('[data-title]').textContent = res.report.vessel;
     $('[data-subtitle]').textContent = (res.report.kind_label || 'Survey') + ' report';
     S.isAdmin = !!res.is_admin; S.tankLog = null;
-    store(LS + '_step', null);
     var have = steps().map(function (s) { return s.id; });
+    var mine = read(LS + '_step'); if (mine && have.indexOf(mine) >= 0) S.data.step = mine; // where this person was on this device
     if (have.indexOf(S.data.step) < 0) S.data.step = 'vessel';
     var seen = read(LS + '_seen') || []; if (seen.indexOf(S.data.step) < 0) { seen.push(S.data.step); store(LS + '_seen', seen); }
     if (VESSEL().some(function (k) { return k !== 'vessel_name' && val(k) !== ''; })) S.manual = true; // a draft with particulars: show them (a new report opens with the IMO search only)
     render();
     saveState(S.dirty ? (online() ? 'Saving…' : 'Changes on this device') : 'Saved', S.dirty ? 'dirty' : '');
     if (S.dirty && online() && !fromCache) saveNow();
-    if (online() && !fromCache) { cacheTemplate(); precache(); }
-    if (!S.dirty) preview();
+    if (online() && !fromCache) { precache(); loadPrevious(); setTimeout(finalAfterOffline, 1500); }
   }
   /** Keep this page and everything it loaded (scripts incl. ExcelJS, styles, fonts, CDN files) for offline use. */
   function precache() {
     if (!('caches' in window)) return;
     var urls = [location.href];
     $$('script[src]').forEach(function (x) { urls.push(x.src); });
+    urls.push(new URL(BANNER, location.href).href); // the letterhead banner of the draft PDF
     $$('link[rel=stylesheet][href]').forEach(function (x) { urls.push(x.href); });
     try { performance.getEntriesByType('resource').forEach(function (e) { if (/\.(woff2?|ttf|otf|png|jpe?g|svg|webp|css|js)(\?|$)/i.test(e.name)) urls.push(e.name); }); } catch (e) {}
     caches.open('ysms-sr-v1').then(function (c) {
@@ -109,7 +138,7 @@
         start(res, false);
       });
   }
-  var ROW_KEYS = ['name', 'ref_height', 'sounding', 'volume', 'density', 'temp', 'mode', 'ullage', 'done', 'id'];
+  var ROW_KEYS = ['name', 'ref_height', 'sounding', 'volume', 'density', 'temp', 'mode', 'ullage', 'done', 'id', 'copy'];
   function normalise(d) {
     d = d || {}; d.fields = d.fields || {}; d.tanks = d.tanks || {}; d.extra = d.extra || {};
     d.grades = Array.isArray(d.grades) ? d.grades : [];
@@ -123,11 +152,7 @@
     });
     return d;
   }
-  function cacheTemplate() { // the template workbook, for the Excel made on this device
-    if (!('caches' in window)) return;
-    var url = P.api + '?a=template&id=' + P.id + '&t=' + S.cfg.template.id;
-    caches.open(TPL_CACHE).then(function (c) { return c.match(url).then(function (hit) { if (!hit) return fetch(url, { credentials: 'same-origin' }).then(function (r) { if (r.ok) c.put(url, r); }); }); }).catch(function () {});
-  }
+
 
   // ---------- fields ----------
   var MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
@@ -234,7 +259,7 @@
   }
   function go(id) {
     var seen = read(LS + '_seen') || []; if (seen.indexOf(id) < 0) { seen.push(id); store(LS + '_seen', seen); }
-    S.data.step = id; changed(true); render(); window.scrollTo(0, 0); preview();
+    S.data.step = id; store(LS + '_step', id); render(); window.scrollTo(0, 0); // the step is remembered on this device; moving between steps saves nothing by itself (two people can look at the same report without clashing)
     if (id === 'summary') { S.tankLog = null; verify(); }
   }
 
@@ -256,7 +281,7 @@
     var note = '';
     if (!S.canEdit) note = '<div class="sr-note warn"><i class="fa-solid fa-lock"></i> View only.</div>';
     else if (S.offlineMode) note = '<div class="sr-note warn"><i class="fa-solid fa-plane"></i> Offline — saved on this device, sent when you are back online.</div>';
-    $('[data-banners]').innerHTML = note;
+    $('[data-banners]').innerHTML = (S.signedOut ? signedOutHtml() : '') + note;
     var list = steps(), i = stepIndex(S.data.step), st = list[i], body;
     if (st.id === 'vessel') body = vesselHtml();
     else if (st.id === 'survey') body = surveyHtml();
@@ -285,6 +310,8 @@
     var miss = show ? issues('vessel').filter(function (x) { return x.key !== 'f:imo'; }) : [];
     return '<section class="sr-card sr-imo" data-testid="sr-vessel"><div class="sr-lookup">' + inputHtml('imo', { label: 'IMO Number', req: true }) +
       (S.canEdit ? '<button type="button" class="sr-btn pri" data-lookup data-online-only data-testid="sr-lookup"><i class="fa-solid fa-magnifying-glass"></i> Lookup</button>' : '') + '</div>' +
+      (S.canEdit && S.prev ? '<div class="sr-prev" data-testid="sr-prev"><button type="button" class="sr-btn alt-o" data-prev data-testid="sr-prev-fill"><i class="fa-solid fa-clock-rotate-left"></i> Fill from previous attendance</button>' +
+        '<span class="sr-muted sr-small">This vessel was attended before — ' + esc(S.prev.label) + '. Fills the particulars, the grades and the tank names with heights.</span></div>' : '') +
       '<div data-lookup-info data-testid="sr-lookup-info">' + lookupInfoHtml() + '</div>' +
       (!show && S.canEdit ? '<button type="button" class="sr-link" data-manual data-testid="sr-manual">or enter the particulars by hand</button>' : '') + '</section>' +
       (show ? '<section class="sr-card"><h3>Vessel particulars</h3>' +
@@ -322,9 +349,18 @@
       card('F. Draft Particulars', 'fa-ruler-vertical', inputHtml('draft_fwd', req) + inputHtml('draft_aft', req) +
         '<label class="sr-f calc"><span>Mean Draft (m)</span><output data-testid="sr-mean">' + mean + '</output></label>' +
         '<label class="sr-f calc"><span>Trim (m) <small>Aft − Fwd</small></span><output data-testid="sr-trim">' + trim + '</output></label>' + inputHtml('list'), 'drafts') +
-      card('Other details', 'fa-file-lines', inputHtml('voyage_no') + inputHtml('charterers') + inputHtml('alongside'), 'other');
+      card('Other details', 'fa-file-lines', inputHtml('voyage_no') + inputHtml('charterers'), 'other');
   }
   // tank steps
+  /** Readings as the surveyors write them, however typed: sounding 0.000, density 0.0000, temperature 00.0. */
+  var TFMT = { sounding: 3, density: 4, temp: 1 };
+  function fmtT(col, v) {
+    var n = num(v); if (n === null || !(col in TFMT)) return v == null ? '' : String(v);
+    var t = n.toFixed(TFMT[col]);
+    if (col === 'temp' && n >= 0 && n < 10) t = '0' + t;
+    return t;
+  }
+  function fmtRow(r) { Object.keys(TFMT).forEach(function (c) { if (c !== 'sounding' || r.mode !== 'ullage') r[c] = fmtT(c, r[c]); }); }
   function sounding(r) {
     if (r.mode !== 'ullage') return String(r.sounding || '');
     var a = num(r.ref_height), b = num(r.ullage);
@@ -350,14 +386,15 @@
   }
   function tankHtml(g, r, i) {
     var key = g + ':' + i, t = calc(r), open = !r.done || S.open[r.id];
-    var head = '<div class="sr-tk-h"><b>Tank ' + (i + 1) + (r.name ? ' – ' + esc(r.name) : '') + '</b>' + (r.done && !S.open[r.id] ? '<span class="sr-ok"><i class="fa-solid fa-circle-check"></i> Saved</span>' : '') + '</div>';
+    var head = '<div class="sr-tk-h"><b>Tank ' + (i + 1) + (r.name ? ' – ' + esc(r.name) : '') + '</b>' + (r.done && !S.open[r.id] ? '<span class="sr-ok"><i class="fa-solid fa-circle-check"></i> Saved</span>' : r.copy ? '<span class="sr-copy-b" data-testid="sr-copy-badge-' + g + '-' + i + '"><i class="fa-regular fa-copy"></i> Copy — change the values, then Save tank</span>' : '') + '</div>';
+    var copyBtn = S.canEdit ? '<button type="button" class="sr-btn sm" data-copy="' + key + '" data-testid="sr-copy-' + g + '-' + i + '"><i class="fa-regular fa-copy"></i> Copy</button>' : '';
     if (!open) {
       var line = function (l, v) { return '<div><dt>' + l + '</dt><dd>' + esc(v) + '</dd></div>'; };
       var more = S.expand[r.id] ? '<dl class="sr-more" data-testid="sr-more-' + g + '-' + i + '">' + line('Reference Height', r.ref_height + ' m') + (r.mode === 'ullage' ? line('Ullage', r.ullage + ' m') : '') + line('Volume', r.volume + ' m³') +
         line('V.C.F.', t.vcf == null ? '' : t.vcf.toFixed(4)) + line('W.C.F.', t.wcf == null ? '' : t.wcf.toFixed(4)) + line('G.S.V.', f3(t.gsv) + ' m³') + '</dl>' : '';
       return '<article class="sr-tank done" data-tank="' + key + '" data-testid="sr-tank-' + g + '-' + i + '">' + head +
-        '<dl class="sr-sum5">' + line('Tank Name', r.name) + line('Sounding', sounding(r) + (num(sounding(r)) !== null ? ' m' : '')) + line('Density', r.density) + line('Temperature', r.temp + ' °C') + line('MT in Air', f3(t.mt)) + '</dl>' + more +
-        '<div class="sr-tk-act">' + (S.canEdit ? '<button type="button" class="sr-btn sm" data-edit="' + key + '" data-testid="sr-edit-' + g + '-' + i + '"><i class="fa-solid fa-pen"></i> Edit</button>' : '') +
+        '<dl class="sr-sum5">' + line('Tank Name', r.name) + line('Sounding', fmtT('sounding', sounding(r)) + (num(sounding(r)) !== null ? ' m' : '')) + line('Density', fmtT('density', r.density)) + line('Temperature', fmtT('temp', r.temp) + ' °C') + line('MT in Air', f3(t.mt)) + '</dl>' + more +
+        '<div class="sr-tk-act">' + (S.canEdit ? '<button type="button" class="sr-btn sm" data-edit="' + key + '" data-testid="sr-edit-' + g + '-' + i + '"><i class="fa-solid fa-pen"></i> Edit</button>' : '') + copyBtn +
         '<button type="button" class="sr-btn sm" data-expand="' + key + '" data-testid="sr-expand-' + g + '-' + i + '"><i class="fa-solid fa-chevron-' + (S.expand[r.id] ? 'up' : 'down') + '"></i> ' + (S.expand[r.id] ? 'Less' : 'Expand') + '</button>' +
         (S.canEdit ? '<button type="button" class="sr-btn sm danger" data-del="' + key + '" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-solid fa-trash"></i> Delete</button>' : '') + '</div></article>';
     }
@@ -374,7 +411,7 @@
       (ull ? inp('ullage', 'Ullage', 'm', true) + '<div class="sr-f calc"><span>Sounding <small>= Ref. height − Ullage</small></span><output data-snd="' + key + '" data-testid="sr-snd-' + g + '-' + i + '">' + esc(sounding(r)) + '</output></div>' : inp('sounding', 'Sounding', 'm', false)) +
       inp('volume', 'Volume', 'm³', true) + inp('density', 'Density at 15°C', 'kg/l', true) + inp('temp', 'Temperature', '°C', true) + '</div>' +
       '<div class="sr-res" data-res="' + key + '">' + resHtml(t) + '</div>' +
-      (S.canEdit ? '<div class="sr-tk-act"><button type="button" class="sr-btn pri" data-save-tank="' + key + '" data-testid="sr-save-tank-' + g + '-' + i + '"><i class="fa-solid fa-check"></i> Save tank</button>' +
+      (S.canEdit ? '<div class="sr-tk-act"><button type="button" class="sr-btn pri" data-save-tank="' + key + '" data-testid="sr-save-tank-' + g + '-' + i + '"><i class="fa-solid fa-check"></i> Save tank</button>' + copyBtn +
         '<button type="button" class="sr-btn sm danger" data-del="' + key + '" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-solid fa-trash"></i> Delete</button></div>' : '') + '</article>';
   }
   function resHtml(t) {
@@ -403,7 +440,8 @@
       return '<div class="sr-prob" data-testid="sr-prob-' + s.replace(':', '-') + '"><div><b>' + esc(names[s] || s) + '</b><ul>' + byStep[s].slice(0, 6).map(function (x) { return '<li>' + esc(x.msg) + '</li>'; }).join('') +
         (byStep[s].length > 6 ? '<li>… and ' + (byStep[s].length - 6) + ' more</li>' : '') + '</ul></div><button type="button" class="sr-btn sm" data-goto="' + target + '">Go to step</button></div>';
     }).join('');
-    return '<section class="sr-card"><h3><i class="fa-solid fa-scale-balanced"></i> ROB comparison ' + srv + '</h3>' +
+    return '<section class="sr-card"><h3><i class="fa-solid fa-scale-balanced"></i> ROB comparison ' + srv +
+      (rows.length ? '<button type="button" class="sr-share" data-share data-testid="sr-share"><i class="fa-brands fa-whatsapp"></i> Share</button>' : '') + '</h3>' +
       (rows.length ? '<div class="sr-cmp-wrap"><table class="sr-cmp" data-testid="sr-cmp"><thead><tr><th>Fuel Grade</th><th>Survey Completed</th><th>Log Book</th><th>Difference</th></tr></thead><tbody>' +
         rows.map(function (r) { return '<tr data-testid="sr-cmp-' + r.g + '"><td>' + esc(r.short) + '</td><td data-c="completed">' + f3(r.completed) + '</td><td data-c="logbook">' + f3(r.logbook) + '</td><td data-c="diff" class="' + (r.diff < 0 ? 'neg' : r.diff > 0 ? 'pos' : '') + '">' + sgn(r.diff) + '</td></tr>'; }).join('') +
         '</tbody></table></div><div class="sr-totdiff" data-testid="sr-total-diff"><span>TOTAL DIFFERENCE</span><b class="' + (tot < 0 ? 'neg' : tot > 0 ? 'pos' : '') + '">' + (any ? sgn(tot) + ' MT' : '—') + '</b></div>' +
@@ -413,10 +451,9 @@
       tankLogHtml() +
       '<section class="sr-card"><h3><i class="fa-solid fa-file-export"></i> Export</h3><div class="sr-out" data-testid="sr-output">' +
       '<button type="button" class="sr-btn pri big" data-gen="pdf" data-online-only' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-download-pdf"><i class="fa-solid fa-file-pdf"></i> Download PDF Report</button>' +
-      '<button type="button" class="sr-btn pri big alt" data-gen="xlsx" data-online-only' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-download-xlsx"><i class="fa-solid fa-file-excel"></i> Download Excel Report</button></div>' +
-      '<p class="sr-small sr-muted">Both files come from one calculation on the server (the company template with its TABLES 54B formulas), so they show the same values.</p>' +
-      '<button type="button" class="sr-link" data-offline-xlsx data-testid="sr-offline-xlsx"><i class="fa-solid fa-download"></i> Draft Excel on this device (works offline)</button>' +
-      '<details class="sr-files"' + (S.files.length ? '' : ' hidden') + '><summary>Earlier files (' + S.files.length + ')</summary><div data-files>' + filesHtml() + '</div></details></section>';
+      '<button type="button" class="sr-btn big" data-pv="open" data-testid="sr-preview-summary"><i class="fa-solid fa-eye"></i> Preview Report</button></div>' +
+      '<p class="sr-small sr-muted" data-testid="sr-excel-note"><i class="fa-solid fa-circle-info"></i> The Excel report is kept in the system with each PDF and is picked automatically in the Word report generator for this vessel.</p>' +
+      '<button type="button" class="sr-link" data-offline-pdf data-testid="sr-offline-pdf"' + (all.length ? ' hidden' : '') + '><i class="fa-solid fa-plane"></i> No internet? Download a draft PDF made on this device</button></section>';
   }
   /** Admin: the version history of the saved tanks (Sounding, Volume, Density, Temperature). */
   var HCOLS = [['sounding', 'Sounding'], ['volume', 'Volume'], ['density', 'Density'], ['temperature', 'Temp']];
@@ -485,22 +522,27 @@
     if ((b = t.closest('[data-goto]'))) { if (!b.disabled) go(b.getAttribute('data-goto')); return; }
     if (t.closest('[data-next]')) {
       var l = steps(), i = stepIndex(S.data.step), id = l[i].id;
-      if (l[i].grade) S.data.tanks[l[i].grade].forEach(function (r) { if (!r.done && !Object.keys(tankErrors(r)).length) { r.done = '1'; delete S.open[r.id]; } });
+      var marked = false;
+      if (l[i].grade) S.data.tanks[l[i].grade].forEach(function (r) { if (!r.done && !r.copy && !Object.keys(tankErrors(r)).length) { fmtRow(r); r.done = '1'; delete S.open[r.id]; marked = true; } }); // a copy waits for its own Save tank
+      if (marked) changed(true);
       if (issues(id).length || (id === 'survey' && !chosen().length)) { if (l[i].grade) render(); block(id); return; }
       go(l[i + 1].id); return;
     }
     if (t.closest('[data-back]')) { go(steps()[Math.max(0, stepIndex(S.data.step) - 1)].id); return; }
     if (t.closest('[data-lookup]')) { lookup(); return; }
+    if (t.closest('[data-prev]')) { fillPrevious(); return; }
+    if (t.closest('[data-share]')) { shareCard(); return; }
     if (t.closest('[data-undo]')) { undoLookup(); return; }
     if (t.closest('[data-manual]')) { S.manual = true; render(); var f = $('[data-f=vessel_name]'); if (f) f.focus(); return; }
     if ((b = t.closest('[data-add]'))) { var g = b.getAttribute('data-add'), row = emptyRow(); S.data.tanks[g].push(row); changed(); render(); var n = $('[data-t="' + g + ':' + (S.data.tanks[g].length - 1) + ':name"]'); if (n) { n.focus(); n.scrollIntoView({ block: 'center' }); } return; }
     if ((b = t.closest('[data-save-tank]'))) { saveTank(b.getAttribute('data-save-tank')); return; }
+    if ((b = t.closest('[data-copy]'))) { copyTank(b.getAttribute('data-copy')); return; }
     if ((b = t.closest('[data-edit]'))) { var p = b.getAttribute('data-edit').split(':'), r = S.data.tanks[p[0]][+p[1]]; S.open[r.id] = true; r.done = ''; changed(); render(); var x = $('[data-t="' + p[0] + ':' + p[1] + ':name"]'); if (x) x.focus(); return; }
     if ((b = t.closest('[data-expand]'))) { var q = b.getAttribute('data-expand').split(':'), rr = S.data.tanks[q[0]][+q[1]]; S.expand[rr.id] = !S.expand[rr.id]; render(); return; }
     if ((b = t.closest('[data-del]'))) { delTank(b.getAttribute('data-del')); return; }
     if ((b = t.closest('[data-mode]'))) { var m = b.getAttribute('data-mode').split(':'), tr = S.data.tanks[m[0]][+m[1]]; tr.mode = m[2]; tr.sounding = m[2] === 'ullage' ? sounding(tr) : tr.sounding; changed(); render(); return; }
     if ((b = t.closest('[data-gen]'))) { generate(b.getAttribute('data-gen')); return; }
-    if (t.closest('[data-offline-xlsx]')) offlineXlsx();
+    if (t.closest('[data-offline-pdf]')) { offlinePdf(); return; }
     if (t.closest('[data-save-now]')) { saveProgress(); return; }
     if ((b = t.closest('[data-pv]'))) { pvAction(b.getAttribute('data-pv')); return; }
   });
@@ -508,6 +550,10 @@
     var el = ev.target;
     if (el.matches('[data-grade]')) { toggleGrade(el.getAttribute('data-grade'), el.checked); return; }
     if (el.matches('select[data-f]')) { setVal(el.getAttribute('data-f'), el.value); changed(); refreshLight(); }
+    if (el.matches('[data-t]')) { // leaving a reading: shown in the report's format
+      var p = el.getAttribute('data-t').split(':'), r = S.data.tanks[p[0]] && S.data.tanks[p[0]][+p[1]];
+      if (r && p[2] in TFMT) { var v = fmtT(p[2], el.value); if (v !== el.value) { el.value = v; r[p[2]] = v; changed(); } }
+    }
   });
   document.addEventListener('input', function (ev) {
     var el = ev.target;
@@ -554,14 +600,122 @@
       if (!li.classList.contains('on')) { li.classList.toggle('done', stepDone(s.id)); var n = $('.n', li); if (n) n.innerHTML = li.classList.contains('done') ? '<i class="fa-solid fa-check"></i>' : j + 1; }
     });
   }
+  /** Earlier attendance of this vessel (a report on the website, or its uploaded Excel). */
+  function loadPrevious() {
+    if (!S.canEdit || !online()) return;
+    fetch(P.api + '?a=previous&id=' + P.id, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (res) {
+      S.prev = res && res.ok ? res.previous : null;
+      if (S.prev && S.data.step === 'vessel') render();
+    }).catch(function () {});
+  }
+  function fillPrevious() {
+    var P0 = S.prev; if (!P0) return;
+    var gNames = (P0.grades || []).map(function (g) { var i = gradeInfo(g); return i ? i.short : g; });
+    var tankCount = 0; Object.keys(P0.tanks || {}).forEach(function (g) { tankCount += P0.tanks[g].length; });
+    var busy = Object.keys(P0.tanks || {}).filter(function (g) { return gradeInfo(g) && S.data.tanks[g] && S.data.tanks[g].length; });
+    Swal.fire({ icon: 'question', title: 'Fill from previous attendance?', confirmButtonText: 'Fill', showCancelButton: true,
+      html: '<div style="text-align:left;font-size:14px">From: <b>' + esc(P0.label) + '</b><ul style="margin:8px 0 0 18px;padding:0">' +
+        '<li>Step 1: ' + Object.keys(P0.fields || {}).length + ' vessel particulars</li>' +
+        '<li>Step 2: grades ' + esc(gNames.join(', ') || '—') + '</li>' +
+        '<li>Step 3: ' + tankCount + ' tank names with reference heights (readings stay empty)</li></ul>' +
+        (busy.length ? '<p class="sr-muted" style="margin-top:8px">Tanks already entered (' + esc(busy.map(function (g) { return gradeInfo(g).short; }).join(', ')) + ') are kept as they are.</p>' : '') + '</div>'
+    }).then(function (x) {
+      if (!x.isConfirmed) return;
+      Object.keys(P0.fields || {}).forEach(function (k) { if (FIELD(k)) { setVal(k, P0.fields[k]); if (P0.source === 'excel') S.ai[k] = true; } });
+      var gs = (P0.grades || []).filter(function (g) { return !!gradeInfo(g); });
+      if (gs.length) S.data.grades = S.cfg.grades.map(function (g) { return g.key; }).filter(function (g) { return gs.indexOf(g) >= 0; });
+      Object.keys(P0.tanks || {}).forEach(function (g) {
+        if (!gradeInfo(g) || (S.data.tanks[g] && S.data.tanks[g].length)) return;
+        S.data.tanks[g] = P0.tanks[g].map(function (t) { var r = emptyRow(); r.name = t.name; r.ref_height = t.ref_height; return r; });
+      });
+      S.manual = true; S.errors = {};
+      changed(); render(); toast('success', 'Filled from the previous attendance — please check');
+    });
+  }
+  // ---------- ROB comparison as an image, shared on WhatsApp ----------
+  function cardImage() {
+    var rows = summaryRows(), tot = 0, any = false;
+    rows.forEach(function (r) { if (r.diff !== null) { tot += r.diff; any = true; } });
+    tot = ReportCalc.round(tot, 3);
+    var W = 1080, pad = 64, rowH = 92, H = 520 + rows.length * rowH + 260;
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var x = c.getContext('2d'), F = function (w, s) { return w + ' ' + s + 'px Lexend, "Segoe UI", Roboto, Arial, sans-serif'; };
+    var rr = function (X, Y, w, h, r) { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); };
+    x.fillStyle = '#F4F7FB'; x.fillRect(0, 0, W, H);
+    var gr = x.createLinearGradient(0, 0, W, 300); gr.addColorStop(0, '#00A3DF'); gr.addColorStop(1, '#6C4CF1');
+    x.fillStyle = gr; x.fillRect(0, 0, W, 300);
+    x.fillStyle = 'rgba(255,255,255,.85)'; x.font = F(600, 30); x.fillText('YMR MARINE SOLUTIONS', pad, 78);
+    x.fillStyle = '#fff'; x.font = F(800, 54);
+    var vn = S.report.vessel || val('vessel_name'); while (x.measureText(vn).width > W - 2 * pad && vn.length > 4) vn = vn.slice(0, -2);
+    x.fillText(vn, pad, 158);
+    x.font = F(500, 30); x.fillStyle = 'rgba(255,255,255,.92)';
+    var sub = [(S.report.kind_label || 'Survey') + ' · ROB comparison', val('place') || val('port_name'), val('completed_date')].filter(Boolean).join('  ·  ');
+    x.fillText(sub, pad, 214);
+    if (val('imo')) { x.font = F(500, 26); x.fillText('IMO ' + val('imo'), pad, 262); }
+    // table card
+    var top = 340, cw = W - 2 * pad;
+    x.save(); x.shadowColor = 'rgba(15,23,42,.10)'; x.shadowBlur = 30; x.shadowOffsetY = 8; x.fillStyle = '#fff'; rr(pad, top, cw, 120 + rows.length * rowH, 28); x.fill(); x.restore();
+    var cols = [pad + 36, pad + 330, pad + 610, pad + cw - 36];
+    x.font = F(700, 24); x.fillStyle = '#64748B';
+    x.textAlign = 'left'; x.fillText('FUEL GRADE', cols[0], top + 66);
+    x.textAlign = 'right'; x.fillText('SURVEY (MT)', cols[1] + 150, top + 66); x.fillText('LOG BOOK (MT)', cols[2] + 150, top + 66); x.fillText('DIFFERENCE', cols[3], top + 66);
+    rows.forEach(function (r, i) {
+      var y = top + 120 + i * rowH;
+      x.strokeStyle = '#E2E8F0'; x.lineWidth = 2; x.beginPath(); x.moveTo(pad + 24, y - 34); x.lineTo(pad + cw - 24, y - 34); x.stroke();
+      x.textAlign = 'left'; x.fillStyle = '#0F172A'; x.font = F(800, 34); x.fillText(r.short, cols[0], y + 22);
+      x.textAlign = 'right'; x.font = F(600, 32); x.fillStyle = '#0F172A';
+      x.fillText(f3(r.completed) || '—', cols[1] + 150, y + 22); x.fillText(f3(r.logbook) || '—', cols[2] + 150, y + 22);
+      x.fillStyle = r.diff < 0 ? '#DC2626' : r.diff > 0 ? '#16A34A' : '#334155'; x.font = F(800, 34); x.fillText(sgn(r.diff), cols[3], y + 22);
+    });
+    // total
+    var ty = top + 150 + rows.length * rowH;
+    x.fillStyle = '#0F2B5B'; rr(pad, ty, cw, 120, 28); x.fill();
+    x.textAlign = 'left'; x.fillStyle = 'rgba(255,255,255,.8)'; x.font = F(700, 28); x.fillText('TOTAL DIFFERENCE', pad + 36, ty + 72);
+    x.textAlign = 'right'; x.fillStyle = tot < 0 ? '#FCA5A5' : tot > 0 ? '#86EFAC' : '#fff'; x.font = F(800, 48); x.fillText(any ? sgn(tot) + ' MT' : '—', pad + cw - 36, ty + 78);
+    x.textAlign = 'left'; x.fillStyle = '#64748B'; x.font = F(500, 24);
+    x.fillText('Survey Completed − Log Book ROB at survey start' + (val('surveyor_name') ? '  ·  Surveyor: ' + val('surveyor_name') : ''), pad, H - 50);
+    return new Promise(function (ok) { c.toBlob(function (b) { ok(b); }, 'image/png'); });
+  }
+  function shareCard() {
+    var name = ((S.report.vessel || 'vessel') + ' ROB comparison').replace(/[^A-Za-z0-9 ._-]+/g, '').trim().replace(/\s+/g, '_') + '.png';
+    var text = (S.report.vessel || '') + ' — ' + (S.report.kind_label || 'Survey') + ' ROB comparison';
+    var ready = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+    ready.then(cardImage).then(function (blob) {
+      S.shareBlob = blob;
+      var file = new File([blob], name, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { // phone: the share sheet (WhatsApp)
+        return navigator.share({ files: [file], text: text, title: text }).catch(function () {});
+      }
+      // computer: copy the picture (paste it in the chat) and download it, then open WhatsApp
+      var copied = window.ClipboardItem && navigator.clipboard && navigator.clipboard.write ? navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function () { return true; }, function () { return false; }) : Promise.resolve(false);
+      return copied.then(function (ok) {
+        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.setAttribute('data-testid', 'sr-share-dl');
+        document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+        Swal.fire({ icon: 'success', title: 'Image ready', html: (ok ? 'The picture is copied — paste it in the WhatsApp chat (Ctrl+V).' : 'The picture was downloaded — attach it in the WhatsApp chat.'),
+          confirmButtonText: '<i class="fa-brands fa-whatsapp"></i> Open WhatsApp', showCancelButton: true, cancelButtonText: 'Close' })
+          .then(function (r) { if (r.isConfirmed) window.open('https://web.whatsapp.com/send?text=' + encodeURIComponent(text), '_blank', 'noopener'); });
+      });
+    }).catch(function (e) { toast('error', 'Could not make the image: ' + (e && e.message || e)); });
+  }
   function emptyRow() { return { name: '', ref_height: '', sounding: '', volume: '', density: '', temp: '', mode: 'sounding', ullage: '', done: '', id: uid() }; }
   function saveTank(key) {
     var p = key.split(':'), r = S.data.tanks[p[0]][+p[1]], e = tankErrors(r);
     r._tried = true;
     if (Object.keys(e).length) { showErrors(); var first = $('[data-tank="' + key + '"] .sr-f.bad'); if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' }); toast('error', 'Complete the marked values of this tank.'); return; }
-    r.done = '1'; delete S.open[r.id]; delete r._tried;
+    fmtRow(r); r.done = '1'; r.copy = ''; delete S.open[r.id]; delete r._tried;
     changed(); saveNow(); render();
     var card = $('[data-tank="' + key + '"]'); if (card) card.scrollIntoView({ block: 'nearest' });
+  }
+  /** A new tank right after this one with the same values, open for editing; its version 1 is made when it is saved. */
+  function copyTank(key) {
+    var p = key.split(':'), src = S.data.tanks[p[0]][+p[1]], row = {};
+    ROW_KEYS.forEach(function (k) { row[k] = src[k] == null ? '' : String(src[k]); });
+    row.id = uid(); row.done = ''; row.copy = '1';
+    S.data.tanks[p[0]].splice(+p[1] + 1, 0, row);
+    S.open[row.id] = true;
+    changed(); render();
+    var n = $('[data-t="' + p[0] + ':' + (+p[1] + 1) + ':name"]'); if (n) { n.scrollIntoView({ block: 'center' }); n.focus(); n.select(); }
+    toast('success', 'Tank copied — change the values and press Save tank');
   }
   function delTank(key) {
     var p = key.split(':'), r = S.data.tanks[p[0]][+p[1]];
@@ -645,7 +799,7 @@
       S.saving = false;
       if (res.ok) {
         S.version = res.version; S.errors = res.errors || {};
-        if (payload() === sent) { S.dirty = false; store(LS, null); saveState('Saved', ''); preview(); }
+        if (payload() === sent) { S.dirty = false; store(LS, null); saveState('Saved', ''); if (pvOpen()) preview(); }
         else { store(LS, { data: S.data, base: S.version, dirty: true, at: Date.now() }); saveNow(); }
         var c = read(CACHE); if (c) { c.report.version = S.version; c.report.data = JSON.parse(sent); store(CACHE, c); }
         showErrors();
@@ -670,7 +824,33 @@
     var wait = function () { return S.saving ? new Promise(function (r) { setTimeout(r, 150); }).then(wait) : Promise.resolve(); };
     return wait().then(function () { return S.dirty ? saveNow() : true; }).then(function () { return wait(); });
   }
-  window.addEventListener('beforeunload', function () { if (S.dirty && online()) saveNow(); }); // what is not saved yet stays on this device (localStorage)
+  window.addEventListener('beforeunload', function () { if (S.dirty && online()) saveNow(); });
+  /**
+   * Live: what someone else saves shows up here within seconds (e.g. the Admin watching the
+   * surveyor fill the tanks). Only while nothing is waiting to be saved on this device and no box
+   * is being typed in; this person's own step stays where it is.
+   */
+  function livePoll() {
+    if (document.hidden || !online() || S.dirty || S.saving || !S.data || S.signedOut || S.offlineMode) return;
+    var a = document.activeElement;
+    if (a && a.matches && a.matches('[data-f],[data-t]') && S.canEdit) return;
+    fetch(P.api + '?a=version&id=' + P.id, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (v) {
+      if (!v || !v.ok || v.version <= S.version) return null;
+      return fetch(P.api + '?a=get&id=' + P.id, { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+    }).then(function (res) {
+      if (!res || !res.ok || res.report.version <= S.version || S.dirty || S.saving) return;
+      var step = S.data.step;
+      S.version = res.report.version; S.data = normalise(res.report.data); S.data.step = step;
+      S.files = res.files || S.files; S.server = null; S.tankLog = null;
+      store(CACHE, res);
+      render();
+      if (S.data.step === 'summary') verify();
+      var who = res.report.updated_by || 'someone';
+      var el = $('[data-live]'); if (el) { el.textContent = 'Updated live — ' + who + ', ' + String(res.report.updated_at).slice(11, 16); el.hidden = false; }
+      if (pvOpen()) preview();
+    }).catch(function () {});
+  }
+  setInterval(livePoll, 8000); // what is not saved yet stays on this device (localStorage)
   /** "Save Progress": save now (whatever the timer), say how it went. */
   function saveProgress() {
     if (!S.canEdit) return;
@@ -684,6 +864,7 @@
   // The server makes the report from the SAVED values into a temporary PDF (ajax a=preview): nothing
   // is stored with the report, no file is listed, the vessel's status is not touched.
   var PV = { doc: null, page: 1, zoom: 1, seq: 0, timer: null, ver: null, lib: null };
+  function pvOpen() { return document.body.classList.contains('sr-pv-open'); }
   function pvEl(s) { return document.querySelector('[data-pv-' + s + ']'); }
   function pvLib() {
     if (PV.lib) return PV.lib;
@@ -747,6 +928,7 @@
     pvDraw();
   }
   window.addEventListener('resize', function () { clearTimeout(PV.rs); PV.rs = setTimeout(pvDraw, 200); });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && pvOpen()) pvAction('close'); });
 
   // ---------- summary check + files ----------
   function verify() {
@@ -785,27 +967,110 @@
       }
     });
   }
-  function offlineXlsx() {
-    if (!window.ReportOfflineXlsx || !window.ExcelJS) { Swal.fire({ icon: 'error', title: 'Not available', text: 'The Excel tools have not been loaded on this device yet — open the report once while online.' }); return; }
-    var url = P.api + '?a=template&id=' + P.id + '&t=' + S.cfg.template.id;
-    var get = ('caches' in window ? caches.open(TPL_CACHE).then(function (c) { return c.match(url); }) : Promise.resolve(null)).then(function (hit) {
-      if (hit) return hit.arrayBuffer();
-      if (!online()) throw new Error('The template workbook is not on this device yet — open the report once while online.');
-      return fetch(url, { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error('Template not available.'); var c2 = r.clone(); if ('caches' in window) caches.open(TPL_CACHE).then(function (c) { c.put(url, c2); }); return r.arrayBuffer(); });
-    });
-    // the template's own sections only, with the grades on board (sounding worked out from ullage)
-    var secs = S.cfg.sections.map(function (s) { return s.key; }), g = chosen(), d = { fields: S.data.fields, tanks: {} };
-    secs.forEach(function (s) { d.tanks[s] = g.indexOf(s) >= 0 ? S.data.tanks[s].map(function (r) { var o = {}; ['name', 'ref_height', 'volume', 'density', 'temp'].forEach(function (k) { o[k] = r[k]; }); o.sounding = sounding(r); return o; }) : []; });
-    var extra = g.filter(function (x) { return secs.indexOf(x) < 0; });
-    Swal.fire({ title: 'Making the Excel on this device…', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
-    get.then(function (buf) { return ReportOfflineXlsx.build(buf, S.cfg.offline, d, S.cfg.calc, secs); })
-      .then(function (blob) {
-        var a = document.createElement('a'), name = (String(S.data.fields.vessel_name || S.report.vessel).toUpperCase() + ' - ' + String(S.report.kind_label || 'Survey').toUpperCase().replace(/\//g, '-') + ' - FIELD REPORT (device).xlsx').replace(/[\\/:*?"<>|]+/g, '_');
-        a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
-        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
-        Swal.fire({ icon: 'success', title: 'Draft Excel saved on this device', text: (extra.length ? extra.map(function (x) { return gradeInfo(x).short; }).join(' / ') + ' and the ROB summary are only in the server report. ' : '') + 'Make the final report when you are online.', timer: 5000 });
-      }).catch(function (e) { Swal.fire({ icon: 'error', title: 'Excel not made', text: e.message || String(e) }); });
+  // ---------- draft PDF made on this device (no internet) ----------
+  // The final report is made by the server from the company template. Without internet the
+  // surveyor still gets a PDF: the same particulars, tank tables and ROB summary, drawn here with
+  // jsPDF and marked DRAFT. When the connection is back the data is saved and the final PDF (and
+  // the Excel kept in the system) is made by itself.
+  var BANNER = 'assets/images/invoice-header.png';
+  function imgData(url) {
+    return fetch(url, { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error(); return r.blob(); }).then(function (b) {
+      return new Promise(function (ok, no) { var fr = new FileReader(); fr.onload = function () { var im = new Image(); im.onload = function () { ok({ data: fr.result, w: im.naturalWidth, h: im.naturalHeight }); }; im.onerror = no; im.src = fr.result; }; fr.onerror = no; fr.readAsDataURL(b); });
+    }).catch(function () { return null; });
   }
+  function offlinePdf() {
+    if (!window.jspdf || !window.jspdf.jsPDF) { Swal.fire({ icon: 'error', title: 'Not available', text: 'The PDF tools are not on this device yet — open the report once while online.' }); return; }
+    var all = issues();
+    if (all.length) { Swal.fire({ icon: 'warning', title: 'Please complete the report first', html: '<ul class="sr-swal-list">' + all.slice(0, 8).map(function (x) { return '<li>' + esc(x.msg) + '</li>'; }).join('') + '</ul>' }); return; }
+    imgData(BANNER).then(function (banner) {
+      var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 12;
+      var navy = [15, 43, 91], grey = [100, 116, 139];
+      var head = function () {
+        var y = M;
+        if (banner) { var h = Math.min(30, (W - 2 * M) * banner.h / banner.w); doc.addImage(banner.data, 'PNG', M, y, W - 2 * M, h); y += h + 4; }
+        else { doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(0, 163, 223); doc.text('YMR MARINE SOLUTIONS', W / 2, y + 8, { align: 'center' }); y += 14; }
+        doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: 0.08 })); doc.setFont('helvetica', 'bold'); doc.setFontSize(80); doc.setTextColor(220, 38, 38);
+        doc.text('DRAFT', W / 2, 170, { align: 'center', angle: 35 }); doc.restoreGraphicsState();
+        return y;
+      };
+      var foot = function () {
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, grey);
+        doc.text('DRAFT made on this device without internet — the final report is made by the YSMS server from the company template.', W / 2, 290, { align: 'center' });
+      };
+      var vessel = val('vessel_name') || S.report.vessel, grades = chosen();
+      // ---- page 1: particulars + tank tables
+      var y = head();
+      doc.setTextColor.apply(doc, navy); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(vessel, W / 2, y + 2, { align: 'center' });
+      doc.setFontSize(9.5); if (val('imo')) doc.text('IMO No. ' + val('imo'), W / 2, y + 7, { align: 'center' });
+      doc.setFontSize(10.5); doc.text((S.report.kind_label || 'Bunker') .toUpperCase() + ' — BUNKER SURVEY', W / 2, y + 13, { align: 'center' });
+      y += 18;
+      var dt = function (d, t) { return [d, t ? t + ' Hrs LT' : ''].filter(Boolean).join('  '); };
+      var part = [['Owners', val('owners')], ['Charterers', val('charterers')], ['FWE', dt(val('fwe_date'), val('fwe_time'))], ['Survey Started', dt(val('started_date'), val('started_time'))],
+        ['Survey Completed', dt(val('completed_date'), val('completed_time'))], ['Place of Survey', [val('place'), val('port_name')].filter(Boolean).join(', ')], ['Voyage No.', val('voyage_no')],
+        ['Draft Fwd / Aft', [val('draft_fwd'), val('draft_aft')].filter(Boolean).join(' / ') + ' m'], ['List', val('list') ? val('list') + '°' : '']];
+      doc.autoTable({ startY: y, margin: { left: M, right: W / 2 + 2 }, body: part, theme: 'grid', styles: { fontSize: 7.5, cellPadding: 1.2, lineColor: [148, 163, 184], lineWidth: 0.15, textColor: 20 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 30 } } });
+      var y1 = doc.lastAutoTable.finalY;
+      var brob = grades.map(function (g) { return [gradeInfo(g).short, val('brob_fwe_' + g), val('brob_started_' + g)]; });
+      doc.autoTable({ startY: y, margin: { left: W / 2 + 6, right: M }, head: [['BROB (MT)', 'At FWE', 'Survey started']], body: brob, theme: 'grid',
+        headStyles: { fillColor: navy, textColor: 255, fontStyle: 'bold', fontSize: 7.5, cellPadding: 1.2 }, styles: { fontSize: 7.5, cellPadding: 1.2, halign: 'right', lineColor: [148, 163, 184], lineWidth: 0.15 }, columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } } });
+      y = Math.max(y1, doc.lastAutoTable.finalY) + 6;
+      grades.forEach(function (g) {
+        var rows = S.data.tanks[g] || []; if (!rows.length) return;
+        var gt = gradeTotals(g), body = rows.map(function (r) {
+          var t = calc(r);
+          return [r.name, r.ref_height, fmtT('sounding', sounding(r)), r.volume, fmtT('density', r.density), fmtT('temp', r.temp), t.vcf == null ? '' : t.vcf.toFixed(4), f3(t.gsv), f3(t.mt)];
+        });
+        body.push([{ content: 'TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } }, { content: f3(gt.gsv), styles: { fontStyle: 'bold' } }, { content: f3(gt.mt), styles: { fontStyle: 'bold' } }]);
+        if (y > 250) { foot(); doc.addPage(); y = head(); }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor.apply(doc, navy); doc.text(gradeInfo(g).name || gradeInfo(g).short, M, y);
+        doc.autoTable({ startY: y + 2, margin: { left: M, right: M }, head: [['Tank', 'Ref. Ht (m)', 'Sounding (m)', 'Volume (m³)', 'Density @15°C', 'Temp (°C)', 'V.C.F.', 'G.S.V. (m³)', 'MT in Air']], body: body, theme: 'grid',
+          headStyles: { fillColor: [230, 246, 252], textColor: navy, fontSize: 7, halign: 'center', cellPadding: 1.2 }, styles: { fontSize: 7.5, cellPadding: 1.1, halign: 'right', lineColor: [148, 163, 184], lineWidth: 0.15, textColor: 20 },
+          columnStyles: { 0: { halign: 'left', cellWidth: 34 } }, didDrawPage: function () {} });
+        y = doc.lastAutoTable.finalY + 7;
+      });
+      foot();
+      // ---- page 2: ROB summary + signatures
+      doc.addPage(); y = head();
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor.apply(doc, navy); doc.text('ROB SUMMARY', W / 2, y + 2, { align: 'center' }); y += 8;
+      var sr = summaryRows(), tot = 0;
+      sr.forEach(function (r) { if (r.diff !== null) tot += r.diff; });
+      tot = ReportCalc.round(tot, 3);
+      doc.autoTable({ startY: y, margin: { left: M, right: M }, head: [['Fuel Grade', 'Survey Completed (MT)', 'Log Book ROB (MT)', 'Difference (MT)']],
+        body: sr.map(function (r) { return [r.short, f3(r.completed), f3(r.logbook), sgn(r.diff).replace('−', '-')]; }).concat([[{ content: 'TOTAL DIFFERENCE', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } }, { content: sgn(tot).replace('−', '-') + ' MT', styles: { fontStyle: 'bold' } }]]),
+        theme: 'grid', headStyles: { fillColor: navy, textColor: 255, fontStyle: 'bold', fontSize: 9 }, styles: { fontSize: 10, cellPadding: 2.2, halign: 'right', lineColor: [148, 163, 184], lineWidth: 0.15, textColor: 20 }, columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } } });
+      y = doc.lastAutoTable.finalY + 8;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(30, 41, 59);
+      doc.text(doc.splitTextToSize('All bunker tanks were carefully sounded together with the Chief Engineer / his representative and the quantities calculated from the vessel\'s calibration tables. Survey Completed = sum of MT in Air of the tanks of each grade; Log Book = ROB at survey start.', W - 2 * M), M, y);
+      y += 26;
+      var sig = function (x, t, n) { doc.setDrawColor(100); doc.line(x, y, x + 70, y); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.text(t, x, y + 5); doc.setFont('helvetica', 'normal'); doc.text(n || '', x, y + 10); };
+      sig(M, 'The Master', val('master')); sig(W - M - 70, 'Independent Marine Surveyor', val('surveyor_name')); y += 26;
+      sig(M, 'The Chief Engineer', val('chief_engineer'));
+      foot();
+      var name = (vessel + ' - ' + (S.report.kind_label || 'SURVEY') + ' - DRAFT').toUpperCase().replace(/[^A-Z0-9 .\-]+/g, '').trim() + '.pdf';
+      doc.save(name);
+      store(LS + '_offpdf', { at: Date.now(), version: S.version }); // make the final report as soon as the connection is back
+      toast('success', 'Draft PDF saved on this device');
+    });
+  }
+  /** Back online after a draft PDF was made offline: save, then make the final PDF (and the Excel kept in the system). */
+  function finalAfterOffline() {
+    var f = read(LS + '_offpdf'); if (!f || !online() || !S.canEdit || S.finalBusy) return;
+    S.finalBusy = true;
+    flush().then(function () {
+      if (S.dirty || issues().length) { S.finalBusy = false; return; }
+      return post({ a: 'generate', id: P.id, pdf: 1 }).then(function (res) {
+        S.finalBusy = false;
+        if (!res || !res.ok) return;
+        store(LS + '_offpdf', null);
+        S.files = res.files || S.files; if (res.version) S.version = res.version;
+        var id = res.new_files && res.new_files.pdf;
+        Swal.fire({ icon: 'success', title: 'Synced — final report ready', text: 'Your offline changes are saved and the final PDF was made from the company template.',
+          confirmButtonText: '<i class="fa-solid fa-file-pdf"></i> Download final PDF', showCancelButton: !!id, cancelButtonText: 'Later', showConfirmButton: !!id })
+          .then(function (r) { if (r.isConfirmed && id) { var a = document.createElement('a'); a.href = P.api + '?a=file&id=' + id; a.setAttribute('download', ''); document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 4000); } });
+      });
+    }).catch(function () { S.finalBusy = false; });
+  }
+  window.addEventListener('online', function () { setTimeout(finalAfterOffline, 1500); });
 
   // ---------- offline support ----------
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('survey_report_sw.js', { scope: './survey_report' }).catch(function () {});

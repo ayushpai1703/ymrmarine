@@ -38,7 +38,7 @@ include 'includes/header.php';
     $('[data-list]').innerHTML = res.reports.length ? '<div style="overflow-x:auto"><table class="sr-t"><thead><tr><th>Vessel</th><th>Report type</th><th>Made by</th><th>Last saved</th><th>Files</th>' + (admin ? '<th>Tank changes</th>' : '') + '<th></th></tr></thead><tbody>' +
       res.reports.map(function (r) {
         var dl = (r.last_pdf ? '<a href="' + API + '?a=file&id=' + r.last_pdf + '" data-testid="sr-list-pdf-' + r.id + '"><i class="fa-solid fa-file-pdf" style="color:#dc2626"></i> PDF</a> ' : '') +
-          (r.last_xlsx ? '<a href="' + API + '?a=file&id=' + r.last_xlsx + '" data-testid="sr-list-xlsx-' + r.id + '"><i class="fa-solid fa-file-excel" style="color:#16a34a"></i> Excel</a>' : '');
+          (admin && r.last_xlsx ? '<a href="' + API + '?a=file&id=' + r.last_xlsx + '" data-testid="sr-list-xlsx-' + r.id + '"><i class="fa-solid fa-file-excel" style="color:#16a34a"></i> Excel</a>' : '');
         return '<tr data-testid="sr-row-' + r.id + '"><td><b>' + esc(r.vessel_name || 'Not entered yet') + '</b>' + (r.report_number ? '<br><small class="sr-muted">' + esc(r.report_number) + '</small>' : '') + '</td>' +
           '<td>' + esc(r.kind_label) + ' <small class="sr-muted">v' + esc(r.template_version) + '</small></td><td>' + esc(r.created_by_name || '') + '</td>' +
           '<td>' + esc(String(r.updated_at).slice(0, 16)) + '<br><small class="sr-muted">' + esc(r.updated_by_name || '') + '</small></td>' +

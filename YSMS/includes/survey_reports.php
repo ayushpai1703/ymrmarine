@@ -59,7 +59,8 @@ function srDefaults(array $eff, ?array $survey): array {
     if ($survey) foreach (sfPrefill($survey) as $k => $v) if (isset($d['fields'][$k])) $d['fields'][$k] = (string)$v;
     if (isset($d['fields']['surveyor_name']) && $d['fields']['surveyor_name'] === '' && srRole() === 'Surveyor') $d['fields']['surveyor_name'] = strtoupper(trim((string)($_SESSION['full_name'] ?? '')));
     if (isset($d['fields']['place']) && !empty($survey['port_name'])) $d['fields']['place'] = strtoupper((string)$survey['port_name']);
-    $d['grades'] = []; $d['step'] = 'vessel';
+    $d['grades'] = array_values(array_intersect(['vlsfo', 'lsmgo'], array_keys(srGradeList($eff)))); // the usual two, preselected
+    $d['step'] = 'vessel';
     $d['extra'] = array_fill_keys(array_keys(srExtraFieldDefs()), '');
     $d['extra']['port_name'] = strtoupper(trim((string)($survey['port_name'] ?? '')));
     foreach (array_keys(srGradeList($eff)) as $g) $d['tanks'][$g] = $d['tanks'][$g] ?? [];
@@ -241,7 +242,7 @@ function srExtraFieldDefs(): array {
         'brob_started_ulsfo' => ['Survey started ROB — ULSFO (MT)', 'num:3'], 'brob_started_hsmgo' => ['Survey started ROB — HSMGO (MT)', 'num:3'],
     ];
 }
-const SR_ROW_META = ['mode', 'ullage', 'done', 'id'];
+const SR_ROW_META = ['mode', 'ullage', 'done', 'id', 'copy']; // copy = 1: a copied tank not saved yet
 
 /** Grades offered for a template: its own sections plus the ones a copied section can take. */
 function srGradeList(array $eff): array {
@@ -280,6 +281,7 @@ function srCleanExtra(array $eff, array $in, array &$store, array &$errors): voi
             foreach (array_merge(array_keys(RT_TANK_COLS), SR_ROW_META) as $c) $o[$c] = is_scalar($row[$c] ?? '') ? mb_substr(trim((string)($row[$c] ?? '')), 0, 60) : '';
             $o['mode'] = $o['mode'] === 'ullage' ? 'ullage' : 'sounding';
             $o['done'] = $o['done'] ? '1' : '';
+            $o['copy'] = $o['copy'] && !$o['done'] ? '1' : '';
             $o['id'] = preg_replace('/[^A-Za-z0-9_-]/', '', $o['id']);
             return $o;
         }, array_slice(array_values((array)($in['tanks'][$g] ?? [])), 0, RT_MAX_TANKS)));
@@ -473,6 +475,28 @@ function srHeaderCompact(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, arra
             if ($v !== '' && is_numeric($v)) $cell->setValue((float)$v); else $cell->setValueExplicit(null, $DT::TYPE_NULL);
         }
     }
+    // the columns left over disappear from the header: no borders, and the unit ("M.Tons") moves
+    // next to the last grade, so the block has exactly as many columns as grades on board
+    $list = array_values($cols);
+    $used = min(count($grades), count($list));
+    if ($used >= count($list) || $used < 1) return;
+    $none = ['borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE]]];
+    $rowsOf = function (array $col) { $r = []; foreach (['label', 'fwe', 'started'] as $k) if ($col[$k]) $r[$k] = (int)preg_replace('/\D/', '', $col[$k]); return $r; };
+    for ($i = $used; $i < count($list); $i++) foreach (['label', 'fwe', 'started'] as $k) if ($list[$i][$k]) $ws->getStyle($list[$i][$k])->applyFromArray($none); // the last grade keeps its own right edge
+    $lastIdx = max(array_keys($cols));
+    $after = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(array_keys($cols)[$used - 1] + 1);
+    foreach ($rowsOf($list[$used - 1]) as $r) {
+        for ($c = $lastIdx + 1; $c <= $lastIdx + 3; $c++) { // the unit text right of the block
+            $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c) . $r;
+            $v = $ws->getCell($coord)->getValue();
+            if (!is_string($v) || trim($v) === '' || $v[0] === '=') continue;
+            $ws->getCell($after . $r)->setValueExplicit($v, $DT::TYPE_STRING);
+            $ws->getStyle($after . $r)->getFont()->applyFromArray(['name' => $ws->getStyle($coord)->getFont()->getName(), 'size' => $ws->getStyle($coord)->getFont()->getSize(), 'bold' => $ws->getStyle($coord)->getFont()->getBold()]);
+            $ws->getStyle($after . $r)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+            $ws->getCell($coord)->setValueExplicit(null, $DT::TYPE_NULL);
+            break;
+        }
+    }
 }
 
 /** A section shows only the tanks entered: its spare rows are hidden (totals and formulas are unchanged). */
@@ -498,6 +522,83 @@ function srFitOnePage(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws): void {
     }
     $ps->setPrintArea($firstCell . ':' . $lastCol . ($lastRow + 1));
     $ps->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
+    $ps->setFitToPage(true);
+    $ps->setFitToWidth(1);
+    $ps->setFitToHeight(1);
+}
+
+/**
+ * A printed page that fills the A4 sheet: print area = the cells used (visible columns), narrow
+ * margins, centred, scaled to the page width; the height left over is shared out over the rows
+ * (at most 1.6×) so the page is filled top to bottom and still prints on one page.
+ */
+function srFitA4(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, ?string $lastCol = null): void {
+    $C = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::class;
+    $ps = $ws->getPageSetup();
+    $firstRow = 1; $maxIdx = $lastCol ? $C::columnIndexFromString($lastCol) : 0; $lastRow = 1;
+    $area = $ps->isPrintAreaSet() ? $ps->getPrintArea() : '';
+    if ($area && preg_match('/\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)/', explode(',', $area)[0], $m)) { $firstRow = (int)$m[2]; if (!$lastCol) $maxIdx = $C::columnIndexFromString($m[3]); }
+    $limit = $maxIdx ?: 30;
+    $usedMax = 1;
+    foreach ($ws->getCoordinates() as $c) {
+        [$cc, $rr] = $C::coordinateFromString($c);
+        $ci = $C::columnIndexFromString($cc);
+        if ($ci > $limit || !$ws->getColumnDimension($cc)->getVisible() || !$ws->getRowDimension((int)$rr)->getVisible()) continue;
+        $v = $ws->getCell($c)->getValue();
+        if ($v === null || (is_string($v) && trim($v) === '')) continue;
+        $lastRow = max($lastRow, (int)$rr); $usedMax = max($usedMax, $ci);
+    }
+    foreach ($ws->getDrawingCollection() as $d) { // the letterhead / logo pictures belong to the page too
+        [$dc, $dr] = $C::coordinateFromString($d->getCoordinates());
+        $lastRow = max($lastRow, (int)$dr);
+    }
+    if (!$maxIdx) $maxIdx = $usedMax;
+    foreach ($ws->getMergeCells() as $rng) { // a merged block that starts inside reaches its end column
+        [$a, $b] = explode(':', $rng);
+        [$ac, $ar] = $C::coordinateFromString($a); [$bc] = $C::coordinateFromString($b);
+        if ((int)$ar >= $firstRow && (int)$ar <= $lastRow && $C::columnIndexFromString($ac) <= $maxIdx) $maxIdx = max($maxIdx, min($C::columnIndexFromString($bc), $limit));
+    }
+    // centred text wider than the first column would run off the page's left edge: start it at the edge
+    $aw = $ws->getColumnDimension('A')->getWidth();
+    $merged = [];
+    foreach ($ws->getMergeCells() as $rng) { [$m0] = explode(':', $rng); $merged[$m0] = true; } // a title merged across the page stays centred
+    for ($r = $firstRow; $r <= $lastRow; $r++) {
+        if (isset($merged['A' . $r])) continue;
+        $v = $ws->getCell('A' . $r)->getValue();
+        if (!is_string($v) || $v === '' || $v[0] === '=' || mb_strlen($v) <= ($aw > 0 ? $aw : 8.43)) continue;
+        $al = $ws->getStyle('A' . $r)->getAlignment();
+        if (in_array($al->getHorizontal(), ['center', 'centerContinuous', 'right'], true) && !$al->getWrapText()) $al->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+    }
+    $lastRow++;
+    $endCol = $C::stringFromColumnIndex($maxIdx);
+    $ps->setPrintArea('A' . $firstRow . ':' . $endCol . $lastRow);
+    $ps->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
+    $ps->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_PORTRAIT);
+    $ps->setHorizontalCentered(true);
+    $mg = $ws->getPageMargins();
+    $mg->setLeft(0.3); $mg->setRight(0.3); $mg->setTop(0.3); $mg->setBottom(0.3); $mg->setHeader(0); $mg->setFooter(0);
+    // size of the area in points (column width in characters → about 7 px + 5 px padding; 1 px = 0.75 pt)
+    $defW = $ws->getDefaultColumnDimension()->getWidth(); $defW = $defW > 0 ? $defW : 8.43;
+    $w = 0.0;
+    for ($i = 1; $i <= $maxIdx; $i++) {
+        $cd = $ws->getColumnDimension($C::stringFromColumnIndex($i));
+        if (!$cd->getVisible()) continue;
+        $cw = $cd->getWidth(); $w += (($cw > 0 ? $cw : $defW) * 7 + 5) * 0.75;
+    }
+    $defH = $ws->getDefaultRowDimension()->getRowHeight(); $defH = $defH > 0 ? $defH : 15.0;
+    $h = 0.0; $rows = [];
+    for ($r = $firstRow; $r <= $lastRow; $r++) {
+        $rd = $ws->getRowDimension($r);
+        if (!$rd->getVisible()) continue;
+        $rh = $rd->getRowHeight(); $rh = $rh > 0 ? $rh : $defH;
+        $rows[$r] = $rh; $h += $rh;
+    }
+    $pageW = (8.27 - 0.6) * 72; $pageH = (11.69 - 0.6) * 72;
+    if ($w > 0 && $h > 0) {
+        $scale = min($pageW / $w, $pageH / $h);
+        $stretch = min(1.6, 0.96 * ($pageH / $scale) / $h); // fill the height left over at this scale
+        if ($stretch > 1.02) foreach ($rows as $r => $rh) $ws->getRowDimension($r)->setRowHeight(round($rh * $stretch, 2));
+    }
     $ps->setFitToPage(true);
     $ps->setFitToWidth(1);
     $ps->setFitToHeight(1);
@@ -559,6 +660,7 @@ function srBuildBook(array $tpl, array $data): array {
         srHeaderCompact($copy, $eff, $extraGrades, $data);
         foreach ($extraGrades as $g) srHideEmptyTankRows($copy, $cpos[SR_EXTRA_SLOT[$g]], count($rowsFor[SR_EXTRA_SLOT[$g]]));
         srFitOnePage($copy);
+        srFitA4($copy); // fills the A4 page
         $copy->getPageSetup()->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
         $extraTitle = SR_EXTRA_SHEET;
     }
@@ -570,6 +672,7 @@ function srBuildBook(array $tpl, array $data): array {
     srHeaderCompact($t, $eff, $tplGrades, $data); // BROB header: the grades on board side by side, no empty column between
     foreach ($tplGrades as $g) srHideEmptyTankRows($t, $pos[$g], count($fill['tanks'][$g])); // only the tanks entered
     srFitOnePage($t); // the tank report prints on one A4 page
+    srFitA4($t);
     $summary = srSummarySheet($book, $eff, $data, $grades, $where);
     // printed: the report sheets in workbook order
     $print = $printBase;
@@ -577,7 +680,10 @@ function srBuildBook(array $tpl, array $data): array {
     if ($extraTitle) $print[] = $extraTitle;
     $print[] = $summary;
     $order = [];
-    foreach ($book->getWorksheetIterator() as $ws) if (in_array($ws->getTitle(), $print, true)) $order[] = $ws->getTitle();
+    foreach ($book->getWorksheetIterator() as $ws) if (in_array($ws->getTitle(), $print, true)) {
+        $order[] = $ws->getTitle();
+        if (!in_array($ws->getTitle(), [$tn, SR_EXTRA_SHEET, $summary], true)) srFitA4($ws); // the certificate fills its A4 page too
+    }
     return [$book, $eff, $order, $where];
 }
 
@@ -789,7 +895,7 @@ function srTankVersionsApply(PDO $db, array $report, array $data, bool $final, i
     foreach ((array)($data['tanks'] ?? []) as $g => $rows) {
         foreach ((array)$rows as $row) {
             $id = preg_replace('/[^A-Za-z0-9_-]/', '', (string)($row['id'] ?? ''));
-            if ($id === '' || (($row['done'] ?? '') !== '1' && !$final)) continue;
+            if ($id === '' || (($row['done'] ?? '') !== '1' && !$final)) continue; // a copied tank: its version 1 when it is saved
             $t = srTracked($row);
             if ($t === array_fill_keys(array_keys(SR_TRACKED), null)) continue;
             $last->execute([$report['id'], $id]);
@@ -903,4 +1009,104 @@ function srPreviewPdf(array $tpl, array $report): array {
     } finally {
         @unlink($tmp . '.xlsx'); @unlink($tmp . '.pdf');
     }
+}
+
+// ================================================================ fill from a previous attendance
+
+/** Vessel name compared loosely: "MV. X", "M.V X" and "x" are the same vessel. */
+function srVesselKey(string $name): string {
+    $n = mb_strtoupper(trim($name));
+    $n = preg_replace('/^M\.?\s*V\.?\s*/u', '', $n);
+    return preg_replace('/[^A-Z0-9]+/u', '', $n);
+}
+
+/**
+ * What an earlier attendance of the same vessel knows, for "Fill from previous attendance": vessel
+ * particulars (step 1), the grades on board (step 2) and the tank names with reference heights
+ * (step 3) — never readings, dates or ROB. Matched by IMO, else by vessel name.
+ *   1. an earlier Survey Report made on the website (newest first);
+ *   2. else the Formal Report Excel uploaded for an earlier survey of the vessel, read with the
+ *      template analysis (the company format) — values that do not pass the field checks are left out.
+ * → null, or ['source', 'label', 'fields', 'grades', 'tanks' => [grade => [[name, ref_height]]]].
+ */
+function srPrevious(PDO $db, array $report): ?array {
+    $tpl = rtTemplate($db, $report['template_id']);
+    if (!$tpl) return null;
+    $eff = rtEffective($tpl);
+    $imo = preg_replace('/\D/', '', (string)($report['data']['fields']['imo'] ?? '')) ?: preg_replace('/\D/', '', (string)($report['survey']['imo_number'] ?? ''));
+    $name = srVesselKey((string)(($report['data']['fields']['vessel_name'] ?? '') ?: ($report['survey']['vessel_name'] ?? '')));
+    if ($imo === '' && $name === '') return null;
+    $same = function (?string $i, ?string $n) use ($imo, $name): bool {
+        $i = preg_replace('/\D/', '', (string)$i);
+        if ($imo !== '' && $i !== '') return $i === $imo;
+        return $name !== '' && srVesselKey((string)$n) === $name;
+    };
+    $vesselKeys = array_merge(['imo'], SR_VESSEL_KEYS);
+    $grades = array_keys(srGradeList($eff));
+
+    // 1. an earlier report on the website
+    $q = $db->prepare('SELECT r.id, r.kind, r.data, r.updated_at, s.vessel_name, s.imo_number FROM survey_reports r LEFT JOIN surveys s ON s.id = r.survey_id
+        WHERE r.id <> ? ORDER BY r.updated_at DESC LIMIT 500');
+    $q->execute([$report['id']]);
+    foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $d = json_decode((string)$r['data'], true) ?: [];
+        if (!$same(($d['fields']['imo'] ?? '') ?: $r['imo_number'], ($d['fields']['vessel_name'] ?? '') ?: $r['vessel_name'])) continue;
+        $tanks = [];
+        foreach ($grades as $g) foreach ((array)($d['tanks'][$g] ?? []) as $row) {
+            $n = trim((string)($row['name'] ?? ''));
+            if ($n !== '') $tanks[$g][] = ['name' => $n, 'ref_height' => trim((string)($row['ref_height'] ?? ''))];
+        }
+        $fields = [];
+        foreach ($vesselKeys as $k) { $v = trim((string)($d['fields'][$k] ?? '')); if ($v !== '') $fields[$k] = $v; }
+        if (!$tanks && count($fields) < 3) continue;
+        $gs = array_values(array_filter((array)($d['grades'] ?? []), fn($g) => in_array($g, $grades, true)));
+        return ['source' => 'report', 'label' => (RT_KINDS[$r['kind']] ?? $r['kind']) . ' report, ' . date('d M Y', strtotime((string)$r['updated_at'])),
+            'fields' => $fields, 'grades' => $gs ?: array_keys($tanks), 'tanks' => $tanks];
+    }
+
+    // 2. the Excel uploaded for an earlier survey of the vessel
+    $cond = $imo !== '' ? 's.imo_number = ?' : '1=1';
+    $q = $db->prepare("SELECT u.id, u.file_path, u.file_name, s.id AS survey_id, s.vessel_name, s.imo_number, s.assign_date FROM uploads u JOIN surveys s ON s.id = u.survey_id
+        WHERE (LOWER(u.file_name) LIKE '%.xlsx' OR LOWER(u.file_name) LIKE '%.xlsm') AND s.id <> ? AND $cond ORDER BY u.id DESC LIMIT 200");
+    $q->execute($imo !== '' ? [(int)($report['survey_id'] ?? 0), $imo] : [(int)($report['survey_id'] ?? 0)]);
+    $tried = 0;
+    foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $u) {
+        if (!$same($u['imo_number'], $u['vessel_name'])) continue;
+        if (++$tried > 3) break;
+        $abs = realpath(dirname(__DIR__) . '/' . ltrim((string)$u['file_path'], '/'));
+        $root = realpath(dirname(__DIR__) . '/uploads');
+        if (!$abs || !$root || strpos($abs, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($abs) || filesize($abs) > 25 * 1024 * 1024) continue;
+        try {
+            $book = sfLoadSpreadsheet($abs);
+            $a = rtAnalyze($book);
+            if (empty($a['ok'])) continue;
+            $fields = [];
+            foreach ($vesselKeys as $k) {
+                $f = $a['fields'][$k] ?? null; $ws = $f ? $book->getSheetByName($f['sheet']) : null;
+                if (!$ws) continue;
+                $v = $ws->getCell($f['cell'])->getCalculatedValue();
+                if ($v === null || is_array($v) || trim((string)$v) === '') continue;
+                [$clean, $err] = sfValidate($eff['fields'][$k]['type'] ?? $f['type'], (string)$v);
+                if ($err === '' && $clean !== '') $fields[$k] = (string)$clean;
+            }
+            $tanks = [];
+            $tws = $book->getSheetByName($a['tables_sheet']);
+            foreach ((array)$a['sections'] as $g => $sec) {
+                if (!$tws || !in_array($g, $grades, true)) continue;
+                for ($r = $sec['first']; $r <= $sec['last']; $r++) {
+                    $n = trim((string)$tws->getCell($sec['cols']['name'] . $r)->getCalculatedValue());
+                    if ($n === '' || preg_match('/^(tank|total|name)\b/i', $n) || mb_strlen($n) > 40) continue;
+                    $h = $tws->getCell($sec['cols']['ref_height'] . $r)->getCalculatedValue();
+                    $tanks[$g][] = ['name' => mb_strtoupper($n), 'ref_height' => is_numeric($h) ? rtrim(rtrim(number_format((float)$h, 3, '.', ''), '0'), '.') : mb_strtoupper(trim((string)$h))];
+                }
+            }
+            $book->disconnectWorksheets();
+            if (!$tanks && count($fields) < 3) continue;
+            return ['source' => 'excel', 'label' => 'Excel of the survey on ' . date('d M Y', strtotime((string)$u['assign_date'])) . ' (' . $u['file_name'] . ')',
+                'fields' => $fields, 'grades' => array_keys($tanks), 'tanks' => $tanks];
+        } catch (Throwable $e) {
+            error_log('srPrevious excel ' . (int)$u['id'] . ': ' . $e->getMessage());
+        }
+    }
+    return null;
 }

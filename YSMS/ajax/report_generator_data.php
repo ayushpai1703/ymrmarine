@@ -101,6 +101,38 @@ if ($action === 'list_excels') {
                 'file_name'   => $r['file_name'],
             ];
         }
+        // Survey Reports made on the website: their latest Excel (kept by the system, not downloaded),
+        // listed first so the vessel's own report is picked automatically. Negative id = survey report file.
+        try {
+            $srq = $db->query("SHOW TABLES LIKE 'survey_report_files'");
+            if ($srq && $srq->fetchColumn()) {
+                $sql = "SELECT f.id, f.file_name, f.created_at, s.id AS survey_id, s.vessel_name, $imo_select, $type_ids_select, st.type_name
+                    FROM survey_report_files f
+                    JOIN survey_reports r ON r.id = f.report_id
+                    JOIN surveys s ON s.id = r.survey_id
+                    LEFT JOIN survey_types st ON s.survey_type_id = st.id
+                    WHERE f.type = 'xlsx' AND f.id = (SELECT MAX(f2.id) FROM survey_report_files f2 WHERE f2.report_id = f.report_id AND f2.type = 'xlsx')
+                    " . ($is_admin ? "" : "AND (s.surveyor_id = :uid OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = :uid2))") . "
+                    ORDER BY f.id DESC";
+                $q = $db->prepare($sql);
+                if (!$is_admin) { $q->bindValue(':uid', (int)($_SESSION['user_id'] ?? 0), PDO::PARAM_INT); $q->bindValue(':uid2', (int)($_SESSION['user_id'] ?? 0), PDO::PARAM_INT); }
+                $q->execute();
+                $sr = [];
+                foreach ($q->fetchAll() as $r) {
+                    $sr[] = [
+                        'upload_id'   => -(int)$r['id'],
+                        'survey_id'   => (int)$r['survey_id'],
+                        'vessel_name' => $r['vessel_name'],
+                        'imo_number'  => $r['imo_number'],
+                        'survey_type' => getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? ''),
+                        'upload_date' => $r['created_at'],
+                        'file_name'   => 'Survey Report — ' . $r['file_name'],
+                        'source'      => 'survey_report',
+                    ];
+                }
+                $out = array_merge($sr, $out);
+            }
+        } catch (Throwable $e) { error_log('report_generator_data.php survey report excels: ' . $e->getMessage()); }
         json_out(['success' => true, 'data' => $out]);
     } catch (Exception $e) {
         error_log('report_generator_data.php list_excels error: ' . $e->getMessage());
@@ -110,7 +142,22 @@ if ($action === 'list_excels') {
 
 if ($action === 'get_excel') {
     $upload_id = (int)($_GET['upload_id'] ?? 0);
-    if ($upload_id <= 0) {
+    if ($upload_id < 0) { // a Survey Report's Excel (made on the website, kept by the system)
+        try {
+            require_once __DIR__ . '/../includes/survey_reports.php';
+            $q = $db->prepare("SELECT report_id, file_path FROM survey_report_files WHERE id = ? AND type = 'xlsx'");
+            $q->execute([-$upload_id]);
+            $f = $q->fetch(PDO::FETCH_ASSOC);
+            $abs = $f ? rtAbs($f['file_path']) : null;
+            // the same access as the report itself (Admin / Super Admin / the vessel's surveyors)
+            if (!$f || !$abs || !srCanUse() || !srReport($db, (int)$f['report_id'])) json_out(['success' => false, 'message' => 'Excel not found.']);
+            json_out(['success' => true, 'data' => base64_encode(file_get_contents($abs))]);
+        } catch (Throwable $e) {
+            error_log('report_generator_data.php get_excel (survey report): ' . $e->getMessage());
+            json_out(['success' => false, 'message' => 'Could not load the Excel file.']);
+        }
+    }
+    if ($upload_id === 0) {
         json_out(['success' => false, 'message' => 'No Excel selected.']);
     }
     try {

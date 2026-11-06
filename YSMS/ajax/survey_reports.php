@@ -3,6 +3,7 @@
  * Survey Reports API (survey_reports.php, survey_report.php). Access: includes/survey_reports.php.
  * CSRF for POST is checked in config.php.
  *
+ *   GET  a=token                      the current CSRF token (after signing in again)
  *   GET  a=list                       reports this user can see
  *   GET  a=surveys&q=                 vessels a new report can be made for
  *   POST a=start   survey_id, kind    "Start Survey" on a vessel: opens its report (the draft when one exists, else a new one)
@@ -14,21 +15,30 @@
  *   POST a=generate id, pdf=1         Excel (+ PDF) from the saved data
  *   POST a=use_latest id              move the report to the active template version
  *   POST a=lookup  id, imo            vessel particulars by IMO (AI + web search); nothing is saved
+ *   GET  a=version&id=                the report's version (live check)
+ *   GET  a=previous&id=               an earlier attendance of the vessel (particulars, grades, tank names + heights)
  *   GET  a=verify&id=                server calculation of the saved data + what is still missing
  *   GET  a=file&id=<file id>          download a generated file
  *   GET  a=template&id=<report id>    the report's template workbook (for the offline Excel)
  */
+ob_start(); // a stray warning / notice must never break the JSON answer
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/survey_reports.php';
-checkAuth();
 
 function srJson(int $code, array $d): void {
+    $stray = '';
+    while (ob_get_level() > 0) $stray .= (string)ob_get_clean();
+    if (trim($stray) !== '') error_log('ajax/survey_reports stray output: ' . mb_substr(trim(strip_tags($stray)), 0, 300));
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     echo json_encode($d);
     exit;
 }
+// signed out (session expired, or the server instance changed): a JSON answer, not the login redirect
+// (which would land on ajax/login.php and answer "Invalid Request" with 200 → "Server error (200)")
+if (empty($_SESSION['user_id'])) srJson(401, ['ok' => false, 'login' => true, 'error' => 'Your session has expired — sign in again. Your changes are kept on this device.']);
+csrf_require();
 if (!srCanUse()) srJson(403, ['ok' => false, 'error' => 'You do not have access to Survey Reports.']);
 $db = getDB();
 rtEnsureTables($db);
@@ -45,6 +55,7 @@ $scope = function () use ($uid): array {
 };
 
 try {
+    if ($a === 'token') srJson(200, ['ok' => true, 'csrf' => csrf_token()]); // a fresh token after signing in again in another tab
     if ($a === 'list') {
         [$w, $p] = $scope();
         $q = $db->prepare("SELECT r.id, r.survey_id, r.kind, r.version, r.data, r.updated_at, r.created_at, s.vessel_name AS s_vessel, s.report_number, s.status, t.version AS template_version,
@@ -83,12 +94,15 @@ try {
         $q->execute([(int)($_GET['id'] ?? 0)]);
         $f = $q->fetch(PDO::FETCH_ASSOC);
         if (!$f || !srReport($db, (int)$f['report_id']) || !($abs = rtAbs($f['file_path']))) srJson(404, ['ok' => false, 'error' => 'File not found.']);
+        // the Excel stays in the system (the Word report generator reads it); only the Admin can download it
+        if ($f['type'] !== 'pdf' && srRole() !== 'Admin') srJson(403, ['ok' => false, 'error' => 'The Excel report is kept in the system and used by the Word report generator.']);
         $pdf = $f['type'] === 'pdf';
         header('Content-Type: ' . ($pdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
         header('Content-Disposition: ' . ($pdf && !empty($_GET['inline']) ? 'inline' : 'attachment') . '; filename="' . str_replace('"', '', $f['file_name']) . '"');
         header('Content-Length: ' . filesize($abs));
         header('Cache-Control: private, no-store');
         header('X-Content-Type-Options: nosniff');
+        while (ob_get_level() > 0) ob_end_clean(); // stream the file, nothing before it
         readfile($abs);
         exit;
     }
@@ -100,6 +114,7 @@ try {
         header('Content-Disposition: attachment; filename="template-v' . $t['version'] . '.xlsx"');
         header('Cache-Control: private, max-age=31536000, immutable'); // a template version never changes
         header('X-Content-Type-Options: nosniff');
+        while (ob_get_level() > 0) ob_end_clean(); // stream the file, nothing before it
         readfile($abs);
         exit;
     }
@@ -146,6 +161,7 @@ try {
         header('Cache-Control: private, no-store');
         header('X-Content-Type-Options: nosniff');
         header('X-Report-Version: ' . $r['version']);
+        while (ob_get_level() > 0) ob_end_clean(); // stream the file, nothing before it
         readfile($p['pdf']);
         exit;
     }
@@ -154,6 +170,17 @@ try {
         $t = $r ? rtTemplate($db, $r['template_id']) : null;
         if (!$r || !$t) srJson(404, ['ok' => false, 'error' => 'Report not found.']);
         srJson(200, ['ok' => true] + srVerify($t, $r['data']));
+    }
+    if ($a === 'version') { // the live check of an open report: only its version (cheap), the page then loads it when newer
+        $r = srReport($db, (int)($_GET['id'] ?? 0));
+        if (!$r) srJson(404, ['ok' => false, 'error' => 'Report not found.']);
+        srJson(200, ['ok' => true, 'version' => $r['version']]);
+    }
+    if ($a === 'previous') { // "Fill from previous attendance": particulars, grades, tank names + heights of an earlier survey of the vessel
+        $r = srReport($db, (int)($_GET['id'] ?? 0));
+        if (!$r) srJson(404, ['ok' => false, 'error' => 'Report not found.']);
+        if (!srCanEdit($r['survey'], $r)) srJson(403, ['ok' => false, 'error' => 'View only.']);
+        srJson(200, ['ok' => true, 'previous' => srPrevious($db, $r)]);
     }
     if (!$isPost) srJson(400, ['ok' => false, 'error' => 'Unknown action.']);
 

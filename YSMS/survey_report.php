@@ -4,8 +4,8 @@
  * step of tank cards per fuel grade on board → ROB summary with the PDF / Excel downloads
  * (company template, includes/survey_reports.php srBuildBook).
  * Works offline after it has been opened once online (survey_report_sw.js): changes are kept on
- * the device and saved when the connection is back; the Excel can be made on the device too
- * (assets/js/report-offline-xlsx.js). Editor: assets/js/survey-report.js.
+ * the device and saved when the connection is back; a draft PDF can be made on the device too
+ * (jsPDF), the final one is made when the connection is back. Editor: assets/js/survey-report.js.
  */
 require_once 'config/config.php';
 require_once 'includes/survey_reports.php';
@@ -38,7 +38,9 @@ include 'includes/header.php';
         <div class="sr-head-r">
             <span class="sr-net" data-net data-testid="sr-net"></span>
             <span class="sr-save" data-save-state data-testid="sr-save-state"></span>
+            <span class="sr-live" data-live hidden data-testid="sr-live"></span>
             <button type="button" class="sr-btn" data-save-now data-testid="sr-save-now"><i class="fa-solid fa-floppy-disk"></i> Save Progress</button>
+            <button type="button" class="sr-btn pri" data-pv="open" data-testid="sr-preview-report"><i class="fa-solid fa-eye"></i> Preview Report</button>
         </div>
     </div>
     <div class="sr-split">
@@ -46,9 +48,9 @@ include 'includes/header.php';
             <div data-banners></div>
             <div data-form data-testid="sr-form"></div>
         </div>
-        <aside class="sr-pv" data-testid="sr-preview" aria-label="Live preview">
+        <aside class="sr-pv" data-testid="sr-preview" aria-label="Report preview" role="dialog">
             <div class="sr-pv-bar">
-                <b class="sr-pv-t"><i class="fa-solid fa-eye"></i> Live preview</b>
+                <b class="sr-pv-t"><i class="fa-solid fa-eye"></i> Report preview</b>
                 <span class="sr-pv-st" data-pv-status data-testid="sr-pv-status">Loading…</span>
                 <span class="sr-pv-sp"></span>
                 <button type="button" class="sr-pv-b" data-pv="prev" title="Previous page" aria-label="Previous page" data-testid="sr-pv-prev"><i class="fa-solid fa-chevron-left"></i></button>
@@ -61,17 +63,17 @@ include 'includes/header.php';
                 <button type="button" class="sr-pv-b sr-pv-x" data-pv="close" title="Close" aria-label="Close preview" data-testid="sr-pv-close"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="sr-pv-c" data-pv-canvas data-testid="sr-pv-canvas"></div>
-            <div class="sr-pv-note">Preview only — not a report: nothing is stored, the vessel's status does not change. Download the final PDF / Excel on the Summary step.</div>
+            <div class="sr-pv-note">Preview only — not a report: nothing is stored, the vessel's status does not change. Download the final PDF on the Summary step.</div>
         </aside>
     </div>
-    <button type="button" class="sr-pv-fab" data-pv="open" data-testid="sr-pv-open"><i class="fa-solid fa-eye"></i> Preview</button>
+    <button type="button" class="sr-pv-fab" data-pv="open" data-testid="sr-pv-open"><i class="fa-solid fa-eye"></i> Preview Report</button>
 </div>
 </div>
 <script>window.SR_PAGE = <?= json_encode(['id' => $id, 'csrf' => csrf_token(), 'api' => 'ajax/survey_reports.php',
     'pdfjs' => 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', 'pdfjsWorker' => 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?>;</script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.14.5/dist/sweetalert2.all.min.js"></script>
-<script src="assets/vendor/exceljs/exceljs.min.js?v=4.4.0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="assets/js/report-calc.js?v=<?= @filemtime(__DIR__ . '/assets/js/report-calc.js') ?>"></script>
-<script src="assets/js/report-offline-xlsx.js?v=<?= @filemtime(__DIR__ . '/assets/js/report-offline-xlsx.js') ?>"></script>
 <script src="assets/js/survey-report.js?v=<?= @filemtime(__DIR__ . '/assets/js/survey-report.js') ?>"></script>
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>

@@ -424,3 +424,88 @@ preview on the right (screens ≥ 1100 px); on a phone a **Preview** button open
 **Deploy.** No manual step: the table is created at runtime on first use (or run
 `database/migration_survey_tank_history.sql` beforehand). Existing reports and data are not
 changed. Rollback: deploy the previous revision; the new table can stay (unused).
+
+## Survey Reports v3 (Excel kept in the system, A4 pages, formats, copy tank, live, previous attendance, share, offline PDF)
+
+**Excel kept in the system (no download).** The summary step has **Download PDF Report** and
+**Preview Report** only. Each PDF made also stores the Excel (`survey_report_files`).
+- The Excel cannot be downloaded by the surveyor: `a=file` gives the Excel to the Admin only.
+- The Word report generator (`report_generator.php`, `ajax/report_generator_data.php`) lists
+  the latest Survey Report Excel of each vessel first, with a negative id = survey report file.
+  It is preselected for the vessel the page was opened for (`?id=`), and **Upload** loads it as
+  before (REPORT sheet).
+- Access is the same as the report: Admin, or the vessel's surveyors.
+
+**A4 pages (`srFitA4`).** TABLES 54B (and its ULSFO/HSMGO copy) and the Offhire certificate:
+- print area = the cells used;
+- margins 0.3", centred horizontally, fitted to the page width;
+- the height left over is shared over the rows (≤ 1.6×), so the page is filled and still prints
+  on one page.
+
+Centred text wider than column A (e.g. "REMARK:") starts at the edge; merged titles stay centred.
+The letterhead is unchanged (a new one will be supplied later).
+
+**Header without empty columns.** The BROB block shows exactly the grades on board. The columns
+left over lose their borders, and "M.Tons" moves next to the last grade (`srHeaderCompact`).
+
+**Reading formats.** Sounding 0.000, density 0.0000, temperature 00.0 — however they are typed:
+- in the form, when leaving the box and on Save tank;
+- in the saved-tank summary;
+- as number formats of the Excel/PDF cells (`RT_TANK_FORMATS`).
+
+Versions compare normalised values, so a re-format makes no new version.
+
+**Step 2.** VLSFO and LSMGO are chosen by default on a new report, and the "Alongside" box is
+removed.
+
+**Preview Report.** No live preview on the page. **Preview Report** (in the header, on the summary,
+and the phone button) opens it:
+- on a computer: a large window;
+- on a phone: full screen.
+
+It refreshes after saves while open, and Esc closes it.
+
+**Copy tank.** **Copy** puts a new tank right after it with the same values, open and marked
+"Copy". It is not auto-saved by Next. Its version 1 is written when it is saved (after its values
+are changed), or when the report is made.
+
+**Live.** The report page checks every 8 s and shows what someone else saved (e.g. the Admin
+watches the surveyor fill the tanks). This happens only while nothing is waiting to be saved on
+that device and no box is being typed in, and an "Updated live — name, time" badge shows.
+Moving between steps no longer saves by itself; the step is remembered on the device. So two
+people looking at one report do not clash.
+
+**Fill from previous attendance (step 1).** Offered when the vessel was surveyed before (`a=previous`,
+`srPrevious`). It is matched by IMO, else by vessel name, from:
+1. the newest earlier Survey Report on the website;
+2. else the Excel uploaded for an earlier survey of the vessel, read with the template analysis.
+   Values must pass the field checks and are marked "please check".
+
+It fills:
+- step 1: the vessel particulars;
+- step 2: the grades;
+- step 3: tank names and reference heights only. Tanks already entered are kept, and no readings,
+  dates or ROB are copied.
+
+**Share (WhatsApp).** **Share** on the ROB comparison makes a 1080 px picture of the card (vessel,
+type, grades, survey vs log book, differences, total).
+- On a phone it opens the share sheet (WhatsApp).
+- On a computer the picture is copied/downloaded and WhatsApp Web opens.
+
+**Session expired ("Server error (200)").** The cause: a request after the session ended was
+redirected to `ajax/login.php`, which answers "Invalid Request" with status 200. Sessions are
+files on the Cloud Run instance, so they end when the instance changes or restarts.
+- The API now answers JSON 401, and the page shows "session expired — sign in again (new tab)".
+- Changes stay on the device, the CSRF token is refreshed (`a=token`), and saving resumes by itself.
+- Stray PHP output can no longer break the JSON.
+
+Keeping sessions across instances (DB sessions) would be a separate change.
+
+**Offline.**
+- Everything is kept on the device and saved when the connection is back (unchanged).
+- With no internet the summary offers a **draft PDF made on the device** (jsPDF 2.5.1 +
+  autotable 3.8.2). It has the letterhead banner, particulars, BROB, tank tables, ROB summary and
+  signatures, and is marked DRAFT.
+- When the connection is back, the offline changes are saved and the final PDF (and the Excel
+  kept in the system) is made by itself, with a "final report ready" message.
+- The offline Excel (ExcelJS) is no longer used.
