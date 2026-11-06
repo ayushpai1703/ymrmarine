@@ -916,6 +916,11 @@ include 'includes/header.php';
         </div>
     </div><!-- /.detail-desktop-view -->
 
+    <?php
+    // Survey Report: Start / Resume Survey, and the Admin's tank history
+    if (in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true)) include 'includes/survey_report_card.php';
+    ?>
+
     <script>
     // 🌟 File-input "chosen" confirmation for the desktop Upload Final
     // Documentation card — purely a display confirmation, same pattern as

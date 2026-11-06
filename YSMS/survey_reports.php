@@ -1,8 +1,9 @@
 <?php
 /**
  * Survey Reports — the bunker survey reports entered on the website and filled into the company's
- * Excel report (Admin uploads it under Report Templates). List + "New report"; each report opens in
- * survey_report.php. Data: ajax/survey_reports.php.
+ * Excel report (Admin uploads it under Report Templates). List only — a report is started from the
+ * vessel's page ("Start Survey", includes/survey_report_card.php); each opens in survey_report.php.
+ * Not in the menu. Data: ajax/survey_reports.php.
  */
 require_once 'config/config.php';
 require_once 'includes/survey_reports.php';
@@ -17,8 +18,7 @@ include 'includes/header.php';
 <div class="sr-wrap">
     <div class="sr-head">
         <div><h1><i class="fa-solid fa-file-signature"></i> Survey Reports</h1>
-            <div class="sr-sub">Choose the report type (221B / ROB, Offhire, Onhire, 3 / 4 Party); the report is made in the company's own Excel format (and PDF).</div></div>
-        <button type="button" class="sr-btn pri" data-new hidden data-testid="sr-new"><i class="fa-solid fa-plus"></i> New report</button>
+            <div class="sr-sub">A survey is started from the vessel's page (Pending Vessels → vessel → Start Survey); the report is made in the company's own Excel format (and PDF).</div></div>
     </div>
     <div class="sr-note" data-no-template hidden data-testid="sr-no-template"><i class="fa-solid fa-circle-info"></i> No report template is uploaded yet.<?= ($_SESSION['role'] ?? '') === 'Admin' ? ' Upload the report workbooks under <a href="admin_report_templates.php">Report Templates</a>.' : ' An Admin has to upload it first.' ?></div>
     <div class="sr-card"><div data-list data-testid="sr-list"><span class="sr-muted">Loading…</span></div></div>
@@ -27,13 +27,12 @@ include 'includes/header.php';
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.14.5/dist/sweetalert2.all.min.js"></script>
 <script>
 (function () {
-  var CSRF = <?= json_encode(csrf_token()) ?>, API = 'ajax/survey_reports.php', KINDS = [];
+  var API = 'ajax/survey_reports.php', KINDS = [];
   var $ = function (s) { return document.querySelector(s); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   fetch(API + '?a=list', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (res) {
     if (!res.ok) { $('[data-list]').textContent = res.error || 'Could not load.'; return; }
     KINDS = res.kinds || [];
-    $('[data-new]').hidden = !res.can_create;
     $('[data-no-template]').hidden = res.active;
     var admin = res.is_admin;
     $('[data-list]').innerHTML = res.reports.length ? '<div style="overflow-x:auto"><table class="sr-t"><thead><tr><th>Vessel</th><th>Report type</th><th>Made by</th><th>Last saved</th><th>Files</th>' + (admin ? '<th>Tank changes</th>' : '') + '<th></th></tr></thead><tbody>' +
@@ -47,26 +46,6 @@ include 'includes/header.php';
           (admin ? '<td data-testid="sr-list-changes-' + r.id + '">' + (+r.tank_changes ? '<b style="color:#b45309">' + r.tank_changes + '</b> change' + (+r.tank_changes === 1 ? '' : 's') : '<span class="sr-muted">0</span>') + '</td>' : '') +
           '<td><a class="sr-btn" href="survey_report.php?id=' + r.id + '" data-testid="sr-open-' + r.id + '"><i class="fa-solid fa-pen-to-square"></i> Open</a></td></tr>';
       }).join('') + '</tbody></table></div>' : '<div class="sr-empty"><i class="fa-solid fa-file-circle-plus"></i><div>No survey reports yet.</div></div>';
-  });
-  $('[data-new]').addEventListener('click', function () {
-    Swal.fire({
-      title: 'New survey report', width: 560, showConfirmButton: false, showCancelButton: true,
-      html: '<div style="font-size:13px;color:#64748b;margin-bottom:10px">Choose the report type</div><div class="sr-kinds" data-testid="sr-kinds">' + KINDS.map(function (k) {
-        return '<button type="button" class="sr-kind" data-kind="' + k.key + '"' + (k.active ? '' : ' disabled title="Template not uploaded yet"') + ' data-testid="sr-kind-' + k.key + '">' + esc(k.label) + (k.active ? '' : '<small>Template not uploaded yet</small>') + '</button>';
-      }).join('') + '</div>',
-      didOpen: function (el) {
-        el.querySelectorAll('[data-kind]:not([disabled])').forEach(function (b) {
-          b.addEventListener('click', function () {
-            Swal.showLoading();
-            var f = new FormData(); f.append('a', 'create'); f.append('kind', b.getAttribute('data-kind')); f.append('csrf_token', CSRF);
-            fetch(API, { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-CSRF-Token': CSRF } }).then(function (r) { return r.json(); }).then(function (res) {
-              if (!res.ok) { Swal.hideLoading(); Swal.showValidationMessage(res.error || 'Not created.'); return; }
-              location.href = 'survey_report.php?id=' + res.id;
-            });
-          });
-        });
-      }
-    });
   });
 })();
 </script>

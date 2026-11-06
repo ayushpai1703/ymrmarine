@@ -324,6 +324,10 @@ The existing Survey Form (`survey_form.php`) and its formats are not changed.
 
 ## Report types, no vessel pick, one-page tank report, tank change history
 
+> Superseded in part by "Survey Report Generator Enhancement" below: reports are now started from
+> the vessel's page (no "New report" button, no reports without a vessel), and the field-level
+> change log was replaced by the tank version history.
+
 **Report types.** "New report" lists the report types: 221B / ROB Survey, Offhire, Onhire,
 3 Party Offhire, 3 Party Onhire, 4 Party Offhire (`RT_KINDS`).
 - Each type has its own template. The Admin uploads it in Report Templates, which has one tab
@@ -360,3 +364,63 @@ from the IMO Lookup (`survey_reports.survey_id` is now NULL for these reports).
 
 Tests: `sr_test.js` 57/57, `sr_wizard_test.js` 43/43, including the change history (a saved and
 edited tank, and an edit that was not saved, then the report made) and the list for the Admin.
+
+## Survey Report Generator Enhancement (entry point, live preview, tank version history)
+
+**Entry point — the vessel's page.** The "Survey Reports" menu item is gone. A survey report is
+started from the vessel: Pending Vessels (or Pending Reports) → vessel → **Survey Report** card
+(`includes/survey_report_card.php`, on `vessel_detail.php`, `report_detail.php`,
+`completed_detail.php`).
+- No report yet: Admin / the assigned Surveyor choose the report type and press **Start
+  Survey** (`a=start`). The type is preselected only when the vessel's survey type is exactly one
+  report type (e.g. "Offhire"); otherwise the user chooses.
+- Start runs in a transaction that locks the vessel row: double clicks or two users at once open
+  the same draft, never two reports. The report keeps the vessel id, its name and IMO.
+- A report exists: **Resume Survey** (or **Open report** once the vessel is no longer pending).
+- A report can no longer be made without a vessel (`a=create` removed). Old reports made without
+  a vessel still open from `survey_reports.php` (the list stays, not in the menu).
+- The editor's back link goes to the vessel's page.
+
+**Split layout and live preview.** `survey_report.php` shows the wizard on the left and a live
+preview on the right (screens ≥ 1100 px); on a phone a **Preview** button opens it full screen.
+- The preview is the real report (same template, letterhead, tables and calculations) made by
+  the server from the **saved** values: `a=preview` → a temporary PDF in the server's temp folder,
+  reused while nothing changes, removed after an hour. Nothing is stored with the report, no file
+  is listed, no number is given, the vessel's status is not touched.
+- It refreshes after each save and step change (debounced; an older answer never replaces a newer
+  one). Page navigation, zoom, refresh. Viewer: pdf.js 3.11.174 from cdnjs.
+- **Save Progress** button; the indicator shows Saved / Saving… / Save failed (and "Changes on
+  this device" when offline).
+
+**Tank version history (Admin only).** Table `survey_tank_entry_history`
+(`database/migration_survey_tank_history.sql`).
+- Tracked: Sounding (typed, or reference height − ullage), Volume, Density, Temperature.
+  Name, remarks and every other field never make a version.
+- Version 1 when a tank is first saved ("Save tank", or Next on a complete tank). A new version
+  only when at least one of the four changes — several at once make one version; going back to an
+  earlier value makes a new version. Numbers are compared normalised (250.5 = 250.50, .948 =
+  0.9480), so autosave and repeated saves add nothing.
+- A tank opened with **Edit** gets its version when it is saved again; when the report is made,
+  tanks still being edited are recorded too.
+- Written in the same transaction as the report's current values (`SELECT … FOR UPDATE` on the
+  report, version check, update, history insert, commit). Any failure rolls everything back;
+  a stale or simultaneous save is refused with 409 and overwrites nothing. UNIQUE (report_id,
+  tank_id, version_number) makes a duplicate version impossible. Rows are never updated or deleted.
+- Admin: the vessel page's Survey Report card → **Tank history**: choose a tank, see every
+  version (newest first, current marked, changed values highlighted, who and when) and compare any
+  two versions. Also on the summary step of the report.
+- `a=tank_history` answers only the Admin (403 for Surveyor, Super Admin and everyone else,
+  before anything is read). The client PDF / Excel never contain history.
+- The Survey Reports list column "Tank changes" counts versions after the first.
+
+**Files.** `includes/survey_report_card.php` (new), `includes/survey_reports.php`
+(`srEnsureHistory`, `srTrackNorm`, `srTracked`, `srTankVersionsApply`, `srTankHistory`, `srStart`,
+`srReportForSurvey`, `srPreviewPdf`; the old `srLogTankChanges` / `srTankLog` removed),
+`ajax/survey_reports.php` (`start`, `for_survey`, `tank_history`, `preview`; transactional save),
+`survey_report.php`, `survey_reports.php`, `assets/js/survey-report.js`,
+`assets/css/survey-report.css`, `includes/nav.php`, `vessel_detail.php`, `report_detail.php`,
+`completed_detail.php`, `database/migration_survey_tank_history*.sql`.
+
+**Deploy.** No manual step: the table is created at runtime on first use (or run
+`database/migration_survey_tank_history.sql` beforehand). Existing reports and data are not
+changed. Rollback: deploy the previous revision; the new table can stay (unused).

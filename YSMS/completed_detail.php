@@ -908,6 +908,11 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
         </div>
     </div><!-- /.detail-desktop-view -->
 
+    <?php
+    // Survey Report: Start / Resume Survey, and the Admin's tank history
+    if (in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true)) include 'includes/survey_report_card.php';
+    ?>
+
     <!-- Add Remarks — shared section, not part of the mobile/desktop toggle
          above, so it always renders once with its own simple responsive CSS. -->
     <section class="remarks-section" id="remarks-section" data-testid="remarks-section">

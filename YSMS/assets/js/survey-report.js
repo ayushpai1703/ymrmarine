@@ -82,6 +82,7 @@
     saveState(S.dirty ? (online() ? 'Saving…' : 'Changes on this device') : 'Saved', S.dirty ? 'dirty' : '');
     if (S.dirty && online() && !fromCache) saveNow();
     if (online() && !fromCache) { cacheTemplate(); precache(); }
+    if (!S.dirty) preview();
   }
   /** Keep this page and everything it loaded (scripts incl. ExcelJS, styles, fonts, CDN files) for offline use. */
   function precache() {
@@ -233,7 +234,7 @@
   }
   function go(id) {
     var seen = read(LS + '_seen') || []; if (seen.indexOf(id) < 0) { seen.push(id); store(LS + '_seen', seen); }
-    S.data.step = id; changed(true); render(); window.scrollTo(0, 0);
+    S.data.step = id; changed(true); render(); window.scrollTo(0, 0); preview();
     if (id === 'summary') { S.tankLog = null; verify(); }
   }
 
@@ -417,21 +418,27 @@
       '<button type="button" class="sr-link" data-offline-xlsx data-testid="sr-offline-xlsx"><i class="fa-solid fa-download"></i> Draft Excel on this device (works offline)</button>' +
       '<details class="sr-files"' + (S.files.length ? '' : ' hidden') + '><summary>Earlier files (' + S.files.length + ')</summary><div data-files>' + filesHtml() + '</div></details></section>';
   }
-  /** Admin: every change made to a tank after it was saved (who, when, old → new). */
+  /** Admin: the version history of the saved tanks (Sounding, Volume, Density, Temperature). */
+  var HCOLS = [['sounding', 'Sounding'], ['volume', 'Volume'], ['density', 'Density'], ['temperature', 'Temp']];
   function tankLogHtml() {
     if (!S.isAdmin) return '';
-    if (S.tankLog === null) { loadTankLog(); return '<section class="sr-card" data-testid="sr-tank-log"><h3><i class="fa-solid fa-clock-rotate-left"></i> Tank change history</h3><span class="sr-muted">Loading…</span></section>'; }
-    var L = S.tankLog;
-    return '<section class="sr-card" data-testid="sr-tank-log"><h3><i class="fa-solid fa-clock-rotate-left"></i> Tank change history <small class="sr-muted">' + L.length + ' change' + (L.length === 1 ? '' : 's') + ' after the tanks were saved</small></h3>' +
-      (L.length ? '<div class="sr-cmp-wrap"><table class="sr-t sr-log"><thead><tr><th>When</th><th>Tank</th><th>Changed</th><th>From</th><th>To</th><th>By</th></tr></thead><tbody>' + L.map(function (x) {
-        return '<tr><td>' + esc(String(x.changed_at).slice(0, 16)) + '</td><td><b>' + esc(x.tank_name) + '</b> <small class="sr-muted">' + esc(x.grade_label) + '</small></td><td>' + esc(x.field_label) + '</td>' +
-          '<td>' + (x.field === 'deleted' ? '' : esc(x.old_value === '' ? '—' : x.old_value)) + '</td><td>' + (x.field === 'deleted' ? '<span class="sr-del">deleted</span>' : '<b>' + esc(x.new_value === '' ? '—' : x.new_value) + '</b>') + '</td><td>' + esc(x.changed_by_name || '') + '</td></tr>';
-      }).join('') + '</tbody></table></div>' : '<span class="sr-muted">No tank was changed after it was saved.</span>') + '</section>';
+    if (S.tankLog === null) { loadTankLog(); return '<section class="sr-card" data-testid="sr-tank-log"><h3><i class="fa-solid fa-clock-rotate-left"></i> Tank history</h3><span class="sr-muted">Loading…</span></section>'; }
+    var T = S.tankLog, edits = 0;
+    T.forEach(function (t) { edits += t.versions.length - 1; });
+    return '<section class="sr-card" data-testid="sr-tank-log"><h3><i class="fa-solid fa-clock-rotate-left"></i> Tank history <small class="sr-muted">Admin only · ' + edits + ' change' + (edits === 1 ? '' : 's') + ' after the first save</small></h3>' +
+      (T.length ? '<div class="sr-cmp-wrap"><table class="sr-t sr-log"><thead><tr><th>Tank</th><th>Version</th>' + HCOLS.map(function (c) { return '<th>' + c[1] + '</th>'; }).join('') + '<th>By</th><th>When</th></tr></thead><tbody>' + T.map(function (t) {
+        return t.versions.slice().reverse().map(function (v, k) {
+          return '<tr data-testid="sr-hist-' + esc(t.tank_id) + '-' + v.version + '">' + (k ? '' : '<td rowspan="' + t.versions.length + '"><b>' + esc(t.name) + '</b> <small class="sr-muted">' + esc(t.grade_label) + '</small>' + (t.in_report ? '' : ' <span class="sr-del">removed</span>') + '</td>') +
+            '<td>v' + v.version + (v.version === t.current_version ? ' <span class="sr-cur">current</span>' : '') + '</td>' +
+            HCOLS.map(function (c) { return '<td' + (v.changed.indexOf(c[0]) >= 0 ? ' class="chg"' : '') + '>' + esc(v.values[c[0]] == null ? '—' : v.values[c[0]]) + '</td>'; }).join('') +
+            '<td>' + esc(v.by || '') + '</td><td>' + esc(String(v.at).slice(0, 16)) + '</td></tr>';
+        }).join('');
+      }).join('') + '</tbody></table></div>' : '<span class="sr-muted">No tank has been saved yet.</span>') + '</section>';
   }
   function loadTankLog() {
     if (S.tankLogLoading) return; S.tankLogLoading = true;
-    fetch(P.api + '?a=tank_log&id=' + P.id, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (res) {
-      S.tankLogLoading = false; S.tankLog = res.ok ? res.log : [];
+    fetch(P.api + '?a=tank_history&id=' + P.id, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (res) {
+      S.tankLogLoading = false; S.tankLog = res.ok ? res.tanks : [];
       if (S.data.step === 'summary') render();
     }).catch(function () { S.tankLogLoading = false; });
   }
@@ -494,6 +501,8 @@
     if ((b = t.closest('[data-mode]'))) { var m = b.getAttribute('data-mode').split(':'), tr = S.data.tanks[m[0]][+m[1]]; tr.mode = m[2]; tr.sounding = m[2] === 'ullage' ? sounding(tr) : tr.sounding; changed(); render(); return; }
     if ((b = t.closest('[data-gen]'))) { generate(b.getAttribute('data-gen')); return; }
     if (t.closest('[data-offline-xlsx]')) offlineXlsx();
+    if (t.closest('[data-save-now]')) { saveProgress(); return; }
+    if ((b = t.closest('[data-pv]'))) { pvAction(b.getAttribute('data-pv')); return; }
   });
   document.addEventListener('change', function (ev) {
     var el = ev.target;
@@ -636,14 +645,14 @@
       S.saving = false;
       if (res.ok) {
         S.version = res.version; S.errors = res.errors || {};
-        if (payload() === sent) { S.dirty = false; store(LS, null); saveState('Saved', ''); }
+        if (payload() === sent) { S.dirty = false; store(LS, null); saveState('Saved', ''); preview(); }
         else { store(LS, { data: S.data, base: S.version, dirty: true, at: Date.now() }); saveNow(); }
         var c = read(CACHE); if (c) { c.report.version = S.version; c.report.data = JSON.parse(sent); store(CACHE, c); }
         showErrors();
         return true;
       }
       if (res._status === 409 && res.server) {
-        saveState('Not saved — changed elsewhere', 'err');
+        saveState('Save failed — changed elsewhere', 'err');
         Swal.fire({ icon: 'warning', title: 'Changed by someone else', html: esc(res.error) + '<br>Keep your changes (they replace the other version) or load the saved one?', showDenyButton: true,
           confirmButtonText: 'Keep my changes', denyButtonText: 'Load the saved report', allowOutsideClick: false }).then(function (r) {
           if (r.isConfirmed) { S.version = res.server.version; saveNow(); }
@@ -651,7 +660,7 @@
         });
         return false;
       }
-      saveState(res._status === 0 ? 'Changes on this device' : 'Not saved', 'err');
+      saveState(res._status === 0 ? 'Changes on this device' : 'Save failed', 'err');
       if (res.error) toast('error', res.error);
       return false;
     }).catch(function () { S.saving = false; saveState('Changes on this device', 'dirty'); return false; });
@@ -662,6 +671,82 @@
     return wait().then(function () { return S.dirty ? saveNow() : true; }).then(function () { return wait(); });
   }
   window.addEventListener('beforeunload', function () { if (S.dirty && online()) saveNow(); }); // what is not saved yet stays on this device (localStorage)
+  /** "Save Progress": save now (whatever the timer), say how it went. */
+  function saveProgress() {
+    if (!S.canEdit) return;
+    if (!online()) { toast('info', 'Offline — kept on this device, saved when you are back online.'); return; }
+    if (!S.dirty) { saveState('Saved', ''); toast('success', 'All changes are saved.'); return; }
+    saveState('Saving…', 'dirty');
+    flush().then(function () { if (!S.dirty) toast('success', 'Progress saved.'); });
+  }
+
+  // ---------- live preview (right panel; a phone opens it with the Preview button) ----------
+  // The server makes the report from the SAVED values into a temporary PDF (ajax a=preview): nothing
+  // is stored with the report, no file is listed, the vessel's status is not touched.
+  var PV = { doc: null, page: 1, zoom: 1, seq: 0, timer: null, ver: null, lib: null };
+  function pvEl(s) { return document.querySelector('[data-pv-' + s + ']'); }
+  function pvLib() {
+    if (PV.lib) return PV.lib;
+    PV.lib = new Promise(function (ok, no) {
+      if (window.pdfjsLib) return ok(window.pdfjsLib);
+      var sc = document.createElement('script'); sc.src = P.pdfjs; sc.onload = function () { window.pdfjsLib.GlobalWorkerOptions.workerSrc = P.pdfjsWorker; ok(window.pdfjsLib); };
+      sc.onerror = function () { PV.lib = null; no(new Error('The preview viewer could not be loaded.')); }; document.head.appendChild(sc);
+    });
+    return PV.lib;
+  }
+  function pvStatus(text, cls) { var e = pvEl('status'); if (e) { e.textContent = text; e.className = 'sr-pv-st ' + (cls || ''); } }
+  function preview(now) {
+    if (!pvEl('canvas')) return;
+    clearTimeout(PV.timer);
+    PV.timer = setTimeout(pvLoad, now ? 0 : 900);
+  }
+  function pvLoad() {
+    if (!online()) { pvStatus('Offline — preview when back online', 'warn'); return; }
+    if (S.dirty || S.saving) { PV.timer = setTimeout(pvLoad, 700); return; } // preview what is saved, never a half-saved state
+    if (PV.ver === S.version && PV.doc) return;
+    var seq = ++PV.seq, ver = S.version;
+    pvStatus('Updating…', 'busy');
+    Promise.all([pvLib(), fetch(P.api + '?a=preview&id=' + P.id + '&v=' + ver, { credentials: 'same-origin' }).then(function (r) {
+      if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) { throw new Error(j.error || 'Preview not available (' + r.status + ').'); });
+      return r.arrayBuffer();
+    })]).then(function (x) {
+      if (seq !== PV.seq) return; // a newer preview was asked for meanwhile
+      return x[0].getDocument({ data: new Uint8Array(x[1]) }).promise.then(function (doc) {
+        if (seq !== PV.seq) return;
+        if (PV.doc) PV.doc.destroy();
+        PV.doc = doc; PV.ver = ver; PV.page = Math.min(PV.page, doc.numPages) || 1;
+        pvStatus('Preview of the saved report', 'ok');
+        return pvDraw();
+      });
+    }).catch(function (e) { if (seq === PV.seq) pvStatus(e.message || 'Preview not available.', 'err'); });
+  }
+  function pvDraw() {
+    if (!PV.doc) return;
+    var box = pvEl('canvas'), n = PV.doc.numPages;
+    pvEl('page').textContent = PV.page + ' / ' + n;
+    pvEl('zoomv').textContent = Math.round(PV.zoom * 100) + '%';
+    return PV.doc.getPage(PV.page).then(function (pg) {
+      var w = Math.max(240, box.clientWidth - 16), v1 = pg.getViewport({ scale: 1 }), scale = (w / v1.width) * PV.zoom, dpr = window.devicePixelRatio || 1;
+      var vp = pg.getViewport({ scale: scale * dpr }), c = document.createElement('canvas');
+      c.width = vp.width; c.height = vp.height; c.style.width = (vp.width / dpr) + 'px'; c.style.height = (vp.height / dpr) + 'px';
+      c.setAttribute('data-testid', 'sr-pv-page');
+      return pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise.then(function () { box.innerHTML = ''; box.appendChild(c); });
+    });
+  }
+  function pvAction(a) {
+    if (a === 'open') { document.body.classList.add('sr-pv-open'); preview(true); if (PV.doc) pvDraw(); return; }
+    if (a === 'close') { document.body.classList.remove('sr-pv-open'); return; }
+    if (a === 'refresh') { PV.ver = null; preview(true); return; }
+    if (!PV.doc) return;
+    if (a === 'prev' && PV.page > 1) PV.page--;
+    else if (a === 'next' && PV.page < PV.doc.numPages) PV.page++;
+    else if (a === 'in') PV.zoom = Math.min(3, PV.zoom + 0.25);
+    else if (a === 'out') PV.zoom = Math.max(0.5, PV.zoom - 0.25);
+    else if (a === 'fit') PV.zoom = 1;
+    else return;
+    pvDraw();
+  }
+  window.addEventListener('resize', function () { clearTimeout(PV.rs); PV.rs = setTimeout(pvDraw, 200); });
 
   // ---------- summary check + files ----------
   function verify() {

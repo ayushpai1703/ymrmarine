@@ -5,8 +5,10 @@
  *
  *   GET  a=list                       reports this user can see
  *   GET  a=surveys&q=                 vessels a new report can be made for
- *   POST a=create  kind               new report (no vessel chosen; its maker owns it) on the type's active template
- *   GET  a=tank_log&id=               changes to saved tanks (Admin)
+ *   POST a=start   survey_id, kind    "Start Survey" on a vessel: opens its report (the draft when one exists, else a new one)
+ *   GET  a=for_survey&survey_id=      the vessel's report (id, type, state) or none
+ *   GET  a=tank_history&id= | &survey_id=   version history of the saved tanks (Admin only)
+ *   GET  a=preview&id=                the report as it prints now, as a temporary PDF (nothing is stored)
  *   GET  a=get&id=                    data, version, form config, files
  *   POST a=save    id, version, data  saves the draft (refused when someone saved meanwhile)
  *   POST a=generate id, pdf=1         Excel (+ PDF) from the saved data
@@ -30,6 +32,7 @@ function srJson(int $code, array $d): void {
 if (!srCanUse()) srJson(403, ['ok' => false, 'error' => 'You do not have access to Survey Reports.']);
 $db = getDB();
 rtEnsureTables($db);
+srEnsureHistory($db);
 $a = (string)($_REQUEST['a'] ?? '');
 $uid = (int)($_SESSION['user_id'] ?? 0);
 $isPost = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST';
@@ -49,7 +52,7 @@ try {
                 (SELECT MAX(f.created_at) FROM survey_report_files f WHERE f.report_id = r.id) AS last_file,
                 (SELECT MAX(f.id) FROM survey_report_files f WHERE f.report_id = r.id AND f.type = 'pdf') AS last_pdf,
                 (SELECT MAX(f.id) FROM survey_report_files f WHERE f.report_id = r.id AND f.type = 'xlsx') AS last_xlsx,
-                (SELECT COUNT(*) FROM survey_report_tank_log l WHERE l.report_id = r.id) AS tank_changes
+                (SELECT COUNT(*) FROM survey_tank_entry_history h WHERE h.report_id = r.id AND h.version_number > 1) AS tank_changes
             FROM survey_reports r LEFT JOIN surveys s ON s.id = r.survey_id LEFT JOIN report_templates t ON t.id = r.template_id
             LEFT JOIN users u ON u.id = r.updated_by LEFT JOIN users cu ON cu.id = r.created_by
             WHERE $w ORDER BY r.updated_at DESC LIMIT 500");
@@ -63,7 +66,7 @@ try {
         }, $q->fetchAll(PDO::FETCH_ASSOC));
         $kinds = [];
         foreach (RT_KINDS as $k => $label) $kinds[] = ['key' => $k, 'label' => $label, 'active' => (bool)rtActive($db, $k)];
-        srJson(200, ['ok' => true, 'reports' => $rows, 'can_create' => in_array(srRole(), ['Admin', 'Surveyor'], true), 'kinds' => $kinds,
+        srJson(200, ['ok' => true, 'reports' => $rows, 'can_create' => false, 'kinds' => $kinds,
             'active' => (bool)array_filter($kinds, fn($k) => $k['active']), 'is_admin' => srRole() === 'Admin']);
     }
     if ($a === 'surveys') {
@@ -111,11 +114,40 @@ try {
             'can_edit' => srCanEdit($r['survey'], $r), 'config' => srEditorConfig($t), 'files' => srFiles($db, $r['id']),
             'newer_template' => $active && $active['id'] !== $t['id'] ? ['id' => $active['id'], 'version' => $active['version']] : null]);
     }
-    if ($a === 'tank_log') {
-        if (srRole() !== 'Admin') srJson(403, ['ok' => false, 'error' => 'Only Admin can see the change history.']);
+    if ($a === 'tank_history') { // Admin only — checked before anything is looked up
+        if (srRole() !== 'Admin') srJson(403, ['ok' => false, 'error' => 'Only Admin can see the tank history.']);
+        if (!empty($_GET['survey_id'])) {
+            $s = sfSurvey($db, (int)$_GET['survey_id']);
+            if (!$s || !sfCanAccess($db, $s)) srJson(404, ['ok' => false, 'error' => 'Vessel not found.']);
+            $r = srReportForSurvey($db, (int)$s['id']);
+            if (!$r) srJson(200, ['ok' => true, 'report' => null, 'tanks' => []]);
+        } else {
+            $r = srReport($db, (int)($_GET['id'] ?? 0));
+            if (!$r) srJson(404, ['ok' => false, 'error' => 'Report not found.']);
+        }
+        srJson(200, ['ok' => true, 'report' => ['id' => $r['id'], 'kind_label' => RT_KINDS[$r['kind']] ?? $r['kind']], 'tanks' => srTankHistory($db, $r)]);
+    }
+    if ($a === 'for_survey') {
+        $s = sfSurvey($db, (int)($_GET['survey_id'] ?? 0));
+        if (!$s || !sfCanAccess($db, $s)) srJson(404, ['ok' => false, 'error' => 'Vessel not found.']);
+        $r = srReportForSurvey($db, (int)$s['id']);
+        srJson(200, ['ok' => true, 'report' => $r ? ['id' => $r['id'], 'kind' => $r['kind'], 'kind_label' => RT_KINDS[$r['kind']] ?? $r['kind'], 'updated_at' => $r['updated_at'], 'updated_by' => $r['updated_by_name']] : null,
+            'can_start' => in_array(srRole(), ['Admin', 'Surveyor'], true) && srCanEdit($s)]);
+    }
+    if ($a === 'preview') { // view only: nothing is stored, no file record, no status change
         $r = srReport($db, (int)($_GET['id'] ?? 0));
-        if (!$r) srJson(404, ['ok' => false, 'error' => 'Report not found.']);
-        srJson(200, ['ok' => true, 'log' => srTankLog($db, $r['id'])]);
+        $t = $r ? rtTemplate($db, $r['template_id']) : null;
+        if (!$r || !$t || !rtAbs($t['file_path'])) srJson(404, ['ok' => false, 'error' => 'Report not found.']);
+        $p = srPreviewPdf($t, $r);
+        if (!$p['ok']) srJson(422, ['ok' => false, 'error' => 'The preview could not be made: ' . $p['error']]);
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: inline; filename="preview.pdf"');
+        header('Content-Length: ' . filesize($p['pdf']));
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+        header('X-Report-Version: ' . $r['version']);
+        readfile($p['pdf']);
+        exit;
     }
     if ($a === 'verify') { // view-only users see the checked summary too
         $r = srReport($db, (int)($_GET['id'] ?? 0));
@@ -125,16 +157,17 @@ try {
     }
     if (!$isPost) srJson(400, ['ok' => false, 'error' => 'Unknown action.']);
 
-    if ($a === 'create') {
+    if ($a === 'start') { // only from a vessel: no report without a valid vessel
         if (!in_array(srRole(), ['Admin', 'Surveyor'], true)) srJson(403, ['ok' => false, 'error' => 'View only.']);
-        $kind = (string)($_POST['kind'] ?? '');
-        if (!isset(RT_KINDS[$kind])) srJson(422, ['ok' => false, 'error' => 'Choose the report type.']);
-        $t = rtActive($db, $kind);
-        if (!$t) srJson(422, ['ok' => false, 'error' => 'No ' . RT_KINDS[$kind] . ' template is uploaded yet. An Admin uploads it under Report Templates.']);
-        $now = date('Y-m-d H:i:s');
-        $db->prepare('INSERT INTO survey_reports (survey_id, template_id, kind, data, version, created_by, created_at, updated_by, updated_at) VALUES (NULL, ?, ?, ?, 1, ?, ?, ?, ?)')
-           ->execute([$t['id'], $kind, json_encode(srDefaults(rtEffective($t), null)), $uid ?: null, $now, $uid ?: null, $now]);
-        srJson(200, ['ok' => true, 'id' => (int)$db->lastInsertId()]);
+        $s = sfSurvey($db, (int)($_POST['survey_id'] ?? 0));
+        if (!$s || !sfCanAccess($db, $s)) srJson(404, ['ok' => false, 'error' => 'Vessel not found.']);
+        if (!srCanEdit($s)) { // not pending any more: an existing report opens (view), nothing new is made
+            $ex = srReportForSurvey($db, (int)$s['id']);
+            if ($ex) srJson(200, ['ok' => true, 'id' => $ex['id'], 'created' => false]);
+            srJson(403, ['ok' => false, 'error' => 'This vessel is no longer pending — a survey cannot be started.']);
+        }
+        $res = srStart($db, $s, (string)($_POST['kind'] ?? ''), $uid);
+        srJson($res['ok'] ? 200 : 422, $res);
     }
 
     $r = srReport($db, (int)($_POST['id'] ?? 0));
@@ -160,16 +193,39 @@ try {
             $errors = array_filter($errors, fn($k) => strpos($k, 't:') !== 0, ARRAY_FILTER_USE_KEY); // tanks are checked per tank (srTankErrors)
             srCleanExtra($eff, $in, $store, $errors); // grades, step, extra values, tank rows of every grade as typed
             $ver = $r['version'] + 1;
-            $upd = $db->prepare('UPDATE survey_reports SET data = ?, version = ?, updated_by = ?, updated_at = ? WHERE id = ? AND version = ?');
-            $upd->execute([json_encode($store), $ver, $uid ?: null, date('Y-m-d H:i:s'), $r['id'], $r['version']]);
-            if (!$upd->rowCount()) srJson(409, ['ok' => false, 'conflict' => true, 'error' => 'Someone else saved this report meanwhile — reload it.']);
+            $versions = 0;
+            // the current values and the tank versions are written together or not at all
+            $db->beginTransaction();
+            try {
+                $lock = $db->prepare('SELECT version FROM survey_reports WHERE id = ? FOR UPDATE');
+                $lock->execute([$r['id']]);
+                if ((int)$lock->fetchColumn() !== $r['version']) {
+                    $db->rollBack();
+                    srJson(409, ['ok' => false, 'conflict' => true, 'error' => 'Someone else saved this report meanwhile — reload it.']);
+                }
+                $upd = $db->prepare('UPDATE survey_reports SET data = ?, version = ?, updated_by = ?, updated_at = ? WHERE id = ? AND version = ?');
+                $upd->execute([json_encode($store), $ver, $uid ?: null, date('Y-m-d H:i:s'), $r['id'], $r['version']]);
+                $versions = srTankVersionsApply($db, $r, $store, false, $uid);
+                $db->commit();
+            } catch (Throwable $e) {
+                if ($db->inTransaction()) $db->rollBack();
+                throw $e;
+            }
             $r['version'] = $ver; $r['data'] = $store;
-            if ($a === 'save') srLogTankChanges($db, $r['id'], $store, false, $uid); // saved tanks changed later → Admin's change history
         }
-        if ($a === 'save') srJson(200, ['ok' => true, 'version' => $r['version'], 'errors' => (object)$errors]);
+        if ($a === 'save') srJson(200, ['ok' => true, 'version' => $r['version'], 'errors' => (object)$errors, 'tank_versions' => $versions ?? 0]);
         $g = srGenerate($db, $r, !empty($_POST['pdf']), $uid);
-        if ($g['ok']) srLogTankChanges($db, $r['id'], $r['data'], true, $uid); // the report as made: tanks still being edited count as saved
         if (!$g['ok']) srJson(422, ['ok' => false, 'error' => $g['error'], 'issues' => $g['issues'] ?? [], 'version' => $r['version']]);
+        // the report as made: tanks still being edited are recorded too, so no reading escapes the history
+        $db->beginTransaction();
+        try {
+            $db->prepare('SELECT id FROM survey_reports WHERE id = ? FOR UPDATE')->execute([$r['id']]);
+            srTankVersionsApply($db, $r, $r['data'], true, $uid);
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            throw $e;
+        }
         srJson(200, ['ok' => true, 'version' => $r['version'], 'files' => srFiles($db, $r['id']), 'new_files' => $g['file_ids'], 'results' => $g['results'], 'pdf_error' => $g['pdf_error']]);
     }
     if ($a === 'lookup') {

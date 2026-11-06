@@ -729,68 +729,178 @@ function srResults(\PhpOffice\PhpSpreadsheet\Spreadsheet $book, array $eff, arra
 }
 
 
-// ================================================================ saved tanks: change log for the Admin
-
-const SR_TANK_FIELDS = ['name' => 'Tank name', 'ref_height' => 'Ref. height', 'mode' => 'Measured', 'sounding' => 'Sounding', 'ullage' => 'Ullage',
-    'volume' => 'Volume', 'density' => 'Density @15°C', 'temp' => 'Temperature'];
+// ================================================================ tank version history (Admin only)
 
 /**
- * After a save: a tank that was saved before ("Save tank") and is saved again with different
- * readings gets one log row per changed value (old → new, who, when); a saved tank that is
- * removed is logged as deleted. A tank being edited (not saved yet) is compared only when it
- * is saved — or when the report is made ($final), so a change never escapes the log.
+ * Every saved tank keeps an immutable version history of its four readings — Sounding, Volume,
+ * Density, Temperature (survey_tank_entry_history). Version 1 is written when the tank is first
+ * saved; a new version only when at least one of the four changes (values compared after
+ * normalising numbers); remarks or any other field never make a version. Written in the same
+ * transaction as the report's current values. Rows are never updated or deleted by the app.
  */
-function srLogTankChanges(PDO $db, int $reportId, array $data, bool $final, int $uid): int {
+const SR_TRACKED = ['sounding' => 'Sounding', 'volume' => 'Volume', 'density' => 'Density', 'temperature' => 'Temperature'];
+
+function srEnsureHistory(PDO $db): void {
+    static $done = false;
+    if ($done) return;
     rtEnsureTables($db);
-    $q = $db->prepare('SELECT tank_id, grade, vals FROM survey_report_tank_saved WHERE report_id = ?');
-    $q->execute([$reportId]);
-    $saved = [];
-    foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) $saved[$r['tank_id']] = ['grade' => $r['grade'], 'vals' => json_decode((string)$r['vals'], true) ?: []];
+    $cols = "`id` int(11) NOT NULL AUTO_INCREMENT,
+        `report_id` int(11) NOT NULL, `survey_id` int(11) DEFAULT NULL, `grade` varchar(10) NOT NULL, `tank_id` varchar(40) NOT NULL,
+        `tank_name` varchar(100) NOT NULL, `version_number` int(11) NOT NULL,
+        `sounding` varchar(30) DEFAULT NULL, `volume` decimal(14,3) DEFAULT NULL, `density` decimal(8,4) DEFAULT NULL, `temperature` decimal(6,1) DEFAULT NULL,
+        `changed_by` int(11) DEFAULT NULL, `changed_at` datetime NOT NULL,
+        PRIMARY KEY (`id`), UNIQUE KEY `uq_steh_tank_version` (`report_id`, `tank_id`, `version_number`),
+        KEY `idx_steh_survey` (`survey_id`), KEY `idx_steh_tank` (`tank_id`)";
+    try {
+        $db->exec("CREATE TABLE IF NOT EXISTS `survey_tank_entry_history` ($cols,
+            CONSTRAINT `fk_steh_report` FOREIGN KEY (`report_id`) REFERENCES `survey_reports` (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Throwable $e) { // foreign key not possible on this server: the table without it
+        $db->exec("CREATE TABLE IF NOT EXISTS `survey_tank_entry_history` ($cols) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+    $done = true;
+}
+
+/** A tracked value as compared and stored: numbers rounded to their decimals, text in capitals, blank → null. */
+function srTrackNorm($v, int $dec): ?string {
+    $v = trim(str_replace(',', '', (string)$v));
+    if ($v === '') return null;
+    if (is_numeric($v)) return number_format(round((float)$v, $dec), $dec, '.', '');
+    return mb_strtoupper(preg_replace('/\s+/u', ' ', $v));
+}
+/** The four tracked readings of a tank row (sounding = typed, or reference height − ullage). */
+function srTracked(array $row): array {
+    return ['sounding' => srTrackNorm(srSounding($row), 3), 'volume' => srTrackNorm($row['volume'] ?? '', 3),
+        'density' => srTrackNorm($row['density'] ?? '', 4), 'temperature' => srTrackNorm($row['temp'] ?? '', 1)];
+}
+
+/**
+ * Write the versions for the saved tanks of $data. Must run inside the transaction that stores
+ * the report's current values. A tank counts as saved when "Save tank" was used (done = 1), or
+ * for every tank when the report is made ($final). → number of versions written.
+ */
+function srTankVersionsApply(PDO $db, array $report, array $data, bool $final, int $uid): int {
+    srEnsureHistory($db);
+    $last = $db->prepare('SELECT version_number, sounding, volume, density, temperature FROM survey_tank_entry_history
+        WHERE report_id = ? AND tank_id = ? ORDER BY version_number DESC LIMIT 1 FOR UPDATE');
+    $ins = $db->prepare('INSERT INTO survey_tank_entry_history (report_id, survey_id, grade, tank_id, tank_name, version_number, sounding, volume, density, temperature, changed_by, changed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     $now = date('Y-m-d H:i:s');
-    $log = $db->prepare('INSERT INTO survey_report_tank_log (report_id, grade, tank_id, tank_name, field, old_value, new_value, changed_by, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    $put = $db->prepare('INSERT INTO survey_report_tank_saved (report_id, tank_id, grade, vals, saved_at) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE grade = VALUES(grade), vals = VALUES(vals), saved_at = VALUES(saved_at)');
-    $n = 0; $seen = [];
+    $n = 0;
     foreach ((array)($data['tanks'] ?? []) as $g => $rows) {
         foreach ((array)$rows as $row) {
-            $id = (string)($row['id'] ?? '');
-            if ($id === '') continue;
-            $seen[$id] = true;
-            if (($row['done'] ?? '') !== '1' && !$final) continue;
-            $vals = [];
-            foreach (array_keys(SR_TANK_FIELDS) as $f) $vals[$f] = mb_substr(trim((string)($row[$f] ?? '')), 0, 100);
-            if ($vals['mode'] !== 'ullage') { $vals['mode'] = 'sounding'; $vals['ullage'] = ''; }
-            if (isset($saved[$id])) {
-                $old = $saved[$id]['vals'];
-                $changed = false;
-                foreach ($vals as $f => $v) {
-                    $o = (string)($old[$f] ?? '');
-                    if ($o === $v) continue;
-                    $log->execute([$reportId, $g, $id, $vals['name'] !== '' ? $vals['name'] : (string)($old['name'] ?? ''), $f, $o, $v, $uid ?: null, $now]);
-                    $n++; $changed = true;
-                }
-                if (!$changed && $saved[$id]['grade'] === $g) continue;
+            $id = preg_replace('/[^A-Za-z0-9_-]/', '', (string)($row['id'] ?? ''));
+            if ($id === '' || (($row['done'] ?? '') !== '1' && !$final)) continue;
+            $t = srTracked($row);
+            if ($t === array_fill_keys(array_keys(SR_TRACKED), null)) continue;
+            $last->execute([$report['id'], $id]);
+            $prev = $last->fetch(PDO::FETCH_ASSOC);
+            if ($prev) {
+                $p = ['sounding' => srTrackNorm($prev['sounding'], 3), 'volume' => srTrackNorm($prev['volume'], 3), 'density' => srTrackNorm($prev['density'], 4), 'temperature' => srTrackNorm($prev['temperature'], 1)];
+                if ($p === $t) continue; // same readings: no new version
             }
-            if (implode('', array_diff_key($vals, ['mode' => 1])) === '') continue;
-            $put->execute([$reportId, $id, $g, json_encode($vals), $now]);
+            $ins->execute([$report['id'], $report['survey_id'] ?: null, $g, $id, mb_substr(trim((string)($row['name'] ?? '')), 0, 100), $prev ? (int)$prev['version_number'] + 1 : 1,
+                $t['sounding'], $t['volume'], $t['density'], $t['temperature'], $uid ?: null, $now]);
+            $n++;
         }
-    }
-    foreach ($saved as $id => $sv) { // a saved tank removed from the report
-        if (isset($seen[$id])) continue;
-        $log->execute([$reportId, $sv['grade'], $id, (string)($sv['vals']['name'] ?? ''), 'deleted', 'tank', null, $uid ?: null, $now]);
-        $db->prepare('DELETE FROM survey_report_tank_saved WHERE report_id = ? AND tank_id = ?')->execute([$reportId, $id]);
-        $n++;
     }
     return $n;
 }
 
-function srTankLog(PDO $db, int $reportId): array {
+/**
+ * The history of a report's tanks, for the Admin: every tank with its versions (oldest first,
+ * the values that changed against the version before marked), its current values in the report,
+ * and whether it is still in the report.
+ */
+function srTankHistory(PDO $db, array $report): array {
+    srEnsureHistory($db);
+    $q = $db->prepare('SELECT h.*, u.full_name AS changed_by_name FROM survey_tank_entry_history h LEFT JOIN users u ON u.id = h.changed_by
+        WHERE h.report_id = ? ORDER BY h.tank_id, h.version_number');
+    $q->execute([$report['id']]);
+    $cur = [];
+    foreach ((array)($report['data']['tanks'] ?? []) as $g => $rows) foreach ((array)$rows as $i => $row) {
+        if (!empty($row['id'])) $cur[$row['id']] = ['grade' => $g, 'pos' => $i + 1, 'name' => (string)($row['name'] ?? ''), 'values' => srTracked($row)];
+    }
+    $tanks = [];
+    foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $h) {
+        $id = $h['tank_id'];
+        if (!isset($tanks[$id])) $tanks[$id] = ['tank_id' => $id, 'grade' => $h['grade'], 'grade_label' => SR_GRADES[$h['grade']][0] ?? strtoupper($h['grade']), 'versions' => []];
+        $vals = ['sounding' => srTrackNorm($h['sounding'], 3), 'volume' => srTrackNorm($h['volume'], 3), 'density' => srTrackNorm($h['density'], 4), 'temperature' => srTrackNorm($h['temperature'], 1)];
+        $prev = end($tanks[$id]['versions']) ?: null;
+        $tanks[$id]['versions'][] = ['version' => (int)$h['version_number'], 'name' => $h['tank_name'], 'values' => $vals,
+            'changed' => $prev ? array_keys(array_diff_assoc($vals, $prev['values'])) : [],
+            'by' => (string)$h['changed_by_name'], 'at' => $h['changed_at']];
+        $tanks[$id]['name'] = $h['tank_name'];
+    }
+    foreach ($tanks as $id => &$t) {
+        $t['current_version'] = end($t['versions'])['version'];
+        $t['in_report'] = isset($cur[$id]);
+        if (isset($cur[$id])) { $t['name'] = $cur[$id]['name'] ?: $t['name']; $t['pos'] = $cur[$id]['pos']; $t['current'] = $cur[$id]['values']; }
+    }
+    unset($t);
+    $order = array_flip(array_keys(SR_GRADES));
+    usort($tanks, fn($a, $b) => [$order[$a['grade']] ?? 9, $a['pos'] ?? 999, $a['name']] <=> [$order[$b['grade']] ?? 9, $b['pos'] ?? 999, $b['name']]);
+    return $tanks;
+}
+
+/**
+ * "Start Survey" on a vessel: its report is opened — the existing draft when there is one,
+ * otherwise a new one on the chosen type's active template. The vessel row is locked meanwhile,
+ * so repeated clicks never make two reports. → ['ok', 'id', 'created'] | ['ok' => false, 'error'].
+ */
+function srStart(PDO $db, array $survey, string $kind, int $uid): array {
     rtEnsureTables($db);
-    $q = $db->prepare('SELECT l.id, l.grade, l.tank_name, l.field, l.old_value, l.new_value, l.changed_at, u.full_name AS changed_by_name
-        FROM survey_report_tank_log l LEFT JOIN users u ON u.id = l.changed_by WHERE l.report_id = ? ORDER BY l.changed_at DESC, l.id DESC LIMIT 500');
-    $q->execute([$reportId]);
-    return array_map(function ($r) {
-        $r['grade_label'] = SR_GRADES[$r['grade']][0] ?? strtoupper($r['grade']);
-        $r['field_label'] = $r['field'] === 'deleted' ? 'Tank deleted' : (SR_TANK_FIELDS[$r['field']] ?? $r['field']);
-        return $r;
-    }, $q->fetchAll(PDO::FETCH_ASSOC));
+    $db->beginTransaction();
+    try {
+        $db->prepare('SELECT id FROM surveys WHERE id = ? FOR UPDATE')->execute([$survey['id']]);
+        $q = $db->prepare('SELECT id FROM survey_reports WHERE survey_id = ? ORDER BY id LIMIT 1');
+        $q->execute([$survey['id']]);
+        if ($id = (int)$q->fetchColumn()) { $db->commit(); return ['ok' => true, 'id' => $id, 'created' => false]; }
+        if (!isset(RT_KINDS[$kind])) { $db->rollBack(); return ['ok' => false, 'error' => 'Choose the report type.']; }
+        $t = rtActive($db, $kind);
+        if (!$t) { $db->rollBack(); return ['ok' => false, 'error' => 'No ' . RT_KINDS[$kind] . ' template is uploaded yet. An Admin uploads it under Report Templates.']; }
+        $now = date('Y-m-d H:i:s');
+        $db->prepare('INSERT INTO survey_reports (survey_id, template_id, kind, data, version, created_by, created_at, updated_by, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)')
+           ->execute([$survey['id'], $t['id'], $kind, json_encode(srDefaults(rtEffective($t), $survey)), $uid ?: null, $now, $uid ?: null, $now]);
+        $id = (int)$db->lastInsertId();
+        $db->commit();
+        return ['ok' => true, 'id' => $id, 'created' => true];
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $e;
+    }
+}
+
+/** The report of a vessel (null when no survey was started). */
+function srReportForSurvey(PDO $db, int $surveyId): ?array {
+    rtEnsureTables($db);
+    $q = $db->prepare('SELECT id FROM survey_reports WHERE survey_id = ? ORDER BY id LIMIT 1');
+    $q->execute([$surveyId]);
+    $id = (int)$q->fetchColumn();
+    return $id ? srReport($db, $id) : null;
+}
+
+/**
+ * Live preview: the report as it would print now, made from the saved values into a temporary
+ * PDF (kept only in the server's temp folder, reused while nothing changes). Nothing is stored
+ * with the report, no number is given, the vessel's status is not touched. → PDF path | error.
+ */
+function srPreviewPdf(array $tpl, array $report): array {
+    $dir = sys_get_temp_dir() . '/ysms_sr_preview';
+    if (!is_dir($dir)) @mkdir($dir, 0700, true);
+    foreach (glob($dir . '/*') ?: [] as $f) if (filemtime($f) < time() - 3600) @unlink($f);
+    $key = $report['id'] . '-' . $report['version'] . '-' . $tpl['id'] . '-' . substr(sha1(json_encode($report['data'])), 0, 12);
+    $pdf = $dir . '/' . $key . '.pdf';
+    if (is_file($pdf)) return ['ok' => true, 'pdf' => $pdf];
+    [$book, , $print] = srBuildBook($tpl, $report['data']);
+    // own temp names, then an atomic rename: two people previewing the same version at once never clash
+    $tmp = $dir . '/' . $key . '.' . bin2hex(random_bytes(4));
+    try {
+        rtSave($book, $tmp . '.xlsx', rtAbs($tpl['file_path']));
+        $p = rtPdf($tmp . '.xlsx', $print, $tmp . '.pdf');
+        if (!$p['ok']) return ['ok' => false, 'error' => $p['error']];
+        if (!@rename($tmp . '.pdf', $pdf) && !is_file($pdf)) return ['ok' => false, 'error' => 'The preview could not be stored.'];
+        return ['ok' => true, 'pdf' => $pdf];
+    } finally {
+        @unlink($tmp . '.xlsx'); @unlink($tmp . '.pdf');
+    }
 }

@@ -939,6 +939,11 @@ include 'includes/header.php';
     </div><!-- /.detail-desktop-view -->
 
     <?php
+    // Survey Report: Start / Resume Survey, and the Admin's tank history
+    if (in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true)) include 'includes/survey_report_card.php';
+    ?>
+
+    <?php
     // Same vessel surveyed before (any client) — for the surveyor's reference. Admin / Super Admin / Surveyor only.
     if (in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true)) {
         require_once 'includes/vessel_history.php';
