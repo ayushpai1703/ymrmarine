@@ -31,16 +31,19 @@ include 'includes/header.php';
 <link rel="stylesheet" href="assets/css/survey-report.css?v=<?= @filemtime(__DIR__ . '/assets/css/survey-report.css') ?>">
 <div class="scroll-content" data-testid="survey-report-page">
 <?php $back_url = $srBack; $page_testid = 'survey-report'; include 'includes/top_app_bar.php'; ?>
-<div class="sr-wrap">
+<div class="sr-wrap sr-v4">
     <div class="sr-head">
-        <div><a href="<?= sanitize($srBack) ?>" class="sr-back" data-testid="sr-back"><i class="fa-solid fa-chevron-left"></i> <?= sanitize($srBackLabel) ?></a>
-            <h1 data-title>Survey report</h1><div class="sr-sub" data-subtitle>Loading…</div></div>
+        <div class="sr-crumbs"><a href="<?= sanitize($srBack) ?>" class="sr-back" data-testid="sr-back" title="Back to <?= sanitize($srBackLabel) ?>"><i class="fa-solid fa-arrow-left"></i></a>
+            <span class="sr-crumb"><span data-kindcrumb>Survey</span> Report <i>/</i> <b data-crumb>Vessel Details</b></span>
+            <h1 data-title hidden>Survey report</h1><span data-subtitle hidden></span></div>
         <div class="sr-head-r">
+            <span class="sr-chip-h"><span>Vessel:</span> <b data-vchip data-testid="sr-vchip">—</b></span>
+            <span class="sr-chip-h"><span>Report:</span> <b data-kchip>—</b></span>
+            <span class="sr-chip-h"><i class="fa-regular fa-calendar"></i> <span>Date:</span> <b data-dchip>—</b></span>
             <span class="sr-net" data-net data-testid="sr-net"></span>
             <span class="sr-save" data-save-state data-testid="sr-save-state"></span>
             <span class="sr-live" data-live hidden data-testid="sr-live"></span>
-            <button type="button" class="sr-btn" data-save-now data-testid="sr-save-now"><i class="fa-solid fa-floppy-disk"></i> Save Progress</button>
-            <button type="button" class="sr-btn pri" data-pv="open" data-testid="sr-preview-report"><i class="fa-solid fa-eye"></i> Preview Report</button>
+            <button type="button" class="sr-pv-fab" data-pv="open" data-testid="sr-pv-open"><i class="fa-solid fa-eye"></i> Preview</button>
         </div>
     </div>
     <div class="sr-split">
@@ -48,10 +51,16 @@ include 'includes/header.php';
             <div data-banners></div>
             <div data-form data-testid="sr-form"></div>
         </div>
-        <aside class="sr-pv" data-testid="sr-preview" aria-label="Report preview" role="dialog">
-            <div class="sr-pv-bar">
-                <b class="sr-pv-t"><i class="fa-solid fa-eye"></i> Report preview</b>
-                <span class="sr-pv-st" data-pv-status data-testid="sr-pv-status">Loading…</span>
+        <aside class="sr-pv" data-testid="sr-preview" aria-label="Report preview">
+            <div class="sr-pv-tabs">
+                <button type="button" class="sr-pv-tab" data-pv="load" data-pv-tab="pdf" data-testid="sr-preview-report"><i class="fa-regular fa-file-lines"></i> Report Preview</button>
+                <button type="button" class="sr-pv-tab" data-pv="excel" data-pv-tab="excel" data-testid="sr-excel-view"><i class="fa-solid fa-table"></i> Excel View</button>
+                <span class="sr-pv-sp"></span>
+                <button type="button" class="sr-pv-b sr-pv-exp" data-pv="open" title="Full screen" aria-label="Full screen" data-testid="sr-pv-expand"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <button type="button" class="sr-pv-b sr-pv-x" data-pv="close" title="Close" aria-label="Close preview" data-testid="sr-pv-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="sr-pv-bar" data-pv-bar hidden>
+                <span class="sr-pv-st" data-pv-status data-testid="sr-pv-status"></span>
                 <span class="sr-pv-sp"></span>
                 <button type="button" class="sr-pv-b" data-pv="prev" title="Previous page" aria-label="Previous page" data-testid="sr-pv-prev"><i class="fa-solid fa-chevron-left"></i></button>
                 <span class="sr-pv-n" data-pv-page data-testid="sr-pv-pageno">– / –</span>
@@ -59,14 +68,11 @@ include 'includes/header.php';
                 <button type="button" class="sr-pv-b" data-pv="out" title="Zoom out" aria-label="Zoom out" data-testid="sr-pv-out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
                 <button type="button" class="sr-pv-b sr-pv-z" data-pv="fit" title="Fit width" data-pv-zoomv data-testid="sr-pv-zoom">100%</button>
                 <button type="button" class="sr-pv-b" data-pv="in" title="Zoom in" aria-label="Zoom in" data-testid="sr-pv-in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
-                <button type="button" class="sr-pv-b" data-pv="refresh" title="Refresh" aria-label="Refresh preview" data-testid="sr-pv-refresh"><i class="fa-solid fa-rotate"></i></button>
-                <button type="button" class="sr-pv-b sr-pv-x" data-pv="close" title="Close" aria-label="Close preview" data-testid="sr-pv-close"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="sr-pv-c" data-pv-canvas data-testid="sr-pv-canvas"></div>
-            <div class="sr-pv-note">Preview only — not a report: nothing is stored, the vessel's status does not change. Download the final PDF on the Summary step.</div>
+            <div class="sr-pv-c" data-pv-canvas data-testid="sr-pv-canvas"><div class="sr-pv-empty" data-testid="sr-pv-empty"><i class="fa-regular fa-file-lines"></i><b>Report preview</b><span>Press <b>Report Preview</b> to see the report as it will print, or <b>Excel View</b> for the sheets. It is made from the saved values when you press it — not while you type.</span></div></div>
+            <div class="sr-pv-note">Preview only — nothing is stored, the vessel's status does not change.</div>
         </aside>
     </div>
-    <button type="button" class="sr-pv-fab" data-pv="open" data-testid="sr-pv-open"><i class="fa-solid fa-eye"></i> Preview Report</button>
 </div>
 </div>
 <script>window.SR_PAGE = <?= json_encode(['id' => $id, 'csrf' => csrf_token(), 'api' => 'ajax/survey_reports.php',

@@ -15,6 +15,8 @@
  *   POST a=generate id, pdf=1         Excel (+ PDF) from the saved data
  *   POST a=use_latest id              move the report to the active template version
  *   POST a=lookup  id, imo            vessel particulars by IMO (AI + web search); nothing is saved
+ *   GET  a=excel_view&id=             the report's sheets as HTML (Excel View tab; no download)
+ *   POST a=import_tanks id, file      tank rows from an uploaded workbook (Import from Excel)
  *   GET  a=version&id=                the report's version (live check)
  *   GET  a=previous&id=               an earlier attendance of the vessel (particulars, grades, tank names + heights)
  *   GET  a=verify&id=                server calculation of the saved data + what is still missing
@@ -171,6 +173,12 @@ try {
         if (!$r || !$t) srJson(404, ['ok' => false, 'error' => 'Report not found.']);
         srJson(200, ['ok' => true] + srVerify($t, $r['data']));
     }
+    if ($a === 'excel_view') { // the report's sheets as HTML to look at (never a download)
+        $r = srReport($db, (int)($_GET['id'] ?? 0));
+        $t = $r ? rtTemplate($db, $r['template_id']) : null;
+        if (!$r || !$t || !rtAbs($t['file_path'])) srJson(404, ['ok' => false, 'error' => 'Report not found.']);
+        srJson(200, ['ok' => true, 'version' => $r['version'], 'html' => srExcelViewHtml($t, $r)]);
+    }
     if ($a === 'version') { // the live check of an open report: only its version (cheap), the page then loads it when newer
         $r = srReport($db, (int)($_GET['id'] ?? 0));
         if (!$r) srJson(404, ['ok' => false, 'error' => 'Report not found.']);
@@ -254,6 +262,15 @@ try {
             throw $e;
         }
         srJson(200, ['ok' => true, 'version' => $r['version'], 'files' => srFiles($db, $r['id']), 'new_files' => $g['file_ids'], 'results' => $g['results'], 'pdf_error' => $g['pdf_error']]);
+    }
+    if ($a === 'import_tanks') { // "Import from Excel": tank rows read from an uploaded workbook (nothing is stored)
+        $file = $_FILES['file'] ?? null;
+        if (!$file || ($file['error'] ?? 1) !== UPLOAD_ERR_OK) srJson(422, ['ok' => false, 'error' => 'Choose an Excel file (.xlsx / .xls / .csv).']);
+        if ((int)$file['size'] > 10 * 1024 * 1024 || !preg_match('/\.(xlsx|xlsm|xls|csv)$/i', (string)$file['name'])) srJson(422, ['ok' => false, 'error' => 'Use an .xlsx, .xls or .csv file under 10 MB.']);
+        $tmp = sys_get_temp_dir() . '/ysms_imp_' . bin2hex(random_bytes(6)) . '.' . strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION));
+        if (!move_uploaded_file($file['tmp_name'], $tmp)) srJson(422, ['ok' => false, 'error' => 'Upload failed.']);
+        try { $res = srImportTanks($tmp, $eff, (array)($r['data']['grades'] ?? [])); } finally { @unlink($tmp); }
+        srJson($res['ok'] ? 200 : 422, $res);
     }
     if ($a === 'lookup') {
         $last = (int)($_SESSION['sr_lookup_at'] ?? 0);

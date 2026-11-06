@@ -509,3 +509,55 @@ Keeping sessions across instances (DB sessions) would be a separate change.
 - When the connection is back, the offline changes are saved and the final PDF (and the Excel
   kept in the system) is made by itself, with a "final report ready" message.
 - The offline Excel (ExcelJS) is no longer used.
+
+## v4: new layout (desktop + mobile design), previous attendance fix
+
+**Fill from previous attendance — fix.** The old Excel was looked up only by IMO when the report
+had one. Many old surveys have no IMO saved, so nothing was found. It now uses the same match as
+"Previous surveys of this vessel" (`vesselHistoryIds`): same IMO **or** same name.
+- The name match ignores the MV./M.V. prefix, case and punctuation, and only done surveys count.
+- Up to 6 recent Excel uploads are tried (.xlsx/.xlsm/.xls).
+- A workbook the analysis does not recognise is read with the current template's cells.
+- Earlier website reports are matched the same way.
+
+**Steps (6).** Vessel Details → Survey Details → Tank Details → Calculations → Documents →
+Preview & Generate.
+- Old drafts open on the right step (`g:<grade>` → Tank Details, `summary` → Calculations).
+- The header has the breadcrumb ("Offhire Report / Tank Details") and Vessel / Report / Date chips.
+- The footer has Previous, Save Draft and "Next: <step>".
+
+**Tank Details (computer): one table, as the design.**
+- Columns: #, Tank Name, Grade (moves the tank), Ref. Height, Sounding, Ullage, Volume, Temp,
+  Density, V.C.F., W.C.F., G.S.V., MT (Air). Volume is kept: G.S.V. needs it.
+- There is a group per grade with its totals, and "Add <grade> tank".
+- Sounding and ullage: type either one, and the other is worked out from the ref. height.
+- Name and MT stay in view while the middle columns scroll.
+- Columns menu (hide Ullage / Volume / V.C.F. / W.C.F. / G.S.V.).
+- Import from Excel (`a=import_tanks`): company format or a plain table with a header row.
+- Copy from Previous: tank names + heights from the previous attendance.
+- Totals bar: tanks, G.S.V., MT.
+
+**Saving rows in the table.**
+- Leaving a row after typing saves a complete tank (its version), like Save tank.
+- Row icons: save / saved (edit), copy, delete.
+- A copy keeps its "Copy" mark until its values change.
+
+**Tank Details (phone).**
+- A list with search, number, name, grade / saved badges and MT; tap opens a bottom sheet
+  "Edit Tank – NAME".
+- The sheet has the fields in two columns, V.C.F. / W.C.F. / G.S.V. / MT, and Delete / Copy /
+  Save Tank buttons.
+- Add Tank opens the sheet for a new tank.
+
+**Other steps.**
+- Calculations: ROB comparison (server-checked, Share), totals per grade, what is missing.
+- Documents: reports made (PDF; Excel only for the Admin), the Word report generator link, the
+  Admin's tank history.
+- Preview & Generate: Download PDF, Preview, offline draft PDF.
+
+**Preview panel (computer ≥ 1200 px, right side).**
+- Tabs: Report Preview (PDF pages, zoom) and Excel View (the report sheets as HTML via
+  `a=excel_view`, no download), plus full screen.
+- Nothing is made while typing: the panel loads only when a tab is pressed. After a change it says
+  "press … to refresh".
+- Smaller screens: the Preview button in the header opens it full screen.

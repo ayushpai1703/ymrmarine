@@ -1030,27 +1030,35 @@ function srVesselKey(string $name): string {
  * → null, or ['source', 'label', 'fields', 'grades', 'tanks' => [grade => [[name, ref_height]]]].
  */
 function srPrevious(PDO $db, array $report): ?array {
+    require_once __DIR__ . '/vessel_history.php';
     $tpl = rtTemplate($db, $report['template_id']);
     if (!$tpl) return null;
     $eff = rtEffective($tpl);
-    $imo = preg_replace('/\D/', '', (string)($report['data']['fields']['imo'] ?? '')) ?: preg_replace('/\D/', '', (string)($report['survey']['imo_number'] ?? ''));
-    $name = srVesselKey((string)(($report['data']['fields']['vessel_name'] ?? '') ?: ($report['survey']['vessel_name'] ?? '')));
-    if ($imo === '' && $name === '') return null;
-    $same = function (?string $i, ?string $n) use ($imo, $name): bool {
-        $i = preg_replace('/\D/', '', (string)$i);
-        if ($imo !== '' && $i !== '') return $i === $imo;
-        return $name !== '' && srVesselKey((string)$n) === $name;
+    $imo = vesselHistoryImo(($report['data']['fields']['imo'] ?? '') ?: ($report['survey']['imo_number'] ?? ''));
+    $imo2 = vesselHistoryImo($report['survey']['imo_number'] ?? '');
+    $keys = array_values(array_unique(array_filter([
+        vesselHistoryKey((string)($report['data']['fields']['vessel_name'] ?? '')),
+        vesselHistoryKey((string)($report['survey']['vessel_name'] ?? '')),
+    ])));
+    $imos = array_values(array_unique(array_filter([$imo, $imo2])));
+    if (!$keys && !$imos) return null;
+    // the same vessel: the same IMO, or the same name (MV./M.V. prefix, case and punctuation ignored) — as "Previous surveys of this vessel"
+    $same = function ($i, $n) use ($keys, $imos): bool {
+        $i = vesselHistoryImo($i);
+        if ($i !== '' && in_array($i, $imos, true)) return true;
+        $k = vesselHistoryKey((string)$n);
+        return $k !== '' && in_array($k, $keys, true);
     };
     $vesselKeys = array_merge(['imo'], SR_VESSEL_KEYS);
     $grades = array_keys(srGradeList($eff));
 
     // 1. an earlier report on the website
     $q = $db->prepare('SELECT r.id, r.kind, r.data, r.updated_at, s.vessel_name, s.imo_number FROM survey_reports r LEFT JOIN surveys s ON s.id = r.survey_id
-        WHERE r.id <> ? ORDER BY r.updated_at DESC LIMIT 500');
+        WHERE r.id <> ? ORDER BY r.updated_at DESC LIMIT 1000');
     $q->execute([$report['id']]);
     foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $d = json_decode((string)$r['data'], true) ?: [];
-        if (!$same(($d['fields']['imo'] ?? '') ?: $r['imo_number'], ($d['fields']['vessel_name'] ?? '') ?: $r['vessel_name'])) continue;
+        if (!$same($d['fields']['imo'] ?? '', $d['fields']['vessel_name'] ?? '') && !$same($r['imo_number'], $r['vessel_name'])) continue;
         $tanks = [];
         foreach ($grades as $g) foreach ((array)($d['tanks'][$g] ?? []) as $row) {
             $n = trim((string)($row['name'] ?? ''));
@@ -1064,49 +1072,142 @@ function srPrevious(PDO $db, array $report): ?array {
             'fields' => $fields, 'grades' => $gs ?: array_keys($tanks), 'tanks' => $tanks];
     }
 
-    // 2. the Excel uploaded for an earlier survey of the vessel
-    $cond = $imo !== '' ? 's.imo_number = ?' : '1=1';
-    $q = $db->prepare("SELECT u.id, u.file_path, u.file_name, s.id AS survey_id, s.vessel_name, s.imo_number, s.assign_date FROM uploads u JOIN surveys s ON s.id = u.survey_id
-        WHERE (LOWER(u.file_name) LIKE '%.xlsx' OR LOWER(u.file_name) LIKE '%.xlsm') AND s.id <> ? AND $cond ORDER BY u.id DESC LIMIT 200");
-    $q->execute($imo !== '' ? [(int)($report['survey_id'] ?? 0), $imo] : [(int)($report['survey_id'] ?? 0)]);
+    // 2. the Excel uploaded for an earlier survey of the vessel (surveys found as in "Previous surveys of this vessel")
+    $ids = [];
+    foreach (array_merge($keys ?: [''], []) as $k) {
+        $name = $k !== '' ? $k : '';
+        foreach ($imos ?: [''] as $i) $ids = array_merge($ids, vesselHistoryIds($db, $name, $i, (int)($report['survey_id'] ?? 0)));
+    }
+    $ids = array_values(array_unique(array_map('intval', $ids)));
+    if (!$ids) return null;
+    $in = implode(',', array_fill(0, count($ids), '?'));
+    $q = $db->prepare("SELECT u.id, u.file_path, u.file_name, s.assign_date, s.survey_completed_date FROM uploads u JOIN surveys s ON s.id = u.survey_id
+        WHERE u.survey_id IN ($in) AND (u.file_type = 'Formal Report Excel' OR LOWER(u.file_name) LIKE '%.xlsx' OR LOWER(u.file_name) LIKE '%.xlsm' OR LOWER(u.file_name) LIKE '%.xls')
+        ORDER BY COALESCE(s.survey_completed_date, s.assign_date) DESC, u.id DESC LIMIT 20");
+    $q->execute($ids);
     $tried = 0;
     foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $u) {
-        if (!$same($u['imo_number'], $u['vessel_name'])) continue;
-        if (++$tried > 3) break;
+        if (!preg_match('/\.(xlsx|xlsm|xls)$/i', (string)$u['file_path'])) continue;
+        if (++$tried > 6) break;
         $abs = realpath(dirname(__DIR__) . '/' . ltrim((string)$u['file_path'], '/'));
         $root = realpath(dirname(__DIR__) . '/uploads');
         if (!$abs || !$root || strpos($abs, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($abs) || filesize($abs) > 25 * 1024 * 1024) continue;
         try {
             $book = sfLoadSpreadsheet($abs);
             $a = rtAnalyze($book);
-            if (empty($a['ok'])) continue;
-            $fields = [];
-            foreach ($vesselKeys as $k) {
-                $f = $a['fields'][$k] ?? null; $ws = $f ? $book->getSheetByName($f['sheet']) : null;
-                if (!$ws) continue;
-                $v = $ws->getCell($f['cell'])->getCalculatedValue();
-                if ($v === null || is_array($v) || trim((string)$v) === '') continue;
-                [$clean, $err] = sfValidate($eff['fields'][$k]['type'] ?? $f['type'], (string)$v);
-                if ($err === '' && $clean !== '') $fields[$k] = (string)$clean;
-            }
-            $tanks = [];
-            $tws = $book->getSheetByName($a['tables_sheet']);
-            foreach ((array)$a['sections'] as $g => $sec) {
-                if (!$tws || !in_array($g, $grades, true)) continue;
-                for ($r = $sec['first']; $r <= $sec['last']; $r++) {
-                    $n = trim((string)$tws->getCell($sec['cols']['name'] . $r)->getCalculatedValue());
-                    if ($n === '' || preg_match('/^(tank|total|name)\b/i', $n) || mb_strlen($n) > 40) continue;
-                    $h = $tws->getCell($sec['cols']['ref_height'] . $r)->getCalculatedValue();
-                    $tanks[$g][] = ['name' => mb_strtoupper($n), 'ref_height' => is_numeric($h) ? rtrim(rtrim(number_format((float)$h, 3, '.', ''), '0'), '.') : mb_strtoupper(trim((string)$h))];
-                }
-            }
+            $map = !empty($a['ok']) ? $a : $eff; // a workbook the analysis does not recognise: read it with the template's own cells
+            $got = srReadPrevious($book, $map, $eff, $vesselKeys, $grades);
+            if ((!$got['tanks'] && count($got['fields']) < 3) && $map !== $eff) $got = srReadPrevious($book, $eff, $eff, $vesselKeys, $grades);
             $book->disconnectWorksheets();
-            if (!$tanks && count($fields) < 3) continue;
-            return ['source' => 'excel', 'label' => 'Excel of the survey on ' . date('d M Y', strtotime((string)$u['assign_date'])) . ' (' . $u['file_name'] . ')',
-                'fields' => $fields, 'grades' => array_keys($tanks), 'tanks' => $tanks];
+            if (!$got['tanks'] && count($got['fields']) < 3) continue;
+            $when = $u['survey_completed_date'] ?: $u['assign_date'];
+            return ['source' => 'excel', 'label' => 'Excel of the survey on ' . date('d M Y', strtotime((string)$when)) . ' (' . $u['file_name'] . ')',
+                'fields' => $got['fields'], 'grades' => array_keys($got['tanks']), 'tanks' => $got['tanks']];
         } catch (Throwable $e) {
             error_log('srPrevious excel ' . (int)$u['id'] . ': ' . $e->getMessage());
         }
     }
     return null;
+}
+
+/** Particulars (checked with the field rules) and tank names + heights of an earlier workbook, read with the layout $map. */
+function srReadPrevious(\PhpOffice\PhpSpreadsheet\Spreadsheet $book, array $map, array $eff, array $vesselKeys, array $grades): array {
+    $fields = [];
+    foreach ($vesselKeys as $k) {
+        $f = $map['fields'][$k] ?? null; $ws = $f ? $book->getSheetByName($f['sheet']) : null;
+        if (!$ws) continue;
+        try { $v = $ws->getCell($f['cell'])->getCalculatedValue(); } catch (Throwable $e) { continue; }
+        if ($v === null || is_array($v) || trim((string)$v) === '') continue;
+        [$clean, $err] = sfValidate($eff['fields'][$k]['type'] ?? $f['type'], (string)$v);
+        if ($err === '' && $clean !== '') $fields[$k] = (string)$clean;
+    }
+    $tanks = [];
+    $tws = $book->getSheetByName($map['tables_sheet'] ?? '');
+    foreach ((array)($map['sections'] ?? []) as $g => $sec) {
+        if (!$tws || !in_array($g, $grades, true)) continue;
+        for ($r = $sec['first']; $r <= $sec['last']; $r++) {
+            try { $n = trim((string)$tws->getCell($sec['cols']['name'] . $r)->getCalculatedValue()); $h = $tws->getCell($sec['cols']['ref_height'] . $r)->getCalculatedValue(); } catch (Throwable $e) { continue; }
+            if ($n === '' || preg_match('/^(tank|total|name)\b/i', $n) || mb_strlen($n) > 40) continue;
+            $tanks[$g][] = ['name' => mb_strtoupper($n), 'ref_height' => is_numeric($h) ? rtrim(rtrim(number_format((float)$h, 3, '.', ''), '0'), '.') : mb_strtoupper(trim((string)$h))];
+        }
+    }
+    return ['fields' => $fields, 'tanks' => $tanks];
+}
+
+// ================================================================ Excel view, tank import
+
+/** The report's printed sheets as HTML (the "Excel View" tab): made from the saved values, nothing is stored. */
+function srExcelViewHtml(array $tpl, array $report): string {
+    [$book, , $print] = srBuildBook($tpl, $report['data']);
+    $html = '';
+    foreach ($print as $title) {
+        $ws = $book->getSheetByName($title);
+        if (!$ws) continue;
+        $w = new \PhpOffice\PhpSpreadsheet\Writer\Html($book);
+        $w->setSheetIndex($book->getIndex($ws));
+        $w->setEmbedImages(true);
+        if ($html === '') $html .= '<style>' . $w->generateStyles(false) . '</style>';
+        $html .= '<h4 class="xv-sheet">' . htmlspecialchars($title) . '</h4>' . $w->generateSheetData();
+    }
+    $book->disconnectWorksheets();
+    return $html;
+}
+
+/**
+ * "Import from Excel": tank rows from an uploaded workbook — the company report format (read with
+ * the template analysis) or a plain table with a header row (Tank, Ref. height, Sounding, Ullage,
+ * Volume, Density, Temp, Grade/Type). → ['ok', 'rows' => [[grade, name, ref_height, sounding, ullage, volume, density, temp]]].
+ */
+function srImportTanks(string $path, array $eff, array $chosen): array {
+    $book = sfLoadSpreadsheet($path);
+    $grades = array_keys(srGradeList($eff));
+    $rows = [];
+    $a = rtAnalyze($book);
+    if (!empty($a['ok']) && ($ws = $book->getSheetByName($a['tables_sheet']))) {
+        foreach ((array)$a['sections'] as $g => $sec) {
+            if (!in_array($g, $grades, true)) continue;
+            for ($r = $sec['first']; $r <= $sec['last']; $r++) {
+                $v = fn($c) => trim((string)$ws->getCell($sec['cols'][$c] . $r)->getCalculatedValue());
+                $n = $v('name');
+                if ($n === '' || preg_match('/^(tank|total)\b/i', $n)) continue;
+                $rows[] = ['grade' => $g, 'name' => mb_strtoupper($n), 'ref_height' => $v('ref_height'), 'sounding' => $v('sounding'), 'ullage' => '', 'volume' => $v('volume'), 'density' => $v('density'), 'temp' => $v('temp')];
+            }
+        }
+    }
+    if (!$rows) { // a plain table
+        $ws = $book->getActiveSheet();
+        $data = $ws->toArray(null, true, false, false);
+        $map = []; $hdr = -1;
+        foreach (array_slice($data, 0, 15, true) as $ri => $line) {
+            $m = [];
+            foreach ($line as $ci => $cell) {
+                $t = strtolower(preg_replace('/[^a-z]/i', '', (string)$cell));
+                if ($t === '') continue;
+                if (!isset($m['name']) && preg_match('/^(tank|tankname|name)/', $t)) $m['name'] = $ci;
+                elseif (!isset($m['ref_height']) && preg_match('/^(ref|refheight|referenceheight|totalheight|height)/', $t)) $m['ref_height'] = $ci;
+                elseif (!isset($m['ullage']) && strpos($t, 'ullage') === 0) $m['ullage'] = $ci;
+                elseif (!isset($m['sounding']) && preg_match('/^(sounding|sdg|sound)/', $t)) $m['sounding'] = $ci;
+                elseif (!isset($m['volume']) && preg_match('/^(volume|vol)/', $t)) $m['volume'] = $ci;
+                elseif (!isset($m['density']) && preg_match('/^(density|dens)/', $t)) $m['density'] = $ci;
+                elseif (!isset($m['temp']) && preg_match('/^(temp|temperature)/', $t)) $m['temp'] = $ci;
+                elseif (!isset($m['grade']) && preg_match('/^(grade|type|fuel|product)/', $t)) $m['grade'] = $ci;
+            }
+            if (isset($m['name']) && count($m) >= 3) { $map = $m; $hdr = $ri; break; }
+        }
+        if ($hdr < 0) return ['ok' => false, 'error' => 'No tank table found. Use the company report format, or a sheet with a header row: Tank, Ref. Height, Sounding (or Ullage), Volume, Density, Temp, Grade.'];
+        $default = $chosen[0] ?? ($grades[0] ?? 'vlsfo');
+        foreach (array_slice($data, $hdr + 1) as $line) {
+            $get = fn($k) => isset($map[$k]) ? trim((string)($line[$map[$k]] ?? '')) : '';
+            $n = $get('name');
+            if ($n === '' || preg_match('/^total\b/i', $n)) continue;
+            $gt = strtoupper(preg_replace('/[^a-z]/i', '', $get('grade'))); $g = $default;
+            foreach (SR_GRADES as $k => [$short]) if ($gt !== '' && $gt === $short && in_array($k, $grades, true)) $g = $k;
+            $rows[] = ['grade' => $g, 'name' => mb_strtoupper($n), 'ref_height' => $get('ref_height'), 'sounding' => $get('sounding'), 'ullage' => $get('ullage'), 'volume' => $get('volume'), 'density' => $get('density'), 'temp' => $get('temp')];
+            if (count($rows) >= 200) break;
+        }
+    }
+    $book->disconnectWorksheets();
+    foreach ($rows as &$r) foreach ($r as $k => $v) $r[$k] = mb_substr((string)$v, 0, 60);
+    unset($r);
+    return $rows ? ['ok' => true, 'rows' => $rows] : ['ok' => false, 'error' => 'No tanks found in this workbook.'];
 }
