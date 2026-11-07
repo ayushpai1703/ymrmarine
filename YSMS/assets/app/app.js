@@ -657,7 +657,6 @@
             me.role === 'Admin' && { k: 'surveyor', label: 'Add surveyor', ic: 'user', to: '#surveyor' },
             ['Admin', 'Super Admin'].indexOf(me.role) !== -1 && { k: 'addclient', label: 'Add client', ic: 'users', to: '#addclient' },
             me.role === 'Admin' && { k: 'admin', label: 'Admin controls', ic: 'shield', to: '#admin' },
-            me.role === 'Admin' && { k: 'duplicates', label: 'Duplicates', ic: 'folder', to: '#duplicates' },
             me.role === 'Super Admin' && { k: 'sacontrols', label: 'Data cleanup', ic: 'alert', to: '#sacontrols' },
             ['Admin', 'Super Admin'].indexOf(me.role) !== -1 && { k: 'activity', label: 'Login activity', ic: 'shield', to: '#activity' },
             { k: 'profile', label: 'My profile', ic: 'user', to: '#me' }
@@ -1099,8 +1098,7 @@
         var admin = me.role === 'Admin' ? [
             item('Assign vessel', 'plus', 'blue', '#assign'), item('Add surveyor', 'user', 'orange', '#surveyor'),
             item('Add client', 'users', 'green', '#addclient'), item('Admin controls', 'shield', 'purple', '#admin'),
-            item('Manage templates', 'file', 'sky', '#templates'), item('Login activity', 'shield', 'red', '#activity'),
-            item('Possible duplicates', 'folder', 'orange', '#duplicates')
+            item('Login activity', 'shield', 'red', '#activity')
         ].join('') : me.role === 'Super Admin' ? [
             item('Add client', 'users', 'green', '#addclient'), item('Add admin', 'shield', 'purple', '#addadmin'),
             item('Manage clients', 'users', 'blue', '#admin'), item('Login activity', 'shield', 'red', '#activity'),
@@ -2178,7 +2176,7 @@
             adminItem('Login activity', 'shield', 'red', 'activity') +
             (admin ? adminItem('Manage templates', 'file', 'sky', 'templates') + adminItem('Possible duplicates', 'folder', 'orange', 'duplicates') + adminItem('Formats', 'folder', 'green', 'formats') : '') +
             '</div><div class="section-title" data-rise>More tools</div><div class="menu-card" data-rise>' +
-            (admin ? webItem('Daily emails', 'inbox', 'blue', 'admin_daily_emails.php') + webItem('Invoice templates', 'file', 'orange', 'admin_invoice_templates.php') +
+            (admin ? webItem('Report templates', 'file', 'green', 'admin_report_templates.php') + webItem('Invoice airtable', 'file', 'blue', 'invoices_airtable.php') + webItem('Daily emails', 'inbox', 'blue', 'admin_daily_emails.php') + webItem('Invoice templates', 'file', 'orange', 'admin_invoice_templates.php') +
                 webItem('Surveyor cards', 'user', 'purple', 'admin_surveyor_cards.php') + webItem('Import ports', 'pin', 'sky', 'ports_import.php') : '') +
             webItem('Import completed vessels', 'upload', 'green', 'completed_import.php') +
             webItem('Month summary (Excel)', 'download', 'blue', 'export_month_summary.php?y=' + new Date().getFullYear() + '&m=' + (new Date().getMonth() + 1), true) +

@@ -168,11 +168,6 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <span>Invoices</span>
             <b class="badge rounded-pill ms-auto nav-tag-badge" style="background:#16A34A;font-size:9.5px;letter-spacing:.04em" data-testid="nav-invoices-new-badge">NEW</b>
         </a>
-        <a href="invoices_airtable.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= in_array($current_page, ['invoices_airtable.php', 'invoice_table.php'], true) ? 'active' : '' ?>" data-testid="navigation-invoice-airtable-link">
-            <i class="fa-solid fa-table-cells"></i>
-            <span style="white-space:nowrap">Invoice Airtable</span>
-            <b class="badge rounded-pill ms-auto nav-tag-badge" style="background:#F59E0B;color:#1f2937;font-size:8.5px;letter-spacing:.03em;padding:3px 6px" data-testid="nav-airtable-testing-badge">TESTING</b>
-        </a>
         <?php endif; ?>
         <a href="completed.php" class="nav-item-btn <?= ($current_page == 'completed.php') ? 'active' : '' ?>" data-testid="navigation-completed-link">
             <i class="fa-solid fa-circle-check"></i>
@@ -218,23 +213,10 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <span>Sales Team</span>
         </a>
 
-        <!-- Inside the navbar.php file, inside the <ul> tag, add this li: -->
-
-    <a href="admin_report_templates.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'admin_report_templates.php') ? 'active' : '' ?>" data-testid="sidebar-report-templates-link">
-        <i class="fa-solid fa-file-excel"></i>
-        <span>Report Templates</span>
-    </a>
-    <a href="manage_templates.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'manage_templates.php') ? 'active' : '' ?>" data-testid="sidebar-manage-templates-link">
-        <i class="fa-solid fa-file-contract"></i>
-        <span>Manage Templates</span>
-    </a>
+        <?php /* Report Templates, Word / Photo Templates (manage_templates.php), Possible Duplicates and Invoice Airtable open from Admin Controls */ ?>
         <a href="login_activity.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'login_activity.php') ? 'active' : '' ?>" data-testid="sidebar-login-activity-link">
             <i class="fa-solid fa-shield-halved"></i>
             <span>Login Activity</span>
-        </a>
-        <a href="possible_duplicates.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'possible_duplicates.php') ? 'active' : '' ?>" data-testid="sidebar-possible-duplicates-link">
-            <i class="fa-solid fa-clone"></i>
-            <span>Possible Duplicates</span>
         </a>
 
         <?php elseif ($user_role === 'Client'): ?>

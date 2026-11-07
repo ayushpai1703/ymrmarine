@@ -301,6 +301,15 @@ include 'includes/header.php';
         <a href="manage_templates.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-word-templates">
             <i class="fa-solid fa-file-word"></i> Word / Photo Templates
         </a>
+        <a href="admin_report_templates.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-report-templates">
+            <i class="fa-solid fa-file-excel"></i> Report Templates
+        </a>
+        <a href="possible_duplicates.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-possible-duplicates">
+            <i class="fa-solid fa-clone"></i> Possible Duplicates
+        </a>
+        <a href="invoices_airtable.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-invoice-airtable">
+            <i class="fa-solid fa-table-cells"></i> Invoice Airtable
+        </a>
         <a href="admin_daily_emails.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-daily-emails">
             <i class="fa-solid fa-envelope-circle-check"></i> Daily Emails
         </a>

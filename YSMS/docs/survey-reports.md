@@ -561,3 +561,17 @@ Preview & Generate.
 - Nothing is made while typing: the panel loads only when a tab is pressed. After a change it says
   "press … to refresh".
 - Smaller screens: the Preview button in the header opens it full screen.
+
+## Letterhead and menu (v4.1)
+
+**Letterhead.** The survey reports use the company letterhead `assets/images/survey-letterhead.png`.
+- On TABLES 54B, its ULSFO/HSMGO copy and the Offhire certificate, it replaces the template's logo
+  picture (`srLetterhead`): from A1, as wide as the printed columns, and the rows the logo covered
+  are resized to its height.
+- The ROB summary sheet and the draft PDF made on the device use it too.
+- The ROB summary is also fitted to one A4 page.
+- A template without a logo at the top is left as it is.
+
+**Menu.** Invoice Airtable, Report Templates, Manage Templates (Word / Photo Templates) and Possible
+Duplicates are no longer in the sidebar / drawer, or in the app's More / quick actions. They open
+from Admin Controls; Report Templates, Possible Duplicates and Invoice Airtable were added there.

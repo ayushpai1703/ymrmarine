@@ -604,6 +604,42 @@ function srFitA4(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, ?string $las
     $ps->setFitToHeight(1);
 }
 
+/** The company letterhead used on the survey reports (TABLES 54B, certificate, ROB summary, draft PDF). */
+const SR_LETTERHEAD = __DIR__ . '/../assets/images/survey-letterhead.png';
+
+/**
+ * The template's logo at the top of a printed sheet is replaced by the letterhead: same place
+ * (from A1), as wide as the printed columns, the rows it covered resized to its height.
+ */
+function srLetterhead(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, string $lastCol = 'J'): void {
+    $C = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::class;
+    if (!is_file(SR_LETTERHEAD)) return;
+    $coll = $ws->getDrawingCollection(); $bottom = 0; $remove = [];
+    foreach ($coll as $k => $d) {
+        [, $r1] = $C::coordinateFromString($d->getCoordinates());
+        if ((int)$r1 > 3) continue; // only the header picture
+        $r2 = $d->getCoordinates2() ? (int)$C::coordinateFromString($d->getCoordinates2())[1] : (int)$r1 + 4;
+        $bottom = max($bottom, $r2 - 1, (int)$r1);
+        $remove[] = $k;
+    }
+    if (!$remove) return; // a template without a header logo: nothing to replace
+    foreach (array_reverse($remove) as $k) $coll->offsetUnset($k);
+    $coll->exchangeArray(array_values($coll->getArrayCopy()));
+    $defW = $ws->getDefaultColumnDimension()->getWidth(); $defW = $defW > 0 ? $defW : 8.43;
+    $px = 0;
+    for ($i = 1; $i <= $C::columnIndexFromString($lastCol); $i++) {
+        $cd = $ws->getColumnDimension($C::stringFromColumnIndex($i));
+        if ($cd->getVisible()) $px += (($cd->getWidth() > 0 ? $cd->getWidth() : $defW) * 7 + 5);
+    }
+    [$bw, $bh] = getimagesize(SR_LETTERHEAD) ?: [961, 248];
+    $w = (int)max(200, $px - 6); $h = (int)round($w * $bh / $bw);
+    $d = new \PhpOffice\PhpSpreadsheet\Worksheet\Drawing();
+    $d->setName('Letterhead'); $d->setPath(SR_LETTERHEAD); $d->setResizeProportional(false); $d->setWidth($w); $d->setHeight($h);
+    $d->setCoordinates('A1'); $d->setOffsetX(2); $d->setOffsetY(2); $d->setWorksheet($ws);
+    $rows = max(1, $bottom);
+    for ($r = 1; $r <= $rows; $r++) $ws->getRowDimension($r)->setRowHeight(round(($h + 8) * 0.75 / $rows, 2)); // px → pt
+}
+
 function srHideRows(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, int $from, int $to): void {
     for ($r = $from; $r <= $to; $r++) $ws->getRowDimension($r)->setVisible(false);
 }
@@ -660,6 +696,7 @@ function srBuildBook(array $tpl, array $data): array {
         srHeaderCompact($copy, $eff, $extraGrades, $data);
         foreach ($extraGrades as $g) srHideEmptyTankRows($copy, $cpos[SR_EXTRA_SLOT[$g]], count($rowsFor[SR_EXTRA_SLOT[$g]]));
         srFitOnePage($copy);
+        srLetterhead($copy);
         srFitA4($copy); // fills the A4 page
         $copy->getPageSetup()->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
         $extraTitle = SR_EXTRA_SHEET;
@@ -672,6 +709,7 @@ function srBuildBook(array $tpl, array $data): array {
     srHeaderCompact($t, $eff, $tplGrades, $data); // BROB header: the grades on board side by side, no empty column between
     foreach ($tplGrades as $g) srHideEmptyTankRows($t, $pos[$g], count($fill['tanks'][$g])); // only the tanks entered
     srFitOnePage($t); // the tank report prints on one A4 page
+    srLetterhead($t);
     srFitA4($t);
     $summary = srSummarySheet($book, $eff, $data, $grades, $where);
     // printed: the report sheets in workbook order
@@ -682,7 +720,8 @@ function srBuildBook(array $tpl, array $data): array {
     $order = [];
     foreach ($book->getWorksheetIterator() as $ws) if (in_array($ws->getTitle(), $print, true)) {
         $order[] = $ws->getTitle();
-        if (!in_array($ws->getTitle(), [$tn, SR_EXTRA_SHEET, $summary], true)) srFitA4($ws); // the certificate fills its A4 page too
+        if (!in_array($ws->getTitle(), [$tn, SR_EXTRA_SHEET, $summary], true)) { srLetterhead($ws); srFitA4($ws); } // the certificate: the letterhead, and it fills its A4 page too
+        if ($ws->getTitle() === $summary) srFitA4($ws, 'D'); // the ROB summary on one A4 page too (it already has the letterhead)
     }
     return [$book, $eff, $order, $where];
 }
@@ -697,11 +736,12 @@ function srSummarySheet(\PhpOffice\PhpSpreadsheet\Spreadsheet $book, array $eff,
     foreach (['A' => 26, 'B' => 22, 'C' => 22, 'D' => 24] as $c => $w) $ws->getColumnDimension($c)->setWidth($w);
     $ws->getStyle('A1:D80')->getFont()->setName('Arial')->setSize(10);
     $ws->getStyle('A1:D80')->getAlignment()->setVertical('center');
-    $banner = dirname(__DIR__) . '/assets/images/invoice-header.png'; // the company letterhead banner (as on the invoices)
+    $banner = SR_LETTERHEAD; // the company letterhead of the survey reports
     if (is_file($banner)) {
+        [$bw, $bh] = getimagesize($banner) ?: [961, 248];
         $d = new \PhpOffice\PhpSpreadsheet\Worksheet\Drawing();
-        $d->setPath($banner); $d->setWidth(640); $d->setCoordinates('A1'); $d->setOffsetX(2); $d->setOffsetY(2); $d->setWorksheet($ws);
-        foreach ([1, 2, 3, 4] as $i) $ws->getRowDimension($i)->setRowHeight(18);
+        $d->setPath($banner); $d->setResizeProportional(false); $d->setWidth(668); $d->setHeight((int)round(668 * $bh / $bw)); $d->setCoordinates('A1'); $d->setOffsetX(2); $d->setOffsetY(2); $d->setWorksheet($ws);
+        foreach ([1, 2, 3, 4] as $i) $ws->getRowDimension($i)->setRowHeight(round((668 * $bh / $bw) * 0.75 / 4 + 1, 2));
     }
     $ws->mergeCells('A5:D5');
     $ws->setCellValue('A5', 'BUNKER SURVEY — ROB SUMMARY');

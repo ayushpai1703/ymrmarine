@@ -1220,7 +1220,7 @@
   // surveyor still gets a PDF: the same particulars, tank tables and ROB summary, drawn here with
   // jsPDF and marked DRAFT. When the connection is back the data is saved and the final PDF (and
   // the Excel kept in the system) is made by itself.
-  var BANNER = 'assets/images/invoice-header.png';
+  var BANNER = 'assets/images/survey-letterhead.png';
   function imgData(url) {
     return fetch(url, { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error(); return r.blob(); }).then(function (b) {
       return new Promise(function (ok, no) { var fr = new FileReader(); fr.onload = function () { var im = new Image(); im.onload = function () { ok({ data: fr.result, w: im.naturalWidth, h: im.naturalHeight }); }; im.onerror = no; im.src = fr.result; }; fr.onerror = no; fr.readAsDataURL(b); });
@@ -1235,7 +1235,7 @@
       var navy = [15, 43, 91], grey = [100, 116, 139];
       var head = function () {
         var y = M;
-        if (banner) { var h = Math.min(30, (W - 2 * M) * banner.h / banner.w); doc.addImage(banner.data, 'PNG', M, y, W - 2 * M, h); y += h + 4; }
+        if (banner) { var bw = W - 2 * M, h = bw * banner.h / banner.w; if (h > 42) { h = 42; bw = h * banner.w / banner.h; } doc.addImage(banner.data, 'PNG', (W - bw) / 2, y, bw, h); y += h + 3; } // the letterhead, in proportion
         else { doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(0, 163, 223); doc.text('YMR MARINE SOLUTIONS', W / 2, y + 8, { align: 'center' }); y += 14; }
         doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: 0.08 })); doc.setFont('helvetica', 'bold'); doc.setFontSize(80); doc.setTextColor(220, 38, 38);
         doc.text('DRAFT', W / 2, 170, { align: 'center', angle: 35 }); doc.restoreGraphicsState();
