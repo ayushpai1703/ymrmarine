@@ -182,9 +182,8 @@ The filled workbook is printed exactly as laid out:
 - The template's print areas, scaling, margins, logo and fonts are used. Liberation fonts stand
   in for Arial / Times.
 - Pages are A4. Hidden columns are not printed, as in Excel.
-- The result is the Bunker Survey Report, the ULSFO / HSMGO tables (when used), the ROB Summary,
-  then the Certificate of Off-hire Bunker Quantity: 3 A4 pages for VLSFO + LSMGO, 4 with ULSFO /
-  HSMGO.
+- The result is two A4 pages: the Bunker Survey Report with every chosen grade, then the
+  Certificate of Off-hire Bunker Quantity (see "One-page PDF (v4.2)").
 
 The Dockerfile installs `libreoffice-calc-nogui`. Without LibreOffice the Excel is still made and
 the page says that the PDF is not available.
@@ -274,7 +273,7 @@ Checked against the MV PROTECTOR workbook:
 6. The Offhire certificate is populated (quantities, vessel / flag / registry text, signatories).
 7. Formatting and print layout are identical: styles, merges, print area, images, page setup,
    column widths.
-8. The PDF is A4, 3 pages (report, ROB summary, certificate), with the real layout.
+8. The PDF is A4, 2 pages (bunker survey with every grade, certificate), with the real layout.
 9. Offline: the report opens, the edit is kept on the device, and the offline Excel equals the
    server Excel except for the edit. Back online, the edit is saved.
 10. The original workbook is unchanged: the source file and the stored version are byte for
@@ -575,3 +574,18 @@ Preview & Generate.
 **Menu.** Invoice Airtable, Report Templates, Manage Templates (Word / Photo Templates) and Possible
 Duplicates are no longer in the sidebar / drawer, or in the app's More / quick actions. They open
 from Admin Controls; Report Templates, Possible Duplicates and Invoice Airtable were added there.
+
+## One-page PDF (v4.2)
+
+The PDF is built from its own copy of the workbook (`srBuildBook($tpl, $data, true)`); the stored
+Excel is built as before and keeps all its tabs (TABLES 54B, the ULSFO-HSMGO copy, ROB SUMMARY, ...).
+
+- **Page 1 — Bunker Survey Report** with every grade chosen in step 2 (2, 3, 4 or 5), each with its
+  tanks, on one A4 page:
+  - the BROB header gets one column per chosen grade (`srHeaderAll`);
+  - ULSFO / HSMGO sections and their totals-list lines are copied from the ULSFO-HSMGO sheet into
+    TABLES 54B (`srMergeExtras`), and that sheet is left out of the PDF;
+  - the page is fitted to 1 × 1 A4 (`srFitOnePage`, `srFitA4`).
+- **Page 2 — Certificate of Off-hire Bunker Quantity.**
+- No ROB summary page in the PDF. The draft PDF made on the device has no ROB summary page either;
+  the signatures follow the tank tables.

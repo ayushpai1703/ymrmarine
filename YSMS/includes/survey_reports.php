@@ -122,7 +122,13 @@ function srGenerate(PDO $db, array $report, bool $pdf, int $uid): array {
     $pdfError = '';
     if ($pdf) {
         $prel = 'uploads/survey_reports/' . $report['id'] . '/' . $stamp . '.pdf';
-        $p = rtPdf(dirname(__DIR__) . '/' . $rel, $print, dirname(__DIR__) . '/' . $prel);
+        // the PDF: every grade on TABLES 54B (one A4 page) + the certificate, from its own build
+        [$pbook, , $pprint] = srBuildBook($tpl, $report['data'], true);
+        $ptmp = sys_get_temp_dir() . '/ysms_srpdf_' . bin2hex(random_bytes(5)) . '.xlsx';
+        rtSave($pbook, $ptmp, rtAbs($tpl['file_path']));
+        $pbook->disconnectWorksheets();
+        $p = rtPdf($ptmp, $pprint, dirname(__DIR__) . '/' . $prel);
+        @unlink($ptmp);
         if ($p['ok']) { $ins->execute([$report['id'], $tpl['id'], 'pdf', $base . '.pdf', $prel, filesize(dirname(__DIR__) . '/' . $prel), $uid ?: null, $now]); $files['pdf'] = (int)$db->lastInsertId(); }
         else $pdfError = $p['error'];
     }
@@ -640,6 +646,160 @@ function srLetterhead(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, string 
     for ($r = 1; $r <= $rows; $r++) $ws->getRowDimension($r)->setRowHeight(round(($h + 8) * 0.75 / $rows, 2)); // px → pt
 }
 
+/**
+ * PDF: the BROB header block with every grade on board, in order. The template's columns are used
+ * first (as srHeaderCompact); more grades get columns of their own to the right, styled like the
+ * last one, and the unit moves after them. → the last column used (for the print area).
+ */
+function srHeaderAll(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, array $eff, array $grades, array $data): string {
+    $C = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::class; $DT = \PhpOffice\PhpSpreadsheet\Cell\DataType::class;
+    $n = srHeaderCols($ws, $eff);
+    $first = array_slice($grades, 0, count($n));
+    srHeaderCompact($ws, $eff, $first, $data);
+    $more = array_slice($grades, count($n));
+    if (!$more || !$n) return 'J';
+    $last = end($n); $lastIdx = max(array_keys($n));
+    // the unit ("M.Tons") right of the block moves after the new columns
+    $rows = []; foreach (['label', 'fwe', 'started'] as $k) if ($last[$k]) $rows[$k] = (int)preg_replace('/\D/', '', $last[$k]);
+    $unit = [];
+    foreach ($rows as $k => $r) for ($c = $lastIdx + 1; $c <= $lastIdx + 3; $c++) {
+        $v = $ws->getCell($C::stringFromColumnIndex($c) . $r)->getValue();
+        if (is_string($v) && trim($v) !== '' && $v[0] !== '=') { $unit[$r] = [$v, $ws->getCell($C::stringFromColumnIndex($c) . $r)->getXfIndex()]; $ws->getCell($C::stringFromColumnIndex($c) . $r)->setValueExplicit(null, $DT::TYPE_NULL); break; }
+    }
+    foreach ($more as $i => $g) {
+        $col = $C::stringFromColumnIndex($lastIdx + 1 + $i);
+        if (!$ws->getColumnDimension($col)->getWidth() || $ws->getColumnDimension($col)->getWidth() < 9) $ws->getColumnDimension($col)->setWidth($ws->getColumnDimension($C::stringFromColumnIndex($lastIdx))->getWidth() ?: 12);
+        foreach ($rows as $k => $r) {
+            $xf = $ws->getCell($C::stringFromColumnIndex($lastIdx) . $r)->getXfIndex(); // read before the next getCell (cell objects are reused)
+            $cell = $ws->getCell($col . $r);
+            $cell->setXfIndex($xf);
+            if ($k === 'label') { $cell->setValueExplicit(SR_GRADES[$g][0], $DT::TYPE_STRING); continue; }
+            $f = $eff['fields']['brob_' . $k . '_' . $g] ?? null;
+            if ($f) { $cell->setValue("='" . $f['sheet'] . "'!" . $f['cell']); continue; }
+            $v = srVal($data, 'brob_' . $k . '_' . $g);
+            if ($v !== '' && is_numeric($v)) $cell->setValue((float)$v); else $cell->setValueExplicit(null, $DT::TYPE_NULL);
+        }
+    }
+    $after = $C::stringFromColumnIndex($lastIdx + 1 + count($more));
+    foreach ($unit as $r => [$v, $xf]) { $ws->getCell($after . $r)->setValueExplicit($v, $DT::TYPE_STRING); $ws->getCell($after . $r)->setXfIndex($xf); }
+    if ($unit && $ws->getColumnDimension($after)->getWidth() < 9) $ws->getColumnDimension($after)->setWidth(9); // room for "M.Tons"
+    return $unit ? $after : $C::stringFromColumnIndex($lastIdx + count($more));
+}
+
+/** The BROB header's grade columns of the template: [column index => ['label', 'fwe', 'started' => coordinate]]. */
+function srHeaderCols(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, array $eff): array {
+    $top = min(array_column($eff['sections'], 'heading')) - 1;
+    $norm = fn($v) => str_replace(['$', "'"], '', (string)$v);
+    $cols = [];
+    foreach (array_keys($eff['sections']) as $slot) {
+        $col = ['label' => null, 'fwe' => null, 'started' => null];
+        foreach (['fwe', 'started'] as $k) {
+            $f = $eff['fields']['brob_' . $k . '_' . $slot] ?? null;
+            if (!$f) continue;
+            $want = $norm('=' . $f['sheet'] . '!' . $f['cell']);
+            foreach ($ws->getRowIterator(1, $top) as $row) foreach ($row->getCellIterator('A', 'L') as $cell) if ($norm($cell->getValue()) === $want) $col[$k] = $cell->getCoordinate();
+        }
+        $any = $col['fwe'] ?? $col['started'];
+        if (!$any) continue;
+        [$c] = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::coordinateFromString($any);
+        $short = strtoupper(trim($eff['fuel_names'][$slot] ?? $slot));
+        for ($r = $top; $r >= 1; $r--) { $v = $ws->getCell($c . $r)->getValue(); if (is_string($v) && strtoupper(trim($v)) === $short) { $col['label'] = $c . $r; break; } }
+        $cols[\PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($c)] = $col;
+    }
+    ksort($cols);
+    return $cols;
+}
+
+/**
+ * PDF: the ULSFO / HSMGO sections (filled on the copy sheet) placed on TABLES 54B right after the
+ * section they use (VLSFO / LSMGO), with their calculated values and the same look; their lines in
+ * the totals list under the tables follow the others. Only the shown rows are copied.
+ */
+function srMergeExtras(\PhpOffice\PhpSpreadsheet\Spreadsheet $book, \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $t, \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $x, array $eff, array $pos, array $cpos, array $extraGrades, string $mtC): void {
+    $C = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::class; $DT = \PhpOffice\PhpSpreadsheet\Cell\DataType::class;
+    $lastIdx = 12; // A..L
+    // the shown value of a cell (formulas calculated) and its style; then written as a plain value
+    $val = function (\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, string $coord): array {
+        $sc = $ws->getCell($coord); $xf = $sc->getXfIndex(); $v = $sc->getValue();
+        if (is_string($v) && $v !== '' && $v[0] === '=') { try { $v = $ws->getCell($coord)->getCalculatedValue(); } catch (Throwable $e) { $v = null; } }
+        return [$v, $xf];
+    };
+    $put = function (string $coord, $v, int $xf) use ($t, $DT) {
+        $tc = $t->getCell($coord);
+        $tc->setXfIndex($xf);
+        if ($v === null || $v === '') $tc->setValueExplicit(null, $DT::TYPE_NULL);
+        elseif (is_numeric($v) && !is_string($v)) $tc->setValueExplicit($v, $DT::TYPE_NUMERIC);
+        else $tc->setValueExplicit((string)$v, $DT::TYPE_STRING);
+    };
+    $copyRows = function (array $src, int $at) use ($t, $x, $book, $C, $lastIdx, $val, $put) { // source rows of $x → new rows of $t from $at
+        $n = count($src) + 1; // + a blank row before
+        $t->insertNewRowBefore($at, $n);
+        sfShiftSheetRefs($book, $t->getTitle(), $at, $n);
+        for ($r = $at; $r < $at + $n; $r++) $t->getRowDimension($r)->setVisible(true);
+        $map = [];
+        foreach ($src as $i => $r) $map[$r] = $at + 1 + $i;
+        foreach ($map as $r => $to) {
+            $h = $x->getRowDimension($r)->getRowHeight(); if ($h > 0) $t->getRowDimension($to)->setRowHeight($h);
+            $t->getRowDimension($to)->setVisible(true);
+            for ($c = 1; $c <= $lastIdx; $c++) {
+                $col = $C::stringFromColumnIndex($c);
+                [$v, $xf] = $val($x, $col . $r);
+                $put($col . $to, $v, $xf); // (a cell object is reused by the next getCell: read first, then write)
+            }
+        }
+        foreach ($x->getMergeCells() as $rng) {
+            [$a, $b] = explode(':', $rng);
+            [$ac, $ar] = $C::coordinateFromString($a); [$bc, $br] = $C::coordinateFromString($b);
+            if (isset($map[(int)$ar], $map[(int)$br])) $t->mergeCells($ac . $map[(int)$ar] . ':' . $bc . $map[(int)$br]);
+        }
+    };
+    // the totals list lines of the extra grades (labelled with their short name on the copy)
+    $shorts = array_map(fn($g) => SR_GRADES[$g][0], $extraGrades);
+    $listSrc = [];
+    $maxSec = max(array_map(fn($s) => $s['mt_total'], $cpos));
+    for ($r = $maxSec + 1; $r <= $x->getHighestRow(); $r++) {
+        $v = $x->getCell('B' . $r)->getValue();
+        if (is_string($v) && in_array(strtoupper(trim($v)), $shorts, true) && $x->getRowDimension($r)->getVisible()) $listSrc[] = $r;
+    }
+    // where the totals list is on TABLES 54B: its last shown line (a template grade's short name in column B)
+    $tShorts = array_map(fn($s) => strtoupper(trim($eff['fuel_names'][$s] ?? $s)), array_keys($eff['sections']));
+    $maxT = max(array_map(fn($s) => $s['mt_total'], $pos));
+    $listAt = 0; $listAny = 0;
+    for ($r = $maxT + 1; $r <= $t->getHighestRow(); $r++) {
+        $v = $t->getCell('B' . $r)->getValue();
+        if (!is_string($v) || !in_array(strtoupper(trim($v)), array_merge($tShorts, ['VLSFO', 'HSFO', 'LSMGO']), true)) continue;
+        $listAny = $r;
+        if ($t->getRowDimension($r)->getVisible()) $listAt = $r;
+    }
+    if (!$listAt) $listAt = $listAny; // no template grade on board: the extra lines go where the list is
+    if ($listSrc && $listAt) { // bottom first, so the section positions above stay right
+        $n = count($listSrc);
+        $t->insertNewRowBefore($listAt + 1, $n);
+        sfShiftSheetRefs($book, $t->getTitle(), $listAt + 1, $n);
+        foreach ($listSrc as $i => $r) {
+            $to = $listAt + 1 + $i;
+            $t->getRowDimension($to)->setVisible(true);
+            $h = $x->getRowDimension($r)->getRowHeight(); if ($h > 0) $t->getRowDimension($to)->setRowHeight($h);
+            for ($c = 1; $c <= $lastIdx; $c++) {
+                $col = $C::stringFromColumnIndex($c);
+                $xf = $t->getCell($col . $listAt)->getXfIndex(); // looks like the line above
+                [$v] = $val($x, $col . $r);
+                $put($col . $to, $v, $xf);
+            }
+        }
+    }
+    // the sections, each after the section it uses (lowest first from the bottom)
+    $todo = [];
+    foreach ($extraGrades as $g) {
+        $slot = SR_EXTRA_SLOT[$g]; $sec = $cpos[$slot];
+        $rows = [];
+        for ($r = $sec['heading']; $r <= $sec['mt_total']; $r++) if ($x->getRowDimension($r)->getVisible()) $rows[] = $r;
+        $todo[] = [$pos[$slot]['mt_total'] + 1, $rows];
+    }
+    usort($todo, fn($a, $b) => $b[0] <=> $a[0]);
+    foreach ($todo as [$at, $rows]) if ($rows) $copyRows($rows, $at);
+}
+
 function srHideRows(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, int $from, int $to): void {
     for ($r = $from; $r <= $to; $r++) $ws->getRowDimension($r)->setVisible(false);
 }
@@ -648,8 +808,10 @@ function srHideRows(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, int $from
  * The report workbook: the template filled with the chosen grades (the others hidden), a copy of
  * TABLES 54B for ULSFO / HSMGO when chosen, and the ROB SUMMARY sheet.
  * → [book, eff, print sheets, where each grade's section is (sheet, rows)].
+ * $forPdf: the book the PDF is printed from — every chosen grade on TABLES 54B (one A4 page) and
+ * the certificate; no ROB summary page. The Excel kept in the system is built without it (unchanged).
  */
-function srBuildBook(array $tpl, array $data): array {
+function srBuildBook(array $tpl, array $data, bool $forPdf = false): array {
     $eff = rtEffective($tpl);
     $grades = srChosenGrades($eff, $data);
     $list = srGradeList($eff);
@@ -695,9 +857,11 @@ function srBuildBook(array $tpl, array $data): array {
         foreach ($cpos as $s => $sec) if (!in_array($s, $used, true)) srHideGrade($book, SR_EXTRA_SHEET, $sec, $mtC, [SR_EXTRA_SHEET]);
         srHeaderCompact($copy, $eff, $extraGrades, $data);
         foreach ($extraGrades as $g) srHideEmptyTankRows($copy, $cpos[SR_EXTRA_SLOT[$g]], count($rowsFor[SR_EXTRA_SLOT[$g]]));
-        srFitOnePage($copy);
-        srLetterhead($copy);
-        srFitA4($copy); // fills the A4 page
+        if (!$forPdf) {
+            srFitOnePage($copy);
+            srLetterhead($copy);
+            srFitA4($copy); // fills the A4 page
+        }
         $copy->getPageSetup()->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
         $extraTitle = SR_EXTRA_SHEET;
     }
@@ -706,11 +870,24 @@ function srBuildBook(array $tpl, array $data): array {
         if (in_array($s, $tplGrades, true)) continue;
         srHideGrade($book, $tn, $sec, $mtC, $printBase);
     }
-    srHeaderCompact($t, $eff, $tplGrades, $data); // BROB header: the grades on board side by side, no empty column between
+    if ($forPdf && $extraGrades) $hdr = srHeaderAll($t, $eff, $grades, $data); // the PDF: every grade in the BROB header
+    else srHeaderCompact($t, $eff, $tplGrades, $data); // BROB header: the grades on board side by side, no empty column between
     foreach ($tplGrades as $g) srHideEmptyTankRows($t, $pos[$g], count($fill['tanks'][$g])); // only the tanks entered
+    if ($forPdf && $extraGrades) srMergeExtras($book, $t, $copy, $eff, $pos, $cpos, $extraGrades, $mtC);
     srFitOnePage($t); // the tank report prints on one A4 page
-    srLetterhead($t);
-    srFitA4($t);
+    $lastCol = $forPdf && !empty($hdr) ? $hdr : 'J';
+    if ($lastCol !== 'J') $t->getPageSetup()->setPrintArea(preg_replace('/\$?J\$?(\d+)$/', $lastCol . '$1', preg_replace('/^[^!]*!/', '', str_replace('$', '', $t->getPageSetup()->getPrintArea()))));
+    srLetterhead($t, $lastCol);
+    srFitA4($t, $lastCol);
+    if ($forPdf) { // printed: TABLES 54B (all grades) and the certificate
+        if ($extraGrades && ($cx = $book->getSheetByName(SR_EXTRA_SHEET))) $book->removeSheetByIndex($book->getIndex($cx)); // its rows are on TABLES 54B now (LibreOffice would print a hidden sheet that has a print area)
+        $order = [];
+        foreach ($book->getWorksheetIterator() as $ws) if (in_array($ws->getTitle(), $printBase, true) && ($tplGrades || $extraGrades || $ws->getTitle() !== $tn)) {
+            $order[] = $ws->getTitle();
+            if ($ws->getTitle() !== $tn) { srLetterhead($ws); srFitA4($ws); }
+        }
+        return [$book, $eff, $order, $where];
+    }
     $summary = srSummarySheet($book, $eff, $data, $grades, $where);
     // printed: the report sheets in workbook order
     $print = $printBase;
@@ -1037,7 +1214,7 @@ function srPreviewPdf(array $tpl, array $report): array {
     $key = $report['id'] . '-' . $report['version'] . '-' . $tpl['id'] . '-' . substr(sha1(json_encode($report['data'])), 0, 12);
     $pdf = $dir . '/' . $key . '.pdf';
     if (is_file($pdf)) return ['ok' => true, 'pdf' => $pdf];
-    [$book, , $print] = srBuildBook($tpl, $report['data']);
+    [$book, , $print] = srBuildBook($tpl, $report['data'], true); // as the PDF prints
     // own temp names, then an atomic rename: two people previewing the same version at once never clash
     $tmp = $dir . '/' . $key . '.' . bin2hex(random_bytes(4));
     try {

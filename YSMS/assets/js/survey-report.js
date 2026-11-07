@@ -1277,21 +1277,13 @@
         y = doc.lastAutoTable.finalY + 7;
       });
       foot();
-      // ---- page 2: ROB summary + signatures
-      doc.addPage(); y = head();
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor.apply(doc, navy); doc.text('ROB SUMMARY', W / 2, y + 2, { align: 'center' }); y += 8;
-      var sr = summaryRows(), tot = 0;
-      sr.forEach(function (r) { if (r.diff !== null) tot += r.diff; });
-      tot = ReportCalc.round(tot, 3);
-      doc.autoTable({ startY: y, margin: { left: M, right: M }, head: [['Fuel Grade', 'Survey Completed (MT)', 'Log Book ROB (MT)', 'Difference (MT)']],
-        body: sr.map(function (r) { return [r.short, f3(r.completed), f3(r.logbook), sgn(r.diff).replace('−', '-')]; }).concat([[{ content: 'TOTAL DIFFERENCE', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } }, { content: sgn(tot).replace('−', '-') + ' MT', styles: { fontStyle: 'bold' } }]]),
-        theme: 'grid', headStyles: { fillColor: navy, textColor: 255, fontStyle: 'bold', fontSize: 9 }, styles: { fontSize: 10, cellPadding: 2.2, halign: 'right', lineColor: [148, 163, 184], lineWidth: 0.15, textColor: 20 }, columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } } });
-      y = doc.lastAutoTable.finalY + 8;
+      // signatures under the tables (no separate ROB summary page — the report is the tank page; the certificate is made by the server)
+      if (y > 235) { foot(); doc.addPage(); y = head(); }
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(30, 41, 59);
-      doc.text(doc.splitTextToSize('All bunker tanks were carefully sounded together with the Chief Engineer / his representative and the quantities calculated from the vessel\'s calibration tables. Survey Completed = sum of MT in Air of the tanks of each grade; Log Book = ROB at survey start.', W - 2 * M), M, y);
-      y += 26;
+      doc.text(doc.splitTextToSize('All bunker tanks were carefully sounded together with the Chief Engineer / his representative and the quantities calculated from the vessel\'s calibration tables.', W - 2 * M), M, y);
+      y += 22;
       var sig = function (x, t, n) { doc.setDrawColor(100); doc.line(x, y, x + 70, y); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.text(t, x, y + 5); doc.setFont('helvetica', 'normal'); doc.text(n || '', x, y + 10); };
-      sig(M, 'The Master', val('master')); sig(W - M - 70, 'Independent Marine Surveyor', val('surveyor_name')); y += 26;
+      sig(M, 'The Master', val('master')); sig(W - M - 70, 'Independent Marine Surveyor', val('surveyor_name')); y += 22;
       sig(M, 'The Chief Engineer', val('chief_engineer'));
       foot();
       var name = (vessel + ' - ' + (S.report.kind_label || 'SURVEY') + ' - DRAFT').toUpperCase().replace(/[^A-Z0-9 .\-]+/g, '').trim() + '.pdf';
