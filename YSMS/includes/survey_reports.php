@@ -1193,6 +1193,18 @@ function srStart(PDO $db, array $survey, string $kind, int $uid): array {
     }
 }
 
+/** A report not tied to a vessel (survey_report.php opened without an id): the active template of the kind, starting values only. */
+function srNew(PDO $db, string $kind, int $uid): array {
+    rtEnsureTables($db);
+    if (!isset(RT_KINDS[$kind])) return ['ok' => false, 'error' => 'Choose the report type.'];
+    $t = rtActive($db, $kind);
+    if (!$t) return ['ok' => false, 'error' => 'No ' . RT_KINDS[$kind] . ' template is uploaded yet. An Admin uploads it under Report Templates.'];
+    $now = date('Y-m-d H:i:s');
+    $db->prepare('INSERT INTO survey_reports (survey_id, template_id, kind, data, version, created_by, created_at, updated_by, updated_at) VALUES (NULL, ?, ?, ?, 1, ?, ?, ?, ?)')
+       ->execute([$t['id'], $kind, json_encode(srDefaults(rtEffective($t), null)), $uid ?: null, $now, $uid ?: null, $now]);
+    return ['ok' => true, 'id' => (int)$db->lastInsertId(), 'created' => true];
+}
+
 /** The report of a vessel (null when no survey was started). */
 function srReportForSurvey(PDO $db, int $surveyId): ?array {
     rtEnsureTables($db);

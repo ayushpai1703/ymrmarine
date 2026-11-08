@@ -12,6 +12,53 @@ require_once 'includes/survey_reports.php';
 checkAuth();
 if (!srCanUse()) { header('Location: index.php'); exit; }
 $id = (int)($_GET['id'] ?? 0);
+// Opened without an id: choose the report type and a new report (not tied to a vessel) is made, then it opens.
+if ($id <= 0) {
+    $srKinds = [];
+    try { $srDb = getDB(); rtEnsureTables($srDb); foreach (RT_KINDS as $k => $l) if (rtActive($srDb, $k)) $srKinds[$k] = $l; }
+    catch (Throwable $e) { error_log('survey_report new: ' . $e->getMessage()); }
+    $srCanNew = in_array(srRole(), ['Admin', 'Surveyor'], true);
+    $page_title = 'New Survey Report';
+    include 'includes/header.php';
+    ?>
+<link rel="stylesheet" href="assets/css/survey-report.css?v=<?= @filemtime(__DIR__ . '/assets/css/survey-report.css') ?>">
+<div class="scroll-content" data-testid="survey-report-new-page">
+<?php $back_url = 'survey_reports.php'; $page_testid = 'survey-report-new'; include 'includes/top_app_bar.php'; ?>
+<div class="sr-wrap sr-v4">
+    <section class="sr-card sr-newrep" data-testid="sr-new">
+        <h3><i class="fa-solid fa-file-circle-plus"></i> New Survey Report</h3>
+        <?php if (!$srCanNew): ?>
+            <div class="sr-note warn">Only an Admin or a Surveyor can make a report.</div>
+        <?php elseif (!$srKinds): ?>
+            <div class="sr-note warn">No report template is uploaded yet. An Admin uploads it under Report Templates.</div>
+        <?php else: ?>
+            <p class="sr-muted">Choose the report type. The report is not tied to a vessel; enter the vessel in the first step.</p>
+            <div class="sr-newrep-k">
+                <?php foreach ($srKinds as $k => $l): ?>
+                    <button type="button" class="sr-btn" data-new-kind="<?= sanitize($k) ?>" data-testid="sr-new-<?= sanitize($k) ?>"><i class="fa-solid fa-file-lines"></i> <?= sanitize($l) ?></button>
+                <?php endforeach; ?>
+            </div>
+            <div class="sr-note err" data-new-err hidden data-testid="sr-new-err"></div>
+        <?php endif; ?>
+    </section>
+</div>
+</div>
+<script>
+(function () {
+  var csrf = <?= json_encode(csrf_token()) ?>, busy = false;
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-new-kind]'); if (!b || busy) return;
+    busy = true; b.disabled = true;
+    var f = new FormData(); f.append('csrf_token', csrf); f.append('a', 'new'); f.append('kind', b.getAttribute('data-new-kind'));
+    fetch('ajax/survey_reports.php', { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf } })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (j && j.ok && j.id) { location.replace('survey_report.php?id=' + j.id); return; } throw new Error(j && j.error || 'Could not make the report.'); })
+      .catch(function (err) { busy = false; b.disabled = false; var m = document.querySelector('[data-new-err]'); if (m) { m.hidden = false; m.textContent = err.message || 'No connection.'; } });
+  });
+})();
+</script>
+<?php include 'includes/nav.php'; include 'includes/footer.php'; exit;
+}
 // back to the vessel the survey belongs to
 $srBack = 'vessels.php'; $srBackLabel = 'Pending Vessels';
 try {

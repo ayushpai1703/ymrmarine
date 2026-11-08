@@ -7,6 +7,7 @@
  *   GET  a=list                       reports this user can see
  *   GET  a=surveys&q=                 vessels a new report can be made for
  *   POST a=start   survey_id, kind    "Start Survey" on a vessel: opens its report (the draft when one exists, else a new one)
+ *   POST a=new     kind               a report without a vessel (survey_report.php opened without an id)
  *   GET  a=for_survey&survey_id=      the vessel's report (id, type, state) or none
  *   GET  a=tank_history&id= | &survey_id=   version history of the saved tanks (Admin only)
  *   GET  a=preview&id=                the report as it prints now, as a temporary PDF (nothing is stored)
@@ -202,6 +203,12 @@ try {
             srJson(403, ['ok' => false, 'error' => 'This vessel is no longer pending — a survey cannot be started.']);
         }
         $res = srStart($db, $s, (string)($_POST['kind'] ?? ''), $uid);
+        srJson($res['ok'] ? 200 : 422, $res);
+    }
+    if ($a === 'new') { // survey_report.php opened without an id: a report not tied to a vessel (Admin / Surveyor)
+        if (!$isPost) srJson(405, ['ok' => false, 'error' => 'POST only.']);
+        if (!in_array(srRole(), ['Admin', 'Surveyor'], true)) srJson(403, ['ok' => false, 'error' => 'View only.']);
+        $res = srNew($db, (string)($_POST['kind'] ?? ''), $uid);
         srJson($res['ok'] ? 200 : 422, $res);
     }
 

@@ -415,14 +415,14 @@
       (S.canEdit ? '<button type="button" class="sr-btn" data-import data-online-only data-testid="sr-import"><i class="fa-solid fa-file-import"></i> Import from Excel</button>' +
         '<input type="file" accept=".xlsx,.xlsm,.xls,.csv" data-import-file hidden data-testid="sr-import-file">' +
         (prevTanks ? '<button type="button" class="sr-btn" data-prev-tanks data-testid="sr-copy-prev"><i class="fa-regular fa-copy"></i> Copy from Previous</button>' : '') : '') +
-      (S.wide ? '<div class="sr-cols"><button type="button" class="sr-btn" data-cols data-testid="sr-cols"><i class="fa-solid fa-table-columns"></i> Columns <i class="fa-solid fa-chevron-down" style="font-size:10px"></i></button>' +
-        (S.colsOpen ? '<div class="sr-cols-m" data-testid="sr-cols-menu">' + OPT_COLS.map(function (c) { return '<label><input type="checkbox" data-colt="' + c[0] + '"' + (hiddenCols().indexOf(c[0]) < 0 ? ' checked' : '') + '> ' + c[1] + '</label>'; }).join('') + '</div>' : '') + '</div>' : '') +
+      ('<div class="sr-cols"><button type="button" class="sr-btn" data-cols data-testid="sr-cols"><i class="fa-solid fa-table-columns"></i> Columns <i class="fa-solid fa-chevron-down" style="font-size:10px"></i></button>' +
+        (S.colsOpen ? '<div class="sr-cols-m" data-testid="sr-cols-menu">' + OPT_COLS.map(function (c) { return '<label><input type="checkbox" data-colt="' + c[0] + '"' + (hiddenCols().indexOf(c[0]) < 0 ? ' checked' : '') + '> ' + c[1] + '</label>'; }).join('') + '</div>' : '') + '</div>') +
       '</div></div>';
   }
   function tanksHtml() {
     var g = chosen();
     if (!g.length) return '<div class="sr-note warn"><i class="fa-solid fa-gas-pump"></i> Choose the fuel grades on board in Survey Details first. <button type="button" class="sr-btn sm" data-goto="survey">Go to Survey Details</button></div>';
-    return '<section class="sr-card sr-tkcard">' + tankToolbar() + (S.wide ? gridHtml() : listHtml()) + '</section>' + totalsBar();
+    return '<section class="sr-card sr-tkcard">' + tankToolbar() + gridHtml() + '</section>' + totalsBar();
   }
   function gradeSelect(g, i) {
     return '<select data-tg="' + g + ':' + i + '" data-testid="sr-tg-' + g + '-' + i + '"' + (S.canEdit ? '' : ' disabled') + '>' + chosen().map(function (x) { return '<option value="' + x + '"' + (x === g ? ' selected' : '') + '>' + esc(gradeInfo(x).short) + '</option>'; }).join('') + '</select>';
@@ -444,13 +444,13 @@
   function rowHtml(g, r, i, n) {
     var key = g + ':' + i, t = calc(r), st = rowState(r), hid = hiddenCols();
     var c = function (k, v) { return '<td class="sr-calc c-' + k + (hid.indexOf(k) >= 0 ? ' hid' : '') + '" data-rc="' + key + ':' + k + '">' + v + '</td>'; };
+    var inp = function (k, col) { return '<td class="sr-in c-' + k + (hid.indexOf(k) >= 0 ? ' hid' : '') + '">' + cellIn(g, i, col, r, true) + '</td>'; };
     return '<tr class="sr-row ' + st + '" data-tank="' + key + '" data-testid="sr-tank-' + g + '-' + i + '"><td class="sr-no">' + n + '</td>' +
-      '<td class="c-name">' + cellIn(g, i, 'name', r) + (st === 'copy' ? '<span class="sr-copy-dot" title="Copy — change the values, then save" data-testid="sr-copy-badge-' + g + '-' + i + '">Copy</span>' : '') + '</td><td class="c-grade">' + gradeSelect(g, i) + '</td>' +
-      '<td>' + cellIn(g, i, 'ref_height', r, true) + '</td><td>' + cellIn(g, i, 'sounding', r, true) + '</td>' +
-      '<td class="c-ullage' + (hid.indexOf('ullage') >= 0 ? ' hid' : '') + '">' + cellIn(g, i, 'ullage', r, true) + '</td>' +
-      '<td class="c-volume' + (hid.indexOf('volume') >= 0 ? ' hid' : '') + '">' + cellIn(g, i, 'volume', r, true) + '</td>' +
-      '<td>' + cellIn(g, i, 'temp', r, true) + '</td><td>' + cellIn(g, i, 'density', r, true) + '</td>' +
+      '<td class="c-name">' + cellIn(g, i, 'name', r) + (st === 'copy' ? '<span class="sr-copy-dot" title="Copy — change the values, then save" data-testid="sr-copy-badge-' + g + '-' + i + '">Copy</span>' : '') + '</td>' +
+      '<td class="c-ref">' + cellIn(g, i, 'ref_height', r, true) + '</td>' +
+      inp('snd', 'sounding') + inp('ullage', 'ullage') + inp('volume', 'volume') + inp('den', 'density') + inp('temp', 'temp') +
       c('vcf', t.vcf == null ? '' : t.vcf.toFixed(4)) + c('wcf', t.wcf == null ? '' : t.wcf.toFixed(4)) + c('gsv', f3c(t.gsv)) + '<td class="sr-calc c-mt" data-rc="' + key + ':mt">' + f3c(t.mt) + '</td>' +
+      '<td class="c-grade">' + gradeSelect(g, i) + '</td>' +
       '<td class="sr-acts">' + actsHtml(g, i, st) + '</td></tr>';
   }
   function actsHtml(g, i, st) {
@@ -461,19 +461,35 @@
       '<button type="button" class="sr-ic" data-copy="' + key + '" title="Copy tank" data-testid="sr-copy-' + g + '-' + i + '"><i class="fa-regular fa-copy"></i></button>' +
       '<button type="button" class="sr-ic del" data-del="' + key + '" title="Delete" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-solid fa-trash-can"></i></button>';
   }
+  /** One table per fuel grade, as on the company sheet: Tank Name · Ref. Height · Sdg. · Density · Temp (typed, boxed) · VCF · GSV · MT,
+      then the grade's total. On a phone the table scrolls sideways with the tank name kept in view, the totals sit in two cards
+      below it, and every grade but the one in use folds up under its name. */
   function gridHtml() {
-    var hid = hiddenCols(), n = 0;
-    var th = function (k, l, u) { return '<th class="c-' + k + (hid.indexOf(k) >= 0 ? ' hid' : '') + '">' + l + (u ? '<small>' + u + '</small>' : '') + '</th>'; };
-    return '<div class="sr-grid-wrap"><table class="sr-tgrid" data-testid="sr-tgrid"><thead><tr><th class="sr-no">#</th><th class="c-name">Tank Name <b class="sr-req">*</b></th><th class="c-grade">Grade</th>' +
-      th('ref', 'Ref. Height', '(m)') + th('snd', 'Sounding', '(m)') + th('ullage', 'Ullage', '(m)') + th('volume', 'Volume', '(m³)') + th('temp', 'Temp', '(°C)') + th('den', 'Density', '(kg/l)') +
-      th('vcf', 'V.C.F.') + th('wcf', 'W.C.F.') + th('gsv', 'G.S.V.', '(m³ @15°C)') + th('mt', 'MT', '(Air)') + '<th class="sr-acts"></th></tr></thead>' +
-      chosen().map(function (g) {
-        var gi = gradeInfo(g), rows = S.data.tanks[g], tot = gradeTotals(g);
-        return '<tbody data-testid="sr-tanks-' + g + '"><tr class="sr-grp"><td colspan="14"><b>' + esc(gi.short) + '</b> <span class="sr-muted">' + esc(gi.name) + '</span><span class="sr-grp-t">' + rows.length + ' tank' + (rows.length === 1 ? '' : 's') +
-          ' · G.S.V. <b data-testid="sr-total-gsv-' + g + '">' + f3(tot.gsv) + '</b> · MT <b data-testid="sr-total-' + g + '">' + f3(tot.mt) + '</b></span></td></tr>' +
+    var hid = hiddenCols(), n = 0, list = chosen();
+    S.gOpen = S.gOpen || {};
+    var th = function (k, l, u, sh, grp) { return '<th class="c-' + k + ' ' + grp + (hid.indexOf(k) >= 0 ? ' hid' : '') + '"><span class="ln">' + l + '</span><span class="sh">' + (sh || l) + '</span>' + (u ? '<small>' + u + '</small>' : '') + '</th>'; };
+    var head = '<thead><tr><th class="sr-no">#</th><th class="c-name">Tank Name</th>' + th('ref', 'Ref. Height', '(m)', 'Ref. Ht.', 'g-ref') +
+      th('snd', 'Sdg. Corr\'d', '(m)', 'Sdg.', 'g-in') + th('ullage', 'Ullage', '(m)', '', 'g-in') + th('volume', 'Volume', '(m³)', '', 'g-in') + th('den', 'Density', '@15°C', '', 'g-in') + th('temp', 'Temp', '(°C)', '', 'g-in') +
+      th('vcf', 'VCF', '', '', 'g-out') + th('wcf', 'WCF', '', '', 'g-out') + th('gsv', 'GSV', '(m³)', '', 'g-out') + th('mt', 'Metric Tons', '(MT)', 'MT', 'g-out') +
+      '<th class="c-grade g-ref">Grade</th><th class="sr-acts"></th></tr></thead>';
+    return list.map(function (g, gi_) {
+      var gi = gradeInfo(g), rows = S.data.tanks[g], tot = gradeTotals(g);
+      var open = S.wide || (g in S.gOpen ? S.gOpen[g] : gi_ === 0);
+      return '<section class="sr-gsec' + (open ? ' open' : '') + '" data-testid="sr-tanks-' + g + '">' +
+        '<button type="button" class="sr-gsec-h" data-gfold="' + g + '" aria-expanded="' + (open ? 'true' : 'false') + '" data-testid="sr-gsec-' + g + '"><i class="fa-solid fa-gas-pump"></i><b>' + esc(gi.name) + '</b>' +
+          '<span class="sr-gsec-n">' + rows.length + ' tank' + (rows.length === 1 ? '' : 's') + '</span><i class="fa-solid fa-chevron-down sr-gsec-c"></i></button>' +
+        '<div class="sr-gsec-b">' +
+        '<div class="sr-grid-wrap"><table class="sr-tgrid" data-testid="' + (gi_ === 0 ? 'sr-tgrid' : 'sr-tgrid-' + g) + '">' + head + '<tbody>' +
           rows.map(function (r, i) { n++; return rowHtml(g, r, i, n); }).join('') +
-          (S.canEdit ? '<tr class="sr-addrow"><td colspan="14"><button type="button" data-add="' + g + '" data-testid="sr-add-' + g + '"><i class="fa-solid fa-circle-plus"></i> Add ' + esc(gi.short) + ' tank</button></td></tr>' : '') + '</tbody>';
-      }).join('') + '</table></div>';
+          (rows.length ? '' : '<tr class="sr-empty"><td colspan="15">No tanks yet.</td></tr>') +
+        '</tbody></table></div>' +
+        (S.canEdit ? '<div class="sr-addrow"><button type="button" data-add="' + g + '" data-testid="sr-add-' + g + '"><i class="fa-solid fa-circle-plus"></i> Add ' + esc(gi.short) + ' tank</button></div>' : '') +
+        '<div class="sr-gt"><span class="sr-gt-l">TOTAL (' + esc(gi.name) + ')</span>' +
+          '<span class="sr-gt-gsv"><span>GSV :</span> <span class="v"><b data-ggsv="' + g + '">' + f3c(tot.gsv) + '</b> <small>m³</small></span></span>' +
+          '<span class="sr-gt-mt"><span>Total MT :</span> <span class="v"><b data-gmt="' + g + '">' + f3c(tot.mt) + '</b> <small>MT</small></span></span>' +
+          '<b hidden data-testid="sr-total-' + g + '">' + f3(tot.mt) + '</b><b hidden data-testid="sr-total-gsv-' + g + '">' + f3(tot.gsv) + '</b></div>' +
+        '</div></section>';
+    }).join('');
   }
   function listHtml() {
     var q = (S.q || '').toUpperCase(), n = 0;
@@ -516,6 +532,7 @@
     var oi = $('[data-t="' + key + ':' + other[0] + '"]'); if (oi && document.activeElement !== oi) oi.value = other[1];
     var tot = gradeTotals(g), a = $('[data-testid=sr-total-' + g + ']'), b = $('[data-testid=sr-total-gsv-' + g + ']');
     if (a) a.textContent = f3(tot.mt); if (b) b.textContent = f3(tot.gsv);
+    var ca = $('[data-gmt="' + g + '"]'), cb = $('[data-ggsv="' + g + '"]'); if (ca) ca.textContent = f3c(tot.mt); if (cb) cb.textContent = f3c(tot.gsv);
     var all = allTotals(), x;
     if ((x = $('[data-testid=sr-tot-tanks]'))) x.textContent = all.n;
     if ((x = $('[data-testid=sr-tot-gsv]'))) x.textContent = f3c(all.gsv) + ' m³';
@@ -676,6 +693,7 @@
     if (t.closest('[data-share]')) { shareCard(); return; }
     if (t.closest('[data-undo]')) { undoLookup(); return; }
     if (t.closest('[data-manual]')) { S.manual = true; render(); var f = $('[data-f=vessel_name]'); if (f) f.focus(); return; }
+    if ((b = t.closest('[data-gfold]'))) { if (!S.wide) { var gf = b.getAttribute('data-gfold'), sec = b.closest('.sr-gsec'); S.gOpen = S.gOpen || {}; S.gOpen[gf] = !sec.classList.contains('open'); sec.classList.toggle('open', S.gOpen[gf]); b.setAttribute('aria-expanded', S.gOpen[gf] ? 'true' : 'false'); } return; }
     if ((b = t.closest('[data-add]'))) { addTank(b.getAttribute('data-add')); return; }
     if ((b = t.closest('[data-open]'))) { openSheet(b.getAttribute('data-open')); return; }
     if (t.closest('[data-sheet-close]')) { closeSheet(); return; }
@@ -685,7 +703,7 @@
     if (S.colsOpen && !t.closest('.sr-cols')) { S.colsOpen = false; var cm = $('[data-testid=sr-cols-menu]'); if (cm) cm.remove(); }
     if ((b = t.closest('[data-save-tank]'))) { saveTank(b.getAttribute('data-save-tank')); return; }
     if ((b = t.closest('[data-copy]'))) { copyTank(b.getAttribute('data-copy')); return; }
-    if ((b = t.closest('[data-edit]'))) { var ek = b.getAttribute('data-edit'); if (!S.wide) { openSheet(ek); return; } var x = $('[data-t="' + ek + ':name"]'); if (x) { x.focus(); x.select(); } return; }
+    if ((b = t.closest('[data-edit]'))) { var ek = b.getAttribute('data-edit'); var x = $('[data-t="' + ek + ':name"]'); if (x) { x.focus(); x.select(); } return; }
     if ((b = t.closest('[data-expand]'))) { var q = b.getAttribute('data-expand').split(':'), rr = S.data.tanks[q[0]][+q[1]]; S.expand[rr.id] = !S.expand[rr.id]; render(); return; }
     if ((b = t.closest('[data-del]'))) { delTank(b.getAttribute('data-del')); return; }
     if ((b = t.closest('[data-mode]'))) { var m = b.getAttribute('data-mode').split(':'), tr = S.data.tanks[m[0]][+m[1]]; tr.mode = m[2]; tr.sounding = m[2] === 'ullage' ? sounding(tr) : tr.sounding; changed(); render(); return; }
@@ -869,7 +887,7 @@
   function addTank(g) {
     var row = emptyRow(); S.data.tanks[g].push(row); changed();
     var key = g + ':' + (S.data.tanks[g].length - 1);
-    if (!S.wide) { openSheet(key); return; }
+    S.gOpen = S.gOpen || {}; S.gOpen[g] = true;
     render(); var n = $('[data-t="' + key + ':name"]'); if (n) { n.focus(); n.scrollIntoView({ block: 'center' }); }
   }
   function openSheet(key) { S.sheet = key; render(); document.body.classList.add('sr-sheet-on'); var n = $('.sr-sheet [data-t$=":name"]'); if (n && !n.value) n.focus(); }
@@ -927,7 +945,6 @@
     S.data.tanks[p[0]].splice(+p[1] + 1, 0, row);
     changed();
     var nk = p[0] + ':' + (+p[1] + 1);
-    if (!S.wide) { S.sheet = nk; render(); return toast('success', 'Tank copied — change the values and press Save Tank'); }
     render();
     var n = $('[data-t="' + nk + ':name"]'); if (n) { n.scrollIntoView({ block: 'center' }); n.focus(); n.select(); }
     toast('success', 'Tank copied — change the values and press Save tank');

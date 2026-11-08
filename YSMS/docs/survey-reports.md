@@ -589,3 +589,21 @@ Excel is built as before and keeps all its tabs (TABLES 54B, the ULSFO-HSMGO cop
 - **Page 2 — Certificate of Off-hire Bunker Quantity.**
 - No ROB summary page in the PDF. The draft PDF made on the device has no ROB summary page either;
   the signatures follow the tank tables.
+
+## Tank Details table and opening without an id (v4.3)
+
+**Tank Details (step 3).** One table per chosen fuel grade, in the company sheet's layout, on a
+computer and on a phone:
+- Heading with the grade's full name; columns Tank Name · Ref. Height · Sdg. Corr'd · Ullage ·
+  Volume · Density @15°C · Temp (typed, boxed) · VCF · WCF · GSV · Metric Tons · Grade · actions.
+  Every column stays; the Columns menu hides Ullage / Volume / VCF / WCF / GSV.
+- Under each table: "TOTAL (grade)" with the GSV and Total MT.
+- Phone: the table scrolls sideways with the tank name kept in view; GSV and Total MT are two
+  cards under it; only the first grade is open, the others fold under their name.
+- Add / Copy / Delete / Save, Import from Excel, Copy from Previous work as before. The phone
+  list + bottom sheet is no longer used.
+
+**survey_report.php without an id.** Shows "New Survey Report": the Admin or a Surveyor picks the
+report type (active templates only) and a report not tied to a vessel is made
+(`a=new`, `srNew`) and opened. Super Admin sees no buttons. Opening the page makes nothing by
+itself.
