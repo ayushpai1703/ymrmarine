@@ -89,43 +89,44 @@
     @media (max-width: 370px) { .pvx-type { max-width: 34%; font-size: 10.5px; padding: 4px 8px; } .pvx-name { font-size: 14.5px; } .pvx-i { font-size: 11px; gap: 5px; } .pvx-i i { width: 13px; font-size: 12px; } }
 }
 
-/* Pending Vessels list card (v4): blue outline; ship photo · bar · name / client · share ·
-   survey-type chip · chevron; Port / Surveyor / Appointment / Agent as label-over-value in a
-   2 × 2 grid with thin dividers; "Latest update" band only when there is one. */
+/* Pending Vessels list card (v5): blue outline; ship photo · bar · vessel name · share;
+   Client / Type of Survey, Port / Agent, Appointment / Surveyor as label over value,
+   rows split by lines; "Latest Updates" with the update as bullet points. */
 @media (max-width: 991.98px) {
-    .vessel-list-container .vessel-card.cc-card.pvy { padding: 12px 14px 12px !important; border-radius: 24px !important; border: 1.6px solid #3b9be6 !important; box-shadow: 0 6px 16px rgba(30,99,237,.08) !important; background: #fff !important; }
-    .cc-card.pvy .cc-num { display: none !important; }
-    .pvy-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
-    .pvy-photo { flex: none; width: 60px; height: 48px; border-radius: 10px; overflow: hidden; display: block; }
-    .pvy-photo img { width: 100%; height: 100%; display: block; object-fit: cover; }
-    .pvy-bar { flex: none; width: 2.5px; height: 30px; border-radius: 2px; background: #1e4fa8; margin: 0 1px; }
-    .pvy-title { flex: 1 1 0; min-width: 96px; display: flex; flex-direction: column; gap: 2px; }
-    .pvy-name { font-size: 16.5px; font-weight: 800; color: #0b1324; text-transform: uppercase; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.01em; }
-    .pvy-client { font-size: 13.5px; font-weight: 500; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pvy-share { flex: none; width: 26px; height: 34px; padding: 0; border: none; background: none; color: #111827; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-    .pvy-share svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-    .pvy-share.busy { opacity: .5; pointer-events: none; }
-    .pvy-type { flex: 0 1 auto; max-width: 26%; min-width: 0; background: #dfe8fb; color: #1d3fd6; border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pvy-chev { flex: none; width: 14px; color: #1d4ed8; display: flex; }
-    .pvy-chev svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-    .pvy-info { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 6px 2px 0; }
-    .pvy-i { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 8px 8px 4px; position: relative; }
-    .pvy-i:nth-child(even) { padding-left: 14px; }
-    .pvy-i:nth-child(odd)::after { content: ""; position: absolute; right: 0; top: 12px; bottom: 12px; width: 1.5px; background: #dfe5ee; }
-    .pvy-i:nth-child(odd):last-child::after { display: none; }
-    .pvy-i:nth-child(n+3) { border-top: 1.5px solid #e6ebf3; }
-    .pvy-i > svg { flex: none; width: 24px; height: 24px; fill: none; stroke: #1D63ED; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-    .pvy-t { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
-    .pvy-l { font-size: 12px; color: #64748b; font-weight: 500; line-height: 1.2; }
-    .pvy-t b { font-size: 14px; font-weight: 700; color: #0b1324; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pvy-note { padding: 6px 2px 0; }
-    .pvy-update { margin-top: 10px; background: #e8eefb; border-radius: 12px; padding: 9px 14px; font-size: 13.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pvy-ul { color: #475569; font-weight: 600; }
-    .pvy-update b { color: #0b1324; font-weight: 800; }
+    .vessel-list-container .vessel-card.cc-card.pvz { padding: 12px 14px 10px !important; border-radius: 24px !important; border: 2px solid #1fa2ea !important; box-shadow: 0 6px 16px rgba(30,99,237,.08) !important; background: #fff !important; }
+    .cc-card.pvz .cc-num { display: none !important; }
+    .pvz-head { display: flex; align-items: center; gap: 10px; min-width: 0; padding-bottom: 12px; border-bottom: 1.5px solid #e6ebf3; }
+    .pvz-photo { flex: none; width: 64px; height: 54px; border-radius: 13px; overflow: hidden; display: block; }
+    .pvz-photo img { width: 100%; height: 100%; display: block; object-fit: cover; }
+    .pvz-bar { flex: none; width: 3px; height: 34px; border-radius: 2px; background: #1e5bd6; margin: 0 2px; }
+    .pvz-name { flex: 1 1 auto; min-width: 0; font-size: 17.5px; font-weight: 800; color: #0b1324; text-transform: uppercase; line-height: 1.15; letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pvz-share { flex: none; width: 34px; height: 36px; padding: 0; border: none; background: none; color: #0b1324; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .pvz-share svg { width: 27px; height: 27px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .pvz-share.busy { opacity: .5; pointer-events: none; }
+    .pvz-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .pvz-i { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px 8px 10px 2px; position: relative; border-bottom: 1.5px solid #e6ebf3; }
+    .pvz-i:nth-child(even) { padding-left: 14px; }
+    .pvz-i:nth-child(odd)::after { content: ""; position: absolute; right: 0; top: 14px; bottom: 14px; width: 1.5px; background: #d9dfe8; }
+    .pvz-no-surveyor .pvz-i:last-child { grid-column: 1 / -1; }
+    .pvz-no-surveyor .pvz-i:last-child::after { display: none; }
+    .pvz-i > svg { flex: none; width: 26px; height: 26px; fill: none; stroke: #1D63ED; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .pvz-t { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+    .pvz-l { font-size: 12.5px; color: #475569; font-weight: 500; line-height: 1.2; }
+    .pvz-t b { font-size: 14px; font-weight: 700; color: #0b1324; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pvz-note { padding: 8px 2px 0; }
+    .pvz-upd { display: flex; align-items: center; gap: 10px; padding: 12px 2px 4px; min-width: 0; }
+    .pvz-upd-k { flex: none; display: flex; align-items: center; gap: 8px; color: #1D4ED8; font-size: 14px; font-weight: 800; }
+    .pvz-upd-k svg { width: 26px; height: 26px; fill: none; stroke: #1D63ED; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .pvz-upd-k span { width: 62px; line-height: 1.15; }
+    .pvz-upd-bar { flex: none; width: 2.5px; align-self: stretch; min-height: 34px; border-radius: 2px; background: #1e5bd6; }
+    .pvz-upd-list { flex: 1 1 auto; min-width: 0; margin: 0; padding: 0 0 0 16px; list-style: disc; }
+    .pvz-upd-list li { font-size: 13px; color: #1e293b; line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pvz-upd-list li::marker { color: #0b1324; }
+    .pvz-upd-none { flex: 1 1 auto; min-width: 0; font-size: 13px; color: #64748b; }
     /* the picture made for Share: whole text, no buttons */
-    .pvx-capture.pvy { border-color: #3b9be6 !important; }
-    .pvx-capture .pvy-share, .pvx-capture .pvy-chev { display: none !important; }
-    .pvx-capture .pvy-name, .pvx-capture .pvy-client, .pvx-capture .pvy-t b, .pvx-capture .pvy-update { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
-    .pvx-capture .pvy-type { white-space: normal; max-width: 40%; overflow: visible; text-align: center; border-radius: 14px; }
-    @media (max-width: 370px) { .pvy-photo { width: 52px; height: 42px; } .pvy-name { font-size: 15px; } .pvy-client { font-size: 12.5px; } .pvy-type { font-size: 10.5px; padding: 5px 8px; max-width: 24%; } .pvy-title { min-width: 84px; } .pvy-t b { font-size: 13px; } .pvy-i { gap: 7px; } .pvy-i > svg { width: 21px; height: 21px; } .pvy-head { gap: 7px; } }
+    .pvx-capture.pvz { border-color: #1fa2ea !important; }
+    .pvx-capture .pvz-share { display: none !important; }
+    .pvx-capture .pvz-name, .pvx-capture .pvz-t b, .pvx-capture .pvz-upd-list li { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+    @media (max-width: 370px) { .pvz-photo { width: 54px; height: 46px; } .pvz-name { font-size: 16.5px; } .pvz-i { gap: 8px; } .pvz-i > svg { width: 22px; height: 22px; } .pvz-t b { font-size: 13.5px; } .pvz-upd-k { font-size: 13px; } .pvz-upd-k span { width: 56px; } }
 }
+

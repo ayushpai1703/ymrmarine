@@ -694,7 +694,7 @@ include 'includes/header.php';
                         $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
                         $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                     ?>
-                    <div class="vessel-card vessel-card--stacked cc-card pvx pvy" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
+                    <div class="vessel-card vessel-card--stacked cc-card pvx pvz" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
                         <?php
                             $pvType = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A');
                             $pvAppt = !empty($survey['appointment_date']) ? date('d M Y', strtotime($survey['appointment_date'])) : '—';
@@ -715,31 +715,43 @@ include 'includes/header.php';
                             $pvTc = static function ($v) { $v = trim((string)$v); return $v === '' ? '' : ucwords(strtolower($v), " -/(.&'"); };
                         ?>
                         <span class="cc-num" data-row-num data-testid="pv-row-num" hidden></span>
-                        <div class="pvy-head">
-                            <span class="pvy-photo"><img src="assets/images/ship-photo.svg" alt="" width="66" height="52"></span>
-                            <span class="pvy-bar" aria-hidden="true"></span>
-                            <div class="pvy-title">
-                                <span class="cc-name pvy-name"><?= sanitize($vessel_name) ?></span>
-                                <span class="pvy-client"><?= sanitize($pvTc($survey['company_name'] ?? '')) ?: '—' ?></span>
-                            </div>
-                            <button type="button" class="pvy-share" data-pv-share data-share-text="<?= sanitize($pvShare) ?>" aria-label="Share vessel details" title="Share" data-testid="pending-vessel-share-<?= (int)$survey['id'] ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M8 11H6.5A2.5 2.5 0 0 0 4 13.5v5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-5A2.5 2.5 0 0 0 17.5 11H16"/></svg></button>
-                            <span class="pvy-type" title="<?= sanitize($pvType) ?>"><?= sanitize($pvType) ?></span>
-                            <span class="pvy-chev" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></span>
+                        <?php
+                            // Latest update as bullet points: one per line (or per sentence when it is one line).
+                            $pvUpd = trim((string)($survey['custom_live_status'] ?? ''));
+                            $pvUpdLines = $pvUpd === '' ? [] : array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $pvUpd))));
+                            if (count($pvUpdLines) === 1) {
+                                $pvSent = array_values(array_filter(array_map('trim', preg_split('/(?<=\.)\s+(?=[A-Z0-9])/', $pvUpdLines[0]))));
+                                if (count($pvSent) > 1) $pvUpdLines = $pvSent;
+                            }
+                        ?>
+                        <div class="pvz-head">
+                            <span class="pvz-photo"><img src="assets/images/ship-photo.svg" alt="" width="64" height="54"></span>
+                            <span class="pvz-bar" aria-hidden="true"></span>
+                            <span class="cc-name pvz-name"><?= sanitize($vessel_name) ?></span>
+                            <button type="button" class="pvz-share" data-pv-share data-share-text="<?= sanitize($pvShare) ?>" aria-label="Share vessel details" title="Share" data-testid="pending-vessel-share-<?= (int)$survey['id'] ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M8 11H6.5A2.5 2.5 0 0 0 4 13.5v5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-5A2.5 2.5 0 0 0 17.5 11H16"/></svg></button>
                         </div>
-                        <div class="pvy-info<?= $is_full_access ? '' : ' pvy-3' ?>">
-                            <div class="pvy-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><div class="pvy-t"><span class="pvy-l">Port</span><b data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><?= sanitize($pvTc($survey['port_name'] ?? '')) ?: 'N/A' ?></b></div></div>
+                        <div class="pvz-grid<?= $is_full_access ? '' : ' pvz-no-surveyor' ?>">
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17l2 2a1 1 0 0 0 3-3"/><path d="M14 14l2.5 2.5a1 1 0 0 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="M21 3l1 11h-2"/><path d="M3 3L2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></svg><div class="pvz-t"><span class="pvz-l">Client</span><b><?= sanitize($pvTc($survey['company_name'] ?? '')) ?: '—' ?></b></div></div>
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.5"/><rect x="9" y="2.5" width="6" height="3.5" rx="1"/><path d="M11 10.5h5M11 14h5M11 17.5h5"/><circle cx="8.3" cy="10.5" r=".6"/><circle cx="8.3" cy="14" r=".6"/><circle cx="8.3" cy="17.5" r=".6"/></svg><div class="pvz-t"><span class="pvz-l">Type of Survey</span><b><?= sanitize($pvType) ?></b></div></div>
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><div class="pvz-t"><span class="pvz-l">Port</span><b data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><?= sanitize($pvTc($survey['port_name'] ?? '')) ?: 'N/A' ?></b></div></div>
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="3"/><circle cx="5.5" cy="9.5" r="2.3"/><circle cx="18.5" cy="9.5" r="2.3"/><path d="M7 20v-1.5c0-2.8 2.2-4.8 5-4.8s5 2 5 4.8V20zM2 19.5v-1c0-2 1.4-3.4 3.5-3.4M22 19.5v-1c0-2-1.4-3.4-3.5-3.4"/></svg><div class="pvz-t"><span class="pvz-l">Agent</span><b><?= sanitize($pvTc($survey['agent_name'] ?? '')) ?: '—' ?></b></div></div>
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><div class="pvz-t"><span class="pvz-l">Appointment</span><b><?= sanitize($pvAppt) ?></b></div></div>
                             <?php if ($is_full_access): ?>
-                            <div class="pvy-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><div class="pvy-t"><span class="pvy-l">Surveyor</span><b><?= sanitize($pvTc($surveyorNames)) ?></b></div></div>
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><div class="pvz-t"><span class="pvz-l">Surveyor</span><b><?= sanitize($pvTc($surveyorNames)) ?></b></div></div>
                             <?php endif; ?>
-                            <div class="pvy-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><div class="pvy-t"><span class="pvy-l">Appointment</span><b><?= sanitize($pvAppt) ?></b></div></div>
-                            <div class="pvy-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="3"/><circle cx="5.5" cy="9.5" r="2.3"/><circle cx="18.5" cy="9.5" r="2.3"/><path d="M7 20v-1.5c0-2.8 2.2-4.8 5-4.8s5 2 5 4.8V20zM2 19.5v-1c0-2 1.4-3.4 3.5-3.4M22 19.5v-1c0-2-1.4-3.4-3.5-3.4"/></svg><div class="pvy-t"><span class="pvy-l">Agent</span><b><?= sanitize($pvTc($survey['agent_name'] ?? '')) ?: '—' ?></b></div></div>
                         </div>
                         <?php if ($needsSurveyor): ?>
-                        <div class="pvy-note"><span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span></div>
+                        <div class="pvz-note"><span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span></div>
                         <?php endif; ?>
-                        <?php if (!empty($survey['custom_live_status'])): ?>
-                        <div class="pvy-update" data-testid="pending-vessel-update-<?= (int)$survey['id'] ?>"><span class="pvy-ul">Latest update ·</span> <b><?= sanitize($survey['custom_live_status']) ?></b></div>
-                        <?php endif; ?>
+                        <div class="pvz-upd" data-testid="pending-vessel-update-<?= (int)$survey['id'] ?>">
+                            <div class="pvz-upd-k"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M8 8.5h8M8 12h8M8 15.5h8"/></svg><span>Latest Updates</span></div>
+                            <span class="pvz-upd-bar" aria-hidden="true"></span>
+                            <?php if ($pvUpdLines): ?>
+                                <ul class="pvz-upd-list"><?php foreach (array_slice($pvUpdLines, 0, 3) as $pvL): ?><li><?= sanitize($pvL) ?></li><?php endforeach; ?></ul>
+                            <?php else: ?>
+                                <div class="pvz-upd-none">No updates recorded yet.</div>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -968,7 +980,7 @@ include 'includes/header.php';
 //    the vessel's details are shared as text (WhatsApp where there is no share sheet).
 (function () {
   var H2C = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-  var FIT = '.pvy-name, .pvy-client, .pvy-type, .pvy-t > b';
+  var FIT = '.pvz-name, .pvz-t > b, .pvz-upd-list li';
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function scrollOnce(el) {
@@ -1035,7 +1047,7 @@ include 'includes/header.php';
     if (btn.classList.contains('busy')) return;
     var text = btn.getAttribute('data-share-text') || '';
     var card = btn.closest('.cc-card');
-    var name = ((card && card.querySelector('.pvy-name') || {}).textContent || 'vessel').trim();
+    var name = ((card && card.querySelector('.pvz-name') || {}).textContent || 'vessel').trim();
     if (!card) return shareText(text);
     btn.classList.add('busy');
     cardPng(card).then(function (blob) {
