@@ -182,3 +182,33 @@
     .pvz-yellow [data-testid=pr-completed-date] > svg { width: 22px; height: 22px; }
     .pvz-yellow [data-testid=pr-completed-date] .pvz-l { font-size: 10.5px; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* Completed card: the same card in green (#28a745) with the recovery panel */
+@media (max-width: 991.98px) {
+    .vessel-list-container .vessel-card.cc-card.pvz.pvz-green { border-color: #28a745 !important; border-width: 2.5px !important; box-shadow: 0 6px 16px rgba(40,167,69,.12) !important; }
+    .pvz-green .pvz-bar { background: #28a745; width: 4px; }
+    .pvz-green .pvz-i > svg { stroke: #28a745; }
+    .pvz-rec { margin: 14px 0 2px; border-radius: 18px; padding: 12px 12px 10px; color: #fff;
+        background: radial-gradient(120% 140% at 100% 0%, #9be22d 0%, rgba(155,226,45,0) 45%), linear-gradient(135deg, #1e9e3a 0%, #28a745 55%, #3cbf3a 100%); box-shadow: 0 6px 14px rgba(40,167,69,.25); }
+    .pvz-rec-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .pvz-rec-top > svg { flex: none; width: 26px; height: 26px; }
+    .pvz-rec-bar { flex: none; width: 2px; height: 26px; background: rgba(255,255,255,.85); border-radius: 2px; }
+    .pvz-rec-l { font-size: 17px; font-weight: 800; letter-spacing: .01em; }
+    .pvz-rec-c { font-size: 17px; font-weight: 800; margin: 0 2px; }
+    .pvz-rec-tot { margin-left: auto; min-width: 0; background: linear-gradient(180deg, #ffffff 0%, #e9f8ec 100%); color: #15803d; border-radius: 999px; padding: 6px 14px; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+    .pvz-rec-tot b { font-weight: 800; color: #14532d; }
+    .pvz-rec-tot.na { color: #475569; }
+    .pvz-rec-parts { display: flex; align-items: center; justify-content: space-between; gap: 6px; border-top: 1.5px solid rgba(255,255,255,.75); margin-top: 10px; padding-top: 8px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+    .pvz-rec-parts i { flex: none; width: 2px; height: 16px; background: rgba(255,255,255,.85); border-radius: 2px; }
+    .pvz-rec-parts span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    @media (max-width: 370px) { .pvz-rec-l, .pvz-rec-c { font-size: 15px; } .pvz-rec-tot { font-size: 13px; padding: 5px 10px; } .pvz-rec-parts { font-size: 10.5px; } }
+}
+.pvs-sheet.pvs-green { background: linear-gradient(160deg, #146c2e 0%, #1e9e3a 55%, #28a745 100%); }
+.pvs-green .pvs-f { border-left-color: #28a745; }
+.pvs-green .pvs-badge { background: #e9f8ec; color: #15803d; }
+.pvs-green .pvs-brand span, .pvs-green .pvs-foot { color: #d9f5df; }
+.pvs-rec { background: #fff; border-radius: 16px; padding: 14px 18px; margin-top: 14px; border-left: 5px solid #28a745; }
+.pvs-rec-top { display: flex; align-items: center; justify-content: space-between; }
+.pvs-rec-top span { font-size: 16px; font-weight: 800; color: #15803d; }
+.pvs-rec-top b { font-size: 22px; font-weight: 800; color: #0b1324; }
+.pvs-rec-parts { margin-top: 6px; font-size: 15px; font-weight: 600; color: #334155; }

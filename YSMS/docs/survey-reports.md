@@ -638,3 +638,8 @@ Agent, Survey Completed Date (or the chosen date) / Surveyor (full access only, 
 status row and no Edit button on the card (open the report). Share sends the picture with
 "Pending Report" in yellow. The card script is shared: `assets/js/vessel-cards.js`
 (`window.VC_CFG = {csrf, def}`; a card may set `data-pv-badge` / `data-pv-theme`).
+
+**Completed mobile card (completed.php).** The same card in green (`#28a745`): vessel picture ·
+name · share; Client / Type of Survey, Port / Agent; a green Recovery panel (Total, then VLSFO /
+HSFO / LSMGO; "NOT APPLICABLE" when there is none). No date, surveyor, status row or Edit button on
+the card (open the vessel). Share sends a green "Completed" picture with the recovery.

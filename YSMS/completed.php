@@ -68,6 +68,10 @@ function cvRecovery(array $r): float {
 $rt = rtState($_GET, 'report', $is_full_access);
 [$rtWhereSql, $rtParams] = rtWhere($rt, $rtScopeWhere, $rtScopeParams);
 [$rtTotal, $rtRows, $rtPage, $rtPages] = rtFetchPage($db, $rt, $rtWhereSql, $rtParams);
+// vessel pictures for the mobile cards (AI search, includes/vessel_image.php); the YMR ship until one is found
+require_once __DIR__ . '/includes/vessel_image.php';
+$viStates = [];
+try { $viStates = viStates($db, array_map(fn($x) => (string)($x['vessel_name'] ?? ''), $rtRows)); } catch (Throwable $e) { error_log('vessel pictures: ' . $e->getMessage()); }
 $rt['page'] = $rtPage;
 $rtOffset = ($rtPage - 1) * RT_PER_PAGE;
 $rtOpts = rtOptions($db, $rtScopeWhere, $rtScopeParams, $is_full_access);
@@ -492,7 +496,22 @@ include 'includes/header.php';
             $card_ts = (!empty($card_date_src) && $card_date_src !== '0000-00-00' && $card_date_src !== '0000-00-00 00:00:00')
                 ? strtotime($card_date_src) : false;
         ?>
-        <div class="vessel-card cc-card" onclick="location.href='completed_detail.php?id=<?= (int)$survey['id'] ?>'"
+        <?php
+            $cvTc = static function ($x) { $x = trim((string)$x); return $x === '' ? '' : ucwords(strtolower($x), " -/(.&'"); };
+            $cvName = (string)(($survey['vessel_name'] ?? '') ?: 'Vessel');
+            $viK = viKey($cvName); $viS = $viStates[$viK] ?? ['status' => 'unknown', 'img' => VI_DEFAULT];
+            $rp = recoveryDisplayParts($survey);
+            $cvShare = implode("\n", array_filter([
+                $cvName,
+                'Client: ' . (($survey['company_name'] ?? '') ?: '—'),
+                'Type of Survey: ' . $typeLabel,
+                'Port: ' . ($survey['port_name'] ?? 'N/A'),
+                'Agent: ' . (($survey['agent_name'] ?? '') ?: '—'),
+                'Recovery: ' . ($rp['na'] ? $rp['total'] : 'Total ' . $rp['total'] . ' (VLSFO ' . $rp['vlsfo'] . ', HSFO ' . $rp['hsfo'] . ', LSMGO ' . $rp['lsmgo'] . ')'),
+                'Status: Completed',
+            ]));
+        ?>
+        <div class="vessel-card cc-card pvz pvz-green" data-pv-badge="Completed" data-pv-theme="green" onclick="location.href='completed_detail.php?id=<?= (int)$survey['id'] ?>'"
              data-survey-card
              data-name="<?= sanitize(strtolower($survey['vessel_name'] ?? '')) ?>"
              data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>"
@@ -503,41 +522,26 @@ include 'includes/header.php';
              data-month="<?= sanitize(cvReportMonth($survey)) ?>"
              data-recovery="<?= cvRecovery($survey) ?>"
              data-date="<?= surveyReportTs($survey) ?>"
-             data-search="<?= sanitize(strtolower(implode(' ', [$survey['vessel_name'] ?? '', $survey['company_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>">
-            <div class="cc-head">
-                <span class="cc-num" data-testid="pv-row-num"><?= $rtOffset + $rtI + 1 ?></span>
-                <span class="cc-ship"><i class="fa-solid fa-ship"></i></span>
-                <span class="cc-div" aria-hidden="true"></span>
-                <span class="cc-name"><?= sanitize($survey['vessel_name']) ?></span>
+             data-search="<?= sanitize(strtolower(implode(' ', [$survey['vessel_name'] ?? '', $survey['company_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>"
+             data-testid="completed-card-<?= (int)$survey['id'] ?>">
+            <span class="cc-num" data-testid="pv-row-num" hidden><?= $rtOffset + $rtI + 1 ?></span>
+            <div class="pvz-head">
+                <span class="pvz-photo<?= $viS['status'] === 'found' ? ' real' : '' ?>"><img src="<?= sanitize($viS['img']) ?>" alt="" width="64" height="54" data-vimg="<?= sanitize($viK) ?>" data-vimg-st="<?= sanitize($viS['status']) ?>" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')" data-testid="completed-photo-<?= (int)$survey['id'] ?>"></span>
+                <span class="pvz-bar" aria-hidden="true"></span>
+                <span class="cc-name pvz-name"><?= sanitize($cvName) ?></span>
+                <button type="button" class="pvz-share" data-pv-share data-share-text="<?= sanitize($cvShare) ?>" aria-label="Share vessel details" title="Share" data-testid="completed-share-<?= (int)$survey['id'] ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M8 11H6.5A2.5 2.5 0 0 0 4 13.5v5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-5A2.5 2.5 0 0 0 17.5 11H16"/></svg></button>
             </div>
-            <div class="cc-rows">
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user"></i><span>Client</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div></div>
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-people-group"></i><span>Agent</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b></div></div>
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-layer-group"></i><span>Survey Type</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-type"><?= sanitize($typeLabel) ?></span></div></div>
-                <?php $rp = recoveryDisplayParts($survey); ?>
-                <div class="cc-row recovery-row"><div class="cc-k"><i class="fa-solid fa-droplet"></i><span>Recovery</span></div><span class="cc-c">:</span>
-                    <div class="cc-v">
-                        <span class="recovery-cell<?= $is_full_access ? '' : ' no-tooltip' ?>"<?= $is_full_access ? ' tabindex="0"' : '' ?> data-testid="recovery-cell-mobile">
-                            <?php if ($rp['na']): ?>
-                            <span class="recovery-total na" data-testid="recovery-pill"><b><?= sanitize($rp['total']) ?></b></span>
-                            <?php else: ?>
-                            <span class="recovery-total" data-testid="recovery-pill"><i class="fa-solid fa-droplet"></i> Total: <b><?= sanitize($rp['total']) ?></b></span>
-                            <span class="recovery-parts cc-parts"><span>VLSFO: <?= sanitize($rp['vlsfo']) ?></span><i>|</i><span>HSFO: <?= sanitize($rp['hsfo']) ?></span><i>|</i><span>LSMGO: <?= sanitize($rp['lsmgo']) ?></span></span>
-                            <?php endif; ?>
-                            <?php if ($is_full_access): ?>
-                            <span class="recovery-tooltip"><i class="fa-solid fa-user-tie me-1"></i>Surveyor: <?= sanitize($surveyorNames) ?></span>
-                            <?php endif; ?>
-                        </span>
-                    </div>
-                </div>
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-location-dot"></i><span>Port</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-port"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div></div>
-                <?php $rtD = rtRowDate($survey, $rt['date']); ?>
-                <div class="cc-row" data-testid="cv-date"><div class="cc-k"><i class="fa-solid fa-calendar-check"></i><span><?= sanitize(rtDateShort($rt['date'])) ?></span></div><span class="cc-c">:</span><div class="cc-v"><b class="cc-date"><?= $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—' ?></b></div></div>
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-circle-check"></i><span>Status</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-status done"><i class="fa-solid fa-check"></i> Completed</span></div></div>
-                <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
-                <div class="cc-foot">
-                    <a href="completed_detail.php?id=<?= (int)$survey['id'] ?>" onclick="event.stopPropagation();" data-testid="cv-edit-<?= (int)$survey['id'] ?>" class="cc-edit"><i class="fa-solid fa-pen"></i> Edit</a>
-                </div>
+            <div class="pvz-grid">
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17l2 2a1 1 0 0 0 3-3"/><path d="M14 14l2.5 2.5a1 1 0 0 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="M21 3l1 11h-2"/><path d="M3 3L2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></svg><div class="pvz-t"><span class="pvz-l">Client</span><b><?= sanitize($cvTc($survey['company_name'] ?? '')) ?: '—' ?></b></div></div>
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.5"/><rect x="9" y="2.5" width="6" height="3.5" rx="1"/><path d="M11 10.5h5M11 14h5M11 17.5h5"/><circle cx="8.3" cy="10.5" r=".6"/><circle cx="8.3" cy="14" r=".6"/><circle cx="8.3" cy="17.5" r=".6"/></svg><div class="pvz-t"><span class="pvz-l">Type of Survey</span><b><?= sanitize($typeLabel) ?></b></div></div>
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><div class="pvz-t"><span class="pvz-l">Port</span><b><?= sanitize($cvTc($survey['port_name'] ?? '')) ?: 'N/A' ?></b></div></div>
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="3"/><circle cx="5.5" cy="9.5" r="2.3"/><circle cx="18.5" cy="9.5" r="2.3"/><path d="M7 20v-1.5c0-2.8 2.2-4.8 5-4.8s5 2 5 4.8V20zM2 19.5v-1c0-2 1.4-3.4 3.5-3.4M22 19.5v-1c0-2-1.4-3.4-3.5-3.4"/></svg><div class="pvz-t"><span class="pvz-l">Agent</span><b><?= sanitize($cvTc($survey['agent_name'] ?? '')) ?: '—' ?></b></div></div>
+            </div>
+            <div class="pvz-rec" data-testid="recovery-cell-mobile">
+                <div class="pvz-rec-top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5C9 7 5.5 10.6 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 10.6 15 7 12 2.5z" fill="#fff"/><path d="M8.6 15.2a3.6 3.6 0 0 0 3.2 3.4" fill="none" stroke="#28a745" stroke-width="1.6" stroke-linecap="round"/></svg><span class="pvz-rec-bar" aria-hidden="true"></span><span class="pvz-rec-l">Recovery</span><span class="pvz-rec-c">:</span>
+                    <span class="pvz-rec-tot<?= $rp['na'] ? ' na' : '' ?>" data-testid="recovery-pill"><?= $rp['na'] ? '<b>' . sanitize($rp['total']) . '</b>' : 'Total: <b>' . sanitize($rp['total']) . '</b>' ?></span></div>
+                <?php if (!$rp['na']): ?>
+                <div class="pvz-rec-parts"><span>VLSFO: <?= sanitize($rp['vlsfo']) ?></span><i></i><span>HSFO: <?= sanitize($rp['hsfo']) ?></span><i></i><span>LSMGO: <?= sanitize($rp['lsmgo']) ?></span></div>
                 <?php endif; ?>
             </div>
         </div>
@@ -723,4 +727,6 @@ include 'includes/header.php';
 .cv-rec-summary small { margin-left: auto; color: #64748b; font-weight: 600; }
 .rt-tb-dd.has-value { border-color: #A78BFA; background: #F3EEFE; color: #5B2DEE; }
 </style>
+<script>window.VC_CFG = <?= json_encode(['csrf' => csrf_token(), 'def' => VI_DEFAULT]) ?>;</script>
+<script src="assets/js/vessel-cards.js?v=<?= @filemtime(__DIR__ . '/assets/js/vessel-cards.js') ?>"></script>
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>

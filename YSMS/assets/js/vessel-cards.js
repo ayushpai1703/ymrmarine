@@ -57,6 +57,8 @@
     var photo = card.querySelector('.pvz-photo img'), real = card.querySelector('.pvz-photo.real');
     var upd = card.querySelector('.pvz-upd-text'), hasUpd = !!card.querySelector('.pvz-upd'), updHtml = upd ? upd.innerHTML : '<span style="color:#64748b">No updates recorded yet.</span>';
     var badge = card.getAttribute('data-pv-badge') || 'Pending Survey', theme = card.getAttribute('data-pv-theme') || '';
+    var recEl = card.querySelector('.pvz-rec'), rec = recEl ? { tot: recEl.querySelector('.pvz-rec-tot').textContent.trim(),
+      parts: [].slice.call(recEl.querySelectorAll('.pvz-rec-parts span')).map(function (x) { return x.textContent.trim(); }).join('   |   ') } : null;
     var now = new Date(), when = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     var el = document.createElement('div');
     el.className = 'pvs-sheet' + (theme ? ' pvs-' + theme : '');
@@ -66,6 +68,7 @@
         '<div class="pvs-hero-t"><span>Vessel</span><b>' + esc(q('.pvz-name')) + '</b></div></div>' +
       '<div class="pvs-grid">' + rows.map(function (r) { return '<div class="pvs-f"><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>'; }).join('') + '</div>' +
       (hasUpd ? '<div class="pvs-upd"><span>Latest Updates</span><div>' + updHtml + '</div></div>' : '') +
+      (rec ? '<div class="pvs-rec"><div class="pvs-rec-top"><span>Recovery</span><b>' + esc(rec.tot) + '</b></div>' + (rec.parts ? '<div class="pvs-rec-parts">' + esc(rec.parts) + '</div>' : '') + '</div>' : '') +
       '<div class="pvs-foot"><span>Shared from YSMS</span><span>' + esc(when) + '</span></div>';
     document.body.appendChild(el);
     return el;
