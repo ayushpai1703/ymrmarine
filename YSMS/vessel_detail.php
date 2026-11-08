@@ -356,6 +356,50 @@ include 'includes/header.php';
        existing simple layout; only >=992px swaps to this. Page-scoped
        <style>, so it doesn't leak into other detail pages. */
     .detail-mobile-view { display: block; }
+
+    /* Mobile vessel card (v2) */
+    @media (max-width: 991.98px) {
+        .info-table-list.vdm-card { background: #fff; border: 1px solid #e8edf4; border-radius: 22px; box-shadow: 0 8px 22px rgba(15,23,42,.07) !important; padding: 14px 12px 12px; margin: 12px 14px; overflow: visible; }
+        .vdm-head { display: flex; align-items: center; gap: 12px; padding: 2px 2px 12px; min-width: 0; }
+        .vdm-ship { flex: none; width: 54px; height: 54px; border-radius: 16px; background: #d1fae5; color: #047857; font-size: 23px; display: flex; align-items: center; justify-content: center; }
+        .vdm-div { flex: none; width: 2px; height: 30px; border-radius: 2px; background: #cfd6e0; }
+        .vdm-name { flex: 1 1 auto; min-width: 0; font-size: 20px; font-weight: 800; color: #0b1324; text-transform: uppercase; letter-spacing: .01em; line-height: 1.2; overflow-wrap: anywhere; }
+        .vdm-send-wrap { position: relative; flex: none; }
+        .vdm-send { width: 46px; height: 46px; border: none; border-radius: 14px; background: linear-gradient(180deg, #2fd12f 0%, #16b316 100%); color: #fff; font-size: 18px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(22,179,22,.3); }
+        .vdm-send-menu { position: absolute; right: 0; top: 52px; z-index: 30; background: #fff; border: 1px solid #e5e8ee; border-radius: 14px; box-shadow: 0 12px 28px rgba(15,23,42,.16); padding: 6px; min-width: 160px; }
+        .vdm-send-menu[hidden] { display: none; }
+        .vdm-send-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 700; color: #0f172a; text-decoration: none; }
+        .vdm-send-item.wa i { color: #16a34a; font-size: 18px; } .vdm-send-item.mail i { color: #1D63ED; font-size: 16px; }
+        .vdm-send-item:active { background: #f1f5f9; }
+        .vdm-rows { padding: 4px 4px 8px; }
+        .vdm-row { display: grid; grid-template-columns: 26px 108px 10px minmax(0, 1fr) auto; align-items: center; column-gap: 9px; padding: 9px 0; min-height: 44px; }
+        .vdm-row > i { text-align: center; color: #1D63ED; font-size: 19px; }
+        .vdm-k { font-size: 14.5px; font-weight: 700; color: #475569; line-height: 1.2; white-space: nowrap; }
+        .vdm-e:empty { display: none; } .vdm-e .aie-btn { margin: 0; }
+        .vdm-name .aie-btn { vertical-align: middle; }
+        .vdm-c { font-size: 15px; font-weight: 800; color: #0f172a; text-align: center; }
+        .vdm-v { min-width: 0; }
+        .vdm-v b { font-size: 15px; font-weight: 800; color: #0b1324; text-transform: uppercase; line-height: 1.25; overflow-wrap: anywhere; }
+        .vdm-v b.vdm-date { text-transform: none; font-size: 15.5px; }
+        .vdm-type { display: inline-block; max-width: 100%; background: #3f8a1c; color: #fff; border-radius: 999px; padding: 5px 16px; font-size: 13px; font-weight: 800; text-transform: uppercase; line-height: 1.3; overflow-wrap: anywhere; }
+        .vdm-port { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; background: #fff; color: #15803d; border: 2px solid #22c55e; border-radius: 999px; padding: 3px 13px; font-size: 13px; font-weight: 800; text-transform: uppercase; line-height: 1.3; overflow-wrap: anywhere; }
+        .vdm-status { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; background: #fff; border: 2px solid; border-radius: 999px; padding: 4px 14px; font-size: 14px; font-weight: 800; }
+        .vdm-status.pending { color: #EA580C; border-color: #FB923C; }
+        .vdm-status.report { color: #B45309; border-color: #F59E0B; }
+        .vdm-status.done { color: #15803D; border-color: #22C55E; }
+        .vdm-status.other { color: #334155; border-color: #cbd5e1; }
+        .vdm-extra .vdm-k { font-size: 13px; } .vdm-extra > i { font-size: 16px; } .vdm-extra .vdm-v b { font-size: 13.5px; }
+        .vdm-remarks { font-size: 13px; font-weight: 600; color: #0f172a; overflow-wrap: anywhere; }
+        .vdm-agent-mail { margin-top: 5px; font-size: 11.5px; line-height: 1.45; text-align: left; } .vdm-agent-mail .btn { text-align: left; }
+        .vdm-foot { display: flex; align-items: center; gap: 10px; background: #fdf6e9; border-radius: 18px; padding: 12px 12px 12px 14px; margin-top: 4px; }
+        .vdm-update { flex: 1 1 auto; min-width: 0; }
+        .vdm-update-text { font-size: 14px; font-weight: 600; color: #1e293b; line-height: 1.35; overflow-wrap: anywhere; }
+        .vdm-update-text i { color: #1D63ED; margin-right: 3px; } .vdm-update-text i.vdm-info { color: #f5b301; }
+        .vdm-update-by { font-size: 11px; color: #64748b; margin-top: 2px; }
+        .vdm-edit { flex: none; display: inline-flex; align-items: center; gap: 7px; background: #fff; color: #1D63ED; border: 2px solid #1D63ED; border-radius: 16px; padding: 8px 16px; font-size: 15px; font-weight: 800; text-decoration: none; }
+        .vdm-note { flex: none; width: 46px; height: 46px; border: none; border-radius: 15px; background: linear-gradient(180deg, #6d3df0 0%, #4f22d6 100%); color: #fff; font-size: 18px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(79,34,214,.3); }
+        @media (max-width: 370px) { .vdm-row { grid-template-columns: 22px 96px 8px minmax(0, 1fr) auto; column-gap: 7px; } .vdm-status { font-size: 12px; padding: 3px 10px; gap: 5px; } .vdm-status i { font-size: 11px; } .vdm-type, .vdm-port { font-size: 12px; padding-left: 10px; padding-right: 10px; } .vdm-k { font-size: 13px; } .vdm-v b { font-size: 13.5px; } .vdm-name { font-size: 17px; } .vdm-edit { padding: 7px 12px; font-size: 14px; } }
+    }
     .detail-desktop-view { display: none; }
     @media (min-width: 992px) {
         .detail-mobile-view { display: none !important; }
@@ -535,29 +579,37 @@ include 'includes/header.php';
 
     <div class="detail-mobile-view">
         <div class="detail-main-row">
-        <div class="info-table-list shadow-sm">
-            <div class="text-end p-2 d-flex justify-content-end gap-2 flex-wrap">
-                <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="btn-whatsapp" data-testid="vessel-detail-whatsapp-link" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
-                <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="btn-email" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-ios-url="<?= sanitize($mail_ios_url) ?>" data-android-url="<?= sanitize($mail_android_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
-                <?php if ($is_admin): ?>
-                    <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vessel-edit-btn" data-testid="vessel-detail-edit-link"><i class="fa-solid fa-pen"></i> Edit</a>
-                <?php endif; ?>
+        <?php
+            // Mobile vessel card (v2): ship tile, name, send menu (WhatsApp / Email); icon · label : value rows;
+            // status pill; cream footer with the latest update, Edit and a jump to the live-status box.
+            $vdm_status_raw = (string)($survey['status'] ?? '');
+            $vdm_status_map = ['Pending Vessel' => ['Pending Survey', 'pending'], 'Pending Report' => ['Pending Report', 'report'], 'Completed' => ['Completed', 'done']];
+            [$vdm_status, $vdm_status_cls] = $vdm_status_map[$vdm_status_raw] ?? [$vdm_status_raw !== '' ? $vdm_status_raw : 'N/A', 'other'];
+            $vdm_appt = (!empty($survey['appointment_date']) && strpos((string)$survey['appointment_date'], '0000-00-00') !== 0) ? date('d M Y', strtotime($survey['appointment_date'])) : '—';
+            $vdm_remarks = !empty($survey['remarks']) ? $survey['remarks'] : '';
+        ?>
+        <div class="info-table-list vdm-card shadow-sm" data-testid="vessel-detail-mobile-card">
+            <div class="vdm-head">
+                <span class="vdm-ship"><i class="fa-solid fa-ship"></i></span>
+                <span class="vdm-div" aria-hidden="true"></span>
+                <span class="vdm-name" data-testid="vdm-vessel-name"><?= sanitize($survey['vessel_name']) ?><?= aie('vessel_name') ?></span>
+                <div class="vdm-send-wrap">
+                    <button type="button" class="vdm-send" data-vdm-send aria-haspopup="true" aria-expanded="false" aria-label="Send vessel details" title="Send" data-testid="vdm-send"><i class="fa-solid fa-paper-plane"></i></button>
+                    <div class="vdm-send-menu" data-vdm-send-menu hidden>
+                        <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="vdm-send-item wa" data-testid="vessel-detail-whatsapp-link" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
+                        <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="vdm-send-item mail" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-ios-url="<?= sanitize($mail_ios_url) ?>" data-android-url="<?= sanitize($mail_android_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
+                    </div>
+                </div>
             </div>
-            <div class="info-row"><span class="info-label">Vessel Name<?= aie('vessel_name') ?></span><span class="info-value"><?= sanitize($survey['vessel_name']) ?></span></div>
-            <div class="info-row"><span class="info-label">Report No<?= aie('report_number') ?></span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
-            <div class="info-row"><span class="info-label">Client Name<?= aie('client_id') ?></span><span class="info-value"><?= sanitize($survey['company_name']) ?></span></div>
-            <div class="info-row"><span class="info-label">Survey Type<?= aie('survey_type_ids') ?></span><span class="info-value text-primary"><?= sanitize($combined_survey_type) ?></span></div>
-            <div class="info-row"><span class="info-label">Assigned Date<?= aie('assign_date') ?></span><span class="info-value fw-bold text-dark"><?= $display_date ?></span></div>
-            <div class="info-row" style="align-items:flex-start;">
-                <span class="info-label">Agent Name<?= aie('agent_name') ?></span>
-                <span class="info-value">
-                    <?= sanitize($survey['agent_name']) ?>
+            <div class="vdm-rows">
+                <div class="vdm-row"><i class="fa-solid fa-user"></i><span class="vdm-k">Client</span><span class="vdm-c">:</span><div class="vdm-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div><span class="vdm-e"><?= aie('client_id') ?></span></div>
+                <div class="vdm-row"><i class="fa-solid fa-people-group"></i><span class="vdm-k">Agent</span><span class="vdm-c">:</span><div class="vdm-v"><b><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b>
                     <?php if ($is_admin && !empty($survey['agent_name'])): ?>
                         <?php
                             $agent_sent_at = $survey['agent_email_sent_at'] ?? null;
                             $agent_sent_label = $agent_sent_at ? date('d M Y, h:i A', strtotime($agent_sent_at)) : '';
                         ?>
-                        <div id="agentEmailActions" style="margin-top:6px;font-size:11.5px;line-height:1.45;" data-survey-id="<?= (int)$survey['id'] ?>">
+                        <div id="agentEmailActions" class="vdm-agent-mail" data-survey-id="<?= (int)$survey['id'] ?>">
                             <span id="agentEmailStatusWrap" style="<?= $agent_sent_at ? '' : 'display:none;' ?>">
                                 <span class="text-success" id="agentEmailSentLabel"><i class="fa-solid fa-circle-check"></i> Email sent to agent on <span id="agentEmailSentAt"><?= sanitize($agent_sent_label) ?></span></span>
                                 <button type="button" id="btnAgentEmailAgain" class="btn btn-link p-0 ms-1" style="font-size:11.5px;vertical-align:baseline;">Send email again</button>
@@ -565,23 +617,40 @@ include 'includes/header.php';
                             <button type="button" id="btnAgentEmailSend" class="btn btn-link p-0" style="font-size:11.5px;<?= $agent_sent_at ? 'display:none;' : '' ?>">Send email to agent for latest update</button>
                         </div>
                     <?php endif; ?>
-                </span>
-            </div>
-            <div class="info-row"><span class="info-label">Surveyor Name<?= aie('surveyors') ?></span><span class="info-value text-primary"><?= sanitize($combined_surveyor_names) ?></span></div>
-            <div class="info-row"><span class="info-label">Port Name<?= aie('port_id') ?></span><span class="info-value"><?= sanitize($survey['port_name']) ?></span></div>
-
-            <div class="info-row"><span class="info-label" style="color: #ea580c;">Admin Remarks<?= aie('remarks') ?></span><span class="info-value text-dark fw-semibold">
-                <?php
-                    $remarks_full = !empty($survey['remarks']) ? $survey['remarks'] : '';
-                    if ($remarks_full === '') {
+                </div><span class="vdm-e"><?= aie('agent_name') ?></span></div>
+                <div class="vdm-row"><i class="fa-solid fa-layer-group"></i><span class="vdm-k">Survey Type</span><span class="vdm-c">:</span><div class="vdm-v"><span class="vdm-type"><?= sanitize($combined_survey_type) ?></span></div><span class="vdm-e"><?= aie('survey_type_ids') ?></span></div>
+                <div class="vdm-row"><i class="fa-solid fa-user-tie"></i><span class="vdm-k">Surveyor</span><span class="vdm-c">:</span><div class="vdm-v"><b><?= sanitize($combined_surveyor_names) ?></b></div><span class="vdm-e"><?= aie('surveyors') ?></span></div>
+                <div class="vdm-row"><i class="fa-solid fa-location-dot"></i><span class="vdm-k">Port</span><span class="vdm-c">:</span><div class="vdm-v"><span class="vdm-port"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div><span class="vdm-e"><?= aie('port_id') ?></span></div>
+                <div class="vdm-row"><i class="fa-solid fa-calendar-days"></i><span class="vdm-k">Appointment</span><span class="vdm-c">:</span><div class="vdm-v"><b class="vdm-date"><?= sanitize($vdm_appt) ?></b></div><span class="vdm-e"><?= aie('appointment_date') ?></span></div>
+                <div class="vdm-row"><i class="fa-solid fa-clock"></i><span class="vdm-k">Status</span><span class="vdm-c">:</span><div class="vdm-v"><span class="vdm-status <?= $vdm_status_cls ?>" data-testid="vdm-status"><i class="fa-solid fa-clock"></i> <?= sanitize($vdm_status) ?></span></div></div>
+                <div class="vdm-row vdm-extra"><i class="fa-solid fa-hashtag"></i><span class="vdm-k">Report No</span><span class="vdm-c">:</span><div class="vdm-v"><b><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></b></div><span class="vdm-e"><?= aie('report_number') ?></span></div>
+                <div class="vdm-row vdm-extra"><i class="fa-solid fa-calendar-check"></i><span class="vdm-k">Assigned Date</span><span class="vdm-c">:</span><div class="vdm-v"><b class="vdm-date"><?= $display_date ?></b></div><span class="vdm-e"><?= aie('assign_date') ?></span></div>
+                <?php if ($vdm_remarks !== '' || aie('remarks') !== ''): ?>
+                <div class="vdm-row vdm-extra"><i class="fa-solid fa-comment-dots" style="color:#ea580c"></i><span class="vdm-k" style="color:#ea580c">Remarks</span><span class="vdm-c">:</span><div class="vdm-v vdm-remarks"><?php
+                    if ($vdm_remarks === '') {
                         echo 'N/A';
-                    } elseif (strlen($remarks_full) > 150) {
-                        echo sanitize(substr($remarks_full, 0, 150)) . '... <a href="#" class="text-primary fw-bold" data-bs-toggle="modal" data-bs-target="#remarksModal" onclick="event.stopPropagation();" data-testid="vessel-detail-read-more-remarks">Read More</a>';
+                    } elseif (strlen($vdm_remarks) > 150) {
+                        echo sanitize(substr($vdm_remarks, 0, 150)) . '... <a href="#" class="text-primary fw-bold" data-bs-toggle="modal" data-bs-target="#remarksModal" onclick="event.stopPropagation();" data-testid="vessel-detail-read-more-remarks">Read More</a>';
                     } else {
-                        echo sanitize($remarks_full);
+                        echo sanitize($vdm_remarks);
                     }
-                ?>
-            </span></div>
+                ?></div><span class="vdm-e"><?= aie('remarks') ?></span></div>
+                <?php endif; ?>
+            </div>
+            <div class="vdm-foot">
+                <div class="vdm-update" data-testid="vdm-latest-update">
+                    <?php if (!empty($survey['custom_live_status'])): ?>
+                        <div class="vdm-update-text"><i class="fa-solid fa-comment-dots"></i> <?= sanitize($survey['custom_live_status']) ?></div>
+                        <div class="vdm-update-by"><?= !empty($survey['status_updated_at']) ? formatLatestUpdateWhen($survey['status_updated_at']) : '' ?> · <?= sanitize($survey['modifier_name'] ?? 'User') ?></div>
+                    <?php else: ?>
+                        <div class="vdm-update-text"><i class="fa-solid fa-circle-info vdm-info"></i> No updates recorded yet.</div>
+                    <?php endif; ?>
+                </div>
+                <?php if ($is_admin): ?>
+                    <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vdm-edit" data-testid="vessel-detail-edit-link"><i class="fa-solid fa-pen"></i> Edit</a>
+                <?php endif; ?>
+                <button type="button" class="vdm-note" data-vdm-note aria-label="Write the latest update" title="Latest update" data-testid="vdm-note"><i class="fa-solid fa-note-sticky"></i></button>
+            </div>
     </div>
     <?php if (!$is_client_viewer && !$is_super_admin): ?>
     <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm mt-2">
@@ -698,6 +767,24 @@ include 'includes/header.php';
     </div>
         </div><!-- /.detail-main-row -->
     </div><!-- /.detail-mobile-view -->
+<script>
+// Mobile vessel card: send menu (WhatsApp / Email) and the note button (jumps to the live-status box).
+(function () {
+  var btn = document.querySelector('[data-vdm-send]'), menu = document.querySelector('[data-vdm-send-menu]');
+  if (btn && menu) {
+    btn.addEventListener('click', function (e) { e.stopPropagation(); var open = menu.hidden; menu.hidden = !open; btn.setAttribute('aria-expanded', open ? 'true' : 'false'); });
+    document.addEventListener('click', function (e) { if (!menu.hidden && !menu.contains(e.target)) { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); } });
+  }
+  var note = document.querySelector('[data-vdm-note]');
+  if (note) note.addEventListener('click', function () {
+    var ta = document.querySelector('.detail-mobile-view .status-update-card textarea[name=latest_status]');
+    if (!ta) return;
+    ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(function () { try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } }, 350);
+  });
+})();
+</script>
+
 
     <div class="detail-desktop-view">
         <div class="vdd-wrap">

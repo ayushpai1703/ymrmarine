@@ -694,41 +694,27 @@ include 'includes/header.php';
                         $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
                         $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                     ?>
-                    <div class="vessel-card vessel-card--stacked cc-card pvc" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
-                        <?php
-                            $pvType = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A');
-                            $pvAppt = !empty($survey['appointment_date']) ? date('d M Y', strtotime($survey['appointment_date'])) : '—';
-                            $pvShare = implode("\n", array_filter([
-                                $vessel_name,
-                                'Client: ' . (($survey['company_name'] ?? '') ?: '—'),
-                                'Agent: ' . (($survey['agent_name'] ?? '') ?: '—'),
-                                'Survey Type: ' . $pvType,
-                                $is_full_access ? 'Surveyor: ' . $surveyorNames : null,
-                                'Port: ' . ($survey['port_name'] ?? 'N/A'),
-                                'Appointment: ' . $pvAppt,
-                                'Status: Pending Survey',
-                            ]));
-                        ?>
-                        <div class="pvc-head">
-                            <span class="cc-num pvc-num" data-row-num data-testid="pv-row-num"></span>
-                            <span class="pvc-ship"><i class="fa-solid fa-ship"></i></span>
-                            <span class="cc-name pvc-name"><?= sanitize($vessel_name) ?></span>
-                            <button type="button" class="pvc-send" data-pv-share data-share-text="<?= sanitize($pvShare) ?>" aria-label="Share vessel details" title="Share" data-testid="pending-vessel-share-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-paper-plane"></i></button>
+                    <div class="vessel-card vessel-card--stacked cc-card" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
+                        <div class="cc-head">
+                            <span class="cc-num" data-row-num data-testid="pv-row-num"></span>
+                            <span class="cc-ship"><i class="fa-solid fa-ship"></i></span>
+                            <span class="cc-div" aria-hidden="true"></span>
+                            <span class="cc-name"><?= sanitize($vessel_name) ?></span>
                         </div>
-                        <div class="pvc-grid">
-                            <div class="pvc-f"><i class="fa-solid fa-user"></i><div class="pvc-t"><span class="pvc-l">Client</span><b class="pvc-v"><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div></div>
-                            <div class="pvc-f"><i class="fa-solid fa-people-group"></i><div class="pvc-t"><span class="pvc-l">Agent</span><b class="pvc-v"><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b></div></div>
-                            <div class="pvc-f"><i class="fa-solid fa-layer-group"></i><div class="pvc-t"><span class="pvc-l">Survey Type</span><span class="pvc-type"><?= sanitize($pvType) ?></span></div></div>
+                        <div class="cc-rows">
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user"></i><span>Client</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-people-group"></i><span>Agent</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b></div></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-layer-group"></i><span>Survey Type</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-type"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A')) ?></span></div></div>
                             <?php if ($is_full_access): ?>
-                            <div class="pvc-f"><i class="fa-solid fa-user-tie"></i><div class="pvc-t"><span class="pvc-l">Surveyor</span><b class="pvc-v"><?= sanitize($surveyorNames) ?></b></div></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user-tie"></i><span>Surveyor</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($surveyorNames) ?></b></div></div>
                             <?php endif; ?>
-                            <div class="pvc-f"><i class="fa-solid fa-location-dot"></i><div class="pvc-t"><span class="pvc-l">Port</span><span class="pvc-port" data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div></div>
-                            <div class="pvc-f"><i class="fa-solid fa-calendar-days"></i><div class="pvc-t"><span class="pvc-l">Appointment</span><b class="pvc-v pvc-date"><?= sanitize($pvAppt) ?></b></div></div>
-                            <div class="pvc-f pvc-status-row"><i class="fa-solid fa-clock"></i><span class="pvc-l">Status</span><span class="pvc-status" data-testid="pending-vessel-status-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-clock"></i> Pending Survey</span></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-location-dot"></i><span>Port</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-port" data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-calendar-day"></i><span>Appointment</span></div><span class="cc-c">:</span><div class="cc-v"><b class="cc-date"><?= !empty($survey['appointment_date']) ? sanitize(date('d M Y', strtotime($survey['appointment_date']))) : '—' ?></b></div></div>
+                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-circle-check"></i><span>Status</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-status pending"><i class="fa-solid fa-clock"></i> Pending</span></div></div>
+                            <?php if ($needsSurveyor): ?>
+                            <div class="cc-note"><span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span></div>
+                            <?php endif; ?>
                         </div>
-                        <?php if ($needsSurveyor): ?>
-                        <div class="pvc-note"><span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span></div>
-                        <?php endif; ?>
                         <div class="vessel-live-status-bar">
                             <div class="pv-footer-text">
                                 <?php if (!empty($survey['custom_live_status'])): ?>
@@ -740,7 +726,7 @@ include 'includes/header.php';
                                         By <span class="text-primary fw-bold"><?= !empty($survey['modifier_name']) ? sanitize($survey['modifier_name']) : 'User' ?></span>
                                     </div>
                                 <?php else: ?>
-                                    <div class="text-muted italic pvc-noupd" style="font-size: 11px;"><i class="fa-solid fa-info-circle text-warning"></i> No updates recorded yet.</div>
+                                    <div class="text-muted italic" style="font-size: 11px;"><i class="fa-solid fa-info-circle text-warning"></i> No updates recorded yet.</div>
                                 <?php endif; ?>
                             </div>
                             <?php if ($can_edit): ?>
@@ -968,18 +954,6 @@ include 'includes/header.php';
     </div>
 
 
-<script>
-// Pending Vessels mobile card: the green send button shares the vessel's details
-// (the phone's share sheet, or WhatsApp where that is not available).
-document.addEventListener('click', function (e) {
-  var btn = e.target.closest && e.target.closest('[data-pv-share]');
-  if (!btn) return;
-  e.preventDefault(); e.stopPropagation();
-  var text = btn.getAttribute('data-share-text') || '';
-  if (navigator.share) { navigator.share({ text: text }).catch(function () {}); return; }
-  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
-}, true);
-</script>
 <script>
 (function () {
   var PER = 25;
