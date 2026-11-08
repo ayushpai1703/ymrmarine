@@ -40,3 +40,17 @@
     .cc-card .vessel-live-status-bar { margin: 4px -14px -10px !important; width: calc(100% + 28px) !important; box-sizing: border-box; border-radius: 0 0 20px 20px; }
     @media (max-width: 360px) { .cc-row { grid-template-columns: 40% 12px minmax(0, 1fr); } .cc-k { gap: 7px; } .cc-k span { font-size: 12px; } .cc-name { font-size: 15.5px; } }
 }
+
+/* Pending Vessels list card: no row numbers, small ship icon · name · share button,
+   no lines between rows, tighter rows. */
+@media (max-width: 991.98px) {
+    .cc-card.pvl .cc-num { display: none !important; }
+    .cc-card.pvl .cc-head { gap: 10px; padding-bottom: 8px; }
+    .cc-card.pvl .cc-ship { width: 36px; height: 36px; border-radius: 11px; font-size: 15px; }
+    .cc-card.pvl .cc-div { display: none; }
+    .pvl-share { flex: none; margin-left: auto; width: 38px; height: 38px; border: none; border-radius: 12px; background: linear-gradient(180deg, #2fd12f 0%, #16b316 100%); color: #fff; font-size: 15px; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 8px rgba(22,179,22,.28); cursor: pointer; }
+    .pvl-share:active { transform: scale(.96); }
+    .cc-card.pvl .cc-row { border-top: none; padding: 4px 0; min-height: 30px; }
+    .cc-card.pvl .cc-note { border-top: none; padding-top: 4px; }
+    .cc-card.pvl .vessel-live-status-bar { margin-top: 8px !important; }
+}

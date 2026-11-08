@@ -694,12 +694,25 @@ include 'includes/header.php';
                         $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
                         $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                     ?>
-                    <div class="vessel-card vessel-card--stacked cc-card" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
+                    <div class="vessel-card vessel-card--stacked cc-card pvl" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
                         <div class="cc-head">
                             <span class="cc-num" data-row-num data-testid="pv-row-num"></span>
                             <span class="cc-ship"><i class="fa-solid fa-ship"></i></span>
                             <span class="cc-div" aria-hidden="true"></span>
                             <span class="cc-name"><?= sanitize($vessel_name) ?></span>
+                            <?php
+                                $pvShare = implode("\n", array_filter([
+                                    $vessel_name,
+                                    'Client: ' . (($survey['company_name'] ?? '') ?: '—'),
+                                    'Agent: ' . (($survey['agent_name'] ?? '') ?: '—'),
+                                    'Survey Type: ' . getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A'),
+                                    $is_full_access ? 'Surveyor: ' . $surveyorNames : null,
+                                    'Port: ' . ($survey['port_name'] ?? 'N/A'),
+                                    'Appointment: ' . (!empty($survey['appointment_date']) ? date('d M Y', strtotime($survey['appointment_date'])) : '—'),
+                                    'Status: Pending',
+                                ]));
+                            ?>
+                            <button type="button" class="pvl-share" data-pv-share data-share-text="<?= sanitize($pvShare) ?>" aria-label="Share vessel details" title="Share" data-testid="pending-vessel-share-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-share-nodes"></i></button>
                         </div>
                         <div class="cc-rows">
                             <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user"></i><span>Client</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div></div>
@@ -954,6 +967,18 @@ include 'includes/header.php';
     </div>
 
 
+<script>
+// Pending Vessels mobile card: the share button sends the vessel's details
+// (the phone's share sheet, or WhatsApp where that is not available).
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest && e.target.closest('[data-pv-share]');
+  if (!btn) return;
+  e.preventDefault(); e.stopPropagation();
+  var text = btn.getAttribute('data-share-text') || '';
+  if (navigator.share) { navigator.share({ text: text }).catch(function () {}); return; }
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+}, true);
+</script>
 <script>
 (function () {
   var PER = 25;
