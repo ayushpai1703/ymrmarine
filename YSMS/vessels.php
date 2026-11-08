@@ -694,58 +694,55 @@ include 'includes/header.php';
                         $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
                         $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                     ?>
-                    <div class="vessel-card vessel-card--stacked cc-card pvl" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
-                        <div class="cc-head">
-                            <span class="cc-num" data-row-num data-testid="pv-row-num"></span>
-                            <span class="cc-ship"><i class="fa-solid fa-ship"></i></span>
-                            <span class="cc-div" aria-hidden="true"></span>
-                            <span class="cc-name"><?= sanitize($vessel_name) ?></span>
-                            <?php
-                                $pvShare = implode("\n", array_filter([
-                                    $vessel_name,
-                                    'Client: ' . (($survey['company_name'] ?? '') ?: '—'),
-                                    'Agent: ' . (($survey['agent_name'] ?? '') ?: '—'),
-                                    'Survey Type: ' . getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A'),
-                                    $is_full_access ? 'Surveyor: ' . $surveyorNames : null,
-                                    'Port: ' . ($survey['port_name'] ?? 'N/A'),
-                                    'Appointment: ' . (!empty($survey['appointment_date']) ? date('d M Y', strtotime($survey['appointment_date'])) : '—'),
-                                    'Status: Pending',
-                                ]));
-                            ?>
-                            <button type="button" class="pvl-share" data-pv-share data-share-text="<?= sanitize($pvShare) ?>" aria-label="Share vessel details" title="Share" data-testid="pending-vessel-share-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-share-nodes"></i></button>
+                    <div class="vessel-card vessel-card--stacked cc-card pvx" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
+                        <?php
+                            $pvType = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A');
+                            $pvAppt = !empty($survey['appointment_date']) ? date('d M Y', strtotime($survey['appointment_date'])) : '—';
+                            $pvShare = implode("\n", array_filter([
+                                $vessel_name,
+                                'Client: ' . (($survey['company_name'] ?? '') ?: '—'),
+                                'Agent: ' . (($survey['agent_name'] ?? '') ?: '—'),
+                                'Survey Type: ' . $pvType,
+                                $is_full_access ? 'Surveyor: ' . $surveyorNames : null,
+                                'Port: ' . ($survey['port_name'] ?? 'N/A'),
+                                'Appointment: ' . $pvAppt,
+                                'Status: Survey Pending',
+                                !empty($survey['custom_live_status']) ? 'Latest update: ' . $survey['custom_live_status'] : null,
+                            ]));
+                        ?>
+                        <span class="cc-num" data-row-num data-testid="pv-row-num" hidden></span>
+                        <div class="pvx-head">
+                            <span class="pvx-ship"><img src="assets/images/ship-tile.svg" alt="" width="44" height="44"></span>
+                            <div class="pvx-title">
+                                <span class="cc-name pvx-name"><?= sanitize($vessel_name) ?></span>
+                                <span class="pvx-client"><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></span>
+                            </div>
+                            <span class="pvx-type" title="<?= sanitize($pvType) ?>"><?= sanitize($pvType) ?></span>
+                            <button type="button" class="pvx-share" data-pv-share data-share-text="<?= sanitize($pvShare) ?>" aria-label="Share vessel details" title="Share" data-testid="pending-vessel-share-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-share"></i></button>
                         </div>
-                        <div class="cc-rows">
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user"></i><span>Client</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div></div>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-people-group"></i><span>Agent</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b></div></div>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-layer-group"></i><span>Survey Type</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-type"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A')) ?></span></div></div>
+                        <div class="pvx-info">
+                            <div class="pvx-i"><i class="fa-solid fa-location-dot"></i><span data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
                             <?php if ($is_full_access): ?>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user-tie"></i><span>Surveyor</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($surveyorNames) ?></b></div></div>
+                            <div class="pvx-i"><i class="fa-regular fa-user"></i><span><?= sanitize($surveyorNames) ?></span></div>
                             <?php endif; ?>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-location-dot"></i><span>Port</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-port" data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div></div>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-calendar-day"></i><span>Appointment</span></div><span class="cc-c">:</span><div class="cc-v"><b class="cc-date"><?= !empty($survey['appointment_date']) ? sanitize(date('d M Y', strtotime($survey['appointment_date']))) : '—' ?></b></div></div>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-circle-check"></i><span>Status</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-status pending"><i class="fa-solid fa-clock"></i> Pending</span></div></div>
-                            <?php if ($needsSurveyor): ?>
-                            <div class="cc-note"><span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span></div>
-                            <?php endif; ?>
+                            <div class="pvx-i"><i class="fa-regular fa-calendar"></i><span>Appointment <?= sanitize($pvAppt) ?></span></div>
+                            <div class="pvx-i pvx-agent"><i class="fa-regular fa-building"></i><span><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></span></div>
                         </div>
-                        <div class="vessel-live-status-bar">
-                            <div class="pv-footer-text">
+                        <div class="pvx-status"><i class="fa-solid fa-clipboard-list"></i><span><b>Status :</b> <em>Survey Pending</em></span></div>
+                        <?php if ($needsSurveyor): ?>
+                        <div class="pvx-note"><span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span></div>
+                        <?php endif; ?>
+                        <div class="pvx-update">
+                            <div class="pvx-update-t">
                                 <?php if (!empty($survey['custom_live_status'])): ?>
-                                    <div class="text-dark fw-semibold mb-1">
-                                        <i class="fa-solid fa-comment-dots text-primary me-1"></i> Latest Update : <?= sanitize($survey['custom_live_status']) ?>
-                                    </div>
-                                    <div class="text-muted" style="font-size: 10px;">
-                                        <span class="fw-bold"><?= !empty($survey['status_updated_at']) ? formatLatestUpdateWhen($survey['status_updated_at']) : '—' ?></span>
-                                        By <span class="text-primary fw-bold"><?= !empty($survey['modifier_name']) ? sanitize($survey['modifier_name']) : 'User' ?></span>
-                                    </div>
+                                    <span class="pvx-ul">Latest update ·</span> <b><?= sanitize($survey['custom_live_status']) ?></b>
+                                    <small><?= !empty($survey['status_updated_at']) ? formatLatestUpdateWhen($survey['status_updated_at']) : '' ?><?= !empty($survey['modifier_name']) ? ' · ' . sanitize($survey['modifier_name']) : '' ?></small>
                                 <?php else: ?>
-                                    <div class="text-muted italic" style="font-size: 11px;"><i class="fa-solid fa-info-circle text-warning"></i> No updates recorded yet.</div>
+                                    <span class="pvx-ul">Latest update ·</span> <span class="pvx-none">No updates recorded yet</span>
                                 <?php endif; ?>
                             </div>
                             <?php if ($can_edit): ?>
-                                <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vessel-edit-btn pv-edit-btn" onclick="event.stopPropagation();" data-testid="pending-vessel-edit-<?= (int)$survey['id'] ?>">
-                                    <i class="fa-solid fa-pen"></i> Edit
-                                </a>
+                                <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="pvx-edit" onclick="event.stopPropagation();" aria-label="Edit" title="Edit" data-testid="pending-vessel-edit-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-pen"></i></a>
                             <?php endif; ?>
                         </div>
                     </div>
