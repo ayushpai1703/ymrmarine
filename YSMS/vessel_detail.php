@@ -577,85 +577,87 @@ include 'includes/header.php';
     <?php if($success): ?><div class="alert alert-success mx-3 mt-3 py-2" style="font-size:12px;"><?= $success ?></div><?php endif; ?>
     <?php if($error): ?><div class="alert alert-danger mx-3 mt-3 py-2" style="font-size:12px;"><?= $error ?></div><?php endif; ?>
 
-    <div class="detail-mobile-view">
-        <div class="detail-main-row">
-        <?php
-            // Mobile vessel card (v2): ship tile, name, send menu (WhatsApp / Email); icon · label : value rows;
-            // status pill; cream footer with the latest update, Edit and a jump to the live-status box.
-            $vdm_status_raw = (string)($survey['status'] ?? '');
-            $vdm_status_map = ['Pending Vessel' => ['Pending Survey', 'pending'], 'Pending Report' => ['Pending Report', 'report'], 'Completed' => ['Completed', 'done']];
-            [$vdm_status, $vdm_status_cls] = $vdm_status_map[$vdm_status_raw] ?? [$vdm_status_raw !== '' ? $vdm_status_raw : 'N/A', 'other'];
-            $vdm_appt = (!empty($survey['appointment_date']) && strpos((string)$survey['appointment_date'], '0000-00-00') !== 0) ? date('d M Y', strtotime($survey['appointment_date'])) : '—';
-            $vdm_remarks = !empty($survey['remarks']) ? $survey['remarks'] : '';
-        ?>
-        <div class="info-table-list vdm-card shadow-sm" data-testid="vessel-detail-mobile-card">
-            <div class="vdm-head">
-                <span class="vdm-ship"><i class="fa-solid fa-ship"></i></span>
-                <span class="vdm-div" aria-hidden="true"></span>
-                <span class="vdm-name" data-testid="vdm-vessel-name"><?= sanitize($survey['vessel_name']) ?><?= aie('vessel_name') ?></span>
-                <div class="vdm-send-wrap">
-                    <button type="button" class="vdm-send" data-vdm-send aria-haspopup="true" aria-expanded="false" aria-label="Send vessel details" title="Send" data-testid="vdm-send"><i class="fa-solid fa-paper-plane"></i></button>
-                    <div class="vdm-send-menu" data-vdm-send-menu hidden>
-                        <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="vdm-send-item wa" data-testid="vessel-detail-whatsapp-link" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
-                        <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="vdm-send-item mail" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-ios-url="<?= sanitize($mail_ios_url) ?>" data-android-url="<?= sanitize($mail_android_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i> Email</a>
-                    </div>
-                </div>
+    <?php
+        require_once __DIR__ . '/includes/detail_app.php';
+        [$daImg, $daReal] = daPhoto($db, (string)$survey['vessel_name']);
+        [$daSt, $daStCls] = daStatus((string)($survey['status'] ?? ''));
+        $daAppt = (!empty($survey['appointment_date']) && strpos((string)$survey['appointment_date'], '0000-00-00') !== 0) ? date('d M Y', strtotime($survey['appointment_date'])) : '';
+        $daRemarks = !empty($survey['remarks']) ? (string)$survey['remarks'] : '';
+    ?>
+    <link rel="stylesheet" href="assets/css/detail-app.css?v=<?= @filemtime(__DIR__ . '/assets/css/detail-app.css') ?>">
+    <div class="detail-mobile-view dapp dapp-blue" data-testid="vessel-detail-app">
+        <div class="dapp-band" aria-hidden="true"></div>
+        <div class="dapp-card dapp-hero" data-testid="vessel-detail-mobile-card">
+            <div class="dapp-hero-top">
+                <div class="dapp-photo<?= $daReal ? ' real' : '' ?>"><img src="<?= sanitize($daImg) ?>" alt="" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')" data-testid="vd-photo"></div>
+                <div class="dapp-hn"><small>Vessel</small><span class="dapp-name" data-testid="vdm-vessel-name"><?= sanitize($survey['vessel_name']) ?><?= aie('vessel_name') ?></span>
+                    <div class="dapp-chips"><span class="dapp-chip ref"><i class="fa-solid fa-hashtag"></i> <?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?><?= aie('report_number') ?></span><span class="dapp-chip <?= $daStCls ?>" data-testid="vdm-status"><i class="fa-solid fa-clock"></i> <?= sanitize($daSt) ?></span></div></div>
             </div>
-            <div class="vdm-rows">
-                <div class="vdm-row"><i class="fa-solid fa-user"></i><span class="vdm-k">Client</span><span class="vdm-c">:</span><div class="vdm-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div><span class="vdm-e"><?= aie('client_id') ?></span></div>
-                <div class="vdm-row"><i class="fa-solid fa-people-group"></i><span class="vdm-k">Agent</span><span class="vdm-c">:</span><div class="vdm-v"><b><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b>
+            <div class="dapp-acts">
+                <a href="<?= sanitize($whatsapp_share_url) ?>" target="_blank" rel="noopener" class="dapp-act wa" data-testid="vessel-detail-whatsapp-link" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i>WhatsApp</a>
+                <a href="<?= sanitize($mail_share_url) ?>" target="_blank" rel="noopener" class="dapp-act em" data-mail-from-picker data-base-url="<?= sanitize($mail_share_url) ?>" data-ios-url="<?= sanitize($mail_ios_url) ?>" data-android-url="<?= sanitize($mail_android_url) ?>" data-my-email="<?= sanitize($my_email) ?>" data-testid="vessel-detail-mail-link" title="Send via Email (Gmail)"><i class="fa-solid fa-envelope"></i>Email</a>
+                <?php if ($is_admin): ?>
+                <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="dapp-act ed" data-testid="vessel-detail-edit-link"><i class="fa-solid fa-pen"></i>Edit</a>
+                <?php endif; ?>
+                <button type="button" class="dapp-act sh" data-pv-share data-share-text="<?= sanitize($appointment_block) ?>" data-testid="vessel-detail-share"><i class="fa-solid fa-share-nodes"></i>Share</button>
+            </div>
+        </div>
+
+        <div class="dapp-card">
+            <div class="dapp-sec-h"><span class="si"><i class="fa-solid fa-ship"></i></span><b>Survey Details</b></div>
+            <div class="dapp-grid">
+                <?= daField('fa-solid fa-handshake', 'Client', daVal($survey['company_name'] ?? ''), aie('client_id')) ?>
+                <?= daField('fa-solid fa-clipboard-list', 'Survey Type', '<span class="dapp-tag">' . sanitize($combined_survey_type) . '</span>', aie('survey_type_ids')) ?>
+                <?= daField('fa-solid fa-location-dot', 'Port', daVal($survey['port_name'] ?? ''), aie('port_id')) ?>
+                <?= daField('fa-regular fa-calendar', 'Assigned Date', '<b class="dapp-v">' . $display_date . '</b>', aie('assign_date')) ?>
+                <?= daField('fa-regular fa-calendar-check', 'Appointment', daVal($daAppt), aie('appointment_date'), 'full') ?>
+                <div class="dapp-f full"><i class="fa-solid fa-people-group"></i><div><span class="dapp-l">Agent<?= aie('agent_name') ?></span><?= daVal($survey['agent_name'] ?? '') ?>
                     <?php if ($is_admin && !empty($survey['agent_name'])): ?>
-                        <?php
-                            $agent_sent_at = $survey['agent_email_sent_at'] ?? null;
-                            $agent_sent_label = $agent_sent_at ? date('d M Y, h:i A', strtotime($agent_sent_at)) : '';
-                        ?>
-                        <div id="agentEmailActions" class="vdm-agent-mail" data-survey-id="<?= (int)$survey['id'] ?>">
+                        <?php $agent_sent_at = $survey['agent_email_sent_at'] ?? null; $agent_sent_label = $agent_sent_at ? date('d M Y, h:i A', strtotime($agent_sent_at)) : ''; ?>
+                        <div id="agentEmailActions" class="dapp-agentmail" data-survey-id="<?= (int)$survey['id'] ?>">
                             <span id="agentEmailStatusWrap" style="<?= $agent_sent_at ? '' : 'display:none;' ?>">
                                 <span class="text-success" id="agentEmailSentLabel"><i class="fa-solid fa-circle-check"></i> Email sent to agent on <span id="agentEmailSentAt"><?= sanitize($agent_sent_label) ?></span></span>
-                                <button type="button" id="btnAgentEmailAgain" class="btn btn-link p-0 ms-1" style="font-size:11.5px;vertical-align:baseline;">Send email again</button>
+                                <button type="button" id="btnAgentEmailAgain" class="btn btn-link p-0 ms-1" style="vertical-align:baseline;">Send email again</button>
                             </span>
-                            <button type="button" id="btnAgentEmailSend" class="btn btn-link p-0" style="font-size:11.5px;<?= $agent_sent_at ? 'display:none;' : '' ?>">Send email to agent for latest update</button>
+                            <button type="button" id="btnAgentEmailSend" class="btn btn-link p-0" style="<?= $agent_sent_at ? 'display:none;' : '' ?>">Send email to agent for latest update</button>
                         </div>
                     <?php endif; ?>
-                </div><span class="vdm-e"><?= aie('agent_name') ?></span></div>
-                <div class="vdm-row"><i class="fa-solid fa-layer-group"></i><span class="vdm-k">Survey Type</span><span class="vdm-c">:</span><div class="vdm-v"><span class="vdm-type"><?= sanitize($combined_survey_type) ?></span></div><span class="vdm-e"><?= aie('survey_type_ids') ?></span></div>
-                <div class="vdm-row"><i class="fa-solid fa-user-tie"></i><span class="vdm-k">Surveyor</span><span class="vdm-c">:</span><div class="vdm-v"><b><?= sanitize($combined_surveyor_names) ?></b></div><span class="vdm-e"><?= aie('surveyors') ?></span></div>
-                <div class="vdm-row"><i class="fa-solid fa-location-dot"></i><span class="vdm-k">Port</span><span class="vdm-c">:</span><div class="vdm-v"><span class="vdm-port"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div><span class="vdm-e"><?= aie('port_id') ?></span></div>
-                <div class="vdm-row"><i class="fa-solid fa-calendar-days"></i><span class="vdm-k">Appointment</span><span class="vdm-c">:</span><div class="vdm-v"><b class="vdm-date"><?= sanitize($vdm_appt) ?></b></div><span class="vdm-e"><?= aie('appointment_date') ?></span></div>
-                <div class="vdm-row"><i class="fa-solid fa-clock"></i><span class="vdm-k">Status</span><span class="vdm-c">:</span><div class="vdm-v"><span class="vdm-status <?= $vdm_status_cls ?>" data-testid="vdm-status"><i class="fa-solid fa-clock"></i> <?= sanitize($vdm_status) ?></span></div></div>
-                <div class="vdm-row vdm-extra"><i class="fa-solid fa-hashtag"></i><span class="vdm-k">Report No</span><span class="vdm-c">:</span><div class="vdm-v"><b><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></b></div><span class="vdm-e"><?= aie('report_number') ?></span></div>
-                <div class="vdm-row vdm-extra"><i class="fa-solid fa-calendar-check"></i><span class="vdm-k">Assigned Date</span><span class="vdm-c">:</span><div class="vdm-v"><b class="vdm-date"><?= $display_date ?></b></div><span class="vdm-e"><?= aie('assign_date') ?></span></div>
-                <?php if ($vdm_remarks !== '' || aie('remarks') !== ''): ?>
-                <div class="vdm-row vdm-extra"><i class="fa-solid fa-comment-dots" style="color:#ea580c"></i><span class="vdm-k" style="color:#ea580c">Remarks</span><span class="vdm-c">:</span><div class="vdm-v vdm-remarks"><?php
-                    if ($vdm_remarks === '') {
-                        echo 'N/A';
-                    } elseif (strlen($vdm_remarks) > 150) {
-                        echo sanitize(substr($vdm_remarks, 0, 150)) . '... <a href="#" class="text-primary fw-bold" data-bs-toggle="modal" data-bs-target="#remarksModal" onclick="event.stopPropagation();" data-testid="vessel-detail-read-more-remarks">Read More</a>';
-                    } else {
-                        echo sanitize($vdm_remarks);
-                    }
-                ?></div><span class="vdm-e"><?= aie('remarks') ?></span></div>
-                <?php endif; ?>
+                </div></div>
+                <?= daField('fa-solid fa-user-tie', 'Surveyors', daPeople((string)$combined_surveyor_names), aie('surveyors'), 'full last') ?>
             </div>
-            <div class="vdm-foot">
-                <div class="vdm-update" data-testid="vdm-latest-update">
+            <?php if ($daRemarks !== '' || aie('remarks') !== ''): ?>
+            <div class="dapp-rem" data-testid="vd-remarks"><span><i class="fa-solid fa-comment-dots"></i> Admin Remarks<?= aie('remarks') ?></span>
+                <p><?php
+                    if ($daRemarks === '') echo 'N/A';
+                    elseif (strlen($daRemarks) > 150) echo sanitize(substr($daRemarks, 0, 150)) . '… <a href="#" data-bs-toggle="modal" data-bs-target="#remarksModal" onclick="event.stopPropagation();" data-testid="vessel-detail-read-more-remarks">Read more</a>';
+                    else echo sanitize($daRemarks);
+                ?></p></div>
+            <?php endif; ?>
+        </div>
+
+        <div class="dapp-card status-update-card" data-testid="vd-live-status">
+            <div class="dapp-sec-h"><span class="si" style="background:#e7f8ee;color:#16a34a"><i class="fa-solid fa-tower-broadcast"></i></span><b>Live Status</b></div>
+            <form action="vessel_detail.php?id=<?= $survey['id'] ?>" method="POST" class="dapp-upd">
+                <?= csrf_field() ?>
+                <div class="dapp-tl" data-testid="vdm-latest-update"><span class="dot"></span><div>
                     <?php if (!empty($survey['custom_live_status'])): ?>
-                        <div class="vdm-update-text"><i class="fa-solid fa-comment-dots"></i> <?= sanitize($survey['custom_live_status']) ?></div>
-                        <div class="vdm-update-by"><?= !empty($survey['status_updated_at']) ? formatLatestUpdateWhen($survey['status_updated_at']) : '' ?> · <?= sanitize($survey['modifier_name'] ?? 'User') ?></div>
+                        <b><?= sanitize($survey['custom_live_status']) ?></b>
+                        <small><?= !empty($survey['status_updated_at']) ? formatLatestUpdateWhen($survey['status_updated_at']) : '' ?> by <i><?= sanitize($survey['modifier_name'] ?? 'User') ?></i></small>
                     <?php else: ?>
-                        <div class="vdm-update-text"><i class="fa-solid fa-circle-info vdm-info"></i> No updates recorded yet.</div>
+                        <b style="color:#64748b;font-weight:600">No updates recorded yet.</b>
                     <?php endif; ?>
+                </div></div>
+                <div class="dapp-inp">
+                    <textarea name="latest_status" class="status-input" rows="2" placeholder="Type the latest update…" required><?= !empty($survey['custom_live_status']) ? sanitize($survey['custom_live_status']) : '' ?></textarea>
+                    <button type="submit" name="update_latest_status" class="dapp-btn small-status-btn"><i class="fa-solid fa-paper-plane"></i> Update</button>
                 </div>
-                <?php if ($is_admin): ?>
-                    <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vdm-edit" data-testid="vessel-detail-edit-link"><i class="fa-solid fa-pen"></i> Edit</a>
-                <?php endif; ?>
-                <button type="button" class="vdm-note" data-vdm-note aria-label="Write the latest update" title="Latest update" data-testid="vdm-note"><i class="fa-solid fa-note-sticky"></i></button>
-            </div>
-    </div>
+            </form>
+        </div>
+
     <?php if (!$is_client_viewer && !$is_super_admin): ?>
-    <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm mt-2">
-        <div class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fa-solid fa-cloud-arrow-up text-primary"></i> Upload Required Reports</div>
-        
+        <div class="dapp-card form-box" data-testid="vd-upload">
+            <div class="dapp-sec-h"><span class="si"><i class="fa-solid fa-cloud-arrow-up"></i></span><b>Upload Reports</b></div>
+            <div class="dapp-up">
     <?php
     // 🌟 One or more files uploaded at assignment time (Assign Vessel form
     // now allows selecting multiple at once). getSurveyAttachments() reads
@@ -723,67 +725,25 @@ include 'includes/header.php';
     </div>
     <?php endif; ?>
 
-<form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data" data-report-upload-form>
-                    <?= csrf_field() ?>
-            <input type="hidden" name="survey_id" value="<?= $survey['id'] ?>">
-            <input type="hidden" name="current_status" value="<?= $survey['status'] ?>">
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">1. Formal Report (PDF) *</label>
-                <input type="file" name="pdf_report" class="form-control form-control-sm" accept=".pdf" required>
+
+            <form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data" data-report-upload-form>
+                <?= csrf_field() ?>
+                <input type="hidden" name="survey_id" value="<?= $survey['id'] ?>">
+                <input type="hidden" name="current_status" value="<?= $survey['status'] ?>">
+                <label class="dapp-ur"><span class="fi fi-pdf"><i class="fa-solid fa-file-pdf"></i></span><span class="t"><b>Formal Report <span class="dapp-req">*</span></b><small>PDF · required</small></span>
+                    <input type="file" name="pdf_report" accept=".pdf" required></label>
+                <label class="dapp-ur"><span class="fi fi-xls"><i class="fa-solid fa-file-excel"></i></span><span class="t"><b>Calculation Sheet</b><small>Excel · optional</small></span>
+                    <input type="file" name="excel_report" accept=".xlsx, .xls"></label>
+                <label class="dapp-ur"><span class="fi fi-add"><i class="fa-solid fa-folder-plus"></i></span><span class="t"><b>Additional Files</b><small>Excel, Word or PDF · several at once</small></span>
+                    <input type="file" name="additional_files[]" accept=".xlsx,.xls,.docx,.doc,.pdf" multiple></label>
+                <button type="submit" class="dapp-btn wide" data-report-upload-submit><i class="fa-solid fa-paper-plane"></i> Submit &amp; Send</button>
+            </form>
             </div>
-            <div class="mb-3">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">2. Calculation Sheet (Excel) <span class="text-muted fw-normal">(optional)</span></label>
-                <input type="file" name="excel_report" class="form-control form-control-sm" accept=".xlsx, .xls">
-            </div>
-            <div class="mt-3 mb-2">
-                <label class="form-label small fw-semibold text-muted">Additional Files (optional)</label>
-                <input type="file" name="additional_files[]" class="form-control form-control-sm" accept=".xlsx,.xls,.docx,.doc,.pdf" multiple>
-                <div class="text-muted" style="font-size:11px;">Excel, Word or PDF. You can select multiple files.</div>
-            </div>
-            <button type="submit" class="blue-action-btn w-100" style="background: #1e3a8a;" data-report-upload-submit>Submit & Send</button>
-        </form>
-    </div>
+        </div>
     <?php endif; ?>
-
-    <div class="status-update-card shadow-sm">
-        <form action="vessel_detail.php?id=<?= $survey['id'] ?>" method="POST">
-            <?= csrf_field() ?>
-            <div class="mb-3">
-                <label class="text-dark fw-bold mb-2" style="font-size:13px;">
-                    <i class="fa-solid fa-pen-fancy text-primary me-1"></i> Latest Update / Live Status
-                </label>
-                <textarea name="latest_status" class="status-input" rows="2" placeholder="Update the current operational event..." required><?= !empty($survey['custom_live_status']) ? sanitize($survey['custom_live_status']) : '' ?></textarea>
-            </div>
-
-            <div class="d-flex justify-content-between align-items-center">
-                <div style="font-size: 11px; color: var(--text-muted);">
-                    <?php if (!empty($survey['status_updated_at'])): ?>
-                        <span class="text-dark fw-bold"><?= formatLatestUpdateWhen($survey['status_updated_at']) ?></span> By <span class="text-primary fw-bold"><?= sanitize($survey['modifier_name'] ?? 'User') ?></span>
-                    <?php endif; ?>
-                </div>
-                <button type="submit" name="update_latest_status" class="small-status-btn">Update</button>
-            </div>
-        </form>
-    </div>
-        </div><!-- /.detail-main-row -->
     </div><!-- /.detail-mobile-view -->
-<script>
-// Mobile vessel card: send menu (WhatsApp / Email) and the note button (jumps to the live-status box).
-(function () {
-  var btn = document.querySelector('[data-vdm-send]'), menu = document.querySelector('[data-vdm-send-menu]');
-  if (btn && menu) {
-    btn.addEventListener('click', function (e) { e.stopPropagation(); var open = menu.hidden; menu.hidden = !open; btn.setAttribute('aria-expanded', open ? 'true' : 'false'); });
-    document.addEventListener('click', function (e) { if (!menu.hidden && !menu.contains(e.target)) { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); } });
-  }
-  var note = document.querySelector('[data-vdm-note]');
-  if (note) note.addEventListener('click', function () {
-    var ta = document.querySelector('.detail-mobile-view .status-update-card textarea[name=latest_status]');
-    if (!ta) return;
-    ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(function () { try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } }, 350);
-  });
-})();
-</script>
+<script>window.VC_CFG = window.VC_CFG || <?= json_encode(['csrf' => csrf_token(), 'def' => VI_DEFAULT]) ?>;</script>
+<script src="assets/js/vessel-cards.js?v=<?= @filemtime(__DIR__ . '/assets/js/vessel-cards.js') ?>"></script>
 
 
     <div class="detail-desktop-view">

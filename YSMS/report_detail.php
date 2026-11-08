@@ -478,58 +478,81 @@ include 'includes/header.php';
     <?php $page_title = 'Pending Report Details'; $back_url = 'reports.php'; $page_testid = 'report-detail'; include 'includes/top_app_bar.php'; ?>
     <?php $overdueAlertKind = 'report'; include 'includes/overdue_alert.php'; // Report Overdue (4+ days since survey completion) ?>
 
-    <div class="detail-mobile-view">
-    <div class="detail-bottom-row">
-    <!-- Read-Only Info Table -->
-    <div class="info-table-list shadow-sm">
-        <div class="info-row"><span class="info-label">Vessel Name<?= aie('vessel_name') ?></span><span class="info-value"><?= sanitize($survey['vessel_name']) ?></span></div>
-        <div class="info-row" data-testid="rd-port-mobile"><span class="info-label">Port<?= aie('port_id') ?></span><span class="info-value"><?= sanitize($survey['port_name'] ?? '—') ?></span></div>
-        <div class="info-row"><span class="info-label">Report No<?= aie('report_number') ?></span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">Client Name<?= aie('client_id') ?></span><span class="info-value"><?= sanitize($survey['company_name']) ?></span></div>
-        <div class="info-row"><span class="info-label">Surveyor Name<?= aie('surveyors') ?></span><span class="info-value"><?= sanitize(getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A')) ?></span></div>
-        <div class="info-row"><span class="info-label">Survey Type<?= aie('survey_type_ids') ?></span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
-        <div class="info-row"><span class="info-label">Survey Completed<?= aie('survey_completed_date') ?></span><span class="info-value text-success fw-bold"><?= date('d M Y', strtotime($survey['survey_completed_date'])) ?></span></div>
-        <?php if (!$recoveryNA): // Recovery rows are left out entirely for N/A survey types ?>
-        <div class="info-row"><span class="info-label">Total Recovery<?= aie('recovery') ?></span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(recoveryDisplay($survey['recovery_amount'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(recoveryDisplay($survey['vlsfo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(recoveryDisplay($survey['lsmgo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(recoveryDisplay($survey['hsfo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
-        <?php else: ?>
-        <div class="info-row" data-testid="recovery-na-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
-        <?php endif; ?>
-    </div>
+    <?php
+        require_once __DIR__ . '/includes/detail_app.php';
+        [$daImg, $daReal] = daPhoto($db, (string)$survey['vessel_name']);
+        $daRec = fn($v) => $v !== null ? recoveryDisplay($v, $recoveryOnhire, 3) . ' MT' : '—';
+        $daRecOpen = $recovery_message || $recovery_error;
+    ?>
+    <link rel="stylesheet" href="assets/css/detail-app.css?v=<?= @filemtime(__DIR__ . '/assets/css/detail-app.css') ?>">
+    <div class="detail-mobile-view dapp dapp-yellow" data-testid="report-detail-app">
+        <div class="dapp-band" aria-hidden="true"></div>
+        <div class="dapp-card dapp-hero">
+            <div class="dapp-hero-top">
+                <div class="dapp-photo<?= $daReal ? ' real' : '' ?>"><img src="<?= sanitize($daImg) ?>" alt="" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')" data-testid="rd-photo"></div>
+                <div class="dapp-hn"><small>Vessel</small><span class="dapp-name"><?= sanitize($survey['vessel_name']) ?><?= aie('vessel_name') ?></span>
+                    <div class="dapp-chips"><span class="dapp-chip ref"><i class="fa-solid fa-hashtag"></i> <?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?><?= aie('report_number') ?></span><span class="dapp-chip st-report"><i class="fa-solid fa-hourglass-half"></i> Pending Report</span></div></div>
+            </div>
+            <div class="dapp-acts">
+                <?php if (!$is_super_admin && $role !== 'Client'): ?>
+                <a href="report_generator.php?id=<?= (int)$survey['id'] ?>" class="dapp-act wd" data-testid="generate-word-report-button"><i class="fa-solid fa-file-word"></i>Word Report</a>
+                <a href="photo_report_generator.php?id=<?= (int)$survey['id'] ?>" class="dapp-act ph" data-testid="generate-photo-report-button"><i class="fa-regular fa-images"></i>Photo Report</a>
+                <?php endif; ?>
+                <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
+                <a href="invoice_generator.php?id=<?= (int)$survey['id'] ?>" class="dapp-act iv" data-testid="generate-invoice-button"><i class="fa-solid fa-file-invoice-dollar"></i>Invoice</a>
+                <?php endif; ?>
+                <?php
+                    $daShare = implode("\n", array_filter([
+                        (string)$survey['vessel_name'],
+                        !empty($survey['report_number']) ? 'Report No: ' . $survey['report_number'] : null,
+                        'Client: ' . ($survey['company_name'] ?? '—'),
+                        'Survey Type: ' . getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A'),
+                        'Port: ' . ($survey['port_name'] ?? '—'),
+                        'Survey Completed: ' . date('d M Y', strtotime($survey['survey_completed_date'])),
+                        'Status: Pending Report',
+                    ]));
+                ?>
+                <button type="button" class="dapp-act sh" data-pv-share data-share-text="<?= sanitize($daShare) ?>" data-testid="report-detail-share"><i class="fa-solid fa-share-nodes"></i>Share</button>
+            </div>
+        </div>
 
-    <?php if ($is_admin && !$recoveryNA): ?>
-    <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm" data-testid="recovery-edit-box">
-        <div class="fw-bold text-dark mb-2" style="font-size: 13px;"><i class="fa-solid fa-droplet text-primary me-1"></i> Edit Recovery</div>
-        <?php if ($recovery_message): ?><div class="alert alert-success py-2 mb-2" style="font-size:12px;" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
-        <?php if ($recovery_error): ?><div class="alert alert-danger py-2 mb-2" style="font-size:12px;" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
-        <form method="POST"><?= csrf_field() ?>
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">Total Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="recovery_amount" class="form-control form-control-sm" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)abs((float)$survey['recovery_amount'])) : '' ?>" data-testid="recovery-field-total">
+        <div class="dapp-card">
+            <div class="dapp-sec-h"><span class="si"><i class="fa-solid fa-ship"></i></span><b>Survey Details</b></div>
+            <div class="dapp-grid">
+                <?= daField('fa-solid fa-handshake', 'Client', daVal($survey['company_name'] ?? ''), aie('client_id')) ?>
+                <?= daField('fa-solid fa-clipboard-list', 'Survey Type', '<span class="dapp-tag">' . sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) . '</span>', aie('survey_type_ids')) ?>
+                <?= daField('fa-solid fa-location-dot', 'Port', daVal($survey['port_name'] ?? ''), aie('port_id'), '', 'rd-port-mobile') ?>
+                <?= daField('fa-regular fa-calendar-check', 'Survey Completed', daVal(date('d M Y', strtotime($survey['survey_completed_date'])), 'ok'), aie('survey_completed_date')) ?>
+                <?= daField('fa-solid fa-user-tie', 'Surveyor', daPeople((string)getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A')), aie('surveyors'), 'full last') ?>
             </div>
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">VLSFO Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="vlsfo_recovery" class="form-control form-control-sm" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['vlsfo_recovery'])) : '' ?>" data-testid="recovery-field-vlsfo">
-            </div>
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">LSMGO Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)abs((float)$survey['lsmgo_recovery'])) : '' ?>" data-testid="recovery-field-lsmgo">
-            </div>
-            <div class="mb-2">
-                <label class="form-label fw-bold text-secondary" style="font-size:11px;">HSFO Recovery (MT)</label>
-                <input type="number" step="0.001" min="0" name="hsfo_recovery" class="form-control form-control-sm" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['hsfo_recovery'])) : '' ?>" data-testid="recovery-field-hsfo">
-            </div>
-            <button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
-        </form>
-    </div>
-    <?php endif; ?>
+            <?php if ($recoveryNA): ?>
+                <div class="dapp-grid" style="padding-top:0"><?= daField('fa-solid fa-droplet', 'Recovery', daVal(RECOVERY_NA_LABEL), '', 'full last', 'recovery-na-mobile') ?></div>
+            <?php else: ?>
+                <?= daRecovery($daRec($survey['recovery_amount']), $daRec($survey['vlsfo_recovery']), $daRec($survey['lsmgo_recovery']), $daRec($survey['hsfo_recovery']), $is_admin ? 'rdRecForm' : '', 'rd-recovery-mobile') ?>
+                <?php if ($is_admin): ?>
+                <?php if ($recovery_message): ?><div class="dapp-alert ok" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
+                <?php if ($recovery_error): ?><div class="dapp-alert err" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
+                <div class="dapp-rec-form" id="rdRecForm" data-testid="recovery-edit-box"<?= $daRecOpen ? '' : ' hidden' ?>>
+                    <form method="POST"><?= csrf_field() ?>
+                        <div class="mb-2"><label class="form-label fw-bold text-secondary" style="font-size:11px;">Total Recovery (MT)</label>
+                            <input type="number" step="0.001" min="0" name="recovery_amount" class="form-control form-control-sm" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)abs((float)$survey['recovery_amount'])) : '' ?>" data-testid="recovery-field-total"></div>
+                        <div class="mb-2"><label class="form-label fw-bold text-secondary" style="font-size:11px;">VLSFO Recovery (MT)</label>
+                            <input type="number" step="0.001" min="0" name="vlsfo_recovery" class="form-control form-control-sm" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['vlsfo_recovery'])) : '' ?>" data-testid="recovery-field-vlsfo"></div>
+                        <div class="mb-2"><label class="form-label fw-bold text-secondary" style="font-size:11px;">LSMGO Recovery (MT)</label>
+                            <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)abs((float)$survey['lsmgo_recovery'])) : '' ?>" data-testid="recovery-field-lsmgo"></div>
+                        <div class="mb-2"><label class="form-label fw-bold text-secondary" style="font-size:11px;">HSFO Recovery (MT)</label>
+                            <input type="number" step="0.001" min="0" name="hsfo_recovery" class="form-control form-control-sm" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['hsfo_recovery'])) : '' ?>" data-testid="recovery-field-hsfo"></div>
+                        <div class="d-flex gap-2"><button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
+                            <button type="button" class="btn btn-light btn-sm w-100" data-dapp-toggle="rdRecForm">Cancel</button></div>
+                    </form>
+                </div>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
 
-    <!-- 🌟 DOWNLOAD SECTION — visible to every role that can reach this page,
-         including Client (their own company's reports only, enforced above). -->
-    <div class="detail-files-panel px-3 my-3">
-        <div class="fw-bold text-dark mb-2" style="font-size: 13px;"><i class="fa-solid fa-folder-open text-warning me-1"></i> Download Pre-Uploaded Survey Files</div>
+        <div class="dapp-card">
+            <div class="dapp-sec-h"><span class="si" style="background:#fff1e6;color:#ea580c"><i class="fa-solid fa-folder-open"></i></span><b>Survey Files</b><span class="r"><?= count($uploaded_files) ?> file<?= count($uploaded_files) === 1 ? '' : 's' ?></span></div>
+            <div class="dapp-files detail-files-panel">
         <?php if(count($uploaded_files) > 0): ?>
             <?php foreach($uploaded_files as $file): ?>
                 <?php
@@ -568,72 +591,41 @@ include 'includes/header.php';
             <div class="text-muted small ps-2">No files attached to this vessel yet.</div>
         <?php endif; ?>
         <?= aieAddFilesButton() ?>
-    </div>
+            </div>
+        </div>
 
     <?php if (!$is_super_admin && $role !== 'Client'): ?>
-    <!-- ✍️ UPLOAD FORM SECTION: Final Report (PDF) is the required document -->
-    <div class="form-box mx-3 p-3 bg-white rounded-3 border shadow-sm">
-        <div class="fw-bold text-dark mb-3" style="font-size: 14px;"><i class="fa-solid fa-cloud-arrow-up text-primary"></i> Upload Final Documentation</div>
-
-        <form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data" id="reportUploadForm" class="report-upload-form"><?= csrf_field() ?>
-            <input type="hidden" name="survey_id" value="<?= $survey['id'] ?>">
-            <input type="hidden" name="current_status" value="<?= $survey['status'] ?>">
-            <input type="hidden" name="no_report_confirmed" id="noReportConfirmed" class="no-report-confirmed" value="0">
-
-            <div class="mb-3">
-                <label class="form-label fw-bold text-secondary" style="font-size:12px;" for="finalReportInput">1. Final Report (PDF)</label>
-                <input type="file" name="final_report_pdf" id="finalReportInput" class="form-control form-control-sm final-report-input" accept=".pdf,application/pdf" data-testid="final-report-pdf-input">
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label fw-bold text-secondary" style="font-size:12px;" for="zipFolderInput">2. ZIP Folder (optional) — photos / supporting documents, max 30 MB</label>
-                <input type="file" name="zip_folder" id="zipFolderInput" class="form-control form-control-sm zip-folder-input" accept=".zip,application/zip,application/x-zip-compressed" data-testid="zip-folder-input">
-            </div>
-
-            <div id="additionalFilesContainer"></div>
-
-            <button type="button" class="btn btn-light btn-sm text-primary fw-bold mb-3 border w-100 py-2 add-more-files-btn" data-target="additionalFilesContainer" style="font-size: 12px;">
-                <i class="fa-solid fa-plus-circle"></i> + Add More Files (Optional)
-            </button>
-
-            <div class="detail-actions-row">
-            <button type="submit" class="btn btn-primary mb-0" id="uploadAndMoveBtn" data-testid="complete-report-submit-button">Complete & Move</button>
-            <a href="report_generator.php?id=<?= $survey['id'] ?>"
-               class="btn btn-success mb-0"
-               style="background-color: #28a745; border: none; font-weight: 600; padding: 10px; border-radius: 8px; color: #fff; text-decoration: none; text-align: center;"
-               data-testid="generate-word-report-button">
-                <i class="fa-solid fa-file-lines me-2"></i> Generate Word Report
-            </a>
-            <a href="photo_report_generator.php?id=<?= $survey['id'] ?>"
-               class="btn btn-primary mb-0"
-               style="border: none; font-weight: 600; padding: 10px; border-radius: 8px; color: #fff; text-decoration: none; text-align: center;"
-               data-testid="generate-photo-report-button">
-                <i class="fa-regular fa-images me-2"></i> Generate Photo Report
-            </a>
-            </div>
-
-        </form>
-    </div>
+        <div class="dapp-card form-box">
+            <div class="dapp-sec-h"><span class="si" style="background:#eaf1ff;color:#1D63ED"><i class="fa-solid fa-cloud-arrow-up"></i></span><b>Final Documentation</b></div>
+            <form action="ajax/upload_handler.php" method="POST" enctype="multipart/form-data" id="reportUploadForm" class="report-upload-form dapp-up"><?= csrf_field() ?>
+                <input type="hidden" name="survey_id" value="<?= $survey['id'] ?>">
+                <input type="hidden" name="current_status" value="<?= $survey['status'] ?>">
+                <input type="hidden" name="no_report_confirmed" id="noReportConfirmed" class="no-report-confirmed" value="0">
+                <label class="dapp-ur" for="finalReportInput"><span class="fi fi-pdf"><i class="fa-solid fa-file-pdf"></i></span><span class="t"><b>Final Report</b><small>PDF</small></span>
+                    <input type="file" name="final_report_pdf" id="finalReportInput" class="final-report-input" accept=".pdf,application/pdf" data-testid="final-report-pdf-input"></label>
+                <label class="dapp-ur" for="zipFolderInput"><span class="fi fi-zip"><i class="fa-solid fa-file-zipper"></i></span><span class="t"><b>ZIP Folder</b><small>Photos / supporting documents · max 30 MB</small></span>
+                    <input type="file" name="zip_folder" id="zipFolderInput" class="zip-folder-input" accept=".zip,application/zip,application/x-zip-compressed" data-testid="zip-folder-input"></label>
+                <div id="additionalFilesContainer"></div>
+                <button type="button" class="dapp-ghost add-more-files-btn" data-target="additionalFilesContainer"><i class="fa-solid fa-plus"></i> Add More Files (optional)</button>
+                <button type="submit" class="dapp-btn wide" id="uploadAndMoveBtn" data-testid="complete-report-submit-button"><i class="fa-solid fa-circle-check"></i> Complete &amp; Move</button>
+            </form>
+        </div>
     <?php endif; ?>
 
     <?php if ($role !== 'Client'): ?>
-    <div class="action-btn-container redelivery-block mb-4 px-3" style="display:flex;flex-direction:column;gap:8px;" data-testid="redelivery-block-mobile">
-        <input type="email" class="form-control form-control-sm" placeholder="Your Gmail address (optional — picks which account composes)" value="<?= sanitize($my_email) ?>" data-redelivery-from data-testid="redelivery-from-input">
-        <a href="#" data-redelivery-open data-base-url="<?= sanitize($redelivery_gmail_url) ?>" data-ios-url="<?= sanitize($redelivery_gmail_ios_url) ?>" data-android-url="<?= sanitize($redelivery_gmail_android_url) ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" style="background:#0f766e;" data-testid="redelivery-email-button">
-            <i class="fa-solid fa-envelope me-1"></i> Send Email to Master for Redelivery
-        </a>
-    </div>
+        <div class="dapp-card redelivery-block" data-testid="redelivery-block-mobile">
+            <div class="dapp-sec-h"><span class="si" style="background:#e6fbf7;color:#0f766e"><i class="fa-solid fa-envelope-open-text"></i></span><b>Email to Master</b></div>
+            <div style="padding:0 16px 4px;font-size:11.5px;color:#64748b">For redelivery · your Gmail address (optional) picks which account composes.</div>
+            <div class="dapp-mail">
+                <input type="email" placeholder="Your Gmail address" value="<?= sanitize($my_email) ?>" data-redelivery-from data-testid="redelivery-from-input">
+                <a href="#" data-redelivery-open data-base-url="<?= sanitize($redelivery_gmail_url) ?>" data-ios-url="<?= sanitize($redelivery_gmail_ios_url) ?>" data-android-url="<?= sanitize($redelivery_gmail_android_url) ?>" class="dapp-btn" data-testid="redelivery-email-button"><i class="fa-solid fa-paper-plane"></i> Send</a>
+            </div>
+        </div>
     <?php endif; ?>
-
-    <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
-    <div class="action-btn-container mb-4 px-3" style="display:flex;flex-direction:column;gap:10px;">
-        <a href="invoice_generator.php?id=<?= (int)$survey['id'] ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" data-testid="generate-invoice-button">
-            <i class="fa-solid fa-file-invoice-dollar me-1"></i> Generate Invoice
-        </a>
-    </div>
-    <?php endif; ?>
-    </div><!-- /.detail-bottom-row -->
     </div><!-- /.detail-mobile-view -->
+<script>window.VC_CFG = window.VC_CFG || <?= json_encode(['csrf' => csrf_token(), 'def' => VI_DEFAULT]) ?>;</script>
+<script src="assets/js/vessel-cards.js?v=<?= @filemtime(__DIR__ . '/assets/js/vessel-cards.js') ?>"></script>
+<script>document.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-dapp-toggle]'); if (!b) return; var t = document.getElementById(b.getAttribute('data-dapp-toggle')); if (t) { t.hidden = !t.hidden; if (!t.hidden) t.scrollIntoView({ behavior: 'smooth', block: 'center' }); } });</script>
 
     <div class="detail-desktop-view">
         <div class="vdd-wrap">
@@ -918,7 +910,7 @@ include 'includes/header.php';
 
     <?php
     // Survey Report: Start / Resume Survey, and the Admin's tank history
-    if (in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true)) include 'includes/survey_report_card.php';
+    // Survey Report: started / resumed from Survey Reports in the menu (survey_reports.php?survey_id=…), not from this page
     ?>
 
     <script>

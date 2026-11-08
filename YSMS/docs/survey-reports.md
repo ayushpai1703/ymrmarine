@@ -643,3 +643,18 @@ status row and no Edit button on the card (open the report). Share sends the pic
 name · share; Client / Type of Survey, Port / Agent; a green Recovery panel (Total, then VLSFO /
 HSFO / LSMGO; "NOT APPLICABLE" when there is none). No date, surveyor, status row or Edit button on
 the card (open the vessel). Share sends a green "Completed" picture with the recovery.
+
+## App-style detail pages (mobile) (v4.5)
+
+`vessel_detail.php` (blue), `report_detail.php` (yellow `#ffc107`), `completed_detail.php` (green
+`#28a745`) have a new phone / tablet layout (`assets/css/detail-app.css`, helpers
+`includes/detail_app.php`); the desktop views are unchanged. Forms, field names, ids and buttons
+are the same as before, only laid out as cards:
+- Vessel card: vessel picture, name, report no, status; quick actions (Pending Vessel: WhatsApp,
+  Email, Edit (Admin), Share; Pending Report: Word Report, Photo Report, Invoice (Admin), Share;
+  Completed: Invoice (Admin) / Expenses (Surveyor), Files, Share — Share sends the details as text).
+- Survey Details with the Admin's inline-edit pencils; surveyors as name chips; Admin Remarks.
+- Recovery box (Total, VLSFO / LSMGO / HSFO); the Admin's "Edit Recovery" opens the form below it.
+- Pending Vessel: Live Status (latest update + update box), Upload Reports. Pending Report: Survey
+  Files, Final Documentation (Complete & Move), Email to Master. Completed: Timeline, Dossier Archive.
+- The Survey Report card is no longer on the Pending Report page (Survey Reports in the menu).

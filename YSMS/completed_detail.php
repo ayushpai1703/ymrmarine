@@ -456,106 +456,6 @@ include 'includes/header.php';
 <div class="scroll-content">
     <?php $page_title = 'Vessel Complete History'; $back_url = 'completed.php'; $page_testid = 'completed-detail'; include 'includes/top_app_bar.php'; ?>
 
-    <div class="detail-mobile-view">
-
-    <!-- Top Summary Card -->
-    <div class="detail-header-card">
-        <div class="vessel-initial-avatar mx-auto mb-2" style="width: 55px; height: 55px; background:#e0f2fe; color:#0369a1; font-weight:700; display:flex; justify-content:center; align-items:center; border-radius:50%;">
-            <?= strtoupper(substr($survey['vessel_name'], 3, 1)) ?>
-        </div>
-        <h3 class="fw-bold text-dark m-0" style="font-size: 18px;"><?= sanitize($survey['vessel_name']) ?><?= aie('vessel_name') ?></h3>
-        <p class="text-muted m-0 mt-1" style="font-size: 12px;">Client: <span class="text-primary fw-bold"><?= sanitize($survey['company_name']) ?></span><?= aie('client_id') ?></p>
-        <?php if (!empty($survey['report_number'])): ?>
-        <p class="text-muted m-0 mt-1" style="font-size: 12px;">Report No: <span class="text-dark fw-bold"><?= sanitize($survey['report_number']) ?></span></p>
-        <?php endif; ?>
-        <div class="mt-2"><span class="badge bg-success px-2 py-1" style="font-size:10px;"><i class="fa-solid fa-circle-check"></i> Survey Fully Completed</span></div>
-        <p class="text-muted m-0 mt-2" style="font-size:12px;" data-testid="completed-detail-uploaded-by">Uploaded By: <span class="text-dark fw-bold"><?= sanitize($survey['uploader_name'] ?: $survey['surveyor_name'] ?: 'Admin') ?></span></p>
-    </div>
-
-    <div class="detail-top-grid">
-    <!-- Timeline Dates -->
-    <div class="info-table-list shadow-sm">
-        <div class="info-row">
-            <span class="info-label"><i class="fa-regular fa-calendar-plus text-primary"></i> Survey Assigned Date<?= aie('appointment_date') ?></span>
-            <span class="info-value" data-testid="cd-assigned-mobile"><span class="badge bg-light text-dark border"><?= $cdAssignedDate ?></span></span>
-        </div>
-        <div class="info-row">
-            <span class="info-label"><i class="fa-regular fa-calendar-check text-warning"></i> Survey Completed Date<?= aie('survey_completed_date') ?></span>
-            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['survey_completed_date'] ?? '') ?></span></span>
-        </div>
-        <div class="info-row">
-            <span class="info-label"><i class="fa-solid fa-calendar-check text-success"></i> Report Completed Date<?= aie('report_uploaded_date') ?></span>
-            <span class="info-value"><span class="badge bg-light text-dark border"><?= fmtDateOnly($survey['report_uploaded_date'] ?? '') ?></span></span>
-        </div>
-    </div>
-
-    <!-- Other records -->
-    <div class="info-table-list shadow-sm">
-        <div class="info-row"><span class="info-label">Report No<?= aie('report_number') ?></span><span class="info-value fw-bold text-dark"><?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?></span></div>
-        <div class="info-row"><span class="info-label">Survey Operation Type<?= aie('survey_type_ids') ?></span><span class="info-value text-primary"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) ?></span></div>
-        <div class="info-row"><span class="info-label">Port of Operation<?= aie('port_id') ?></span><span class="info-value"><?= sanitize($survey['port_name']) ?></span></div>
-        <div class="info-row"><span class="info-label">Agent Handle<?= aie('agent_name') ?></span><span class="info-value"><?= sanitize($survey['agent_name']) ?></span></div>
-        <div class="info-row" data-testid="cd-surveyor-mobile"><span class="info-label">Surveyor<?= aie('surveyors') ?></span><span class="info-value"><?= sanitize($cd_surveyor_name ?: '—') ?></span></div>
-        <?php if ($recoveryNA): ?>
-        <div class="info-row" data-testid="recovery-na-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
-        <?php endif; ?>
-    </div>
-
-    <!-- Recovery — single card; Admin gets an inline edit-pencil that swaps
-         the display rows for the same Save form in place, instead of a
-         separate "Edit Recovery" box further down the page. -->
-    <?php if (!$recoveryNA): // no Recovery card at all for N/A survey types ?>
-    <div class="info-table-list shadow-sm recovery-block<?= $recovery_edit_open ? ' editing' : '' ?>" id="recoveryBlockMobile" data-testid="recovery-block-mobile">
-        <div class="recovery-block-head">
-            <span><i class="fa-solid fa-droplet text-primary me-1"></i> Recovery</span>
-            <?php if ($is_admin && !$recoveryNA): ?>
-            <button type="button" class="recovery-edit-toggle" data-recovery-edit-toggle="recoveryBlockMobile" title="Edit Recovery" data-testid="recovery-edit-toggle-mobile"><i class="fa-solid fa-pen"></i></button>
-            <?php endif; ?>
-        </div>
-        <?php if ($recovery_message): ?><div class="alert alert-success py-2 mx-2 mt-2 mb-0" style="font-size:12px;" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
-        <?php if ($recovery_error): ?><div class="alert alert-danger py-2 mx-2 mt-2 mb-0" style="font-size:12px;" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
-
-        <div class="recovery-display">
-            <?php if ($recoveryEmpty): ?>
-            <div class="info-row" data-testid="recovery-empty-mobile"><span class="info-label">Recovery</span><span class="info-value fw-bold"><?= sanitize(RECOVERY_NA_LABEL) ?></span></div>
-            <?php else: ?>
-            <div class="info-row"><span class="info-label">Total Recovery<?= aie('recovery') ?></span><span class="info-value"><?= $survey['recovery_amount'] !== null ? sanitize(recoveryDisplay($survey['recovery_amount'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
-            <div class="info-row"><span class="info-label">VLSFO Recovery</span><span class="info-value"><?= $survey['vlsfo_recovery'] !== null ? sanitize(recoveryDisplay($survey['vlsfo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
-            <div class="info-row"><span class="info-label">LSMGO Recovery</span><span class="info-value"><?= $survey['lsmgo_recovery'] !== null ? sanitize(recoveryDisplay($survey['lsmgo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
-            <div class="info-row"><span class="info-label">HSFO Recovery</span><span class="info-value"><?= $survey['hsfo_recovery'] !== null ? sanitize(recoveryDisplay($survey['hsfo_recovery'], $recoveryOnhire, 3)) . ' MT' : '—' ?></span></div>
-            <?php endif; ?>
-        </div>
-
-        <?php if ($is_admin && !$recoveryNA): ?>
-        <div class="recovery-edit-form">
-            <form method="POST" class="p-3"><?= csrf_field() ?>
-                <div class="mb-2">
-                    <label class="form-label fw-bold text-secondary" style="font-size:11px;">Total Recovery (MT)</label>
-                    <input type="number" step="0.001" min="0" name="recovery_amount" class="form-control form-control-sm" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)abs((float)$survey['recovery_amount'])) : '' ?>" data-testid="recovery-field-total">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label fw-bold text-secondary" style="font-size:11px;">VLSFO Recovery (MT)</label>
-                    <input type="number" step="0.001" min="0" name="vlsfo_recovery" class="form-control form-control-sm" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['vlsfo_recovery'])) : '' ?>" data-testid="recovery-field-vlsfo">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label fw-bold text-secondary" style="font-size:11px;">LSMGO Recovery (MT)</label>
-                    <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)abs((float)$survey['lsmgo_recovery'])) : '' ?>" data-testid="recovery-field-lsmgo">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label fw-bold text-secondary" style="font-size:11px;">HSFO Recovery (MT)</label>
-                    <input type="number" step="0.001" min="0" name="hsfo_recovery" class="form-control form-control-sm" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['hsfo_recovery'])) : '' ?>" data-testid="recovery-field-hsfo">
-                </div>
-                <div class="d-flex gap-2">
-                    <button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
-                    <button type="button" class="btn btn-light btn-sm w-100" data-recovery-edit-toggle="recoveryBlockMobile">Cancel</button>
-                </div>
-            </form>
-        </div>
-        <?php endif; ?>
-    </div>
-    <?php endif; ?>
-    </div><!-- /.detail-top-grid -->
-
 <?php
 // "Add Files" box under the Dossier Archive — same people who may replace
 // documents here (Admin / assigned Surveyor). Posts to the shared upload
@@ -585,12 +485,93 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
     .caf-submit { margin-top: 12px; width: 100%; border: 0; border-radius: 10px; padding: 10px 14px; background: #1e3a8a; color: #fff; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
     .caf-submit:hover { background: #0b1e46; }
 </style>
-    <!-- Files -->
-    <div class="px-3 mt-3 detail-files-wrap" id="dossier-files">
-        <div class="fw-bold text-dark mb-2" style="font-size: 14px;">
-            <i class="fa-solid fa-cloud-arrow-down text-primary me-1"></i> Dossier Archive (All Uploaded Files)
+    <?php
+        require_once __DIR__ . '/includes/detail_app.php';
+        [$daImg, $daReal] = daPhoto($db, (string)$survey['vessel_name']);
+        $daRec = fn($v) => $v !== null ? recoveryDisplay($v, $recoveryOnhire, 3) . ' MT' : '—';
+        $daShare = implode("\n", array_filter([
+            (string)$survey['vessel_name'],
+            !empty($survey['report_number']) ? 'Report No: ' . $survey['report_number'] : null,
+            'Client: ' . ($survey['company_name'] ?? '—'),
+            'Survey Type: ' . getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A'),
+            'Port: ' . ($survey['port_name'] ?? '—'),
+            'Report Completed: ' . fmtDateOnly($survey['report_uploaded_date'] ?? ''),
+            'Status: Completed',
+        ]));
+    ?>
+    <link rel="stylesheet" href="assets/css/detail-app.css?v=<?= @filemtime(__DIR__ . '/assets/css/detail-app.css') ?>">
+    <div class="detail-mobile-view dapp dapp-green" data-testid="completed-detail-app">
+        <div class="dapp-band" aria-hidden="true"></div>
+        <div class="dapp-card dapp-hero">
+            <div class="dapp-hero-top">
+                <div class="dapp-photo<?= $daReal ? ' real' : '' ?>"><img src="<?= sanitize($daImg) ?>" alt="" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')" data-testid="cd-photo"></div>
+                <div class="dapp-hn"><small>Vessel</small><span class="dapp-name"><?= sanitize($survey['vessel_name']) ?><?= aie('vessel_name') ?></span>
+                    <div class="dapp-chips"><span class="dapp-chip ref"><i class="fa-solid fa-hashtag"></i> <?= !empty($survey['report_number']) ? sanitize($survey['report_number']) : '—' ?><?= aie('report_number') ?></span><span class="dapp-chip st-done"><i class="fa-solid fa-circle-check"></i> Fully Completed</span></div></div>
+            </div>
+            <div class="dapp-who" data-testid="completed-detail-uploaded-by"><i class="fa-solid fa-cloud-arrow-up"></i> Report uploaded by <b><?= sanitize($survey['uploader_name'] ?: $survey['surveyor_name'] ?: 'Admin') ?></b></div>
+            <div class="dapp-acts">
+                <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
+                <a href="invoice_generator.php?id=<?= (int)$survey['id'] ?>" class="dapp-act iv" data-testid="generate-invoice-button"><i class="fa-solid fa-file-invoice-dollar"></i>Invoice</a>
+                <?php endif; ?>
+                <?php if (($_SESSION['role'] ?? '') === 'Surveyor'): ?>
+                <a href="coming_soon.php?feature=Generate+Expenses" class="dapp-act ph" data-testid="generate-expenses-button"><i class="fa-solid fa-receipt"></i>Expenses</a>
+                <?php endif; ?>
+                <a href="#dossier-files" class="dapp-act wd"><i class="fa-solid fa-box-archive"></i>Files</a>
+                <button type="button" class="dapp-act sh" data-pv-share data-share-text="<?= sanitize($daShare) ?>" data-testid="completed-detail-share"><i class="fa-solid fa-share-nodes"></i>Share</button>
+            </div>
         </div>
-        <div class="detail-files-grid">
+
+        <div class="dapp-card">
+            <div class="dapp-sec-h"><span class="si"><i class="fa-solid fa-timeline"></i></span><b>Timeline</b></div>
+            <div class="dapp-tline">
+                <div class="dapp-ts"><span class="d"><i class="fa-solid fa-calendar-plus"></i></span><div class="x"><span>Survey Assigned</span><b data-testid="cd-assigned-mobile"><?= $cdAssignedDate ?></b></div><?= aie('appointment_date') ?></div>
+                <div class="dapp-ts"><span class="d"><i class="fa-solid fa-anchor"></i></span><div class="x"><span>Survey Completed</span><b><?= fmtDateOnly($survey['survey_completed_date'] ?? '') ?></b></div><?= aie('survey_completed_date') ?></div>
+                <div class="dapp-ts done"><span class="d"><i class="fa-solid fa-check"></i></span><div class="x"><span>Report Completed</span><b><?= fmtDateOnly($survey['report_uploaded_date'] ?? '') ?></b></div><?= aie('report_uploaded_date') ?></div>
+            </div>
+        </div>
+
+        <div class="dapp-card">
+            <div class="dapp-sec-h"><span class="si"><i class="fa-solid fa-ship"></i></span><b>Survey Details</b></div>
+            <div class="dapp-grid">
+                <?= daField('fa-solid fa-handshake', 'Client', daVal($survey['company_name'] ?? ''), aie('client_id')) ?>
+                <?= daField('fa-solid fa-clipboard-list', 'Survey Type', '<span class="dapp-tag">' . sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A')) . '</span>', aie('survey_type_ids')) ?>
+                <?= daField('fa-solid fa-location-dot', 'Port', daVal($survey['port_name'] ?? ''), aie('port_id')) ?>
+                <?= daField('fa-solid fa-people-group', 'Agent', daVal($survey['agent_name'] ?? ''), aie('agent_name')) ?>
+                <?= daField('fa-solid fa-user-tie', 'Surveyor', daPeople((string)($cd_surveyor_name ?: '')), aie('surveyors'), 'full last', 'cd-surveyor-mobile') ?>
+            </div>
+            <?php if ($recoveryNA): ?>
+                <div class="dapp-grid" style="padding-top:0"><?= daField('fa-solid fa-droplet', 'Recovery', daVal(RECOVERY_NA_LABEL), '', 'full last', 'recovery-na-mobile') ?></div>
+            <?php else: ?>
+                <?php if ($recoveryEmpty): ?>
+                    <div class="dapp-grid" style="padding-top:0"><?= daField('fa-solid fa-droplet', 'Recovery', daVal(RECOVERY_NA_LABEL), aie('recovery'), 'full last', 'recovery-empty-mobile') ?></div>
+                    <?php if ($is_admin): ?><div style="padding:0 16px 14px"><button type="button" class="dapp-ghost" data-dapp-toggle="cdRecForm" data-testid="recovery-edit-open"><i class="fa-solid fa-pen"></i> Add Recovery</button></div><?php endif; ?>
+                <?php else: ?>
+                    <?= daRecovery($daRec($survey['recovery_amount']), $daRec($survey['vlsfo_recovery']), $daRec($survey['lsmgo_recovery']), $daRec($survey['hsfo_recovery']), $is_admin ? 'cdRecForm' : '', 'recovery-block-mobile') ?>
+                <?php endif; ?>
+                <?php if ($recovery_message): ?><div class="dapp-alert ok" data-testid="recovery-success"><?= sanitize($recovery_message) ?></div><?php endif; ?>
+                <?php if ($recovery_error): ?><div class="dapp-alert err" data-testid="recovery-error"><?= sanitize($recovery_error) ?></div><?php endif; ?>
+                <?php if ($is_admin): ?>
+                <div class="dapp-rec-form" id="cdRecForm"<?= $recovery_edit_open ? '' : ' hidden' ?>>
+                    <form method="POST"><?= csrf_field() ?>
+                        <div class="mb-2"><label class="form-label fw-bold text-secondary" style="font-size:11px;">Total Recovery (MT)</label>
+                            <input type="number" step="0.001" min="0" name="recovery_amount" class="form-control form-control-sm" value="<?= $survey['recovery_amount'] !== null ? sanitize((string)abs((float)$survey['recovery_amount'])) : '' ?>" data-testid="recovery-field-total"></div>
+                        <div class="mb-2"><label class="form-label fw-bold text-secondary" style="font-size:11px;">VLSFO Recovery (MT)</label>
+                            <input type="number" step="0.001" min="0" name="vlsfo_recovery" class="form-control form-control-sm" value="<?= $survey['vlsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['vlsfo_recovery'])) : '' ?>" data-testid="recovery-field-vlsfo"></div>
+                        <div class="mb-2"><label class="form-label fw-bold text-secondary" style="font-size:11px;">LSMGO Recovery (MT)</label>
+                            <input type="number" step="0.001" min="0" name="lsmgo_recovery" class="form-control form-control-sm" value="<?= $survey['lsmgo_recovery'] !== null ? sanitize((string)abs((float)$survey['lsmgo_recovery'])) : '' ?>" data-testid="recovery-field-lsmgo"></div>
+                        <div class="mb-2"><label class="form-label fw-bold text-secondary" style="font-size:11px;">HSFO Recovery (MT)</label>
+                            <input type="number" step="0.001" min="0" name="hsfo_recovery" class="form-control form-control-sm" value="<?= $survey['hsfo_recovery'] !== null ? sanitize((string)abs((float)$survey['hsfo_recovery'])) : '' ?>" data-testid="recovery-field-hsfo"></div>
+                        <div class="d-flex gap-2"><button type="submit" name="update_recovery" class="btn btn-primary btn-sm w-100" data-testid="save-recovery-button">Save Recovery</button>
+                            <button type="button" class="btn btn-light btn-sm w-100" data-dapp-toggle="cdRecForm">Cancel</button></div>
+                    </form>
+                </div>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+
+        <div class="dapp-card" id="dossier-files">
+            <div class="dapp-sec-h"><span class="si" style="background:#eaf1ff;color:#1D63ED"><i class="fa-solid fa-box-archive"></i></span><b>Dossier Archive</b><span class="r"><?= count($all_files) ?> file<?= count($all_files) === 1 ? '' : 's' ?></span></div>
+            <div class="dapp-files detail-files-wrap"><div class="detail-files-grid">
         <?php if(count($all_files) > 0): ?>
             <?php foreach($all_files as $file): ?>
                 <?php 
@@ -642,25 +623,13 @@ $renderCompletedAddFiles = function (string $variant) use ($survey) {
             </div>
         <?php endif; ?>
         </div><!-- /.detail-files-grid -->
-        <?php if ($can_replace_docs) echo $renderCompletedAddFiles('mobile'); ?>
-    </div>
-
-       <!-- Generate Invoice: Admin only. Generate Expenses: Surveyor only (Coming Soon for now).
-            Client and Super Admin see neither, and are blocked server-side too
-            (invoice_generator.php / generate_invoice.php are Admin-only). -->
-    <div class="action-btn-container mb-4 px-3" style="display:flex;flex-direction:column;gap:10px;">
-        <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
-        <a href="invoice_generator.php?id=<?= (int)$survey['id'] ?>" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" data-testid="generate-invoice-button">
-            <i class="fa-solid fa-file-invoice-dollar me-1"></i> Generate Invoice
-        </a>
-        <?php endif; ?>
-        <?php if (($_SESSION['role'] ?? '') === 'Surveyor'): ?>
-        <a href="coming_soon.php?feature=Generate+Expenses" class="blue-action-btn text-decoration-none d-inline-flex align-items-center justify-content-center" style="background:#0f766e;" data-testid="generate-expenses-button">
-            <i class="fa-solid fa-receipt me-1"></i> Generate Expenses
-        </a>
-        <?php endif; ?>
-    </div>
+            <?php if ($can_replace_docs) echo $renderCompletedAddFiles('mobile'); ?>
+            </div>
+        </div>
     </div><!-- /.detail-mobile-view -->
+<script>window.VC_CFG = window.VC_CFG || <?= json_encode(['csrf' => csrf_token(), 'def' => VI_DEFAULT]) ?>;</script>
+<script src="assets/js/vessel-cards.js?v=<?= @filemtime(__DIR__ . '/assets/js/vessel-cards.js') ?>"></script>
+<script>document.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-dapp-toggle]'); if (!b) return; var t = document.getElementById(b.getAttribute('data-dapp-toggle')); if (t) { t.hidden = !t.hidden; if (!t.hidden) t.scrollIntoView({ behavior: 'smooth', block: 'center' }); } });</script>
 
     <div class="detail-desktop-view">
         <div class="vdd-wrap">
