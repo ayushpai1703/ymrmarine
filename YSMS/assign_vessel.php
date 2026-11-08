@@ -541,6 +541,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     $success = "Vessel assigned successfully! Report No: " . $report_number;
+                    // the vessel's picture for the cards: looked up by the AI when the list is next shown (includes/vessel_image.php)
+                    try { require_once __DIR__ . '/includes/vessel_image.php'; viQueue($db, (string)$vessel_name); } catch (Throwable $vie) { error_log('vessel picture queue: ' . $vie->getMessage()); }
                     
                     // 🌟 Optional assignment attachment(s) — the file input allows
                     // selecting multiple files at once (assignment_attachment[]), so

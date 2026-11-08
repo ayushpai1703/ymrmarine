@@ -1025,10 +1025,7 @@ include 'includes/header.php';
         </div>
     </div><!-- /.detail-desktop-view -->
 
-    <?php
-    // Survey Report: Start / Resume Survey, and the Admin's tank history
-    if (in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true)) include 'includes/survey_report_card.php';
-    ?>
+    <?php /* Survey Report: started / resumed from Survey Reports in the menu (survey_reports.php?survey_id=…), not from this page */ ?>
 
     <?php
     // Same vessel surveyed before (any client) — for the surveyor's reference. Admin / Super Admin / Surveyor only.

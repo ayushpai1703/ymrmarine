@@ -90,6 +90,14 @@ if ($is_full_access) {
     $stmt->execute([$user_id, $user_id]);
 }
 $surveys = $stmt->fetchAll();
+// vessel pictures (AI search, includes/vessel_image.php); the YMR ship until one is found
+require_once __DIR__ . '/includes/vessel_image.php';
+$viStates = [];
+try { $viStates = viStates($db, array_map(fn($r) => (string)($r['vessel_name'] ?? ''), $surveys)); } catch (Throwable $e) { error_log('vessel pictures: ' . $e->getMessage()); }
+$viImg = function (string $name) use ($viStates): array {
+    $k = viKey($name); $st = $viStates[$k] ?? ['status' => 'unknown', 'img' => VI_DEFAULT];
+    return [$k, $st['img'], $st['status']];
+};
 
 $survey_types_filter = [];
 $survey_places_filter = [];
@@ -589,6 +597,9 @@ include 'includes/header.php';
             background: linear-gradient(135deg, #EEF2FF, #DCE3FF); color: #4F46E5;
             display: flex; align-items: center; justify-content: center; font-size: 15px;
         }
+        .vd-vessel-photo { width: 46px; height: 36px; padding: 0; overflow: hidden; background: #eef3fb; }
+        .vd-vessel-photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .vd-vessel-photo.real img { object-fit: cover; }
         .vd-vessel { font-weight: 700; color: #0f172a; text-decoration: none; font-size: 13.5px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
         .vd-vessel:hover { color: #5B2DEE; }
         .vd-sub { font-size: 11px; color: #94a3b8; margin-top: 1px; font-weight: 500; }
@@ -725,7 +736,8 @@ include 'includes/header.php';
                             }
                         ?>
                         <div class="pvz-head">
-                            <span class="pvz-photo"><img src="assets/images/ship-photo.svg" alt="" width="64" height="54"></span>
+                            <?php [$viK, $viSrc, $viSt] = $viImg($vessel_name); ?>
+                            <span class="pvz-photo<?= $viSt === 'found' ? ' real' : '' ?>"><img src="<?= sanitize($viSrc) ?>" alt="" width="64" height="54" data-vimg="<?= sanitize($viK) ?>" data-vimg-st="<?= sanitize($viSt) ?>" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')" data-testid="pending-vessel-photo-<?= (int)$survey['id'] ?>"></span>
                             <span class="pvz-bar" aria-hidden="true"></span>
                             <span class="cc-name pvz-name"><?= sanitize($vessel_name) ?></span>
                             <button type="button" class="pvz-share" data-pv-share data-share-text="<?= sanitize($pvShare) ?>" aria-label="Share vessel details" title="Share" data-testid="pending-vessel-share-<?= (int)$survey['id'] ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M8 11H6.5A2.5 2.5 0 0 0 4 13.5v5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-5A2.5 2.5 0 0 0 17.5 11H16"/></svg></button>
@@ -747,7 +759,7 @@ include 'includes/header.php';
                             <div class="pvz-upd-k"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M8 8.5h8M8 12h8M8 15.5h8"/></svg><span>Latest Updates</span></div>
                             <span class="pvz-upd-bar" aria-hidden="true"></span>
                             <?php if ($pvUpdLines): ?>
-                                <ul class="pvz-upd-list"><?php foreach (array_slice($pvUpdLines, 0, 3) as $pvL): ?><li><?= sanitize($pvL) ?></li><?php endforeach; ?></ul>
+                                <div class="pvz-upd-text" data-testid="pending-vessel-update-text-<?= (int)$survey['id'] ?>"><?= implode('<br>', array_map(fn($l) => '• ' . sanitize($l), $pvUpdLines)) ?></div>
                             <?php else: ?>
                                 <div class="pvz-upd-none">No updates recorded yet.</div>
                             <?php endif; ?>
@@ -897,7 +909,8 @@ include 'includes/header.php';
                                 <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
                                 <td>
                                     <div class="vd-vessel-cell">
-                                        <div class="vd-vessel-icon"><i class="fa-solid fa-ship"></i></div>
+                                        <?php [$viK, $viSrc, $viSt] = $viImg($vessel_name); ?>
+                                        <div class="vd-vessel-icon vd-vessel-photo<?= $viSt === 'found' ? ' real' : '' ?>"><img src="<?= sanitize($viSrc) ?>" alt="" width="44" height="36" data-vimg="<?= sanitize($viK) ?>" data-vimg-st="<?= sanitize($viSt) ?>" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')" data-testid="pending-vessel-desk-photo-<?= (int)$survey['id'] ?>"></div>
                                         <div style="min-width:0;">
                                             <a class="vd-vessel" href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><?= sanitize($vessel_name) ?></a>
                                             <?php if (!empty($survey['report_number'])): ?>
@@ -972,44 +985,34 @@ include 'includes/header.php';
 
 
 <script>
-// Pending Vessels mobile cards
-// 1) Text cut with "…" (vessel, client, survey type, port, agent, ...) scrolls once to show
-//    the whole text, the first time the card is on screen after the page opens.
-// 2) Share: the card is sent as a picture (full text, no buttons) through the phone's share
-//    sheet; where a picture cannot be shared it is downloaded; if the picture cannot be made,
-//    the vessel's details are shared as text (WhatsApp where there is no share sheet).
+// Pending Vessels cards
+// 1) Pictures: vessels not looked up yet are asked of the AI (2 at a time, ajax/vessel_image.php);
+//    a found picture replaces the YMR ship on the mobile card and in the desktop table.
+// 2) Share (mobile card): a designed picture of the vessel — YMR header, photo, details, latest
+//    update — through the phone's share sheet; downloaded where pictures cannot be shared; the
+//    details as text if the picture cannot be made.
 (function () {
   var H2C = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-  var FIT = '.pvz-name, .pvz-t > b, .pvz-upd-list li';
-  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var DEF = <?= json_encode(VI_DEFAULT) ?>;
 
-  function scrollOnce(el) {
-    var dist = el.scrollWidth - el.clientWidth;
-    if (dist <= 1 || !el.animate) return;
-    var html = el.innerHTML;
-    el.innerHTML = '<span class="pvx-mq">' + html + '</span>';
-    el.classList.add('pvx-scrolling');
-    var inner = el.firstChild, ms = Math.max(1200, dist * 28);
-    var anim = inner.animate([
-      { transform: 'translateX(0)' }, { transform: 'translateX(0)', offset: 0.15 },
-      { transform: 'translateX(' + (-dist) + 'px)', offset: 0.55 }, { transform: 'translateX(' + (-dist) + 'px)', offset: 0.75 },
-      { transform: 'translateX(0)' }
-    ], { duration: ms + 1600, easing: 'ease-in-out' });
-    anim.onfinish = function () { el.innerHTML = html; el.classList.remove('pvx-scrolling'); };
-  }
-  function cardOnce(card) {
-    if (card.__pvxDone) return; card.__pvxDone = true;
-    card.querySelectorAll(FIT).forEach(scrollOnce);
-  }
-  function startScroll() {
-    if (reduce) return;
-    var cards = [].slice.call(document.querySelectorAll('.vessel-list-container .cc-card.pvx'));
-    if (!cards.length) return;
-    if (!('IntersectionObserver' in window)) { cards.forEach(function (c) { if (c.offsetParent) cardOnce(c); }); return; }
-    var io = new IntersectionObserver(function (es) {
-      es.forEach(function (e) { if (e.isIntersecting && e.intersectionRatio >= 0.6) { io.unobserve(e.target); setTimeout(function () { cardOnce(e.target); }, 250); } });
-    }, { threshold: [0.6] });
-    cards.forEach(function (c) { io.observe(c); });
+  function lookupPictures(tries) {
+    var keys = {};
+    document.querySelectorAll('img[data-vimg]').forEach(function (im) { var st = im.getAttribute('data-vimg-st'); if (st === 'pending' || st === 'unknown') keys[im.getAttribute('data-vimg')] = 1; });
+    var list = Object.keys(keys).slice(0, 40);
+    if (!list.length || tries > 20) return;
+    var f = new FormData(); f.append('a', 'lookup'); f.append('csrf_token', <?= json_encode(csrf_token()) ?>); list.forEach(function (k) { f.append('names[]', k); });
+    fetch('ajax/vessel_image.php', { method: 'POST', body: f, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.ok) return;
+      Object.keys(j.states || {}).forEach(function (k) {
+        var st = j.states[k];
+        document.querySelectorAll('img[data-vimg]').forEach(function (im) {
+          if (im.getAttribute('data-vimg') !== k) return;
+          im.setAttribute('data-vimg-st', st.status);
+          if (st.status === 'found' && im.getAttribute('src') !== st.img) { im.src = st.img; im.parentNode.classList.add('real'); }
+        });
+      });
+      if (j.more) setTimeout(function () { lookupPictures(tries + 1); }, 400);
+    }).catch(function () {});
   }
 
   var h2cP = null;
@@ -1027,16 +1030,40 @@ include 'includes/header.php';
     if (navigator.share) { navigator.share({ text: text }).catch(function () {}); return; }
     window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
   }
+  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function waitImages(root) {
+    return Promise.all([].slice.call(root.querySelectorAll('img')).map(function (im) {
+      return im.complete && im.naturalWidth ? null : new Promise(function (r) { im.onload = im.onerror = function () { r(); }; setTimeout(r, 4000); });
+    }));
+  }
+  /** The picture that is shared: built from the card's own values, 720 px wide, drawn at 2×. */
+  function shareSheet(card) {
+    var q = function (s) { var e = card.querySelector(s); return e ? e.textContent.trim() : ''; };
+    var rows = [].slice.call(card.querySelectorAll('.pvz-i')).map(function (i) { return [i.querySelector('.pvz-l').textContent.trim(), i.querySelector('.pvz-t b').textContent.trim()]; });
+    var photo = card.querySelector('.pvz-photo img'), real = card.querySelector('.pvz-photo.real');
+    var upd = card.querySelector('.pvz-upd-text'), updHtml = upd ? upd.innerHTML : '<span style="color:#64748b">No updates recorded yet.</span>';
+    var now = new Date(), when = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    var el = document.createElement('div');
+    el.className = 'pvs-sheet';
+    el.innerHTML =
+      '<div class="pvs-top"><div class="pvs-brand"><img src="' + DEF + '" alt=""><div><b>YMR MARINE</b><span>Survey Status</span></div></div><span class="pvs-badge">Pending Survey</span></div>' +
+      '<div class="pvs-hero"><div class="pvs-photo' + (real ? ' real' : '') + '"><img src="' + esc(photo ? photo.getAttribute('src') : DEF) + '" alt=""></div>' +
+        '<div class="pvs-hero-t"><span>Vessel</span><b>' + esc(q('.pvz-name')) + '</b></div></div>' +
+      '<div class="pvs-grid">' + rows.map(function (r) { return '<div class="pvs-f"><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>'; }).join('') + '</div>' +
+      '<div class="pvs-upd"><span>Latest Updates</span><div>' + updHtml + '</div></div>' +
+      '<div class="pvs-foot"><span>Shared from YSMS</span><span>' + esc(when) + '</span></div>';
+    document.body.appendChild(el);
+    return el;
+  }
   function cardPng(card) {
     return loadH2C().then(function (h2c) {
-      card.setAttribute('data-pvx-capture', '1');
-      return h2c(card, {
-        scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)), backgroundColor: '#ffffff', useCORS: true, logging: false,
-        onclone: function (doc) { var c = doc.querySelector('[data-pvx-capture]'); if (c) c.classList.add('pvx-capture'); }
+      var el = shareSheet(card);
+      return waitImages(el).then(function () {
+        return h2c(el, { scale: 2, backgroundColor: null, useCORS: true, logging: false });
       }).then(function (canvas) {
-        card.removeAttribute('data-pvx-capture');
+        el.remove();
         return new Promise(function (res, rej) { canvas.toBlob(function (b) { b ? res(b) : rej(new Error('png')); }, 'image/png'); });
-      }, function (err) { card.removeAttribute('data-pvx-capture'); throw err; });
+      }, function (err) { el.remove(); throw err; });
     });
   }
 
@@ -1063,9 +1090,8 @@ include 'includes/header.php';
   }, true);
 
   function ready() {
-    startScroll();
-    // fetch the picture library in the background so Share is quick
-    if (document.querySelector('.vessel-list-container .cc-card.pvx') && window.matchMedia && matchMedia('(max-width: 991.98px)').matches) setTimeout(function () { loadH2C().catch(function () {}); }, 1500);
+    lookupPictures(0);
+    if (document.querySelector('.vessel-list-container .cc-card.pvz') && window.matchMedia && matchMedia('(max-width: 991.98px)').matches) setTimeout(function () { loadH2C().catch(function () {}); }, 1500);
   }
   if (document.readyState === 'complete') ready(); else window.addEventListener('load', ready);
 })();

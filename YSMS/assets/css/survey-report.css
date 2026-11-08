@@ -502,3 +502,18 @@ body.sr-pv-open .sr-pv-fab { display: none; }
     .sr-v4 .sr-gsec .sr-tgrid td.sr-calc { min-width: 0; }
     .sr-v4 .sr-gsec .sr-tgrid td.c-mt { min-width: 0; }
 }
+
+/* Survey Reports: Start Survey (find the vessel) */
+.srs-start h3 { font-size: 15px; margin: 0 0 10px; }
+.srs-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.srs-q { position: relative; flex: 1 1 260px; }
+.srs-q i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+.srs-q input { width: 100%; height: 42px; border: 1px solid #d5dfeb; border-radius: 10px; padding: 0 12px 0 34px; font-size: 14px; }
+.srs-res { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin-top: 10px; }
+.srs-item { display: flex; align-items: center; gap: 10px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px; text-decoration: none; color: #0f172a; background: #fff; }
+.srs-item:hover { border-color: #93c5fd; background: #f8fbff; }
+.srs-item > i:first-child { color: #1d4ed8; }
+.srs-item span { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.srs-item b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srs-item small { font-size: 12px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srs-item > i:last-child { color: #94a3b8; font-size: 12px; }

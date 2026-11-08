@@ -607,3 +607,27 @@ computer and on a phone:
 report type (active templates only) and a report not tied to a vessel is made
 (`a=new`, `srNew`) and opened. Super Admin sees no buttons. Opening the page makes nothing by
 itself.
+
+## Menu entry, vessel pictures (v4.4)
+
+**Survey Reports in the menu.** Admin and Surveyor have "Survey Reports" in the sidebar (computer)
+and the drawer (phone). The vessel page no longer has the Survey Report card. On Survey Reports:
+**Start Survey** — search the pending vessels (name / report no.) → the vessel's Start / Resume
+card (`survey_reports.php?survey_id=…`, same card, with the Admin's tank history), or **Report
+without a vessel** (`survey_report.php`). The card is still on the Pending Report page.
+
+**Vessel pictures (Pending Vessels, mobile card and desktop table).** `includes/vessel_image.php`,
+`ajax/vessel_image.php`, table `vessel_images` (made on first use).
+- Assigning a vessel queues its name. When the list is shown, names not looked up yet are asked of
+  Gemini with Google Search (2 per request): a direct photo link of that ship.
+- The server checks the picture itself before keeping it: https only, public address (no private /
+  metadata addresses; the checked address is the one connected to), at most 3 MB, a real JPEG /
+  PNG / WebP / GIF of at least 120 × 80.
+- Found → shown through `ajax/vessel_image.php?a=img` (kept a week in the temp folder). Not found →
+  the YMR ship `assets/images/ymr-ship.png`; asked again after 30 days.
+- `YSMS_VI_ALLOW_PRIVATE=1` lets the test servers use local addresses — never set it in production.
+
+**Pending Vessels mobile card.** Cut text no longer scrolls. Latest update: the whole text, at
+most 4 lines then "…". Share: a designed picture (YMR header, vessel photo, details, latest update,
+date) through the phone's share sheet; downloaded where pictures cannot be shared; the details as
+text if the picture cannot be made.
