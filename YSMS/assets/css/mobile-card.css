@@ -40,3 +40,36 @@
     .cc-card .vessel-live-status-bar { margin: 4px -14px -10px !important; width: calc(100% + 28px) !important; box-sizing: border-box; border-radius: 0 0 20px 20px; }
     @media (max-width: 360px) { .cc-row { grid-template-columns: 40% 12px minmax(0, 1fr); } .cc-k { gap: 7px; } .cc-k span { font-size: 12px; } .cc-name { font-size: 15.5px; } }
 }
+
+/* Pending Vessels mobile card (v2): tinted header band with ship tile, name and a green share
+   button; two-column label/value grid; status pill; cream footer with the latest update and Edit. */
+@media (max-width: 991.98px) {
+    .vessel-list-container .vessel-card.cc-card.pvc { padding: 10px !important; border-radius: 22px !important; border: 1px solid #e8edf4 !important; box-shadow: 0 8px 22px rgba(15,23,42,.07) !important; overflow: hidden; }
+    .pvc-head { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 10px; border-radius: 16px; background: linear-gradient(90deg, #eef4fc 0%, #e6effa 100%); min-width: 0; }
+    .pvc-num { display: none !important; }
+    .pvc-ship { flex: none; width: 46px; height: 46px; border-radius: 14px; background: #d1fae5; color: #047857; font-size: 19px; display: flex; align-items: center; justify-content: center; }
+    .pvc-name { flex: 1 1 auto; min-width: 0; font-size: 18px; font-weight: 800; color: #0b1324; letter-spacing: .01em; text-transform: uppercase; line-height: 1.2; overflow-wrap: anywhere; }
+    .pvc-send { flex: none; width: 44px; height: 44px; border: none; border-radius: 13px; background: linear-gradient(180deg, #2fd12f 0%, #16b316 100%); color: #fff; font-size: 17px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(22,179,22,.3); cursor: pointer; }
+    .pvc-send:active { transform: scale(.96); }
+    .pvc-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 12px; padding: 16px 6px 12px; }
+    .pvc-f { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+    .pvc-f > i { flex: none; width: 20px; text-align: center; color: #1D63ED; font-size: 17px; margin-top: 2px; }
+    .pvc-t { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+    .pvc-l { font-size: 12.5px; font-weight: 600; color: #64748b; line-height: 1.2; }
+    .pvc-v { font-size: 13.5px; font-weight: 800; color: #0b1324; text-transform: uppercase; line-height: 1.25; overflow-wrap: anywhere; }
+    .pvc-v.pvc-date { text-transform: none; font-size: 14px; }
+    .pvc-type { display: inline-block; max-width: 100%; background: #3f8a1c; color: #fff; border-radius: 12px; padding: 4px 10px; font-size: 11px; font-weight: 800; text-transform: uppercase; line-height: 1.3; overflow-wrap: anywhere; }
+    .pvc-port { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; background: #fff; color: #15803d; border: 2px solid #4ADE80; border-radius: 14px; padding: 2px 11px; font-size: 12.5px; font-weight: 800; text-transform: uppercase; line-height: 1.3; overflow-wrap: anywhere; }
+    .pvc-port i { font-size: 11px; }
+    .pvc-status-row { grid-column: 1 / -1; align-items: center; gap: 12px; }
+    .pvc-status-row > i { margin-top: 0; }
+    .pvc-status-row .pvc-l { font-size: 14px; color: #475569; }
+    .pvc-status { display: inline-flex; align-items: center; gap: 7px; border: 2px solid #FB923C; color: #EA580C; background: #fff; border-radius: 999px; padding: 4px 14px; font-size: 13px; font-weight: 800; margin-left: 8px; }
+    .pvc-status i { font-size: 12px; }
+    .pvc-note { padding: 0 6px 10px; }
+    .cc-card.pvc .vessel-live-status-bar { margin: 0 !important; width: 100% !important; border-radius: 16px !important; background: #fdf6e9 !important; border: none !important; padding: 12px 12px 12px 14px !important; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .cc-card.pvc .pvc-noupd { font-size: 13px !important; font-style: normal; color: #1e293b !important; font-weight: 600; }
+    .cc-card.pvc .pvc-noupd i { color: #f5b301 !important; margin-right: 4px; }
+    .cc-card.pvc .pv-edit-btn { display: inline-flex; align-items: center; gap: 7px; flex: none; margin: 0; background: #fff !important; color: #1D63ED !important; border: 2px solid #1D63ED !important; border-radius: 14px !important; padding: 7px 18px !important; font-size: 14px !important; font-weight: 800; text-decoration: none; }
+    @media (max-width: 360px) { .pvc-name { font-size: 16px; } .pvc-grid { gap: 14px 8px; } .pvc-v { font-size: 12.5px; } .pvc-f { gap: 8px; } }
+}
