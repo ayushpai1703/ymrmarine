@@ -965,16 +965,103 @@ include 'includes/header.php';
 
 
 <script>
-// Pending Vessels mobile card: the share button sends the vessel's details
-// (the phone's share sheet, or WhatsApp where that is not available).
-document.addEventListener('click', function (e) {
-  var btn = e.target.closest && e.target.closest('[data-pv-share]');
-  if (!btn) return;
-  e.preventDefault(); e.stopPropagation();
-  var text = btn.getAttribute('data-share-text') || '';
-  if (navigator.share) { navigator.share({ text: text }).catch(function () {}); return; }
-  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
-}, true);
+// Pending Vessels mobile cards
+// 1) Text cut with "…" (vessel, client, survey type, port, agent, ...) scrolls once to show
+//    the whole text, the first time the card is on screen after the page opens.
+// 2) Share: the card is sent as a picture (full text, no buttons) through the phone's share
+//    sheet; where a picture cannot be shared it is downloaded; if the picture cannot be made,
+//    the vessel's details are shared as text (WhatsApp where there is no share sheet).
+(function () {
+  var H2C = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+  var FIT = '.pvx-name, .pvx-client, .pvx-type, .pvx-i > span';
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function scrollOnce(el) {
+    var dist = el.scrollWidth - el.clientWidth;
+    if (dist <= 1 || !el.animate) return;
+    var html = el.innerHTML;
+    el.innerHTML = '<span class="pvx-mq">' + html + '</span>';
+    el.classList.add('pvx-scrolling');
+    var inner = el.firstChild, ms = Math.max(1200, dist * 28);
+    var anim = inner.animate([
+      { transform: 'translateX(0)' }, { transform: 'translateX(0)', offset: 0.15 },
+      { transform: 'translateX(' + (-dist) + 'px)', offset: 0.55 }, { transform: 'translateX(' + (-dist) + 'px)', offset: 0.75 },
+      { transform: 'translateX(0)' }
+    ], { duration: ms + 1600, easing: 'ease-in-out' });
+    anim.onfinish = function () { el.innerHTML = html; el.classList.remove('pvx-scrolling'); };
+  }
+  function cardOnce(card) {
+    if (card.__pvxDone) return; card.__pvxDone = true;
+    card.querySelectorAll(FIT).forEach(scrollOnce);
+  }
+  function startScroll() {
+    if (reduce) return;
+    var cards = [].slice.call(document.querySelectorAll('.vessel-list-container .cc-card.pvx'));
+    if (!cards.length) return;
+    if (!('IntersectionObserver' in window)) { cards.forEach(function (c) { if (c.offsetParent) cardOnce(c); }); return; }
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting && e.intersectionRatio >= 0.6) { io.unobserve(e.target); setTimeout(function () { cardOnce(e.target); }, 250); } });
+    }, { threshold: [0.6] });
+    cards.forEach(function (c) { io.observe(c); });
+  }
+
+  var h2cP = null;
+  function loadH2C() {
+    if (window.html2canvas) return Promise.resolve(window.html2canvas);
+    if (!h2cP) h2cP = new Promise(function (res, rej) {
+      var sc = document.createElement('script'); sc.src = H2C; sc.async = true;
+      sc.onload = function () { window.html2canvas ? res(window.html2canvas) : rej(new Error('html2canvas')); };
+      sc.onerror = function () { h2cP = null; rej(new Error('html2canvas')); };
+      document.head.appendChild(sc);
+    });
+    return h2cP;
+  }
+  function shareText(text) {
+    if (navigator.share) { navigator.share({ text: text }).catch(function () {}); return; }
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+  }
+  function cardPng(card) {
+    return loadH2C().then(function (h2c) {
+      card.setAttribute('data-pvx-capture', '1');
+      return h2c(card, {
+        scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)), backgroundColor: '#ffffff', useCORS: true, logging: false,
+        onclone: function (doc) { var c = doc.querySelector('[data-pvx-capture]'); if (c) c.classList.add('pvx-capture'); }
+      }).then(function (canvas) {
+        card.removeAttribute('data-pvx-capture');
+        return new Promise(function (res, rej) { canvas.toBlob(function (b) { b ? res(b) : rej(new Error('png')); }, 'image/png'); });
+      }, function (err) { card.removeAttribute('data-pvx-capture'); throw err; });
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-pv-share]');
+    if (!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    if (btn.classList.contains('busy')) return;
+    var text = btn.getAttribute('data-share-text') || '';
+    var card = btn.closest('.cc-card');
+    var name = ((card && card.querySelector('.pvx-name') || {}).textContent || 'vessel').trim();
+    if (!card) return shareText(text);
+    btn.classList.add('busy');
+    cardPng(card).then(function (blob) {
+      var fname = name.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') + '.png';
+      var file = new File([blob], fname || 'vessel.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        return navigator.share({ files: [file], title: name }).catch(function (err) { if (err && err.name !== 'AbortError') throw err; });
+      }
+      var url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    }).catch(function () { shareText(text); }).then(function () { btn.classList.remove('busy'); });
+  }, true);
+
+  function ready() {
+    startScroll();
+    // fetch the picture library in the background so Share is quick
+    if (document.querySelector('.vessel-list-container .cc-card.pvx') && window.matchMedia && matchMedia('(max-width: 991.98px)').matches) setTimeout(function () { loadH2C().catch(function () {}); }, 1500);
+  }
+  if (document.readyState === 'complete') ready(); else window.addEventListener('load', ready);
+})();
 </script>
 <script>
 (function () {

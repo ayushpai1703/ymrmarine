@@ -75,5 +75,16 @@
     .pvx-update-t small { display: none; }
     .pvx-none { color: #64748b; }
     .pvx-edit { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #fff; color: #1D63ED; display: flex; align-items: center; justify-content: center; font-size: 12px; text-decoration: none; box-shadow: 0 1px 3px rgba(15,23,42,.12); }
+    .pvx-scrolling { text-overflow: clip !important; }
+    .pvx-mq { display: inline-block; white-space: nowrap; will-change: transform; }
+    .pvx-share.busy { opacity: .7; pointer-events: none; }
+    .pvx-share.busy i { animation: pvxSpin .8s linear infinite; }
+    @keyframes pvxSpin { to { transform: rotate(360deg); } }
+    /* the picture made for Share: whole text, no buttons */
+    .cc-card.pvx.pvx-capture { box-shadow: none !important; margin: 0 !important; }
+    .pvx-capture .pvx-share, .pvx-capture .pvx-edit { display: none !important; }
+    .pvx-capture .pvx-name, .pvx-capture .pvx-client, .pvx-capture .pvx-i span, .pvx-capture .pvx-update-t { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+    .pvx-capture .pvx-type { white-space: normal; max-width: 42%; overflow: visible; text-align: center; border-radius: 14px; }
+    .pvx-capture .pvx-update { border-radius: 18px; }
     @media (max-width: 370px) { .pvx-type { max-width: 34%; font-size: 10.5px; padding: 4px 8px; } .pvx-name { font-size: 14.5px; } .pvx-i { font-size: 11px; gap: 5px; } .pvx-i i { width: 13px; font-size: 12px; } }
 }
