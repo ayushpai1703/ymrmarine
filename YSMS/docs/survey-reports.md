@@ -631,3 +631,10 @@ without a vessel** (`survey_report.php`). The card is still on the Pending Repor
 most 4 lines then "…". Share: a designed picture (YMR header, vessel photo, details, latest update,
 date) through the phone's share sheet; downloaded where pictures cannot be shared; the details as
 text if the picture cannot be made.
+
+**Pending Reports mobile card (reports.php).** The same card as Pending Vessels in yellow
+(`#ffc107` outline, bar and icons): vessel picture · name · share; Client / Type of Survey, Port /
+Agent, Survey Completed Date (or the chosen date) / Surveyor (full access only, as before); no
+status row and no Edit button on the card (open the report). Share sends the picture with
+"Pending Report" in yellow. The card script is shared: `assets/js/vessel-cards.js`
+(`window.VC_CFG = {csrf, def}`; a card may set `data-pv-badge` / `data-pv-theme`).

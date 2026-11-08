@@ -20,6 +20,10 @@ $is_full_access = in_array($role, ['Admin', 'Super Admin'], true);
 $rt = rtState($_GET, 'survey', $is_full_access);
 [$rtWhereSql, $rtParams] = rtWhere($rt, $rtScopeWhere, $rtScopeParams);
 [$rtTotal, $rtRows, $rtPage, $rtPages] = rtFetchPage($db, $rt, $rtWhereSql, $rtParams);
+// vessel pictures for the mobile cards (AI search, includes/vessel_image.php); the YMR ship until one is found
+require_once __DIR__ . '/includes/vessel_image.php';
+$viStates = [];
+try { $viStates = viStates($db, array_map(fn($x) => (string)($x['vessel_name'] ?? ''), $rtRows)); } catch (Throwable $e) { error_log('vessel pictures: ' . $e->getMessage()); }
 $rt['page'] = $rtPage;
 $rtOffset = ($rtPage - 1) * RT_PER_PAGE;
 $rtOpts = rtOptions($db, $rtScopeWhere, $rtScopeParams, $is_full_access);
@@ -529,7 +533,24 @@ include 'includes/header.php';
             $typeLabel = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
             $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
         ?>
-        <div class="vessel-card cc-card" onclick="location.href='report_detail.php?id=<?= (int)$survey['id'] ?>'" data-survey-card
+        <?php
+            $prTc = static function ($x) { $x = trim((string)$x); return $x === '' ? '' : ucwords(strtolower($x), " -/(.&'"); };
+            $rtD = rtRowDate($survey, $rt['date']);
+            $prDate = $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—';
+            $prDateLabel = $rt['date'] === 'survey' ? 'Survey Completed Date' : rtDateShort($rt['date']);
+            $viK = viKey($vessel_name); $viS = $viStates[$viK] ?? ['status' => 'unknown', 'img' => VI_DEFAULT];
+            $prShare = implode("\n", array_filter([
+                $vessel_name,
+                'Client: ' . (($survey['company_name'] ?? '') ?: '—'),
+                'Type of Survey: ' . $typeLabel,
+                'Port: ' . ($survey['port_name'] ?? 'N/A'),
+                'Agent: ' . (($survey['agent_name'] ?? '') ?: '—'),
+                $prDateLabel . ': ' . $prDate,
+                $is_full_access ? 'Surveyor: ' . $surveyorNames : null,
+                'Status: Pending Report',
+            ]));
+        ?>
+        <div class="vessel-card cc-card pvz pvz-yellow" data-pv-badge="Pending Report" data-pv-theme="yellow" onclick="location.href='report_detail.php?id=<?= (int)$survey['id'] ?>'" data-survey-card
              data-name="<?= sanitize(strtolower($vessel_name)) ?>"
              data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>"
              data-place="<?= sanitize($survey['port_name'] ?? '') ?>"
@@ -537,28 +558,23 @@ include 'includes/header.php';
              data-surveyor="<?= sanitize($surveyorNames) ?>"
              data-status="pending"
              data-date="<?= surveyCompletedTs($survey) ?>"
-             data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '']))) ?>">
-            <div class="cc-head">
-                <span class="cc-num" data-testid="pv-row-num"><?= $rtOffset + $rtI + 1 ?></span>
-                <span class="cc-ship"><i class="fa-solid fa-ship"></i></span>
-                <span class="cc-div" aria-hidden="true"></span>
-                <span class="cc-name"><?= sanitize($vessel_name) ?></span>
+             data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '']))) ?>"
+             data-testid="pending-report-card-<?= (int)$survey['id'] ?>">
+            <span class="cc-num" data-testid="pv-row-num" hidden><?= $rtOffset + $rtI + 1 ?></span>
+            <div class="pvz-head">
+                <span class="pvz-photo<?= $viS['status'] === 'found' ? ' real' : '' ?>"><img src="<?= sanitize($viS['img']) ?>" alt="" width="64" height="54" data-vimg="<?= sanitize($viK) ?>" data-vimg-st="<?= sanitize($viS['status']) ?>" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')" data-testid="pending-report-photo-<?= (int)$survey['id'] ?>"></span>
+                <span class="pvz-bar" aria-hidden="true"></span>
+                <span class="cc-name pvz-name"><?= sanitize($vessel_name) ?></span>
+                <button type="button" class="pvz-share" data-pv-share data-share-text="<?= sanitize($prShare) ?>" aria-label="Share vessel details" title="Share" data-testid="pending-report-share-<?= (int)$survey['id'] ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M8 11H6.5A2.5 2.5 0 0 0 4 13.5v5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-5A2.5 2.5 0 0 0 17.5 11H16"/></svg></button>
             </div>
-            <div class="cc-rows">
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user"></i><span>Client</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div></div>
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-people-group"></i><span>Agent</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b></div></div>
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-layer-group"></i><span>Survey Type</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-type"><?= sanitize($typeLabel) ?></span></div></div>
+            <div class="pvz-grid<?= $is_full_access ? '' : ' pvz-no-surveyor' ?>">
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17l2 2a1 1 0 0 0 3-3"/><path d="M14 14l2.5 2.5a1 1 0 0 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="M21 3l1 11h-2"/><path d="M3 3L2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></svg><div class="pvz-t"><span class="pvz-l">Client</span><b><?= sanitize($prTc($survey['company_name'] ?? '')) ?: '—' ?></b></div></div>
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.5"/><rect x="9" y="2.5" width="6" height="3.5" rx="1"/><path d="M11 10.5h5M11 14h5M11 17.5h5"/><circle cx="8.3" cy="10.5" r=".6"/><circle cx="8.3" cy="14" r=".6"/><circle cx="8.3" cy="17.5" r=".6"/></svg><div class="pvz-t"><span class="pvz-l">Type of Survey</span><b><?= sanitize($typeLabel) ?></b></div></div>
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><div class="pvz-t"><span class="pvz-l">Port</span><b><?= sanitize($prTc($survey['port_name'] ?? '')) ?: 'N/A' ?></b></div></div>
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="3"/><circle cx="5.5" cy="9.5" r="2.3"/><circle cx="18.5" cy="9.5" r="2.3"/><path d="M7 20v-1.5c0-2.8 2.2-4.8 5-4.8s5 2 5 4.8V20zM2 19.5v-1c0-2 1.4-3.4 3.5-3.4M22 19.5v-1c0-2-1.4-3.4-3.5-3.4"/></svg><div class="pvz-t"><span class="pvz-l">Agent</span><b><?= sanitize($prTc($survey['agent_name'] ?? '')) ?: '—' ?></b></div></div>
+                <div class="pvz-i" data-testid="pr-completed-date"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><div class="pvz-t"><span class="pvz-l"><?= sanitize($prDateLabel) ?></span><b><?= sanitize($prDate) ?></b></div></div>
                 <?php if ($is_full_access): ?>
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user-tie"></i><span>Surveyor</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($surveyorNames) ?></b></div></div>
-                <?php endif; ?>
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-location-dot"></i><span>Port</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-port"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div></div>
-                <?php $rtD = rtRowDate($survey, $rt['date']); ?>
-                <div class="cc-row" data-testid="pr-completed-date"><div class="cc-k"><i class="fa-solid fa-calendar-check"></i><span><?= sanitize($rt['date'] === 'survey' ? 'Survey Completed' : rtDateShort($rt['date'])) ?></span></div><span class="cc-c">:</span><div class="cc-v"><b class="cc-date"><?= $rtD !== '' ? date('d M Y', strtotime($rtD)) : '—' ?></b></div></div>
-                <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-circle-check"></i><span>Status</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-status report"><i class="fa-solid fa-hourglass-half"></i> Pending Report</span></div></div>
-                <?php if (($_SESSION['role'] ?? '') === 'Admin'): ?>
-                <div class="cc-foot">
-                    <a href="report_detail.php?id=<?= (int)$survey['id'] ?>" onclick="event.stopPropagation();" data-testid="pr-edit-<?= (int)$survey['id'] ?>" class="cc-edit"><i class="fa-solid fa-pen"></i> Edit</a>
-                </div>
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><div class="pvz-t"><span class="pvz-l">Surveyor</span><b><?= sanitize($prTc($surveyorNames)) ?></b></div></div>
                 <?php endif; ?>
             </div>
         </div>
@@ -687,4 +703,6 @@ include 'includes/header.php';
 <?= rtMenus($rtBase, $rt, $rtOpts, $rtYears, $is_full_access) ?>
 <script src="assets/js/report-table.js?v=<?= @filemtime(__DIR__ . '/assets/js/report-table.js') ?>"></script>
 
+<script>window.VC_CFG = <?= json_encode(['csrf' => csrf_token(), 'def' => VI_DEFAULT]) ?>;</script>
+<script src="assets/js/vessel-cards.js?v=<?= @filemtime(__DIR__ . '/assets/js/vessel-cards.js') ?>"></script>
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>
