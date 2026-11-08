@@ -88,3 +88,44 @@
     .pvx-capture .pvx-update { border-radius: 18px; }
     @media (max-width: 370px) { .pvx-type { max-width: 34%; font-size: 10.5px; padding: 4px 8px; } .pvx-name { font-size: 14.5px; } .pvx-i { font-size: 11px; gap: 5px; } .pvx-i i { width: 13px; font-size: 12px; } }
 }
+
+/* Pending Vessels list card (v4): blue outline; ship photo · bar · name / client · share ·
+   survey-type chip · chevron; Port / Surveyor / Appointment / Agent as label-over-value in a
+   2 × 2 grid with thin dividers; "Latest update" band only when there is one. */
+@media (max-width: 991.98px) {
+    .vessel-list-container .vessel-card.cc-card.pvy { padding: 12px 14px 12px !important; border-radius: 24px !important; border: 1.6px solid #3b9be6 !important; box-shadow: 0 6px 16px rgba(30,99,237,.08) !important; background: #fff !important; }
+    .cc-card.pvy .cc-num { display: none !important; }
+    .pvy-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .pvy-photo { flex: none; width: 60px; height: 48px; border-radius: 10px; overflow: hidden; display: block; }
+    .pvy-photo img { width: 100%; height: 100%; display: block; object-fit: cover; }
+    .pvy-bar { flex: none; width: 2.5px; height: 30px; border-radius: 2px; background: #1e4fa8; margin: 0 1px; }
+    .pvy-title { flex: 1 1 0; min-width: 96px; display: flex; flex-direction: column; gap: 2px; }
+    .pvy-name { font-size: 16.5px; font-weight: 800; color: #0b1324; text-transform: uppercase; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.01em; }
+    .pvy-client { font-size: 13.5px; font-weight: 500; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pvy-share { flex: none; width: 26px; height: 34px; padding: 0; border: none; background: none; color: #111827; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .pvy-share svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .pvy-share.busy { opacity: .5; pointer-events: none; }
+    .pvy-type { flex: 0 1 auto; max-width: 26%; min-width: 0; background: #dfe8fb; color: #1d3fd6; border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pvy-chev { flex: none; width: 14px; color: #1d4ed8; display: flex; }
+    .pvy-chev svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+    .pvy-info { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 6px 2px 0; }
+    .pvy-i { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 8px 8px 4px; position: relative; }
+    .pvy-i:nth-child(even) { padding-left: 14px; }
+    .pvy-i:nth-child(odd)::after { content: ""; position: absolute; right: 0; top: 12px; bottom: 12px; width: 1.5px; background: #dfe5ee; }
+    .pvy-i:nth-child(odd):last-child::after { display: none; }
+    .pvy-i:nth-child(n+3) { border-top: 1.5px solid #e6ebf3; }
+    .pvy-i > svg { flex: none; width: 24px; height: 24px; fill: none; stroke: #1D63ED; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .pvy-t { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+    .pvy-l { font-size: 12px; color: #64748b; font-weight: 500; line-height: 1.2; }
+    .pvy-t b { font-size: 14px; font-weight: 700; color: #0b1324; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pvy-note { padding: 6px 2px 0; }
+    .pvy-update { margin-top: 10px; background: #e8eefb; border-radius: 12px; padding: 9px 14px; font-size: 13.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pvy-ul { color: #475569; font-weight: 600; }
+    .pvy-update b { color: #0b1324; font-weight: 800; }
+    /* the picture made for Share: whole text, no buttons */
+    .pvx-capture.pvy { border-color: #3b9be6 !important; }
+    .pvx-capture .pvy-share, .pvx-capture .pvy-chev { display: none !important; }
+    .pvx-capture .pvy-name, .pvx-capture .pvy-client, .pvx-capture .pvy-t b, .pvx-capture .pvy-update { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+    .pvx-capture .pvy-type { white-space: normal; max-width: 40%; overflow: visible; text-align: center; border-radius: 14px; }
+    @media (max-width: 370px) { .pvy-photo { width: 52px; height: 42px; } .pvy-name { font-size: 15px; } .pvy-client { font-size: 12.5px; } .pvy-type { font-size: 10.5px; padding: 5px 8px; max-width: 24%; } .pvy-title { min-width: 84px; } .pvy-t b { font-size: 13px; } .pvy-i { gap: 7px; } .pvy-i > svg { width: 21px; height: 21px; } .pvy-head { gap: 7px; } }
+}

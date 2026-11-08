@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="132" height="104" viewBox="0 0 132 104" role="img" aria-label="Ship at sea">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f8fd8"/><stop offset=".6" stop-color="#9fd0f2"/><stop offset="1" stop-color="#e3f3fb"/></linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f74b8"/><stop offset="1" stop-color="#0b4a86"/></linearGradient>
+  </defs>
+  <rect width="132" height="104" fill="url(#sky)"/>
+  <ellipse cx="28" cy="22" rx="18" ry="5" fill="#fff" opacity=".7"/>
+  <ellipse cx="96" cy="14" rx="22" ry="5" fill="#fff" opacity=".55"/>
+  <rect y="62" width="132" height="42" fill="url(#sea)"/>
+  <path d="M0 70 Q16 67 32 70 T64 70 T96 70 T132 70" stroke="#7cc0ec" stroke-width="1.2" fill="none" opacity=".6"/>
+  <path d="M0 86 Q16 83 32 86 T64 86 T96 86 T132 86" stroke="#7cc0ec" stroke-width="1.2" fill="none" opacity=".45"/>
+  <!-- hull -->
+  <path d="M10 58 L118 52 L112 72 L22 76 Z" fill="#1d2f6f"/>
+  <path d="M15 69 L114 64.5 L112 72 L22 76 Z" fill="#d93a3a"/>
+  <path d="M10 58 L118 52 L117 55 L11 61 Z" fill="#f2f5fa"/>
+  <!-- containers -->
+  <g stroke="#0f172a" stroke-width=".4">
+    <rect x="34" y="48" width="10" height="9" fill="#e5484d"/><rect x="44" y="47.5" width="10" height="9" fill="#2bb673"/>
+    <rect x="54" y="47" width="10" height="9" fill="#f59e0b"/><rect x="64" y="46.5" width="10" height="9" fill="#3b82f6"/>
+    <rect x="74" y="46" width="10" height="9" fill="#e5484d"/><rect x="84" y="45.5" width="10" height="9" fill="#2bb673"/>
+    <rect x="94" y="45" width="10" height="9" fill="#f59e0b"/>
+    <rect x="44" y="40" width="10" height="7.5" fill="#3b82f6"/><rect x="54" y="39.5" width="10" height="7.5" fill="#e5484d"/>
+    <rect x="64" y="39" width="10" height="7.5" fill="#2bb673"/><rect x="74" y="38.5" width="10" height="7.5" fill="#f59e0b"/>
+    <rect x="84" y="38" width="10" height="7.5" fill="#3b82f6"/>
+  </g>
+  <!-- bridge -->
+  <rect x="16" y="38" width="14" height="20" fill="#f8fafc" stroke="#94a3b8" stroke-width=".5"/>
+  <rect x="14" y="36" width="18" height="3" fill="#e2e8f0"/>
+  <rect x="18" y="41" width="10" height="2.4" fill="#1e3a5f"/>
+  <rect x="20" y="30" width="3" height="6" fill="#334155"/>
+  <!-- wake -->
+  <path d="M112 72 Q122 74 130 72" stroke="#fff" stroke-width="1.5" fill="none" opacity=".8"/>
+  <path d="M22 76 Q60 79 112 74" stroke="#fff" stroke-width="1" fill="none" opacity=".5"/>
+  <!-- plane -->
+  <path d="M98 22 L112 17 L113 18.5 L100 24 Z M105 19.5 L108 14 L109.5 14.5 L108 19 Z" fill="#e5484d"/>
+</svg>

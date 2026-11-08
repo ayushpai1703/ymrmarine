@@ -694,7 +694,7 @@ include 'includes/header.php';
                         $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
                         $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                     ?>
-                    <div class="vessel-card vessel-card--stacked cc-card pvx" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
+                    <div class="vessel-card vessel-card--stacked cc-card pvx pvy" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
                         <?php
                             $pvType = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A');
                             $pvAppt = !empty($survey['appointment_date']) ? date('d M Y', strtotime($survey['appointment_date'])) : '—';
@@ -710,41 +710,36 @@ include 'includes/header.php';
                                 !empty($survey['custom_live_status']) ? 'Latest update: ' . $survey['custom_live_status'] : null,
                             ]));
                         ?>
+                        <?php
+                            // Names as written (Title Case) for client / agent / port / surveyor; vessel name stays in capitals.
+                            $pvTc = static function ($v) { $v = trim((string)$v); return $v === '' ? '' : ucwords(strtolower($v), " -/(.&'"); };
+                        ?>
                         <span class="cc-num" data-row-num data-testid="pv-row-num" hidden></span>
-                        <div class="pvx-head">
-                            <span class="pvx-ship"><img src="assets/images/ship-tile.svg" alt="" width="44" height="44"></span>
-                            <div class="pvx-title">
-                                <span class="cc-name pvx-name"><?= sanitize($vessel_name) ?></span>
-                                <span class="pvx-client"><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></span>
+                        <div class="pvy-head">
+                            <span class="pvy-photo"><img src="assets/images/ship-photo.svg" alt="" width="66" height="52"></span>
+                            <span class="pvy-bar" aria-hidden="true"></span>
+                            <div class="pvy-title">
+                                <span class="cc-name pvy-name"><?= sanitize($vessel_name) ?></span>
+                                <span class="pvy-client"><?= sanitize($pvTc($survey['company_name'] ?? '')) ?: '—' ?></span>
                             </div>
-                            <span class="pvx-type" title="<?= sanitize($pvType) ?>"><?= sanitize($pvType) ?></span>
-                            <button type="button" class="pvx-share" data-pv-share data-share-text="<?= sanitize($pvShare) ?>" aria-label="Share vessel details" title="Share" data-testid="pending-vessel-share-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-share"></i></button>
+                            <button type="button" class="pvy-share" data-pv-share data-share-text="<?= sanitize($pvShare) ?>" aria-label="Share vessel details" title="Share" data-testid="pending-vessel-share-<?= (int)$survey['id'] ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M8 11H6.5A2.5 2.5 0 0 0 4 13.5v5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-5A2.5 2.5 0 0 0 17.5 11H16"/></svg></button>
+                            <span class="pvy-type" title="<?= sanitize($pvType) ?>"><?= sanitize($pvType) ?></span>
+                            <span class="pvy-chev" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></span>
                         </div>
-                        <div class="pvx-info">
-                            <div class="pvx-i"><i class="fa-solid fa-location-dot"></i><span data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div>
+                        <div class="pvy-info<?= $is_full_access ? '' : ' pvy-3' ?>">
+                            <div class="pvy-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><div class="pvy-t"><span class="pvy-l">Port</span><b data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><?= sanitize($pvTc($survey['port_name'] ?? '')) ?: 'N/A' ?></b></div></div>
                             <?php if ($is_full_access): ?>
-                            <div class="pvx-i"><i class="fa-regular fa-user"></i><span><?= sanitize($surveyorNames) ?></span></div>
+                            <div class="pvy-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><div class="pvy-t"><span class="pvy-l">Surveyor</span><b><?= sanitize($pvTc($surveyorNames)) ?></b></div></div>
                             <?php endif; ?>
-                            <div class="pvx-i"><i class="fa-regular fa-calendar"></i><span>Appointment <?= sanitize($pvAppt) ?></span></div>
-                            <div class="pvx-i pvx-agent"><i class="fa-regular fa-building"></i><span><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></span></div>
+                            <div class="pvy-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><div class="pvy-t"><span class="pvy-l">Appointment</span><b><?= sanitize($pvAppt) ?></b></div></div>
+                            <div class="pvy-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="3"/><circle cx="5.5" cy="9.5" r="2.3"/><circle cx="18.5" cy="9.5" r="2.3"/><path d="M7 20v-1.5c0-2.8 2.2-4.8 5-4.8s5 2 5 4.8V20zM2 19.5v-1c0-2 1.4-3.4 3.5-3.4M22 19.5v-1c0-2-1.4-3.4-3.5-3.4"/></svg><div class="pvy-t"><span class="pvy-l">Agent</span><b><?= sanitize($pvTc($survey['agent_name'] ?? '')) ?: '—' ?></b></div></div>
                         </div>
-                        <div class="pvx-status"><i class="fa-solid fa-clipboard-list"></i><span><b>Status :</b> <em>Survey Pending</em></span></div>
                         <?php if ($needsSurveyor): ?>
-                        <div class="pvx-note"><span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span></div>
+                        <div class="pvy-note"><span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span></div>
                         <?php endif; ?>
-                        <div class="pvx-update">
-                            <div class="pvx-update-t">
-                                <?php if (!empty($survey['custom_live_status'])): ?>
-                                    <span class="pvx-ul">Latest update ·</span> <b><?= sanitize($survey['custom_live_status']) ?></b>
-                                    <small><?= !empty($survey['status_updated_at']) ? formatLatestUpdateWhen($survey['status_updated_at']) : '' ?><?= !empty($survey['modifier_name']) ? ' · ' . sanitize($survey['modifier_name']) : '' ?></small>
-                                <?php else: ?>
-                                    <span class="pvx-ul">Latest update ·</span> <span class="pvx-none">No updates recorded yet</span>
-                                <?php endif; ?>
-                            </div>
-                            <?php if ($can_edit): ?>
-                                <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="pvx-edit" onclick="event.stopPropagation();" aria-label="Edit" title="Edit" data-testid="pending-vessel-edit-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-pen"></i></a>
-                            <?php endif; ?>
-                        </div>
+                        <?php if (!empty($survey['custom_live_status'])): ?>
+                        <div class="pvy-update" data-testid="pending-vessel-update-<?= (int)$survey['id'] ?>"><span class="pvy-ul">Latest update ·</span> <b><?= sanitize($survey['custom_live_status']) ?></b></div>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -973,7 +968,7 @@ include 'includes/header.php';
 //    the vessel's details are shared as text (WhatsApp where there is no share sheet).
 (function () {
   var H2C = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-  var FIT = '.pvx-name, .pvx-client, .pvx-type, .pvx-i > span';
+  var FIT = '.pvy-name, .pvy-client, .pvy-type, .pvy-t > b';
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function scrollOnce(el) {
@@ -1040,7 +1035,7 @@ include 'includes/header.php';
     if (btn.classList.contains('busy')) return;
     var text = btn.getAttribute('data-share-text') || '';
     var card = btn.closest('.cc-card');
-    var name = ((card && card.querySelector('.pvx-name') || {}).textContent || 'vessel').trim();
+    var name = ((card && card.querySelector('.pvy-name') || {}).textContent || 'vessel').trim();
     if (!card) return shareText(text);
     btn.classList.add('busy');
     cardPng(card).then(function (blob) {
