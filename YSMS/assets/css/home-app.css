@@ -5,6 +5,8 @@
     .ha-band { display: block; position: absolute; left: 0; right: 0; top: 0; height: 268px; z-index: 0; border-radius: 0 0 28px 28px;
         background: linear-gradient(150deg, #0b2a5b 0%, #123f86 60%, #1b6fd1 100%); }
     .ha-page > *:not(.ha-band) { position: relative; z-index: 1; }
+    .ha-page > .dash-header { z-index: 30; } /* the profile menu opens over the search bar and the cards */
+    .ha-page > .dash-header + .overview-section { z-index: 25; } /* search results open over the cards */
     .ha-page .dash-header { background: transparent !important; box-shadow: none !important; border: 0 !important; padding-top: 18px !important; }
     .ha-page .dash-header::after { display: none !important; }
     .ha-page .user-welcome { display: flex; flex-direction: column-reverse; }
