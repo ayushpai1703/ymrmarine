@@ -165,7 +165,10 @@ include 'includes/header.php';
        them here reskins the dynamic content too — no JS changes needed. */
     @media (min-width: 992px) {
         .top-app-bar { display: none !important; }
-        .scroll-content { max-width: 1400px; margin: 0 auto; padding: 8px 20px 40px; }
+        /* keep the app's left-sidebar offset (includes/header.php: 268px); the old rule here
+           reset it to 20px, so the left part of the page sat under the sidebar */
+        .scroll-content { max-width: none; margin: 0; padding: 8px 24px 40px 284px; }
+        .scroll-content > :not(.top-app-bar):not(.sidebar-screen-overlay) { max-width: 1400px; margin-left: auto; margin-right: auto; }
 
         .vdd-hero {
             position: relative; overflow: hidden; border-radius: 22px;
