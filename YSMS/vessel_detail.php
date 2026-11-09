@@ -841,6 +841,7 @@ include 'includes/header.php';
                                 <div class="vdd-remarks-label">Admin Remarks<?= aie('remarks') ?></div>
                                 <div class="vdd-remarks-text">
                                     <?php
+                                        $remarks_full = !empty($survey['remarks']) ? (string)$survey['remarks'] : '';
                                         if ($remarks_full === '') {
                                             echo 'N/A';
                                         } elseif (strlen($remarks_full) > 150) {
