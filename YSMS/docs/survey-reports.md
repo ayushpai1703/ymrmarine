@@ -658,3 +658,12 @@ are the same as before, only laid out as cards:
 - Pending Vessel: Live Status (latest update + update box), Upload Reports. Pending Report: Survey
   Files, Final Documentation (Complete & Move), Email to Master. Completed: Timeline, Dossier Archive.
 - The Survey Report card is no longer on the Pending Report page (Survey Reports in the menu).
+
+## Home (mobile) (v4.6)
+
+`index.php` on phones / tablets (`assets/css/home-app.css`; desktop unchanged): blue header band
+with the greeting, inbox and profile, the search bar and Today's Overview cards (blue / yellow /
+green); Total Recovery as a green card with a curve, This Month (opens the month list) and the ships
+of this month inside it (the separate This Month card is hidden on phones); Month Summary and the
+other statistics as rounded cards; the Surveyor's quick actions as 2 × 2 tiles with a Survey
+Reports tile and a "Soon" badge on Vessel Lineups.
