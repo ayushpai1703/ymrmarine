@@ -266,7 +266,9 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
 </script>
 <?php endif; ?>
 
-<div class="scroll-content">
+<link rel="stylesheet" href="assets/css/home-app.css?v=<?= @filemtime(__DIR__ . '/assets/css/home-app.css') ?>">
+<div class="scroll-content ha-page">
+    <div class="ha-band" aria-hidden="true"></div>
     <div class="dash-header">
         <div class="user-welcome">
             <h2>Hi, <?= sanitize($_SESSION['full_name']) ?> 👋</h2>
@@ -300,7 +302,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         </div>
     </div>
 
-    <div class="overview-section">
+    <div class="overview-section ha-ov">
         <div class="section-title-row">
             <span class="section-title">Today's Overview</span>
             <div class="date-select-badge">
@@ -334,17 +336,25 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
     </div>
 
     <div class="stat-grid">
-        <div class="stat-card" role="button" style="cursor:pointer;" onclick="openRecoveryModal('total')" data-testid="total-recovery-card">
+        <?php $dm = dashboardMonthStats($db, $role, (int)$user_id, (int)$client_row_id, (int)date('Y'), (int)date('n')); ?>
+        <div class="stat-card ha-rec" role="button" style="cursor:pointer;" onclick="openRecoveryModal('total')" data-testid="total-recovery-card">
+            <span class="ha-rec-ic" aria-hidden="true"><i class="fa-solid fa-droplet"></i></span>
             <span class="stat-title"><i class="fa-solid fa-arrow-trend-up stat-title-icon"></i>Total Recovery</span>
             <!-- 🌟 $ సింబల్ తీసివేసి కేవలం వాల్యూ (MT తో కలిపి) డిస్‌ప్లే అవుతుంది -->
             <div class="stat-val"><?= $total_recovery ?></div>
-            <div class="mt-2" style="height: 30px; overflow: hidden;">
+            <div class="mt-2 ha-spark-old" style="height: 30px; overflow: hidden;">
                 <svg viewBox="0 0 100 30" width="100%" height="100%" preserveAspectRatio="none">
                     <path d="M0,25 Q15,5 30,20 T60,10 T90,15 T100,5" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round"/>
                 </svg>
             </div>
+            <svg class="ha-spark" viewBox="0 0 320 54" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="haSparkFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+                <path d="M0 44 C30 40 40 30 70 32 S120 46 150 30 S200 8 230 20 S280 40 320 10 L320 54 L0 54 Z" fill="url(#haSparkFill)"/><path d="M0 44 C30 40 40 30 70 32 S120 46 150 30 S200 8 230 20 S280 40 320 10" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>
+            <div class="ha-rec-bot">
+                <button type="button" onclick="event.stopPropagation(); openRecoveryModal('month')" data-testid="ha-month-recovery"><span>This Month</span><b><?= $month_recovery ?></b></button>
+                <div><span>Ships this month</span><b data-testid="ha-month-ships"><?= (int)$dm['ships'] ?></b></div>
+            </div>
         </div>
-        <div class="stat-card" role="button" style="cursor:pointer;" onclick="openRecoveryModal('month')" data-testid="month-recovery-card">
+        <div class="stat-card ha-month" role="button" style="cursor:pointer;" onclick="openRecoveryModal('month')" data-testid="month-recovery-card">
             <span class="stat-title stat-title--blue"><i class="fa-solid fa-chart-column stat-title-icon"></i>This Month Recovery</span>
             <!-- 🌟 $ సింబల్ తీసివేసి కేవలం వాల్యూ (MT తో కలిపి) డిస్‌ప్లే అవుతుంది -->
             <div class="stat-val"><?= $month_recovery ?></div>
@@ -355,7 +365,6 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             </div>
         </div>
         <!-- Month Summary: pick a year + month → ships surveyed and recovery by Survey Completed Date (replaces the VLSFO / LSMGO / HSFO cards). -->
-        <?php $dm = dashboardMonthStats($db, $role, (int)$user_id, (int)$client_row_id, (int)date('Y'), (int)date('n')); ?>
         <div class="stat-card dm-card" data-testid="month-summary-card">
             <div class="dm-head">
                 <span class="stat-title stat-title--purple"><i class="fa-solid fa-calendar-check stat-title-icon"></i>Month Summary</span>
@@ -707,7 +716,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             </a>
         </div>
 
-        <div class="overview-section dashboard-action-item mt-3">
+        <div class="overview-section dashboard-action-item mt-3 ha-soon">
             <a href="coming_soon.php?feature=Vessel+Lineups" class="bg-white p-3 rounded-4 d-flex justify-content-between align-items-center shadow-sm text-decoration-none h-100" style="border: 1px solid var(--border-color);" data-testid="vessel-line-up-link">
                 <div class="d-flex align-items-center gap-3">
                     <div class="bg-primary bg-opacity-10 text-primary rounded-3 d-flex justify-content-center align-items-center" style="width: 40px; height: 40px;">

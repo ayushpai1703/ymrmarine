@@ -1,0 +1,130 @@
+/* App-style mobile detail pages (vessel_detail.php, report_detail.php, completed_detail.php).
+   Phone / tablet width only (the desktop views are separate and unchanged). Theme per page:
+   .dapp-blue (Pending Vessel), .dapp-yellow (Pending Report, #ffc107), .dapp-green (Completed, #28a745). */
+@media (max-width: 991.98px) {
+    .dapp { --blue: #1D63ED; --ink: #0b1324; --muted: #64748b; --line: #e8edf4; --acc: #1D63ED; --acc-soft: #eaf1ff;
+        font-family: 'Lexend', system-ui, sans-serif; color: var(--ink); position: relative; padding: 0 12px 24px; }
+    .dapp-yellow { --acc: #e0a800; --acc-soft: #fff6d6; }
+    .dapp-green { --acc: #28a745; --acc-soft: #e7f8ee; }
+    .dapp-band { position: absolute; left: 0; right: 0; top: 0; height: 92px; border-radius: 0 0 26px 26px;
+        background: linear-gradient(150deg, #0b2a5b 0%, #123f86 60%, #1b6fd1 100%); z-index: 0; }
+    .dapp-yellow .dapp-band { background: linear-gradient(150deg, #7a5600 0%, #c99400 55%, #ffc107 100%); }
+    .dapp-green .dapp-band { background: linear-gradient(150deg, #0f5323 0%, #1e8a36 55%, #28a745 100%); }
+    .dapp > *:not(.dapp-band) { position: relative; z-index: 1; }
+    .dapp-card { background: #fff; border-radius: 22px; box-shadow: 0 8px 24px rgba(15,23,42,.07); margin: 0 0 14px; overflow: hidden; border: 0; }
+    .dapp-hero { padding: 16px; margin-top: 14px; }
+    .dapp-hero-top { display: flex; gap: 14px; align-items: center; }
+    .dapp-photo { flex: none; width: 92px; height: 72px; border-radius: 16px; background: #eaf2fc; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    .dapp-photo img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+    .dapp-photo.real img { object-fit: cover; padding: 0; }
+    .dapp-hn { min-width: 0; flex: 1; }
+    .dapp-hn small { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
+    .dapp-name { display: block; font-size: 20px; font-weight: 800; letter-spacing: .01em; line-height: 1.15; margin: 2px 0 6px; text-transform: uppercase; overflow-wrap: anywhere; }
+    .dapp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .dapp-chip { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 4px 10px; font-size: 11.5px; font-weight: 700; }
+    .dapp-chip.ref { background: #eef3fb; color: #1e3a8a; }
+    .dapp-chip.st-pending { background: #fff1e6; color: #ea580c; }
+    .dapp-chip.st-report { background: #fff6d6; color: #9a6b00; }
+    .dapp-chip.st-done { background: #e7f8ee; color: #15803d; }
+    .dapp-chip.st-other { background: #f1f5f9; color: #334155; }
+    .dapp-who { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+    .dapp-who b { color: var(--ink); }
+    .dapp-acts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+    .dapp-act { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: #334155 !important; text-decoration: none !important; background: none; border: 0; padding: 0; font-family: inherit; }
+    .dapp-act > i { width: 48px; height: 48px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 19px; }
+    .dapp-act.wa > i { background: #e7f8ee; color: #16a34a; } .dapp-act.em > i { background: #fdecec; color: #dc2626; }
+    .dapp-act.ed > i { background: #eaf1ff; color: #1D63ED; } .dapp-act.sh > i { background: #f1ecff; color: #6d3df0; }
+    .dapp-act.iv > i { background: #eaf1ff; color: #1e3a8a; } .dapp-act.wd > i { background: #eaf1ff; color: #1D63ED; } .dapp-act.ph > i { background: #e7f8ee; color: #16a34a; }
+    .dapp-sec-h { display: flex; align-items: center; gap: 10px; padding: 14px 16px 4px; }
+    .dapp-sec-h .si { flex: none; width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; background: var(--acc-soft); color: var(--acc); }
+    .dapp-sec-h b { font-size: 15.5px; font-weight: 700; }
+    .dapp-sec-h .r { margin-left: auto; font-size: 12px; color: var(--blue); font-weight: 600; }
+    .dapp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 4px 16px 10px; }
+    .dapp-f { display: flex; gap: 10px; padding: 12px 6px 12px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+    .dapp-f:nth-child(even):not(.full) { padding-left: 12px; border-left: 1px solid var(--line); }
+    .dapp-f.full { grid-column: 1 / -1; padding-left: 0; border-left: 0; }
+    .dapp-f.last { border-bottom: 0; }
+    .dapp-f > i { flex: none; width: 20px; color: var(--acc); font-size: 15px; margin-top: 2px; text-align: center; }
+    .dapp-f > div { min-width: 0; flex: 1; }
+    .dapp-l { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+    .dapp-v { display: block; font-size: 13.5px; font-weight: 700; margin-top: 2px; line-height: 1.3; overflow-wrap: anywhere; }
+    .dapp-v.ok { color: #15803d; }
+    .dapp-tag { display: inline-block; background: #e3eaff; color: #1d3fd6; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-top: 3px; }
+    .dapp .aie-btn { width: 20px !important; height: 20px !important; min-width: 0 !important; padding: 0 !important; border-radius: 6px !important; font-size: 9.5px !important; margin: 0 0 0 2px !important; }
+    .dapp-people { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .dapp-p { display: inline-flex; align-items: center; gap: 6px; background: #f3f6fb; border-radius: 999px; padding: 3px 10px 3px 3px; font-size: 12.5px; font-weight: 600; }
+    .dapp-p em { width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: #fff; font-style: normal; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .dapp-p:nth-child(2n) em { background: #6d3df0; } .dapp-p:nth-child(3n) em { background: #0f766e; }
+    .dapp-agentmail { font-size: 11.5px; line-height: 1.45; margin-top: 4px; }
+    .dapp-agentmail .btn { font-size: 11.5px !important; text-align: left; }
+    .dapp-rem { margin: 0 16px 14px; background: #fff7ed; border-radius: 14px; padding: 12px 14px; border-left: 4px solid #f97316; }
+    .dapp-rem > span { font-size: 12px; font-weight: 700; color: #ea580c; display: flex; align-items: center; gap: 6px; }
+    .dapp-rem p { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: #334155; overflow-wrap: anywhere; }
+    .dapp-rem a { font-weight: 700; color: var(--blue); }
+    /* recovery box */
+    .dapp-rec { margin: 4px 16px 14px; border-radius: 18px; color: #fff; padding: 12px 14px; background: linear-gradient(135deg, #1e9e3a, #28a745 60%, #3cbf3a); }
+    .dapp-yellow .dapp-rec { background: linear-gradient(135deg, #b88700, #e0a800 60%, #ffc107); }
+    .dapp-rec-t { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 15px; }
+    .dapp-rec-t .tot { margin-left: auto; background: #fff; color: #15803d; border-radius: 999px; padding: 5px 12px; font-size: 13.5px; white-space: nowrap; }
+    .dapp-yellow .dapp-rec-t .tot { color: #8a6100; }
+    .dapp-rec-p { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+    .dapp-rec-p div { background: rgba(255,255,255,.18); border-radius: 12px; padding: 7px 6px; text-align: center; font-size: 10.5px; font-weight: 600; }
+    .dapp-rec-p b { display: block; font-size: 13.5px; font-weight: 800; margin-top: 2px; }
+    .dapp-rec-edit { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; background: rgba(255,255,255,.95); color: #15803d; border: 0; border-radius: 12px; padding: 9px; font: 700 13px 'Lexend', system-ui, sans-serif; }
+    .dapp-yellow .dapp-rec-edit { color: #8a6100; }
+    .dapp-rec-form { margin: -4px 16px 14px; background: #f8fafc; border: 1px solid var(--line); border-radius: 16px; padding: 12px; }
+    .dapp-rec-form[hidden] { display: none; }
+    .dapp-rec-form .form-control { border-radius: 10px; }
+    .dapp-alert { margin: 0 16px 10px; border-radius: 12px; padding: 8px 12px; font-size: 12px; }
+    .dapp-alert.ok { background: #e7f8ee; color: #15803d; } .dapp-alert.err { background: #fef2f2; color: #b91c1c; }
+    /* live status */
+    .dapp-upd { padding: 4px 16px 16px; }
+    .dapp-tl { display: flex; gap: 10px; background: #f3f7ff; border-radius: 14px; padding: 12px; }
+    .dapp-tl .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 4px #d7e4ff; margin-top: 5px; }
+    .dapp-tl b { font-size: 14.5px; overflow-wrap: anywhere; } .dapp-tl small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+    .dapp-tl small i { color: var(--blue); font-style: normal; font-weight: 600; }
+    .dapp-inp { display: flex; gap: 8px; margin-top: 10px; align-items: stretch; }
+    .dapp-inp textarea { flex: 1; min-width: 0; border: 1.5px solid #d6e0ee; border-radius: 14px; padding: 10px 12px; font: 13px 'Lexend', system-ui, sans-serif; resize: vertical; min-height: 46px; }
+    .dapp-btn { border: 0; border-radius: 14px; background: linear-gradient(135deg, #1D63ED, #4f46e5); color: #fff !important; font: 700 14px 'Lexend', system-ui, sans-serif; padding: 0 18px; min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none !important; }
+    .dapp-btn.wide { width: 100%; height: 50px; margin-top: 14px; font-size: 15px; background: linear-gradient(135deg, #0b2a5b, #1D63ED); }
+    .dapp-green .dapp-btn.wide { background: linear-gradient(135deg, #15803d, #28a745); }
+    /* upload tiles (the file inputs stay, styled) */
+    .dapp-up { padding: 4px 16px 16px; }
+    .dapp-ur { display: flex; align-items: center; gap: 12px; border: 1.5px dashed #c9d6ea; border-radius: 16px; padding: 12px; margin-top: 10px; flex-wrap: wrap; }
+    .dapp-ur .fi { flex: none; width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; }
+    .dapp-ur .t { flex: 1; min-width: 0; } .dapp-ur .t b { display: block; font-size: 13.5px; } .dapp-ur .t small { font-size: 11.5px; color: var(--muted); }
+    .dapp-ur input[type=file] { flex-basis: 100%; font-size: 12px; color: var(--muted); border: 0; padding: 0; background: none; }
+    .dapp-ur input[type=file]::file-selector-button { border: 0; background: #eaf1ff; color: var(--blue); font: 700 12.5px 'Lexend', system-ui, sans-serif; border-radius: 10px; padding: 7px 12px; margin-right: 10px; }
+    .dapp-req { color: #dc2626; }
+    .fi-pdf { background: #fdecec; color: #dc2626; } .fi-xls { background: #e7f8ee; color: #16a34a; } .fi-add { background: #eaf1ff; color: #1D63ED; } .fi-zip { background: #fff6d6; color: #b88700; }
+    .dapp-ghost { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1.5px dashed #c9d6ea !important; border-radius: 14px; padding: 11px; margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--blue) !important; background: none; }
+    /* files */
+    .dapp-files { padding: 4px 16px 14px; }
+    .dapp-files [data-doc-row] { border-radius: 14px !important; box-shadow: none !important; border-color: var(--line) !important; padding: 10px !important; margin: 8px 0 0 !important; }
+    .dapp-files .doc-view-btn, .dapp-files .doc-replace-btn { border-radius: 9px; }
+    .dapp-files [data-doc-row] { flex-wrap: wrap; gap: 8px; }
+    .dapp-files [data-doc-row] > div:first-child { max-width: 100% !important; flex: 1 1 160px; min-width: 0; }
+    .dapp-files .doc-actions-row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; margin-left: auto; max-width: 100%; }
+    .dapp-files .completed-add-files-form { border-radius: 16px; }
+    /* generate tiles */
+    .dapp-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 4px 16px 16px; }
+    .dapp-tile { border-radius: 18px; padding: 14px 12px; color: #fff !important; font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 10px; min-height: 92px; text-decoration: none !important; }
+    .dapp-tile > i { width: 36px; height: 36px; border-radius: 11px; background: rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .dapp-tile small { display: block; font-weight: 500; font-size: 11px; opacity: .85; margin-top: 2px; }
+    .dapp-tile.t-blue { background: linear-gradient(135deg, #1D63ED, #4f46e5); } .dapp-tile.t-green { background: linear-gradient(135deg, #16a34a, #22c55e); }
+    .dapp-tile.t-navy { background: linear-gradient(135deg, #0b2a5b, #1e4fa8); } .dapp-tile.t-teal { background: linear-gradient(135deg, #0f766e, #14b8a6); }
+    .dapp-tile.big { grid-column: 1 / -1; flex-direction: row; align-items: center; min-height: 0; }
+    .dapp-tile.big .go { margin-left: auto; }
+    .dapp-mail { display: flex; gap: 8px; padding: 0 16px 16px; }
+    .dapp-mail input { flex: 1; min-width: 0; border: 1.5px solid #d6e0ee; border-radius: 14px; padding: 10px 12px; font-size: 13px; }
+    .dapp-mail .dapp-btn { background: linear-gradient(135deg, #0f766e, #14b8a6); white-space: nowrap; }
+    /* timeline (completed) */
+    .dapp-tline { padding: 6px 16px 14px; }
+    .dapp-ts { display: flex; align-items: center; gap: 12px; position: relative; padding-bottom: 14px; }
+    .dapp-ts:not(:last-child)::before { content: ""; position: absolute; left: 15px; top: 32px; bottom: 0; width: 2px; background: #d8f0de; }
+    .dapp-ts .d { flex: none; width: 32px; height: 32px; border-radius: 50%; background: #e7f8ee; color: #16a34a; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+    .dapp-ts.done .d { background: #16a34a; color: #fff; }
+    .dapp-ts .x { flex: 1; min-width: 0; } .dapp-ts .x span { display: block; font-size: 11.5px; color: var(--muted); } .dapp-ts .x b { font-size: 14px; }
+    /* the page's own bits shown inside the cards */
+    .dapp .status-update-card, .dapp .form-box { margin: 0 !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+}

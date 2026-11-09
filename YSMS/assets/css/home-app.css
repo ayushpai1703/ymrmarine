@@ -1,0 +1,65 @@
+/* Home (index.php) — app-style layout on phones / tablets; the desktop dashboard is unchanged. */
+.ha-band, .ha-rec-bot, .ha-rec-ic, .ha-only, .ha-spark { display: none; }
+@media (max-width: 991.98px) {
+    .ha-page { position: relative; }
+    .ha-band { display: block; position: absolute; left: 0; right: 0; top: 0; height: 268px; z-index: 0; border-radius: 0 0 28px 28px;
+        background: linear-gradient(150deg, #0b2a5b 0%, #123f86 60%, #1b6fd1 100%); }
+    .ha-page > *:not(.ha-band) { position: relative; z-index: 1; }
+    .ha-page > .dash-header { z-index: 30; } /* the profile menu opens over the search bar and the cards */
+    .ha-page > .dash-header + .overview-section { z-index: 25; } /* search results open over the cards */
+    .ha-page .dash-header { background: transparent !important; box-shadow: none !important; border: 0 !important; padding-top: 18px !important; }
+    .ha-page .dash-header::after { display: none !important; }
+    .ha-page .user-welcome { display: flex; flex-direction: column-reverse; }
+    .ha-page .user-welcome h2 { color: #fff !important; font-size: 21px !important; font-weight: 800 !important; margin: 2px 0 0 !important; }
+    .ha-page .user-welcome p { color: #bcd3f5 !important; font-size: 12.5px !important; margin: 0 !important; }
+    .ha-page .dash-inbox-btn { background: rgba(255,255,255,.14) !important; border: 0 !important; color: #fff !important; border-radius: 14px !important; box-shadow: none !important; }
+    .ha-page .dash-inbox-btn span { border-color: #123f86 !important; }
+    .ha-page .dash-header + .overview-section { margin-top: 0 !important; }
+    .ha-page .search-input-wrapper { background: #fff !important; border: 0 !important; border-radius: 16px !important; box-shadow: 0 8px 20px rgba(0,0,0,.14) !important; }
+    .ha-page .search-input-wrapper > i { color: #1D63ED !important; }
+    .ha-page .section-title-row .section-title { font-weight: 700; }
+    .ha-page .ha-ov .section-title { color: #fff !important; }
+    .ha-page .date-select-badge { background: rgba(255,255,255,.18) !important; color: #fff !important; border: 0 !important; border-radius: 999px !important; }
+    .ha-page .overview-grid { gap: 10px !important; }
+    .ha-page .ov-card { background: #fff !important; border: 0 !important; border-radius: 20px !important; box-shadow: 0 8px 22px rgba(15,23,42,.08) !important; position: relative; overflow: hidden; padding: 14px 12px !important; }
+    .ha-page .ov-card::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; }
+    .ha-page .ov-card.pending-vessel::after { background: #1D63ED; } .ha-page .ov-card.pending-report::after { background: #ffc107; } .ha-page .ov-card.completed::after { background: #28a745; }
+    .ha-page .ov-card .ov-icon { border-radius: 12px !important; }
+    .ha-page .ov-card.pending-vessel .ov-icon { background: #eaf1ff !important; color: #1D63ED !important; }
+    .ha-page .ov-card.pending-report .ov-icon { background: #fff6d6 !important; color: #b88700 !important; }
+    .ha-page .ov-card.completed .ov-icon { background: #e7f8ee !important; color: #16a34a !important; }
+    .ha-page .ov-card .ov-count { font-weight: 800 !important; color: #0b1324 !important; }
+    .ha-page .ov-card .ov-label { color: #64748b !important; font-weight: 600 !important; }
+    .ha-page .stat-grid { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; gap: 10px !important; }
+    .ha-page .stat-card { border: 0 !important; border-radius: 20px !important; box-shadow: 0 8px 22px rgba(15,23,42,.06) !important; background: #fff; }
+    /* green recovery card (with this month inside it) */
+    .ha-page .stat-card.ha-rec { grid-column: 1 / -1; color: #fff; padding: 16px !important;
+        background: radial-gradient(120% 140% at 100% 0%, #9be22d 0%, rgba(155,226,45,0) 45%), linear-gradient(135deg, #146c2e, #28a745) !important; box-shadow: 0 10px 22px rgba(40,167,69,.25) !important; }
+    .ha-page .ha-rec .stat-title { color: #d9f5df !important; background: none !important; padding: 0 !important; }
+    .ha-page .ha-rec .stat-title-icon { display: none; }
+    .ha-page .ha-rec .stat-val { color: #fff !important; font-size: 28px !important; font-weight: 800 !important; }
+    .ha-page .ha-rec { position: relative; }
+    .ha-page .ha-rec .ha-spark-old { display: none; }
+    .ha-page .ha-rec .ha-spark { display: block; width: 100%; height: 54px; margin: 6px 0 2px; }
+    .ha-page .ha-rec-ic { display: flex; position: absolute; top: 14px; right: 14px; width: 40px; height: 40px; border-radius: 13px; background: rgba(255,255,255,.18); align-items: center; justify-content: center; font-size: 17px; }
+    .ha-page .ha-rec-bot { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .ha-page .ha-rec-bot > * { background: rgba(255,255,255,.16); border: 0; border-radius: 14px; padding: 9px 12px; text-align: left; color: #fff; font-family: inherit; }
+    .ha-page .ha-rec-bot span { display: block; font-size: 11px; color: #e3f8e8; font-weight: 600; }
+    .ha-page .ha-rec-bot b { display: block; font-size: 16px; font-weight: 800; margin-top: 2px; }
+    .ha-page .stat-card.ha-month { display: none !important; }
+    .ha-page .stat-card.dm-card { grid-column: 1 / -1; }
+    .ha-page .dm-card .dm-stats { display: grid !important; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .ha-page .dm-card .dm-stats > div { background: #f6f8fc; border-radius: 16px; padding: 12px; }
+    .ha-page .dm-card .dm-dl { background: #e7f8ee !important; color: #15803d !important; border-radius: 12px !important; border: 0 !important; }
+    .ha-page .dm-card .dm-select { border-radius: 12px !important; }
+    /* quick actions as 2 × 2 tiles */
+    .ha-page .dashboard-action-links { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding: 0 16px; margin-top: 18px; }
+    .ha-page .dashboard-action-links .ha-only { display: block; }
+    .ha-page .dashboard-action-item { margin: 0 !important; padding: 0 !important; }
+    .ha-page .dashboard-action-item > a { flex-direction: column; align-items: flex-start !important; justify-content: flex-start !important; border: 0 !important; border-radius: 20px !important; box-shadow: 0 8px 22px rgba(15,23,42,.06) !important; padding: 14px !important; position: relative; }
+    .ha-page .dashboard-action-item > a > .d-flex { flex-direction: column; align-items: flex-start !important; gap: 10px !important; }
+    .ha-page .dashboard-action-item > a > .d-flex > div:first-child { width: 42px !important; height: 42px !important; border-radius: 14px !important; font-size: 18px; }
+    .ha-page .dashboard-action-item > a > i.fa-chevron-right { display: none; }
+    .ha-page .dashboard-action-item .fw-bold { font-size: 13.5px !important; }
+    .ha-page .ha-soon > a::after { content: "Soon"; position: absolute; top: 12px; right: 12px; background: #fff1e6; color: #ea580c; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+}

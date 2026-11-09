@@ -347,7 +347,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // సర్వేయర్ ఐడి హ్యాండ్లింగ్ (Outsourcing అయితే యూజర్ టేబుల్‌లో లేని ఐడి లేదా అడ్మిన్ ఐడి సెట్ చేయవచ్చు)
     // ఇక్కడ ఔట్‌సోర్సింగ్ కోసం ఒక డమ్మీ వాల్యూ (उदा. 1 లేదా అడ్మిన్ ఐడి) లేదా ప్రత్యేక లాజిక్ ఇవ్వచ్చు.
-    $final_surveyor_id = ($surveyor_id === 'outsourcing' || $surveyor_id === 'unassigned') ? 1 : (int)$surveyor_id; 
+    $final_surveyor_id = ($surveyor_id === 'outsourcing' || $surveyor_id === 'unassigned') ? 1 : (int)$surveyor_id;
+
     if($surveyor_id === 'outsourcing' && $remarks == '') {
         $remarks = "Outsourced Survey.";
     }
@@ -538,7 +539,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $new_survey_id = 0;
                         }
                     }
+
                     $success = "Vessel assigned successfully! Report No: " . $report_number;
+                    // the vessel's picture for the cards: looked up by the AI when the list is next shown (includes/vessel_image.php)
+                    try { require_once __DIR__ . '/includes/vessel_image.php'; viQueue($db, (string)$vessel_name); } catch (Throwable $vie) { error_log('vessel picture queue: ' . $vie->getMessage()); }
                     
                     // 🌟 Optional assignment attachment(s) — the file input allows
                     // selecting multiple files at once (assignment_attachment[]), so
@@ -984,6 +988,10 @@ include 'includes/header.php';
         touch-action: manipulation;
     }
 
+    .vdd-hero { display: none; }
+    .vdd-form-card-head { display: none; }
+    .vdd-field-icon { display: none; }
+
     /* Desktop 2-col */
     @media (min-width: 992px) {
         .form-box-custom {
@@ -1003,6 +1011,114 @@ include 'includes/header.php';
         }
         .form-box-custom > #reportNumberGroup {
             grid-column: 1 / -1;
+        }
+
+        /* ═══ Desktop modern redesign — same hero + icon-chip visual
+           language as the rest of the app's redesigned pages. Mobile
+           (everything outside this block) is completely untouched. Every
+           .searchable-select / .ss-* class name below is exactly what the
+           JS at the bottom of this file already builds/queries against —
+           only colors, radius and spacing change; no JS was touched. */
+        .top-app-bar { display: none !important; }
+        .scroll-content { max-width: 1400px; margin: 0 auto; padding: 8px 20px 40px; }
+
+        .vdd-hero {
+            position: relative; overflow: hidden; border-radius: 22px;
+            background: linear-gradient(120deg, #0f172a 0%, #1E1B6B 48%, #4B2FD6 100%);
+            padding: 26px 30px; margin-bottom: 4px;
+            display: flex; align-items: center; gap: 16px;
+            box-shadow: 0 14px 34px rgba(30,27,107,.22);
+        }
+        .vdd-hero-icon-bg {
+            position: absolute; right: -26px; top: -40px; font-size: 170px; color: rgba(255,255,255,.07);
+            pointer-events: none; line-height: 1;
+        }
+        .vdd-hero-ship {
+            width: 52px; height: 52px; border-radius: 15px; flex: none; position: relative;
+            background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px;
+        }
+        .vdd-hero-title { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -.01em; position: relative; }
+        .vdd-hero-sub { font-size: 12.5px; color: rgba(255,255,255,.66); margin-top: 4px; font-weight: 500; position: relative; }
+
+        .form-box-custom {
+            border: 1px solid #e2e8f0 !important; border-radius: 20px !important;
+            box-shadow: 0 4px 20px rgba(15,23,42,.05) !important; padding: 26px 28px !important;
+        }
+        .vdd-form-card-head {
+            grid-column: 1 / -1; display: flex; align-items: center; gap: 10px;
+            margin: -26px -28px 18px; padding: 18px 28px; border-bottom: 1px solid #f1f5f9;
+        }
+        .vdd-form-card-head-icon {
+            width: 30px; height: 30px; border-radius: 9px; flex: none;
+            background: linear-gradient(135deg, #8B7CF6, #4B2FD6); color: #fff;
+            display: flex; align-items: center; justify-content: center; font-size: 13px;
+        }
+        .vdd-form-card-head-title { font-size: 15.5px; font-weight: 800; color: #0f172a; }
+        .vdd-form-card-head-sub { font-size: 11.5px; color: #94a3b8; margin-top: 1px; font-weight: 500; }
+
+        .form-group-custom label {
+            display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: #64748b;
+        }
+        .form-group-custom label i.vdd-field-icon { display: inline-block; color: #A78BFA; font-size: 11px; width: 14px; text-align: center; }
+        .form-group-custom input,
+        .form-group-custom select,
+        .form-group-custom textarea,
+        .searchable-select .ss-trigger {
+            border: 1.5px solid #e2e8f0 !important; border-radius: 12px !important;
+            padding: 11px 14px !important; font-size: 13.5px !important; background: #F8FAFC !important;
+        }
+        .form-group-custom input:focus,
+        .form-group-custom select:focus,
+        .form-group-custom textarea:focus,
+        .searchable-select .ss-trigger:focus {
+            outline: none !important; border-color: #A78BFA !important;
+            box-shadow: 0 0 0 4px rgba(91,45,238,.12) !important; background: #fff !important;
+        }
+        .searchable-select.open .ss-trigger {
+            border-color: #A78BFA !important; box-shadow: 0 0 0 4px rgba(91,45,238,.12) !important; background: #fff !important;
+        }
+        .searchable-select .ss-panel {
+            border: 1.5px solid #e2e8f0; border-radius: 14px; box-shadow: 0 16px 36px rgba(15,23,42,.14);
+        }
+        .searchable-select .ss-option:hover, .searchable-select .ss-option.ss-selected {
+            background: #F3EEFE !important; color: #5B2DEE !important;
+        }
+        .ss-multi .ss-option.ss-selected { background: #F3EEFE !important; color: #5B2DEE !important; }
+        .ss-multi .ss-option-checkbox { accent-color: #5B2DEE !important; }
+        .searchable-select .ss-search-input, .ss-country-wrap select.ss-country-filter {
+            border: 1.5px solid #e2e8f0 !important; border-radius: 10px !important; background: #F8FAFC !important;
+        }
+        .searchable-select .ss-search-input:focus {
+            outline: none !important; border-color: #A78BFA !important; background: #fff !important;
+        }
+
+        .blue-action-btn {
+            border: none !important; border-radius: 14px !important; height: 48px;
+            background: linear-gradient(120deg, #1E1B6B, #4B2FD6) !important; font-weight: 800 !important;
+            box-shadow: 0 10px 22px rgba(75,47,214,.3) !important; display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+
+        #vesselNameField ~ .form-group-custom > div[style*="f8fafc"] {
+            border: 1px solid #e2e8f0 !important; border-radius: 12px !important; background: #F8FAFC !important;
+        }
+        input[type="file"][name="assignment_attachment[]"] {
+            border: 1.5px dashed #C7D2E0 !important; border-radius: 14px !important;
+            padding: 14px !important; background: #F8FAFC !important; cursor: pointer;
+        }
+
+        #duplicateVesselModal .modal-content {
+            border: none; border-radius: 20px; box-shadow: 0 20px 44px rgba(15,23,42,.22); overflow: hidden;
+        }
+        #duplicateVesselModal .modal-header {
+            background: linear-gradient(120deg, #FFF7ED, #FFEDD5); border-bottom: 1px solid #FED7AA; padding: 18px 22px;
+        }
+        #duplicateVesselModal .modal-body { padding: 22px; }
+        #duplicateVesselModal .modal-footer { padding: 14px 22px; border-top: 1px solid #f1f5f9; }
+        #duplicateVesselConfirmBtn {
+            border-radius: 999px !important; padding: 0 20px !important; height: 40px;
+            background: linear-gradient(120deg, #1E1B6B, #4B2FD6) !important; border: none !important;
+            box-shadow: 0 8px 18px rgba(75,47,214,.28);
         }
     }
 
@@ -1047,7 +1163,229 @@ include 'includes/header.php';
         .searchable-select.open { z-index: 400; }
         .searchable-select.open .ss-panel { z-index: 400; }
     }
+
+    /* 🌟 Manual Form | Paste Email tabs + Paste Email panel — Assign Vessel
+       (AI Email -> Auto Vessel Assignment). Same color scheme/typography as
+       the rest of this page (--accent-blue / #3b32b3 primary action color,
+       var(--border-color), var(--text-muted)). */
+    .vessel-input-tabs { display: flex; gap: 8px; }
+    .vit-tab {
+        flex: 1 1 0;
+        display: flex; align-items: center; justify-content: center; gap: 7px;
+        padding: 11px 10px; border-radius: 12px; border: 1px solid var(--border-color);
+        background: #fff; color: var(--text-muted); font-size: 13px; font-weight: 650;
+    }
+    .vit-tab.active { background: #3b32b3; border-color: #3b32b3; color: #fff; }
+
+    .paste-email-card {
+        background: var(--card-bg); border: 1px solid var(--border-color);
+        border-radius: 16px; padding: 16px;
+    }
+    .pe-head { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+    .pe-head-icon {
+        width: 36px; height: 36px; border-radius: 10px; background: #eef2ff; color: #3b32b3;
+        display: flex; align-items: center; justify-content: center; font-size: 15px; flex: 0 0 auto;
+    }
+    .pe-head-title { font-size: 14px; font-weight: 700; color: var(--text-dark); }
+    .pe-head-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+    #pasteEmailTextarea {
+        width: 100%; border: 1px solid var(--border-color); border-radius: 12px;
+        padding: 12px; font-size: 13px; background: #f8fafc; outline: none; resize: vertical;
+    }
+    #pasteEmailTextarea:focus { border-color: #3b32b3; background: #fff; }
+    .pe-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .pe-btn {
+        border: none; border-radius: 10px; padding: 11px 16px; font-size: 13px; font-weight: 650;
+        display: inline-flex; align-items: center; gap: 7px;
+    }
+    .pe-btn-primary { background: #3b32b3; color: #fff; flex: 1 1 auto; justify-content: center; }
+    .pe-btn-ghost { background: #f1f5f9; color: var(--text-muted); }
+    .pe-loading { margin-top: 12px; font-size: 12.5px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+    .pe-spinner {
+        width: 15px; height: 15px; border-radius: 50%; border: 2px solid #dbe0f5; border-top-color: #3b32b3;
+        display: inline-block; animation: pe-spin .7s linear infinite;
+    }
+    @keyframes pe-spin { to { transform: rotate(360deg); } }
+    .pe-error { margin-top: 12px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
+
+    .pe-multi { margin-top: 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 12px; }
+    .pe-multi-title { font-size: 12.5px; font-weight: 700; color: #92400e; margin-bottom: 8px; }
+    .pe-multi-list { display: flex; flex-direction: column; gap: 6px; }
+    .pe-multi-item {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        background: #fff; border: 1px solid var(--border-color); border-radius: 10px; padding: 9px 11px;
+        font-size: 12.5px; font-weight: 600; color: var(--text-dark);
+    }
+    .pe-multi-item button {
+        border: none; background: #3b32b3; color: #fff; border-radius: 8px; padding: 6px 12px;
+        font-size: 11.5px; font-weight: 650;
+    }
+
+    .pe-result { margin-top: 14px; }
+    .pe-result-head { font-size: 13.5px; font-weight: 700; color: #15803d; display: flex; align-items: center; gap: 7px; }
+    .pe-confidence {
+        margin-left: auto; font-size: 11px; font-weight: 700; color: #3b32b3; background: #eef2ff;
+        padding: 3px 9px; border-radius: 999px;
+    }
+    .pe-result-sub { font-size: 11.5px; color: var(--text-muted); margin: 4px 0 10px; }
+    .pe-fields { display: flex; flex-direction: column; gap: 6px; }
+    .pe-field-row {
+        display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid var(--border-color);
+        border-radius: 9px; padding: 8px 10px; font-size: 12.5px;
+    }
+    .pe-field-label { color: var(--text-muted); flex: 0 0 120px; font-weight: 600; }
+    .pe-field-value { flex: 1; color: var(--text-dark); font-weight: 650; word-break: break-word; }
+    .pe-field-value.empty { color: #cbd5e1; font-weight: 500; font-style: italic; }
+    .pe-field-badge { font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; flex: 0 0 auto; }
+    .pe-field-badge.ok { background: #dcfce7; color: #16a34a; }
+    .pe-field-badge.warn { background: #fef3c7; color: #b45309; }
+    .pe-missing { margin-top: 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px; font-size: 12px; color: #92400e; }
+    .pe-missing-item { display: block; margin-top: 3px; }
+    .pe-result-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    .pe-result-actions .pe-btn-primary { flex: 1 1 160px; }
+    .pe-result-actions .pe-btn-ghost { flex: 1 1 120px; justify-content: center; }
+
+    /* AI-populated field highlight on the Manual Form itself, + the small
+       "✓ AI" badge injected next to its label. Both clear the moment the
+       admin edits the field (see JS), since at that point it's their value. */
+    .ai-filled { background: #eef2ff !important; border-color: #3b32b3 !important; }
+    .ai-badge {
+        display: inline-flex; align-items: center; gap: 3px; font-size: 9.5px; font-weight: 700;
+        color: #3b32b3; background: #eef2ff; padding: 2px 7px; border-radius: 999px; margin-left: 6px;
+        vertical-align: middle;
+    }
+
+    /* ═══════════ Ultra-modern Assign Vessel form (single card).
+       Only appearance changes: every field keeps its name/id/class, so the
+       existing searchable-select JS, validation and submit flow are untouched. */
+    #assignVesselForm .avm-form {
+        display: block !important; background: transparent !important; border: none !important;
+        box-shadow: none !important; padding: 0 !important; margin: 14px 12px 24px !important; max-width: 1000px;
+    }
+    @media (min-width: 992px) {
+        /* The page's older desktop rule (max-width + margin:auto, padding 20px)
+           centred a narrow column on the whole window and ignored the 252px
+           sidebar. Use the app's standard sidebar offset instead and centre
+           one 960px column (hero, alerts, form) inside the remaining space. */
+        .scroll-content {
+            max-width: none !important; width: 100% !important; margin: 0 !important;
+            padding: 20px 32px 40px 284px !important; box-sizing: border-box;
+        }
+        .scroll-content > .vdd-hero,
+        .scroll-content > .alert,
+        .scroll-content > div.mx-3,
+        #manualFormPanel { max-width: 960px; margin-left: auto !important; margin-right: auto !important; }
+        .scroll-content > .vdd-hero { margin-bottom: 18px !important; }
+        #assignVesselForm .avm-form { margin: 0 0 32px !important; max-width: none; }
+    }
+
+    .avm-card {
+        background: #fff; border: 1px solid #E9ECF5; border-radius: 22px; padding: 20px 16px 6px; margin-bottom: 14px;
+        box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 12px 32px rgba(15,23,42,.05);
+    }
+    @media (min-width: 768px) { .avm-card { padding: 26px 26px 10px; } }
+
+    .avm-grid { display: grid; grid-template-columns: 1fr; gap: 0 18px; }
+    @media (min-width: 768px) {
+        .avm-grid { grid-template-columns: 1fr 1fr; }
+        .avm-grid > .avm-span-2 { grid-column: 1 / -1; }
+    }
+    #assignVesselForm .form-group-custom { margin-bottom: 16px; min-width: 0; }
+    #assignVesselForm .form-group-custom label {
+        display: flex !important; align-items: center; gap: 7px; flex-wrap: wrap;
+        font-size: 12px !important; font-weight: 700 !important; color: #475569 !important;
+        margin: 0 0 7px !important; letter-spacing: .01em;
+    }
+    #assignVesselForm .form-group-custom label i.vdd-field-icon {
+        display: inline-flex !important; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 7px; background: #F3EEFE; color: #7C3AED; font-size: 10.5px;
+    }
+    #assignVesselForm .form-group-custom input:not([type=checkbox]):not([type=hidden]):not([type=file]):not(.ss-search-input):not(.ss-add-new-input):not(.ss-add-new-input-extra),
+    #assignVesselForm .form-group-custom textarea,
+    #assignVesselForm .searchable-select .ss-trigger {
+        border: 1.5px solid #E4E7EF !important; border-radius: 14px !important; background: #F9FAFC !important;
+        padding: 12px 15px !important; min-height: 50px !important; font-size: 15px !important; color: #0f172a !important;
+        box-shadow: inset 0 1px 2px rgba(15,23,42,.03) !important;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    #assignVesselForm .form-group-custom textarea { min-height: 96px !important; line-height: 1.5; }
+    #assignVesselForm .form-group-custom input:hover:not(:disabled):not([readonly]),
+    #assignVesselForm .form-group-custom textarea:hover,
+    #assignVesselForm .searchable-select .ss-trigger:hover { border-color: #CBD2E1 !important; background: #fff !important; }
+    #assignVesselForm .form-group-custom input:focus,
+    #assignVesselForm .form-group-custom textarea:focus,
+    #assignVesselForm .searchable-select .ss-trigger:focus-visible,
+    #assignVesselForm .searchable-select.open .ss-trigger {
+        outline: none !important; border-color: #8B5CF6 !important; background: #fff !important;
+        box-shadow: 0 0 0 4px rgba(139,92,246,.16) !important;
+    }
+    #assignVesselForm .form-group-custom input[readonly], #assignVesselForm .form-group-custom input:disabled {
+        background: linear-gradient(120deg, #F5F3FF, #EEF2FF) !important; border-style: dashed !important; color: #3730A3 !important; font-weight: 800 !important;
+    }
+    #assignVesselForm .searchable-select .ss-trigger { display: flex; align-items: center; justify-content: space-between; text-align: left; }
+    #assignVesselForm .searchable-select .ss-trigger-text:not(.placeholder) { color: #0f172a !important; font-weight: 700 !important; }
+    /* Bootstrap's own .placeholder class (loading skeleton) paints a solid
+       currentColor bar behind the "Select …" text — undo it here. */
+    #assignVesselForm .searchable-select .ss-trigger-text.placeholder {
+        background: transparent !important; cursor: inherit; min-height: 0; vertical-align: baseline;
+        color: #94a3b8 !important; font-weight: 500 !important; font-size: 15px !important;
+    }
+    #assignVesselForm .searchable-select .ss-trigger .fa-chevron-down { color: #8B5CF6; transition: transform .2s ease; }
+    #assignVesselForm .searchable-select.open .ss-trigger .fa-chevron-down { transform: rotate(180deg); }
+    #assignVesselForm .searchable-select .ss-panel {
+        border: 1px solid #E4E7EF !important; border-radius: 16px !important;
+        box-shadow: 0 24px 48px rgba(15,23,42,.16) !important; overflow: hidden;
+    }
+    #assignVesselForm .searchable-select .ss-option { border-radius: 10px; margin: 2px 6px; }
+    #assignVesselForm .searchable-select .ss-option:hover,
+    #assignVesselForm .searchable-select .ss-option.ss-selected { background: #F3EEFE !important; color: #5B2DEE !important; }
+    #assignVesselForm .ss-multi .ss-option-checkbox { accent-color: #7C3AED !important; }
+    #assignVesselForm .searchable-select .ss-search-input { border-radius: 12px !important; }
+
+    /* file input as a drop zone */
+    #assignVesselForm input[type="file"][name="assignment_attachment[]"] {
+        width: 100%; border: 2px dashed #C9C2F5 !important; border-radius: 18px !important;
+        padding: 18px !important; background: linear-gradient(135deg, #FAF8FF, #F5F7FF) !important;
+        cursor: pointer; font-size: 13px; color: #475569; min-height: 0 !important;
+        transition: border-color .15s ease, background .15s ease;
+    }
+    #assignVesselForm input[type="file"][name="assignment_attachment[]"]:hover { border-color: #8B5CF6 !important; background: #F5F3FF !important; }
+    #assignVesselForm input[type="file"]::file-selector-button {
+        border: none; border-radius: 12px; padding: 10px 16px; margin-right: 12px; cursor: pointer;
+        background: linear-gradient(120deg, #4B2FD6, #7C3AED); color: #fff; font-weight: 700; font-size: 13px;
+        box-shadow: 0 6px 14px rgba(91,45,238,.25);
+    }
+    #assignVesselForm .avm-existing > div[style] { border: 1px solid #E9ECF5 !important; border-radius: 12px !important; background: #F9FAFC !important; padding: 10px 14px !important; }
+
+    /* sticky submit bar */
+    .avm-submit-bar {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+        background: #fff; border: 1px solid #E9ECF5; border-radius: 20px; padding: 12px 12px 12px 18px;
+        box-shadow: 0 12px 32px rgba(15,23,42,.08);
+    }
+    @media (min-width: 992px) { .avm-submit-bar { position: sticky; bottom: 16px; z-index: 30; } }
+    .avm-submit-hint { font-size: 12px; color: #64748b; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+    .avm-submit-hint i { color: #A78BFA; }
+    #assignVesselForm .blue-action-btn.avm-submit {
+        width: auto !important; min-width: 240px; flex: 1 1 240px; max-width: 360px; margin: 0 !important; height: 52px;
+        border: none !important; border-radius: 16px !important; color: #fff !important; font-weight: 800 !important; font-size: 15px !important;
+        display: inline-flex !important; align-items: center; justify-content: center; gap: 10px;
+        background: linear-gradient(120deg, #1E1B6B 0%, #4B2FD6 50%, #7C3AED 100%) !important;
+        background-size: 200% 100% !important; background-position: 0% 0% !important;
+        box-shadow: 0 12px 26px rgba(75,47,214,.35) !important;
+        transition: background-position .4s ease, transform .15s ease, box-shadow .2s ease;
+    }
+    #assignVesselForm .blue-action-btn.avm-submit:hover:not(:disabled) { background-position: 100% 0% !important; transform: translateY(-1px); box-shadow: 0 16px 32px rgba(75,47,214,.42) !important; }
+    #assignVesselForm .blue-action-btn.avm-submit:active:not(:disabled) { transform: translateY(0); }
+    @media (max-width: 575.98px) {
+        .avm-submit-bar { padding: 12px; }
+        .avm-submit-hint { width: 100%; justify-content: center; }
+        #assignVesselForm .blue-action-btn.avm-submit { max-width: none; width: 100% !important; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { #assignVesselForm .blue-action-btn.avm-submit { transition: none; } }
 </style>
+<link rel="stylesheet" href="assets/css/app-pages.css?v=<?= @filemtime(__DIR__ . '/assets/css/app-pages.css') ?>">
 
 <?php
 $page_title = $edit_mode ? 'Edit Vessel Assignment' : ($is_requester ? 'Request Survey' : 'Assign New Vessel');
@@ -1056,7 +1394,16 @@ $page_testid = 'assign-vessel';
 include 'includes/top_app_bar.php';
 ?>
 
-<div class="scroll-content">
+<div class="scroll-content av-page">
+    <div class="vdd-hero">
+        <i class="fa-solid fa-ship vdd-hero-icon-bg" aria-hidden="true"></i>
+        <div class="vdd-hero-ship"><i class="fa-solid fa-ship"></i></div>
+        <div>
+            <div class="vdd-hero-title"><?= $edit_mode ? 'Edit Vessel Assignment' : ($is_requester ? 'Request Survey' : 'Assign New Vessel') ?></div>
+            <div class="vdd-hero-sub"><?= $edit_mode ? 'Update this vessel\'s survey assignment' : ($is_sales_role ? 'Request a survey for a client — the office assigns the surveyor' : 'Assign a vessel to a client, port, survey type and surveyor') ?></div>
+        </div>
+    </div>
+
     <!-- Feedback Alerts -->
     <?php if($success): ?>
         <div class="alert alert-success mx-3 mt-3 py-2" style="font-size:12px;"><?= sanitize($success) ?></div>
@@ -1081,6 +1428,7 @@ include 'includes/top_app_bar.php';
     <?php endif; ?>
     <?php if($error): ?><div class="alert alert-danger mx-3 mt-3 py-2" style="font-size:12px;"><?= $error ?></div><?php endif; ?>
 
+    <div id="manualFormPanel">
     <?php
     // 🌟 Edit-mode pre-fill values — computed once here, used throughout the
     // form below so every field (including the client/port searchable
@@ -1105,10 +1453,11 @@ include 'includes/top_app_bar.php';
     <!-- Assignment Form -->
     <form action="assign_vessel.php<?= $edit_mode ? '?edit_id=' . (int)$edit_id : '' ?>" method="POST" id="assignVesselForm" enctype="multipart/form-data"><?= csrf_field() ?>
         <?php if ($edit_mode): ?><input type="hidden" name="edit_id" value="<?= (int)$edit_id ?>"><?php endif; ?>
-        <div class="form-box-custom shadow-sm" style="padding-top:20px;">
-
+        <div class="form-box-custom avm-form" style="padding-top:20px;">
+            <div class="avm-card">
+                <div class="avm-grid">
             <div class="form-group-custom" id="vesselNameField">
-                <label for="vessel_name">Vessel Name *</label>
+                <label for="vessel_name"><i class="fa-solid fa-ship vdd-field-icon"></i> Vessel Name *</label>
                 <input type="text" name="vessel_name" id="vessel_name" value="<?= $edit_mode ? sanitize($edit_survey['vessel_name']) : '' ?>" placeholder="e.g. MV Pacific Dawn" required autocomplete="off" inputmode="text" style="font-size:16px;min-height:48px;">
             </div>
 
@@ -1117,7 +1466,7 @@ include 'includes/top_app_bar.php';
                  into other clients' names. Server-side (POST handler above) also locks
                  client_id to this value regardless of what's submitted. -->
             <div class="form-group-custom">
-                <label>Client Name *</label>
+                <label><i class="fa-solid fa-building vdd-field-icon"></i> Client Name *</label>
                 <input type="text" value="<?= sanitize($own_client_name ?: 'Your Company') ?>" disabled
                        style="background:#f1f5f9;color:#0b1e46;font-weight:700;" data-testid="client-name-locked">
                 <input type="hidden" name="client_id" id="clientSelect" value="<?= (int)$own_client_id ?>">
@@ -1128,7 +1477,7 @@ include 'includes/top_app_bar.php';
                  New Client" — it is saved through the same endpoint Admin
                  Controls uses, so it shows up there too. -->
             <div class="form-group-custom">
-                <label>Client Name *</label>
+                <label><i class="fa-solid fa-building vdd-field-icon"></i> Client Name *</label>
                 <div class="searchable-select" data-ss-root="client">
                     <button type="button" class="ss-trigger" data-testid="client-select-trigger">
                         <span class="ss-trigger-text<?= ($edit_mode && $edit_client_id) ? '' : ' placeholder' ?>" data-placeholder="Select Client" style="color:#64748b !important;font-weight:500;font-size:14px;"><?= ($edit_mode && $edit_client_id) ? sanitize($edit_client_name) : 'Select Client' ?></span>
@@ -1167,8 +1516,8 @@ include 'includes/top_app_bar.php';
             <!-- Report Number: shown only after client selected — YMR/{SHORT}/{YYYY}/{MM}/{NNNN}.
                  In edit mode this shows the assignment's existing (fixed) number instead of a
                  live preview — editing never generates a new one. -->
-            <div class="form-group-custom" id="reportNumberGroup" style="<?= ($edit_mode && !empty($edit_survey['report_number'])) ? '' : 'display:none;' ?>">
-                <label>Report Number <?php if (!$edit_mode): ?><span class="text-muted fw-normal">(auto)</span><?php endif; ?></label>
+            <div class="form-group-custom avm-span-2" id="reportNumberGroup" style="<?= ($edit_mode && !empty($edit_survey['report_number'])) ? '' : 'display:none;' ?>">
+                <label><i class="fa-solid fa-hashtag vdd-field-icon"></i> Report Number <?php if (!$edit_mode): ?><span class="text-muted fw-normal">(auto)</span><?php endif; ?></label>
                 <input type="text" id="reportNumberPreview" value="<?= $edit_mode ? sanitize($edit_survey['report_number'] ?? '') : '' ?>" readonly
                        style="background:#f1f5f9; color:#0b1e46; font-weight:700; letter-spacing:0.5px; cursor:default;"
                        data-testid="report-number-preview" placeholder="Select client to generate">
@@ -1181,18 +1530,19 @@ include 'includes/top_app_bar.php';
 
 
 <div class="form-group-custom">
-                <label>Agent Name *</label>
+                <label><i class="fa-solid fa-people-group vdd-field-icon"></i> Agent Name *</label>
                 <input type="text" name="agent_name" value="<?= $edit_mode ? sanitize($edit_survey['agent_name']) : '' ?>" placeholder="e.g. Oceanus Agencies" required>
             </div>
 
+
             <div class="form-group-custom">
-                <label>Appointment Date *</label>
+                <label><i class="fa-solid fa-calendar-day vdd-field-icon"></i> Appointment Date *</label>
                 <input type="date" name="appointment_date" value="<?= $edit_mode ? sanitize($edit_survey['appointment_date'] ?? '') : '' ?>" required>
             </div>
 
             <!-- 🌟 Port Name: searchable dropdown with search box inside -->
-            <div class="form-group-custom">
-                <label>Port Name *</label>
+            <div class="form-group-custom avm-span-2">
+                <label><i class="fa-solid fa-location-dot vdd-field-icon"></i> Port Name *</label>
                 <div class="searchable-select" data-ss-root="port">
                     <button type="button" class="ss-trigger" data-testid="port-select-trigger">
                         <span class="ss-trigger-text<?= ($edit_mode && $edit_port_id) ? '' : ' placeholder' ?>" data-placeholder="Select Port" style="color:#64748b !important;font-weight:500;font-size:14px;"><?= ($edit_mode && $edit_port_id) ? sanitize($edit_port_name) : 'Select Port' ?></span>
@@ -1242,8 +1592,8 @@ include 'includes/top_app_bar.php';
             </div>
 
             <!-- 🌟 Survey Type: searchable MULTI-select (checkboxes) with search box inside -->
-            <div class="form-group-custom">
-                <label>Survey Type * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
+            <div class="form-group-custom avm-span-2">
+                <label><i class="fa-solid fa-file-circle-check vdd-field-icon"></i> Survey Type * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
                 <div class="searchable-select ss-multi" data-ss-root="surveyType">
                     <button type="button" class="ss-trigger" data-testid="survey-type-select-trigger">
                         <span class="ss-trigger-text placeholder" data-placeholder="Select Survey Type" style="color:#64748b !important;font-weight:500;font-size:14px;">Select Survey Type</span>
@@ -1281,8 +1631,8 @@ include 'includes/top_app_bar.php';
             </div>
 
             <?php if (!$is_requester): ?>
-            <div class="form-group-custom">
-                <label>Assign Surveyor(s) * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
+            <div class="form-group-custom avm-span-2">
+                <label><i class="fa-solid fa-user-tie vdd-field-icon"></i> Assign Surveyor(s) * <span class="text-muted fw-normal" style="font-size:10.5px;">(select one or more)</span></label>
                 <div class="searchable-select ss-multi" data-ss-root="surveyor" data-hidden-input="surveyorIdsInput">
                     <button type="button" class="ss-trigger" data-testid="surveyor-select-trigger">
                         <span class="ss-trigger-text placeholder" data-placeholder="Select Surveyor(s)" style="color:#64748b !important;font-weight:500;font-size:14px;">Select Surveyor(s)</span>
@@ -1313,14 +1663,15 @@ include 'includes/top_app_bar.php';
             </div>
             <?php endif; ?>
 
-            <div class="form-group-custom">
-                <label>Remarks (Optional)</label>
+
+            <div class="form-group-custom avm-span-2">
+                <label><i class="fa-solid fa-comment vdd-field-icon"></i> Remarks (Optional)</label>
                 <textarea name="remarks" rows="3" placeholder="Enter any specific instructions or notes..."><?= $edit_mode ? sanitize($edit_survey['remarks'] ?? '') : '' ?></textarea>
             </div>
 
             <?php if ($edit_mode && !empty($edit_attachments)): ?>
-            <div class="form-group-custom">
-                <label>Already Uploaded</label>
+            <div class="form-group-custom avm-span-2 avm-existing">
+                <label><i class="fa-solid fa-paperclip vdd-field-icon"></i> Already Uploaded</label>
                 <?php foreach ($edit_attachments as $att): ?>
                     <div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;border:1px solid var(--border-color);border-radius:10px;padding:8px 12px;margin-bottom:6px;font-size:12px;">
                         <span><i class="fa-solid fa-paperclip text-primary me-1"></i><?= sanitize($att['file_name']) ?></span>
@@ -1330,17 +1681,24 @@ include 'includes/top_app_bar.php';
             </div>
             <?php endif; ?>
 
-            <div class="form-group-custom">
-                <label>Assignment Attachment(s) <span class="text-muted" style="font-weight:500;text-transform:none;letter-spacing:0;">(optional)</span></label>
+            <div class="form-group-custom avm-span-2">
+                <label><i class="fa-solid fa-cloud-arrow-up vdd-field-icon"></i> Assignment Attachment(s) <span class="text-muted" style="font-weight:500;text-transform:none;letter-spacing:0;">(optional)</span></label>
                 <input type="file" name="assignment_attachment[]" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip" multiple>
                 <div class="text-muted" style="font-size:11px;margin-top:4px;"><?= $edit_mode ? 'Any files selected here are added to the ones already uploaded above — nothing gets removed.' : 'You can select multiple files at once. Surveyor will see all of them on the vessel detail page.' ?></div>
             </div>
 
-            <button type="submit" class="blue-action-btn mt-3" style="background: #3b32b3;">
-                <i class="fa-solid fa-ship"></i> <?= $edit_mode ? 'Save Changes' : 'Assign & Save Vessel' ?>
-            </button>
+                </div>
+            </div>
+
+            <div class="avm-submit-bar">
+                <div class="avm-submit-hint"><i class="fa-solid fa-circle-info"></i> Fields marked <b>*</b> are required</div>
+                <button type="submit" class="blue-action-btn avm-submit" data-testid="assign-vessel-submit">
+                    <i class="fa-solid <?= $edit_mode ? 'fa-floppy-disk' : 'fa-paper-plane' ?>"></i> <?= $edit_mode ? 'Save Changes' : 'Assign &amp; Save Vessel' ?>
+                </button>
+            </div>
         </div>
     </form>
+    </div><!-- /#manualFormPanel -->
 </div>
 
 <?php /* 🌟 Duplicate-vessel-name confirmation — shown only when the entered
@@ -1372,10 +1730,21 @@ include 'includes/top_app_bar.php';
 </div>
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+// 🌟 includes/footer.php (included at the bottom of this page) loads jQuery
+// a SECOND time — that second <script src> creates a brand new jQuery
+// instance and replaces window.$/jQuery, so any $.ajaxSetup() default set
+// here would be silently gone by the time a click handler actually fires
+// $.ajax() later (same proven bug/fix as bulk_assign_vessels.php). Belt and
+// suspenders: set ajaxSetup here AND pass the header explicitly on every
+// individual $.ajax call below.
+const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
+$.ajaxSetup({ headers: { 'X-CSRF-Token': CSRF_TOKEN } });
+</script>
 <script>
     $(document).ready(function() {
         var EDIT_MODE = <?= $edit_mode ? 'true' : 'false' ?>; // editing an existing assignment, not creating a new one
-        var CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
 
         // ---- Inline "+ Add New" (Client / Port / Survey Type) ----
         // Admin only (see PHP gating around these boxes). Saves through the
@@ -1890,7 +2259,292 @@ include 'includes/top_app_bar.php';
     });
 </script>
 
-<?php 
+<?php if (!$is_requester && !$edit_mode): ?>
+<script>
+// 🌟 Paste Email (AI Email -> Vessel Assignment). Separate ready block from
+// the one above — purely additive, never touches the existing manual-form
+// JS. Only rendered for Admin, and only when creating a new assignment
+// (not editing one).
+$(document).ready(function() {
+    if (!$('#pasteEmailPanel').length) return;
+
+    var lastExtractionMeta = null;
+    var currentVessel = null;
+
+    function resetResultUI() {
+        $('#pasteEmailError').hide().text('');
+        $('#pasteEmailMultiPicker').hide();
+        $('#pasteEmailMultiList').empty();
+        $('#pasteEmailResult').hide();
+        $('#pasteEmailFieldsList').empty();
+        $('#pasteEmailMissing').hide().empty();
+        currentVessel = null;
+    }
+
+    // ---- Tabs ----
+    $('#tabBtnManual').on('click', function() {
+        $(this).addClass('active');
+        $('#tabBtnPasteEmail').removeClass('active');
+        $('#manualFormPanel').show();
+        $('#pasteEmailPanel').hide();
+    });
+    $('#tabBtnPasteEmail').on('click', function() {
+        $(this).addClass('active');
+        $('#tabBtnManual').removeClass('active');
+        $('#pasteEmailPanel').show();
+        $('#manualFormPanel').hide();
+    });
+
+    $('#clearPasteEmailBtn').on('click', function() {
+        $('#pasteEmailTextarea').val('');
+        resetResultUI();
+    });
+
+    function showExtractError(resp) {
+        var msg = (resp && resp.message) ? resp.message : 'Unable to extract vessel details from this email. Please try again or use Manual Form.';
+        $('#pasteEmailError').text(msg).show();
+    }
+
+    function runExtraction() {
+        var text = $.trim($('#pasteEmailTextarea').val());
+        if (!text) {
+            Swal.fire({ icon: 'warning', title: 'Please paste the client email first.', confirmButtonColor: '#3b32b3' });
+            return;
+        }
+        resetResultUI();
+        $('#pasteEmailLoading').show();
+        $('#extractEmailBtn').prop('disabled', true).css('opacity', '0.7');
+
+        $.ajax({
+            url: 'ajax/email_vessel_extract.php',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ email_text: text }),
+            dataType: 'json',
+            headers: { 'X-CSRF-Token': CSRF_TOKEN }
+        }).done(function(resp) {
+            $('#pasteEmailLoading').hide();
+            $('#extractEmailBtn').prop('disabled', false).css('opacity', '1');
+            if (!resp || !resp.success) { showExtractError(resp); return; }
+
+            lastExtractionMeta = resp;
+            var vessels = resp.vessels || [];
+            if (!vessels.length) {
+                $('#pasteEmailError').text('No vessel information could be found in this email. Please check the content, or use Manual Form.').show();
+                return;
+            }
+            if (vessels.length > 1) {
+                renderMultiPicker(vessels);
+            } else {
+                renderResult(vessels[0]);
+            }
+        }).fail(function(xhr) {
+            $('#pasteEmailLoading').hide();
+            $('#extractEmailBtn').prop('disabled', false).css('opacity', '1');
+            showExtractError(xhr.responseJSON);
+        });
+    }
+
+    $('#extractEmailBtn').on('click', runExtraction);
+    $('#reExtractBtn').on('click', runExtraction);
+
+    function renderMultiPicker(vessels) {
+        $('#pasteEmailMultiPicker').show();
+        var $list = $('#pasteEmailMultiList').empty();
+        vessels.forEach(function(v, idx) {
+            var $item = $('<div class="pe-multi-item"></div>');
+            $item.append($('<span></span>').text((idx + 1) + '. ' + (v.vessel_name || 'Unnamed vessel')));
+            var $btn = $('<button type="button">Review</button>');
+            $btn.on('click', function() { renderResult(v); });
+            $item.append($btn);
+            $list.append($item);
+        });
+    }
+
+    var FIELD_LABELS = {
+        vessel_name: 'Vessel Name', imo_number: 'IMO Number', client_name: 'Client',
+        port_name: 'Port', agent_name: 'Agent', survey_type: 'Survey Type',
+        cargo_name: 'Cargo', cargo_quantity: 'Quantity', eta: 'ETA', etd: 'ETD',
+        berth: 'Berth', voyage_number: 'Voyage No.', bill_of_lading: 'Bill of Lading',
+        terminal_name: 'Terminal', master_name: 'Master', agent_email: 'Agent Email',
+        agent_phone: 'Agent Phone', client_email: 'Client Email'
+    };
+    var DISPLAY_ORDER = ['vessel_name', 'imo_number', 'client_name', 'port_name', 'agent_name', 'survey_type',
+        'cargo_name', 'cargo_quantity', 'eta', 'etd', 'berth', 'voyage_number', 'bill_of_lading',
+        'terminal_name', 'master_name', 'agent_email', 'agent_phone', 'client_email'];
+
+    function renderResult(vessel) {
+        currentVessel = vessel;
+        $('#pasteEmailMultiPicker').hide();
+        $('#pasteEmailResult').show();
+
+        var conf = lastExtractionMeta && lastExtractionMeta.extraction_confidence !== null && lastExtractionMeta.extraction_confidence !== undefined
+            ? lastExtractionMeta.extraction_confidence : null;
+        $('#pasteEmailConfidence').text(conf !== null ? ('AI Confidence: ' + conf + '%') : '');
+
+        var $fields = $('#pasteEmailFieldsList').empty();
+        var uncertainSet = vessel.uncertain_fields || [];
+        // Fields backed by a searchable-select dropdown — show what will
+        // actually get SELECTED (the fuzzy-matched real row), not just the
+        // raw text the AI read, so a wrong match is visible before the
+        // admin clicks "Review & Assign Vessel" rather than hidden behind a
+        // plain "✓ AI" badge. matched_*_score is 0-100; a match on a
+        // different-looking name than what was extracted gets a "Check"
+        // badge even when the AI itself was confident about the text.
+        var MATCH_FIELDS = {
+            client_name: { idKey: 'matched_client_id', labelKey: 'matched_client_label', scoreKey: 'matched_client_score' },
+            port_name: { idKey: 'matched_port_id', labelKey: 'matched_port_label', scoreKey: 'matched_port_score' }
+        };
+        DISPLAY_ORDER.forEach(function(key) {
+            var val = vessel[key] || '';
+            var uncertain = uncertainSet.indexOf(key) !== -1;
+            var $row = $('<div class="pe-field-row"></div>');
+            $row.append($('<span class="pe-field-label"></span>').text(FIELD_LABELS[key] || key));
+
+            var match = MATCH_FIELDS[key];
+            var valueText = val || 'Not found';
+            var badgeWarn = uncertain;
+            if (match && val) {
+                var matchedId = vessel[match.idKey];
+                var matchedLabel = vessel[match.labelKey];
+                var matchedScore = vessel[match.scoreKey];
+                if (matchedId && matchedLabel) {
+                    var differs = matchedLabel.toLowerCase().trim() !== val.toLowerCase().trim();
+                    valueText = val + (differs ? ('  →  will select: ' + matchedLabel + ' (' + matchedScore + '%)') : '');
+                    if (differs) badgeWarn = true;
+                } else {
+                    valueText = val + '  —  not found in existing list, select manually';
+                    badgeWarn = true;
+                }
+            }
+
+            $row.append($('<span></span>').addClass('pe-field-value' + (val ? '' : ' empty')).text(valueText));
+            if (val) {
+                $row.append($('<span></span>').addClass('pe-field-badge ' + (badgeWarn ? 'warn' : 'ok')).text(badgeWarn ? '⚠ Check' : '✓ AI'));
+            }
+            $fields.append($row);
+        });
+
+        var missing = vessel.missing_fields || [];
+        var $m = $('#pasteEmailMissing');
+        if (missing.length) {
+            $m.empty().show().append('<strong>Missing information:</strong>');
+            missing.forEach(function(f) {
+                $m.append($('<span class="pe-missing-item"></span>').text('⚠ ' + (FIELD_LABELS[f] || f)));
+            });
+        } else {
+            $m.hide().empty();
+        }
+    }
+
+    $('#backPasteAnotherBtn').on('click', function() {
+        $('#pasteEmailTextarea').val('');
+        resetResultUI();
+    });
+
+    function markAiFilled($input) {
+        if (!$input || !$input.length) return;
+        $input.addClass('ai-filled');
+        var $label = $input.closest('.form-group-custom').find('label').first();
+        $label.find('.ai-badge').remove();
+        $label.append('<span class="ai-badge">✓ AI</span>');
+        $input.one('input change', function() {
+            $(this).removeClass('ai-filled');
+            $(this).closest('.form-group-custom').find('.ai-badge').remove();
+        });
+    }
+
+    // Reuses the existing searchable-select widgets exactly as a real click
+    // would (no duplicate selection logic) — finds the matching <li
+    // data-value="..."> inside that widget's own option list and triggers
+    // a real click on it, which runs the widget's own selectOption()/
+    // toggleOption() and keeps the hidden select/input perfectly in sync.
+    function clickOption($root, value) {
+        if (!$root.length || value === null || value === undefined || value === '') return false;
+        var $opt = $root.find('.ss-options .ss-option[data-value="' + value + '"]');
+        if ($opt.length) { $opt.trigger('click'); return true; }
+        return false;
+    }
+
+    function applyAiVesselToForm(v) {
+        // 🌟 IMPORTANT: assign_vessel.php's existing form is reused exactly
+        // as-is — no new fields. Only vessel_name / client / agent_name /
+        // port / survey type / remarks are real existing fields, so those
+        // are the only ones this function ever writes into. Everything else
+        // the AI found (imo_number, cargo, ETA, berth, voyage number, bill
+        // of lading, master name, agent/client email/phone) has no existing
+        // field to go into, so it's folded into the existing Remarks
+        // textarea below instead — never dropped, never given a new input.
+        if (v.vessel_name) { $('#vessel_name').val(v.vessel_name); markAiFilled($('#vessel_name')); }
+        if (v.agent_name) { $('input[name="agent_name"]').val(v.agent_name); markAiFilled($('input[name="agent_name"]')); }
+
+        if (v.matched_client_id) {
+            var $clientRoot = $('[data-ss-root="client"]');
+            if (clickOption($clientRoot, v.matched_client_id)) markAiFilled($clientRoot.find('.ss-trigger'));
+        }
+
+        if (v.matched_port_id) {
+            var $portRoot = $('[data-ss-root="port"]');
+            if (clickOption($portRoot, v.matched_port_id)) markAiFilled($portRoot.find('.ss-trigger'));
+        }
+
+        if (v.matched_survey_type_ids && v.matched_survey_type_ids.length) {
+            var $stRoot = $('[data-ss-root="surveyType"]');
+            // Clear anything already selected first (e.g. from reviewing a
+            // different vessel a moment ago) so only THIS vessel's matched
+            // types end up checked.
+            $stRoot.find('.ss-options .ss-option.ss-selected').each(function() { $(this).trigger('click'); });
+            var anyApplied = false;
+            v.matched_survey_type_ids.forEach(function(id) { if (clickOption($stRoot, id)) anyApplied = true; });
+            if (anyApplied) markAiFilled($stRoot.find('.ss-trigger'));
+        }
+
+        // Everything with no real form field (per the request's own "don't
+        // duplicate existing DB fields" instruction) is folded into Remarks
+        // so none of it is lost, clearly labeled as coming from the email.
+        var extraMap = {
+            'IMO Number': v.imo_number,
+            'Terminal': v.terminal_name, 'Cargo': v.cargo_name,
+            'Cargo Quantity': [v.cargo_quantity, v.cargo_unit].filter(Boolean).join(' '),
+            'ETA': v.eta, 'ETD': v.etd, 'Survey Date': v.survey_date, 'Survey Time': v.survey_time,
+            'Berth': v.berth, 'Voyage No.': v.voyage_number, 'Bill of Lading': v.bill_of_lading,
+            'Master': v.master_name, 'Agent Email': v.agent_email, 'Agent Phone': v.agent_phone,
+            'Client Email': v.client_email
+        };
+        var extraLines = [];
+        Object.keys(extraMap).forEach(function(label) {
+            if (extraMap[label]) extraLines.push(label + ': ' + extraMap[label]);
+        });
+        if (v.remarks) extraLines.push(v.remarks);
+        if (extraLines.length) {
+            var $remarks = $('textarea[name="remarks"]');
+            var existing = $.trim($remarks.val());
+            var block = '[From client email — AI extracted]\n' + extraLines.join('\n');
+            $remarks.val(existing ? (existing + '\n\n' + block) : block);
+            markAiFilled($remarks);
+        }
+
+        if (v.client_name && !v.matched_client_id) {
+            Swal.fire({ icon: 'info', title: 'Client "' + v.client_name + '" was not found in the existing client list — please select it manually.', confirmButtonColor: '#3b32b3' });
+        } else if (v.port_name && !v.matched_port_id) {
+            Swal.fire({ icon: 'info', title: 'Port "' + v.port_name + '" was not found in the existing port list — please select it manually.', confirmButtonColor: '#3b32b3' });
+        }
+    }
+
+    $('#reviewAssignBtn').on('click', function() {
+        if (!currentVessel) return;
+        applyAiVesselToForm(currentVessel);
+        $('#tabBtnManual').trigger('click');
+        Swal.fire({ icon: 'success', title: 'Form filled from email — please review before assigning.', confirmButtonColor: '#3b32b3', timer: 2000, showConfirmButton: false });
+        setTimeout(function() {
+            try { document.getElementById('manualFormPanel').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+        }, 150);
+    });
+});
+</script>
+<?php endif; ?>
+
+<?php
 include 'includes/nav.php';
 include 'includes/footer.php';
 ?>

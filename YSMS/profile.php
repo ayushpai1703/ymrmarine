@@ -367,6 +367,7 @@ if (!empty($user['avatar']) && file_exists($user['avatar'])) {
 include 'includes/header.php';
 ?>
 
+<link rel="stylesheet" href="assets/css/app-pages.css?v=<?= @filemtime(__DIR__ . '/assets/css/app-pages.css') ?>">
 <style>
     .profile-card { background: white; border-radius: 16px; padding: 20px; margin: 15px; border: 1px solid var(--border-color); }
     .profile-form-control { width: 100%; padding: 11px 13px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 13.5px; background: #f8fafc; outline: none; margin-bottom: 12px; }
@@ -375,6 +376,7 @@ include 'includes/header.php';
     .save-profile-btn { background: #3b32b3; color: white; border: none; width: 100%; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
     .logout-zone-btn { background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; width: 100%; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 600; text-align: center; display: block; text-decoration: none; margin-top: 15px; }
     #imageUploadInput { display: none; }
+    .profile-panel-icon { color: inherit; }
 
     /* Desktop only: 2 cards per row */
     @media (min-width: 992px) {
@@ -404,11 +406,75 @@ include 'includes/header.php';
             margin-left: auto;
             margin-right: auto;
         }
+
+        /* ═══ Desktop modern redesign — same hero + icon-chip visual
+           language as the rest of the app's redesigned pages. Mobile
+           (everything outside this block) is completely untouched. */
+        .profile-top-bar { display: none !important; }
+
+        .profile-photo-block {
+            position: relative; overflow: hidden; border-radius: 22px;
+            background: linear-gradient(120deg, #0f172a 0%, #1E1B6B 48%, #4B2FD6 100%);
+            padding: 30px 20px; margin-top: 20px !important;
+            box-shadow: 0 14px 34px rgba(30,27,107,.22);
+        }
+        .profile-photo-block::before {
+            content: '\f2bd'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 170px;
+            position: absolute; right: -20px; top: -34px; color: rgba(255,255,255,.07); pointer-events: none; line-height: 1;
+        }
+        .profile-photo-block img { border-color: rgba(255,255,255,.85) !important; box-shadow: 0 0 0 4px rgba(255,255,255,.12); }
+        .profile-photo-block h4 { color: #fff !important; position: relative; }
+        .profile-photo-block .badge {
+            background: rgba(255,255,255,.16) !important; color: #fff !important; border-color: rgba(255,255,255,.3) !important;
+            font-size: 10.5px !important; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+            padding: 5px 12px !important; border-radius: 999px; position: relative;
+        }
+
+        .profile-card {
+            border: 1px solid #e2e8f0; border-radius: 20px; padding: 0;
+            box-shadow: 0 4px 20px rgba(15,23,42,.05); overflow: hidden;
+        }
+        .profile-card > .fw-bold {
+            padding: 16px 20px; margin: 0 !important; border-bottom: 1px solid #f1f5f9;
+            display: flex; align-items: center; font-size: 13.5px !important;
+        }
+        .profile-card-body { display: block; padding: 18px 20px; }
+        .profile-card-body > a.save-profile-btn:first-child { margin-top: 0 !important; }
+        .profile-panel-icon {
+            width: 28px; height: 28px; border-radius: 9px; flex: none; margin-right: 10px;
+            background: linear-gradient(135deg, #8B7CF6, #4B2FD6);
+            display: inline-flex; align-items: center; justify-content: center; font-size: 12.5px;
+        }
+        .profile-panel-icon i { color: #fff !important; }
+
+        .profile-form-control, .profile-locked-control {
+            border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 11px 14px; font-size: 13.5px;
+        }
+        .profile-form-control { background: #F8FAFC; }
+        .profile-form-control:focus { outline: none; border-color: #A78BFA; box-shadow: 0 0 0 4px rgba(91,45,238,.12); background: #fff; }
+        .profile-locked-control { background: #F1F5F9; }
+
+        .save-profile-btn {
+            border: none; border-radius: 12px; height: 46px;
+            background: linear-gradient(120deg, #1E1B6B, #4B2FD6); font-weight: 800; font-size: 13px;
+            box-shadow: 0 8px 18px rgba(75,47,214,.28);
+        }
+        .profile-card form .save-profile-btn[style*="eab308"] {
+            background: linear-gradient(120deg, #B45309, #F59E0B) !important; color: #fff !important;
+            box-shadow: 0 8px 18px rgba(180,83,9,.28);
+        }
+        a.save-profile-btn[style*="1e3a8a"] { background: linear-gradient(120deg, #1E3A8A, #2563EB) !important; box-shadow: 0 8px 18px rgba(37,99,235,.28); }
+        a.save-profile-btn[style*="0f766e"] { background: linear-gradient(120deg, #0f766e, #14B8A6) !important; box-shadow: 0 8px 18px rgba(15,118,110,.28); }
+
+        .logout-zone-btn {
+            border-radius: 14px; font-weight: 800; height: 48px; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 16px rgba(220,38,38,.08);
+        }
     }
 </style>
 
-<div class="scroll-content">
-    <div class="bg-white p-3 d-flex align-items-center gap-2 border-bottom">
+<div class="scroll-content pr-page">
+    <div class="bg-white p-3 d-flex align-items-center gap-2 border-bottom profile-top-bar">
         <a href="index.php" class="text-dark"><i class="fa-solid fa-chevron-left"></i></a>
         <h5 class="fw-bold m-0 text-center flex-grow-1" style="font-size: 16px;">Account Settings</h5>
         <div class="d-flex align-items-center gap-2" style="flex-shrink:0;">
@@ -442,8 +508,8 @@ include 'includes/header.php';
     <div class="profile-desktop-grid">
     <!-- 🔓 SECTION A: PERSONAL INFO (మార్చుకోగలిగేవి) -->
     <div class="profile-card shadow-sm mb-1">
-        <div class="fw-bold text-dark mb-2" style="font-size: 12.5px;"><i class="fa-solid fa-user-pen text-primary me-1"></i> Personal Information</div>
-        <form action="profile.php" method="POST"><?= csrf_field() ?>
+        <div class="fw-bold text-dark mb-2" style="font-size: 12.5px;"><span class="profile-panel-icon"><i class="fa-solid fa-user-pen text-primary me-1"></i></span> Personal Information</div>
+        <form action="profile.php" method="POST" class="profile-card-body"><?= csrf_field() ?>
             <?php
                 $isSurveyor = (($_SESSION['role'] ?? '') === 'Surveyor');
                 $cur_first = $user['first_name'] ?? '';
@@ -492,8 +558,8 @@ include 'includes/header.php';
 
     <!-- 🔐 SECTION B: CHANGE PASSWORD (కొత్త ఆప్షన్) -->
     <div class="profile-card shadow-sm mt-2">
-        <div class="fw-bold text-dark mb-2" style="font-size: 12.5px;"><i class="fa-solid fa-key text-warning me-1"></i> Change Password</div>
-        <form action="profile.php" method="POST"><?= csrf_field() ?>
+        <div class="fw-bold text-dark mb-2" style="font-size: 12.5px;"><span class="profile-panel-icon"><i class="fa-solid fa-key text-warning me-1"></i></span> Change Password</div>
+        <form action="profile.php" method="POST" class="profile-card-body"><?= csrf_field() ?>
             <div>
                 <label class="text-secondary mb-1 d-block" style="font-size: 11.5px;">Current Password</label>
                 <input type="password" name="current_password" class="profile-form-control" placeholder="••••••••" required>
@@ -512,7 +578,8 @@ include 'includes/header.php';
 
     <!-- 🔒 SECTION C: LOCKED PARAMETERS (మార్చడానికి వీలులేనివి) -->
     <div class="profile-card shadow-sm mt-2">
-        <div class="fw-bold text-muted mb-2" style="font-size: 12.5px;"><i class="fa-solid fa-lock text-secondary me-1"></i> Locked System Parameters</div>
+        <div class="fw-bold text-muted mb-2" style="font-size: 12.5px;"><span class="profile-panel-icon"><i class="fa-solid fa-lock text-secondary me-1"></i></span> Locked System Parameters</div>
+        <div class="profile-card-body">
         <?php if ($current_role === 'Client' && $client_company_name !== ''): ?>
         <div>
             <label class="text-secondary mb-1 d-block" style="font-size: 11.5px;">Company Name</label>
@@ -533,23 +600,26 @@ include 'includes/header.php';
             <label class="text-secondary mb-1 d-block" style="font-size: 11.5px;">Date of Joining</label>
             <input type="text" class="profile-locked-control" value="<?= $joining_date ?>" readonly>
         </div>
+        </div>
     </div>
 
     <!-- 🌟 1.2 SECTION D: BUSINESS CARD / ID CARD DOWNLOADS (Admin uploads via Admin Controls > ID / Business Cards; everyone can only download their own) -->
     <?php if ($business_card_path || $id_card_path): ?>
     <div class="profile-card shadow-sm mt-2">
-        <div class="fw-bold text-dark mb-2" style="font-size: 12.5px;"><i class="fa-solid fa-id-card text-primary me-1"></i> My Cards</div>
+        <div class="fw-bold text-dark mb-2" style="font-size: 12.5px;"><span class="profile-panel-icon"><i class="fa-solid fa-id-card text-primary me-1"></i></span> My Cards</div>
+        <div class="profile-card-body">
         <?php if ($business_card_path): ?>
             <a href="<?= sanitize($business_card_path) ?>" download class="save-profile-btn mt-1 d-block text-decoration-none" style="background: #1e3a8a; margin-bottom: 10px;" data-testid="profile-download-business-card"><i class="fa-solid fa-download me-1"></i> Download Business Card</a>
         <?php endif; ?>
         <?php if ($id_card_path): ?>
             <a href="<?= sanitize($id_card_path) ?>" download class="save-profile-btn mt-1 d-block text-decoration-none" style="background: #0f766e;" data-testid="profile-download-id-card"><i class="fa-solid fa-download me-1"></i> Download ID Card</a>
         <?php endif; ?>
+        </div>
     </div>
     <?php elseif ($current_role === 'Admin'): ?>
     <div class="profile-card shadow-sm mt-2">
-        <div class="fw-bold text-dark mb-2" style="font-size: 12.5px;"><i class="fa-solid fa-id-card text-primary me-1"></i> My Cards</div>
-        <p class="text-muted small m-0">No cards uploaded yet. Go to <a href="admin_surveyor_cards.php">Admin Controls &gt; ID / Business Cards</a> to add them.</p>
+        <div class="fw-bold text-dark mb-2" style="font-size: 12.5px;"><span class="profile-panel-icon"><i class="fa-solid fa-id-card text-primary me-1"></i></span> My Cards</div>
+        <p class="text-muted small m-0 profile-card-body">No cards uploaded yet. Go to <a href="admin_surveyor_cards.php">Admin Controls &gt; ID / Business Cards</a> to add them.</p>
     </div>
     <?php endif; ?>
 
@@ -561,6 +631,20 @@ include 'includes/header.php';
     </div>
 </div>
 
+<script>
+// Phones / tablets: each section opens and closes when its title row is tapped (app style); the computer view shows them all.
+(function () {
+  if (!window.matchMedia('(max-width: 991.98px)').matches) return;
+  document.querySelectorAll('.pr-page .profile-card').forEach(function (card, i) {
+    var h = card.firstElementChild; if (!h) return;
+    h.classList.add('pr-row'); h.setAttribute('role', 'button'); h.setAttribute('tabindex', '0'); h.setAttribute('aria-expanded', 'false');
+    h.setAttribute('data-testid', 'profile-section-' + i);
+    function t() { var o = card.classList.toggle('pr-open'); h.setAttribute('aria-expanded', o ? 'true' : 'false'); }
+    h.addEventListener('click', t);
+    h.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); t(); } });
+  });
+})();
+</script>
 <?php 
 include 'includes/nav.php';
 include 'includes/footer.php';

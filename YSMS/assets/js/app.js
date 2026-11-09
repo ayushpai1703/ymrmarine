@@ -68,9 +68,11 @@ $(document).ready(function() {
     // Global FAB Bottom Drawer Action Animation Engine Match
     $('#globalFabTrigger').on('click', function() {
         var $fab = $(this);
+        if ($('body').hasClass('fab-open')) { closeFab(); return; } // the × closes it again
         $fab.addClass('fab-tap');
         setTimeout(function() { $fab.removeClass('fab-tap'); }, 380);
 
+        $('body').addClass('fab-open'); $fab.attr('aria-expanded', 'true');
         $('#fabActionOverlay').css('display', 'flex');
         setTimeout(function() {
             $('#fabPopupSheet').css('transform', 'translateY(0)');
@@ -78,11 +80,13 @@ $(document).ready(function() {
     });
 
     function closeFab() {
+        $('body').removeClass('fab-open'); $('#globalFabTrigger').attr('aria-expanded', 'false');
         $('#fabPopupSheet').css('transform', 'translateY(100%)');
         setTimeout(function() {
             $('#fabActionOverlay').css('display', 'none');
         }, 300);
     }
+    $(document).on('keydown', function(e) { if (e.key === 'Escape' && $('body').hasClass('fab-open')) closeFab(); });
 
     $('#closeFabBtn, #fabActionOverlay').on('click', function(e) {
         if (e.target === this || this.id === 'closeFabBtn') {

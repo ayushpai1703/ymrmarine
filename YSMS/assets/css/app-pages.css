@@ -1,0 +1,145 @@
+/*
+ * App-style mobile pages (phones and tablets below 992px only; the computer view is unchanged):
+ * Cancelled Vessels, Assign Vessel, Profile, Admin Controls. Login has its own block below.
+ * Shared pieces: .ap-band (coloured header), .ap-search, .ap-chips, .ap-card.
+ */
+.ap-page { display: none; }
+
+@media (max-width: 991.98px) {
+    .ap-page { display: block; font-family: 'Lexend', system-ui, sans-serif; padding-bottom: 120px; }
+    .ap-band { position: relative; color: #fff; padding: 14px 16px 64px; border-radius: 0 0 28px 28px;
+        background: linear-gradient(150deg, #0b2a5b 0%, #123f86 60%, #1b6fd1 100%); }
+    .ap-band.ap-red { background: linear-gradient(150deg, #8f1d28 0%, #b02a37 50%, #dc3545 100%); }
+    .ap-top { display: flex; align-items: center; gap: 12px; }
+    .ap-ib { flex: none; width: 42px; height: 42px; border-radius: 14px; border: 0; background: rgba(255,255,255,.16) !important; color: #fff !important;
+        display: inline-flex; align-items: center; justify-content: center; font-size: 17px; text-decoration: none; padding: 0; }
+    .ap-ib:active { transform: scale(.96); }
+    .ap-hb .hamburger-lines { display: inline-flex; flex-direction: column; gap: 4px; width: 18px; }
+    .ap-hb .hb-line { display: block; height: 2px; border-radius: 2px; background: #fff; }
+    .ap-tt { flex: 1; min-width: 0; }
+    .ap-tt small { display: block; font-size: 12px; opacity: .8; }
+    .ap-tt b { display: block; font-size: 20px; font-weight: 800; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ap-search { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; background: #fff; border-radius: 16px; padding: 0 14px; height: 50px; box-shadow: 0 6px 16px rgba(0,0,0,.12); }
+    .ap-search i { color: #1D63ED; }
+    .ap-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: 400 14px 'Lexend', sans-serif; color: #0b1324; }
+    .ap-chips { display: flex; gap: 8px; overflow-x: auto; padding: 0 14px 4px; margin: -50px 0 12px; position: relative; z-index: 2; scrollbar-width: none; }
+    .ap-chips::-webkit-scrollbar { display: none; }
+    .ap-chip { flex: none; border: 0; border-radius: 999px; padding: 8px 14px; font: 700 12.5px 'Lexend', sans-serif; background: #fff; color: #334155; box-shadow: 0 2px 8px rgba(15,23,42,.08); }
+    .ap-chip.on { background: #1D63ED; color: #fff; }
+    .ap-list { padding: 0 12px; position: relative; z-index: 1; }
+    .ap-empty { text-align: center; color: #64748b; padding: 32px 12px; font-size: 14px; }
+    .ap-empty i { display: block; font-size: 26px; color: #dc3545; margin-bottom: 8px; }
+
+    /* Cancelled Vessels: phone cards instead of the grid; Bootstrap danger red #dc3545 */
+    .cn-page .at-wrap, .cn-page > .top-app-bar { display: none !important; }
+    .vessel-list-container .vessel-card.cc-card.pvz.pvz-red { border-color: #dc3545 !important; border-width: 2.5px !important; box-shadow: 0 6px 16px rgba(220,53,69,.12) !important; }
+    .pvz-red .pvz-bar { background: #dc3545; width: 4px; }
+    .pvz-red .pvz-i > svg { stroke: #dc3545; }
+    .cnm-rem { margin: 12px 0 2px; background: #fdf0f1; color: #842029; border-radius: 14px; padding: 10px 12px; font-size: 13px; line-height: 1.45; }
+    .cnm-rem b { color: #b02a37; font-weight: 700; }
+    .vessel-list-container .vessel-card.cnm-hide { display: none !important; }
+}
+.pvs-sheet.pvs-red { background: linear-gradient(160deg, #8f1d28 0%, #b02a37 55%, #dc3545 100%); }
+.pvs-red .pvs-f { border-left-color: #dc3545; }
+.pvs-red .pvs-badge { background: #fdf0f1; color: #b02a37; }
+.pvs-red .pvs-brand span, .pvs-red .pvs-foot { color: #fbdfe2; }
+
+/* Profile (profile.php): blue header, the photo in a white card, sections as tap-to-open rows */
+@media (max-width: 991.98px) {
+    .pr-page { background: #f3f6fb; padding-bottom: 120px; }
+    .pr-page .profile-top-bar { background: linear-gradient(150deg, #0b2a5b 0%, #123f86 60%, #1b6fd1 100%) !important; border: 0 !important;
+        padding: 16px 16px 76px !important; border-radius: 0 0 28px 28px; color: #fff; }
+    .pr-page .profile-top-bar > a { width: 42px; height: 42px; border-radius: 14px; background: rgba(255,255,255,.16); color: #fff !important;
+        display: inline-flex; align-items: center; justify-content: center; flex: none; text-decoration: none; }
+    .pr-page .profile-top-bar h5 { color: #fff; font-size: 19px !important; font-weight: 800 !important; text-align: left !important; }
+    .pr-page > .alert { position: relative; z-index: 2; margin-top: -60px !important; margin-bottom: 70px; border-radius: 14px !important; }
+    .pr-page .profile-photo-block { position: relative; z-index: 1; margin: -64px 16px 6px; background: #fff; border-radius: 24px; padding: 4px 16px 20px; box-shadow: 0 8px 24px rgba(15,23,42,.08); }
+    .pr-page .profile-photo-block > div { margin-top: 16px !important; }
+    .pr-page .profile-photo-block img { border-color: #fff !important; box-shadow: 0 6px 18px rgba(29,99,237,.25); }
+    .pr-page .profile-photo-block .bg-primary { background: #1D63ED !important; }
+    .pr-page .profile-photo-block h4 { font-size: 19px !important; font-weight: 800 !important; color: #0b1324 !important; margin-top: 10px !important; }
+    .pr-page .profile-photo-block .badge { background: #eaf1ff !important; color: #1D63ED !important; border-color: #bcd2fb !important; border-radius: 999px; padding: 5px 12px !important; font-size: 11.5px; }
+    .pr-page .profile-desktop-grid { margin: 14px 16px 0; background: #fff; border-radius: 22px; box-shadow: 0 8px 24px rgba(15,23,42,.07); overflow: hidden; }
+    .pr-page .profile-card { margin: 0 !important; border: 0 !important; border-top: 1px solid #e8edf4 !important; border-radius: 0; box-shadow: none !important; padding: 0; }
+    .pr-page .profile-card:first-child { border-top: 0 !important; }
+    .pr-page .pr-row { display: flex !important; align-items: center; gap: 12px; padding: 14px 16px; margin: 0 !important; font-size: 15px !important; font-weight: 700 !important; color: #0b1324 !important; cursor: pointer; }
+    .pr-page .pr-row::after { content: '\f054'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 12px; color: #94a3b8; margin-left: auto; transition: transform .18s ease; }
+    .pr-page .pr-open .pr-row::after { transform: rotate(90deg); }
+    .pr-page .profile-panel-icon { flex: none; width: 40px; height: 40px; border-radius: 13px; background: #eaf1ff; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; }
+    .pr-page .profile-panel-icon i { margin: 0 !important; }
+    .pr-page .profile-card:nth-child(2) .profile-panel-icon { background: #fff7db; }
+    .pr-page .profile-card:nth-child(3) .profile-panel-icon { background: #f1f5f9; }
+    .pr-page .profile-card .profile-card-body { display: none; padding: 2px 16px 16px; }
+    .pr-page .profile-card.pr-open .profile-card-body { display: block; }
+    .pr-page .profile-form-control, .pr-page .profile-locked-control { border: 1.5px solid #d6e0ee; border-radius: 14px; padding: 12px 14px; font-size: 16px; background: #fff; }
+    .pr-page .profile-locked-control { background: #f3f6fb; }
+    .pr-page .profile-form-control:focus { border-color: #1D63ED; box-shadow: 0 0 0 3px rgba(29,99,237,.12); }
+    .pr-page .save-profile-btn { border-radius: 16px; height: 50px; padding: 0; background: linear-gradient(135deg, #0b2a5b, #1D63ED); font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .pr-page .profile-card form .save-profile-btn[style*="eab308"] { background: linear-gradient(135deg, #b45309, #f59e0b) !important; color: #fff !important; }
+    .pr-page .logout-zone-btn { margin-top: 14px; background: #fff; border: 0; border-radius: 22px; box-shadow: 0 8px 24px rgba(15,23,42,.07); color: #dc3545;
+        display: flex; align-items: center; gap: 12px; padding: 14px 16px; text-align: left; font-size: 15px; font-weight: 700; }
+    .pr-page .logout-zone-btn i { width: 40px; height: 40px; border-radius: 13px; background: #fdf0f1; display: inline-flex; align-items: center; justify-content: center; margin: 0 !important; }
+}
+
+/* Admin Controls (admin_controls.php): purple header, every section as an app tile (2 per row), the chosen list below */
+.ac-m-lab { display: none; }
+@media (max-width: 991.98px) {
+    .ac-page { background: #f3f6fb; padding-bottom: 120px; }
+    .ac-page > .top-app-bar { background: linear-gradient(150deg, #2e1065 0%, #5b21b6 55%, #7c3aed 100%) !important; border: 0 !important; box-shadow: none !important; }
+    .ac-page > .top-app-bar .top-app-bar-title { color: #fff !important; font-weight: 800; }
+    .ac-page > .top-app-bar .hb-line { background: #fff !important; }
+    .ac-page > .top-app-bar .hamburger-menu-btn, .ac-page > .top-app-bar .detail-back-btn { color: #fff !important; }
+    .ac-m-lab { display: block; color: #ddd6fe; font-size: 12px; font-weight: 600; padding: 0 18px 54px; margin-top: -1px;
+        background: linear-gradient(150deg, #4c1d95 0%, #6d28d9 55%, #7c3aed 100%); border-radius: 0 0 28px 28px; }
+    .ac-page .admin-tabs-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; overflow: visible; padding: 0 14px; margin-top: -42px; position: relative; z-index: 1; }
+    .ac-page .admin-tab-btn { flex-direction: column; align-items: flex-start; gap: 10px; white-space: normal; text-align: left; border: 2px solid transparent; border-radius: 20px;
+        background: #fff; color: #0b1324; padding: 14px; font-size: 13.5px; font-weight: 700; line-height: 1.25; box-shadow: 0 8px 22px rgba(15,23,42,.07); min-height: 104px; }
+    .ac-page .admin-tab-btn i { width: 42px; height: 42px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; background: #ede9fe; color: #6d28d9; }
+    .ac-page .admin-tab-btn:nth-child(6n+2) i { background: #fff7db; color: #b45309; }
+    .ac-page .admin-tab-btn:nth-child(6n+3) i { background: #e7f6ec; color: #15803d; }
+    .ac-page .admin-tab-btn:nth-child(6n+4) i { background: #eaf1ff; color: #1D63ED; }
+    .ac-page .admin-tab-btn:nth-child(6n+5) i { background: #fdf0f1; color: #dc3545; }
+    .ac-page .admin-tab-btn:nth-child(6n) i { background: #e6f7f5; color: #0f766e; }
+    .ac-page .admin-tab-btn.active { background: #fff; color: #0b1324; border-color: #7c3aed; }
+    .ac-page .admin-module-panel { padding: 18px 14px 14px; scroll-margin-top: 70px; }
+    .ac-page .admin-search-input { border-radius: 14px !important; height: 48px; font-size: 16px !important; background: #fff !important; border: 1.5px solid #d6e0ee !important; }
+    .ac-page .admin-add-btn { border-radius: 14px; background: #6d28d9; }
+    .ac-page .admin-bulk-btn { border-radius: 14px; }
+    .ac-page .admin-item-card { border: 0; border-radius: 18px; box-shadow: 0 6px 16px rgba(15,23,42,.06); padding: 14px; }
+    .ac-page .admin-item-actions button, .ac-page .admin-item-actions a { width: 36px !important; height: 36px !important; border-radius: 11px !important; }
+    .ac-page .admin-danger-zone { margin: 6px 14px 24px; border-radius: 20px; background: #fff; border: 1.5px solid #f5c2c7; }
+    .ac-page .admin-danger-zone-btn { background: #dc3545; border-radius: 12px; }
+}
+
+/* Assign Vessel (assign_vessel.php): blue header, the form card over it, blue fields and button.
+   Only looks change: every field keeps its name / id, so the selects, checks and saving work as before. */
+@media (max-width: 991.98px) {
+    [data-testid="assign-vessel-top-app-bar"] { background: #0b2a5b !important; border-bottom: 0 !important; box-shadow: none !important; }
+    [data-testid="assign-vessel-top-app-bar"] .top-app-bar-title { color: #fff !important; font-weight: 800; }
+    [data-testid="assign-vessel-top-app-bar"] .detail-back-btn { color: #fff !important; }
+    .av-page { position: relative; background: #f3f6fb; padding-bottom: 120px; }
+    .av-page::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 84px; border-radius: 0 0 28px 28px;
+        background: linear-gradient(160deg, #0b2a5b 0%, #123f86 55%, #1b6fd1 100%); }
+    .av-page > * { position: relative; z-index: 1; }
+    .av-page #assignVesselForm .avm-form { margin: 10px 14px 24px !important; }
+    .av-page .avm-card { border: 0; border-radius: 24px; padding: 20px 16px 6px; box-shadow: 0 8px 24px rgba(15,23,42,.08); }
+    .av-page #assignVesselForm .form-group-custom label { color: #64748b !important; font-weight: 600 !important; font-size: 12.5px !important; }
+    .av-page #assignVesselForm .form-group-custom label i.vdd-field-icon { width: 26px; height: 26px; border-radius: 9px; background: #eaf1ff; color: #1D63ED; font-size: 11.5px; }
+    .av-page #assignVesselForm .form-group-custom input:not([type=checkbox]):not([type=hidden]):not([type=file]):not(.ss-search-input):not(.ss-add-new-input):not(.ss-add-new-input-extra),
+    .av-page #assignVesselForm .form-group-custom textarea,
+    .av-page #assignVesselForm .searchable-select .ss-trigger { background: #fff !important; border-color: #d6e0ee !important; border-radius: 14px !important; font-size: 16px !important; }
+    .av-page #assignVesselForm .form-group-custom input:focus,
+    .av-page #assignVesselForm .form-group-custom textarea:focus,
+    .av-page #assignVesselForm .searchable-select.open .ss-trigger { border-color: #1D63ED !important; box-shadow: 0 0 0 3px rgba(29,99,237,.12) !important; }
+    .av-page #assignVesselForm .form-group-custom input[readonly], .av-page #assignVesselForm .form-group-custom input:disabled { background: #eef4ff !important; color: #123f86 !important; }
+    .av-page #assignVesselForm .searchable-select .ss-trigger .fa-chevron-down { color: #1D63ED; }
+    .av-page #assignVesselForm .searchable-select .ss-option:hover,
+    .av-page #assignVesselForm .searchable-select .ss-option.ss-selected { background: #eaf1ff !important; color: #1D63ED !important; }
+    .av-page #assignVesselForm .ss-multi .ss-option-checkbox { accent-color: #1D63ED !important; }
+    .av-page #assignVesselForm input[type="file"][name="assignment_attachment[]"] { border-color: #c9d6ea !important; background: #f8fbff !important; }
+    .av-page #assignVesselForm input[type="file"]::file-selector-button { background: #eaf1ff; color: #1D63ED; box-shadow: none; }
+    .av-page .avm-submit-bar { border: 0; border-radius: 22px; box-shadow: 0 8px 24px rgba(15,23,42,.08); }
+    .av-page .avm-submit-hint i { color: #1D63ED; }
+    .av-page #assignVesselForm .blue-action-btn.avm-submit { background: linear-gradient(135deg, #0b2a5b, #1D63ED) !important; box-shadow: 0 10px 22px rgba(29,99,237,.28) !important; }
+    .av-page .vit-tab.active { background: #1D63ED; border-color: #1D63ED; }
+}

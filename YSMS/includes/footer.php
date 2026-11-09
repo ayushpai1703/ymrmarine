@@ -8,6 +8,7 @@
 // ever gets Request Survey.
 $fab_user_role = $user_role ?? ($_SESSION['role'] ?? '');
 ?>
+<link rel="stylesheet" href="assets/css/bottom-nav.css?v=<?= @filemtime(__DIR__ . '/../assets/css/bottom-nav.css') ?>">
 <!-- Global Center FAB Action Drawer Overlay -->
 <div class="fab-overlay" id="fabActionOverlay">
     <div class="fab-popup-sheet" id="fabPopupSheet">

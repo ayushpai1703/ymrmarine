@@ -90,6 +90,14 @@ if ($is_full_access) {
     $stmt->execute([$user_id, $user_id]);
 }
 $surveys = $stmt->fetchAll();
+// vessel pictures (AI search, includes/vessel_image.php); the YMR ship until one is found
+require_once __DIR__ . '/includes/vessel_image.php';
+$viStates = [];
+try { $viStates = viStates($db, array_map(fn($r) => (string)($r['vessel_name'] ?? ''), $surveys)); } catch (Throwable $e) { error_log('vessel pictures: ' . $e->getMessage()); }
+$viImg = function (string $name) use ($viStates): array {
+    $k = viKey($name); $st = $viStates[$k] ?? ['status' => 'unknown', 'img' => VI_DEFAULT];
+    return [$k, $st['img'], $st['status']];
+};
 
 $survey_types_filter = [];
 $survey_places_filter = [];
@@ -589,6 +597,9 @@ include 'includes/header.php';
             background: linear-gradient(135deg, #EEF2FF, #DCE3FF); color: #4F46E5;
             display: flex; align-items: center; justify-content: center; font-size: 15px;
         }
+        .vd-vessel-photo { width: 46px; height: 36px; padding: 0; overflow: hidden; background: #eef3fb; }
+        .vd-vessel-photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .vd-vessel-photo.real img { object-fit: cover; }
         .vd-vessel { font-weight: 700; color: #0f172a; text-decoration: none; font-size: 13.5px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
         .vd-vessel:hover { color: #5B2DEE; }
         .vd-sub { font-size: 11px; color: #94a3b8; margin-top: 1px; font-weight: 500; }
@@ -694,45 +705,63 @@ include 'includes/header.php';
                         $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
                         $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                     ?>
-                    <div class="vessel-card vessel-card--stacked cc-card" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
-                        <div class="cc-head">
-                            <span class="cc-num" data-row-num data-testid="pv-row-num"></span>
-                            <span class="cc-ship"><i class="fa-solid fa-ship"></i></span>
-                            <span class="cc-div" aria-hidden="true"></span>
-                            <span class="cc-name"><?= sanitize($vessel_name) ?></span>
+                    <div class="vessel-card vessel-card--stacked cc-card pvx pvz" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
+                        <?php
+                            $pvType = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A');
+                            $pvAppt = !empty($survey['appointment_date']) ? date('d M Y', strtotime($survey['appointment_date'])) : '—';
+                            $pvShare = implode("\n", array_filter([
+                                $vessel_name,
+                                'Client: ' . (($survey['company_name'] ?? '') ?: '—'),
+                                'Agent: ' . (($survey['agent_name'] ?? '') ?: '—'),
+                                'Survey Type: ' . $pvType,
+                                $is_full_access ? 'Surveyor: ' . $surveyorNames : null,
+                                'Port: ' . ($survey['port_name'] ?? 'N/A'),
+                                'Appointment: ' . $pvAppt,
+                                'Status: Survey Pending',
+                                !empty($survey['custom_live_status']) ? 'Latest update: ' . $survey['custom_live_status'] : null,
+                            ]));
+                        ?>
+                        <?php
+                            // Names as written (Title Case) for client / agent / port / surveyor; vessel name stays in capitals.
+                            $pvTc = static function ($v) { $v = trim((string)$v); return $v === '' ? '' : ucwords(strtolower($v), " -/(.&'"); };
+                        ?>
+                        <span class="cc-num" data-row-num data-testid="pv-row-num" hidden></span>
+                        <?php
+                            // Latest update as bullet points: one per line (or per sentence when it is one line).
+                            $pvUpd = trim((string)($survey['custom_live_status'] ?? ''));
+                            $pvUpdLines = $pvUpd === '' ? [] : array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $pvUpd))));
+                            if (count($pvUpdLines) === 1) {
+                                $pvSent = array_values(array_filter(array_map('trim', preg_split('/(?<=\.)\s+(?=[A-Z0-9])/', $pvUpdLines[0]))));
+                                if (count($pvSent) > 1) $pvUpdLines = $pvSent;
+                            }
+                        ?>
+                        <div class="pvz-head">
+                            <?php [$viK, $viSrc, $viSt] = $viImg($vessel_name); ?>
+                            <span class="pvz-photo<?= $viSt === 'found' ? ' real' : '' ?>"><img src="<?= sanitize($viSrc) ?>" alt="" width="64" height="54" data-vimg="<?= sanitize($viK) ?>" data-vimg-st="<?= sanitize($viSt) ?>" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')" data-testid="pending-vessel-photo-<?= (int)$survey['id'] ?>"></span>
+                            <span class="pvz-bar" aria-hidden="true"></span>
+                            <span class="cc-name pvz-name"><?= sanitize($vessel_name) ?></span>
+                            <button type="button" class="pvz-share" data-pv-share data-share-text="<?= sanitize($pvShare) ?>" aria-label="Share vessel details" title="Share" data-testid="pending-vessel-share-<?= (int)$survey['id'] ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M8 11H6.5A2.5 2.5 0 0 0 4 13.5v5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-5A2.5 2.5 0 0 0 17.5 11H16"/></svg></button>
                         </div>
-                        <div class="cc-rows">
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user"></i><span>Client</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['company_name'] ?? '') ?: '—' ?></b></div></div>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-people-group"></i><span>Agent</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($survey['agent_name'] ?? '') ?: '—' ?></b></div></div>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-layer-group"></i><span>Survey Type</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-type"><?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A')) ?></span></div></div>
+                        <div class="pvz-grid<?= $is_full_access ? '' : ' pvz-no-surveyor' ?>">
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17l2 2a1 1 0 0 0 3-3"/><path d="M14 14l2.5 2.5a1 1 0 0 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="M21 3l1 11h-2"/><path d="M3 3L2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></svg><div class="pvz-t"><span class="pvz-l">Client</span><b><?= sanitize($pvTc($survey['company_name'] ?? '')) ?: '—' ?></b></div></div>
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.5"/><rect x="9" y="2.5" width="6" height="3.5" rx="1"/><path d="M11 10.5h5M11 14h5M11 17.5h5"/><circle cx="8.3" cy="10.5" r=".6"/><circle cx="8.3" cy="14" r=".6"/><circle cx="8.3" cy="17.5" r=".6"/></svg><div class="pvz-t"><span class="pvz-l">Type of Survey</span><b><?= sanitize($pvType) ?></b></div></div>
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><div class="pvz-t"><span class="pvz-l">Port</span><b data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><?= sanitize($pvTc($survey['port_name'] ?? '')) ?: 'N/A' ?></b></div></div>
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="3"/><circle cx="5.5" cy="9.5" r="2.3"/><circle cx="18.5" cy="9.5" r="2.3"/><path d="M7 20v-1.5c0-2.8 2.2-4.8 5-4.8s5 2 5 4.8V20zM2 19.5v-1c0-2 1.4-3.4 3.5-3.4M22 19.5v-1c0-2-1.4-3.4-3.5-3.4"/></svg><div class="pvz-t"><span class="pvz-l">Agent</span><b><?= sanitize($pvTc($survey['agent_name'] ?? '')) ?: '—' ?></b></div></div>
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><div class="pvz-t"><span class="pvz-l">Appointment</span><b><?= sanitize($pvAppt) ?></b></div></div>
                             <?php if ($is_full_access): ?>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-user-tie"></i><span>Surveyor</span></div><span class="cc-c">:</span><div class="cc-v"><b><?= sanitize($surveyorNames) ?></b></div></div>
-                            <?php endif; ?>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-location-dot"></i><span>Port</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-port" data-testid="pending-vessel-place-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-location-dot"></i><?= sanitize($survey['port_name'] ?? 'N/A') ?></span></div></div>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-calendar-day"></i><span>Appointment</span></div><span class="cc-c">:</span><div class="cc-v"><b class="cc-date"><?= !empty($survey['appointment_date']) ? sanitize(date('d M Y', strtotime($survey['appointment_date']))) : '—' ?></b></div></div>
-                            <div class="cc-row"><div class="cc-k"><i class="fa-solid fa-circle-check"></i><span>Status</span></div><span class="cc-c">:</span><div class="cc-v"><span class="cc-status pending"><i class="fa-solid fa-clock"></i> Pending</span></div></div>
-                            <?php if ($needsSurveyor): ?>
-                            <div class="cc-note"><span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span></div>
+                            <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><div class="pvz-t"><span class="pvz-l">Surveyor</span><b><?= sanitize($pvTc($surveyorNames)) ?></b></div></div>
                             <?php endif; ?>
                         </div>
-                        <div class="vessel-live-status-bar">
-                            <div class="pv-footer-text">
-                                <?php if (!empty($survey['custom_live_status'])): ?>
-                                    <div class="text-dark fw-semibold mb-1">
-                                        <i class="fa-solid fa-comment-dots text-primary me-1"></i> Latest Update : <?= sanitize($survey['custom_live_status']) ?>
-                                    </div>
-                                    <div class="text-muted" style="font-size: 10px;">
-                                        <span class="fw-bold"><?= !empty($survey['status_updated_at']) ? formatLatestUpdateWhen($survey['status_updated_at']) : '—' ?></span>
-                                        By <span class="text-primary fw-bold"><?= !empty($survey['modifier_name']) ? sanitize($survey['modifier_name']) : 'User' ?></span>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="text-muted italic" style="font-size: 11px;"><i class="fa-solid fa-info-circle text-warning"></i> No updates recorded yet.</div>
-                                <?php endif; ?>
-                            </div>
-                            <?php if ($can_edit): ?>
-                                <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vessel-edit-btn pv-edit-btn" onclick="event.stopPropagation();" data-testid="pending-vessel-edit-<?= (int)$survey['id'] ?>">
-                                    <i class="fa-solid fa-pen"></i> Edit
-                                </a>
+                        <?php if ($needsSurveyor): ?>
+                        <div class="pvz-note"><span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> <?= sanitize($survey['company_name'] ?? 'Client') ?> assigned this — assign a surveyor</span></div>
+                        <?php endif; ?>
+                        <div class="pvz-upd" data-testid="pending-vessel-update-<?= (int)$survey['id'] ?>">
+                            <div class="pvz-upd-k"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M8 8.5h8M8 12h8M8 15.5h8"/></svg><span>Latest Updates</span></div>
+                            <span class="pvz-upd-bar" aria-hidden="true"></span>
+                            <?php if ($pvUpdLines): ?>
+                                <div class="pvz-upd-text" data-testid="pending-vessel-update-text-<?= (int)$survey['id'] ?>"><?= implode('<br>', array_map(fn($l) => '• ' . sanitize($l), $pvUpdLines)) ?></div>
+                            <?php else: ?>
+                                <div class="pvz-upd-none">No updates recorded yet.</div>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -880,7 +909,8 @@ include 'includes/header.php';
                                 <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
                                 <td>
                                     <div class="vd-vessel-cell">
-                                        <div class="vd-vessel-icon"><i class="fa-solid fa-ship"></i></div>
+                                        <?php [$viK, $viSrc, $viSt] = $viImg($vessel_name); ?>
+                                        <div class="vd-vessel-icon vd-vessel-photo<?= $viSt === 'found' ? ' real' : '' ?>"><img src="<?= sanitize($viSrc) ?>" alt="" width="44" height="36" data-vimg="<?= sanitize($viK) ?>" data-vimg-st="<?= sanitize($viSt) ?>" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')" data-testid="pending-vessel-desk-photo-<?= (int)$survey['id'] ?>"></div>
                                         <div style="min-width:0;">
                                             <a class="vd-vessel" href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><?= sanitize($vessel_name) ?></a>
                                             <?php if (!empty($survey['report_number'])): ?>
@@ -954,6 +984,8 @@ include 'includes/header.php';
     </div>
 
 
+<script>window.VC_CFG = <?= json_encode(['csrf' => csrf_token(), 'def' => VI_DEFAULT]) ?>;</script>
+<script src="assets/js/vessel-cards.js?v=<?= @filemtime(__DIR__ . '/assets/js/vessel-cards.js') ?>"></script>
 <script>
 (function () {
   var PER = 25;
