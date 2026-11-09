@@ -139,7 +139,7 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         </a>
         <a href="vessels.php" class="nav-item-btn <?= ($current_page == 'vessels.php') ? 'active' : '' ?>" data-testid="navigation-vessels-link">
             <i class="fa-solid fa-ship"></i>
-            <span>Pending Vessels</span>
+            <span class="bn-long">Pending Vessels</span><span class="bn-short">Vessels</span>
         </a>
 
         <?php
@@ -149,7 +149,7 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
         // Client + Add Admin, Client sees Request Survey).
         if (in_array($user_role, ['Admin', 'Super Admin', 'Client'], true)):
         ?>
-            <button class="center-fab-btn" id="globalFabTrigger" data-testid="global-add-menu-button">
+            <button class="center-fab-btn" id="globalFabTrigger" aria-label="Quick actions" aria-expanded="false" data-testid="global-add-menu-button">
                 <i class="fa-solid fa-plus"></i>
             </button>
         <?php
@@ -158,7 +158,7 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
 
         <a href="reports.php" class="nav-item-btn <?= ($current_page == 'reports.php') ? 'active' : '' ?>" data-testid="navigation-reports-link">
             <i class="fa-solid fa-file-invoice"></i>
-            <span>Pending Reports</span>
+            <span class="bn-long">Pending Reports</span><span class="bn-short">Reports</span>
         </a>
         <?php if (in_array($user_role, ['Admin', 'Surveyor'], true)): ?>
         <!-- Survey Reports (Admin, Surveyor): sidebar + drawer only, so the phone bottom bar keeps its 5 slots -->

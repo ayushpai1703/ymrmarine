@@ -1,0 +1,58 @@
+/* Phone / tablet bottom navigation (includes/nav.php, menu in includes/footer.php): a floating
+   rounded bar — Home · Vessels · (+) · Reports · Completed — the current tab in a light-blue pill,
+   a blue (+) that turns into × and opens the quick actions as a card just above it.
+   Not used on a computer (the same element is the sidebar there) or while the drawer is open. */
+.bn-short { display: none; }
+@media (max-width: 991.98px) {
+    .bottom-nav-bar:not(.drawer-mode) .bn-long { display: none; }
+    .bottom-nav-bar:not(.drawer-mode) .bn-short { display: inline; }
+    .bottom-nav-bar:not(.drawer-mode) {
+        left: 12px !important; right: 12px !important; bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+        height: 74px !important; padding: 0 8px !important; border-radius: 40px !important;
+        background: rgba(255,255,255,.96) !important; border: 1px solid #d8e4fb !important;
+        box-shadow: 0 12px 30px rgba(29,99,237,.14), 0 2px 6px rgba(15,23,42,.06) !important;
+        justify-content: space-between !important;
+    }
+    .bottom-nav-bar:not(.drawer-mode) .nav-item-btn {
+        flex: 1 1 0; min-width: 0; height: 60px !important; border-radius: 30px !important; padding: 6px 4px !important;
+        color: #0f1e46 !important; font-size: 12px !important; font-weight: 700 !important; gap: 3px !important;
+    }
+    .bottom-nav-bar:not(.drawer-mode) .nav-item-btn i { font-size: 20px !important; color: #0f1e46; }
+    .bottom-nav-bar:not(.drawer-mode) .nav-item-btn.active { background: #dce8ff !important; color: #1D63ED !important; }
+    .bottom-nav-bar:not(.drawer-mode) .nav-item-btn.active i { color: #1D63ED !important; }
+    .bottom-nav-bar:not(.drawer-mode) .nav-item-btn.active::before { display: none !important; }
+    .bottom-nav-bar:not(.drawer-mode) .center-fab-btn {
+        flex: none; width: 66px !important; height: 66px !important; margin: -26px 6px 0 !important;
+        background: radial-gradient(circle at 35% 30%, #3d86ff 0%, #1D63ED 45%, #0b4bd1 100%) !important;
+        box-shadow: 0 10px 24px rgba(29,99,237,.45), 0 0 0 6px rgba(255,255,255,.95), 0 0 0 7px #e3ecfd !important;
+        font-size: 26px !important; transition: transform .2s ease;
+    }
+    .bottom-nav-bar:not(.drawer-mode) .center-fab-btn i { transition: transform .25s ease; }
+    body.fab-open .bottom-nav-bar:not(.drawer-mode) { z-index: 1001 !important; }
+    body.fab-open .bottom-nav-bar:not(.drawer-mode) .center-fab-btn i { transform: rotate(45deg); }
+
+    /* quick actions: a card just above the bar, with a small arrow to the (+) */
+    .fab-overlay { position: fixed !important; inset: 0 !important; background: rgba(15,30,70,.18) !important; align-items: flex-end !important; z-index: 999 !important; }
+    .fab-overlay .fab-popup-sheet {
+        position: relative; width: auto !important; max-width: calc(100% - 32px); margin: 0 16px calc(104px + env(safe-area-inset-bottom, 0px)) !important;
+        padding: 14px 10px !important; border-radius: 26px !important; background: #fff !important;
+        box-shadow: 0 16px 40px rgba(15,30,70,.18) !important; border: 1px solid #e3ecfd;
+        display: flex; align-items: stretch; justify-content: center; transform: translateY(16px) scale(.96); opacity: 0;
+        transition: transform .22s ease, opacity .18s ease !important;
+    }
+    body.fab-open .fab-overlay .fab-popup-sheet { transform: none !important; opacity: 1; }
+    .fab-overlay .fab-popup-sheet::after { content: ""; position: absolute; left: 50%; bottom: -9px; width: 18px; height: 18px; background: #fff; transform: translateX(-50%) rotate(45deg); border-right: 1px solid #e3ecfd; border-bottom: 1px solid #e3ecfd; }
+    .fab-overlay .fab-popup-sheet > h5, .fab-overlay #closeFabBtn { display: none !important; }
+    .fab-overlay .fab-option-item {
+        flex: 1 1 0; min-width: 76px; max-width: 120px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px;
+        padding: 4px 8px !important; border: 0 !important; text-align: center; font-size: 13px; font-weight: 700; color: #0f1e46 !important; line-height: 1.2;
+    }
+    .fab-overlay .fab-option-item + .fab-option-item { border-left: 1.5px solid #e8eef8 !important; }
+    .fab-overlay .fab-option-item > i { width: 54px !important; height: 54px; border-radius: 18px; display: flex !important; align-items: center; justify-content: center; font-size: 23px; background: #eaf1ff; color: #1D63ED !important; }
+    .fab-overlay [data-testid=fab-add-surveyor-link] > i { background: #fff3d6; color: #f5a400 !important; }
+    .fab-overlay [data-testid=fab-add-client-link] > i { background: #e5f7ea; color: #16a34a !important; }
+    .fab-overlay [data-testid=fab-admin-controls-link] > i, .fab-overlay [data-testid=fab-add-admin-link] > i { background: #f0eaff; color: #7c3aed !important; }
+    .fab-overlay [data-testid=fab-data-cleanup-link] > i { background: #fdecec; color: #dc2626 !important; }
+    body.fab-open .fnotes-fab { opacity: 0; pointer-events: none; } /* the notes button would sit on the menu */
+    .fnotes-fab { bottom: calc(104px + env(safe-area-inset-bottom, 0px)) !important; } /* above the floating bar */
+}
