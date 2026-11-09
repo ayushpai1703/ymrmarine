@@ -13,7 +13,9 @@
     var keys = {};
     document.querySelectorAll('img[data-vimg]').forEach(function (im) { var st = im.getAttribute('data-vimg-st'); if (st === 'pending' || st === 'unknown') keys[im.getAttribute('data-vimg')] = 1; });
     var list = Object.keys(keys).slice(0, 40);
-    if (!list.length || tries > 20) return;
+    // a few questions per page view, only while the page is on screen; the rest on later visits
+    if (!list.length || tries >= 6) return;
+    if (document.hidden) { document.addEventListener('visibilitychange', function again() { if (!document.hidden) { document.removeEventListener('visibilitychange', again); lookupPictures(tries); } }); return; }
     var f = new FormData(); f.append('a', 'lookup'); f.append('csrf_token', CFG.csrf || ''); list.forEach(function (k) { f.append('names[]', k); });
     fetch('ajax/vessel_image.php', { method: 'POST', body: f, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j || !j.ok) return;
@@ -25,7 +27,7 @@
           if (st.status === 'found' && im.getAttribute('src') !== st.img) { im.src = st.img; im.parentNode.classList.add('real'); }
         });
       });
-      if (j.more) setTimeout(function () { lookupPictures(tries + 1); }, 400);
+      if (j.more) setTimeout(function () { lookupPictures(tries + 1); }, j.busy ? 8000 : 1500);
     }).catch(function () {});
   }
 
@@ -108,7 +110,7 @@
   }, true);
 
   function ready() {
-    lookupPictures(0);
+    setTimeout(function () { lookupPictures(0); }, 2000); // after the page has settled
     if (document.querySelector('.vessel-list-container .cc-card.pvz') && window.matchMedia && matchMedia('(max-width: 991.98px)').matches) setTimeout(function () { loadH2C().catch(function () {}); }, 1500);
   }
   if (document.readyState === 'complete') ready(); else window.addEventListener('load', ready);

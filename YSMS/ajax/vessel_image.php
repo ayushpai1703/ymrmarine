@@ -28,6 +28,9 @@ function viDefault(): void {
 if (empty($_SESSION['user_id'])) viOut(401, ['ok' => false, 'error' => 'Sign in again.']);
 csrf_require();
 $a = (string)($_REQUEST['a'] ?? '');
+// Nothing below writes the session: let go of it now, so the user's other pages and requests
+// do not wait while a picture is downloaded or the AI is asked (that wait made the whole site slow).
+session_write_close();
 
 try {
     $db = getDB();
@@ -40,15 +43,16 @@ try {
         $q->execute([$k]);
         $url = (string)($q->fetchColumn() ?: '');
         if ($url === '') viDefault();
-        $dir = rtrim(sys_get_temp_dir(), '/') . '/ysms_vessel_img';
-        if (!is_dir($dir)) @mkdir($dir, 0700, true);
-        $f = $dir . '/' . sha1($k . '|' . $url);
-        $meta = @json_decode((string)@file_get_contents($f . '.json'), true);
+        [$f, $mf] = viCachePath($k, $url);
+        $meta = @json_decode((string)@file_get_contents($mf), true);
         if (!is_file($f) || !$meta || filemtime($f) < time() - 7 * 86400) {
             $img = viFetch($url);
-            if (!$img) viDefault();
-            @file_put_contents($f . '.tmp', $img['body']); @rename($f . '.tmp', $f);
-            @file_put_contents($f . '.json', json_encode(['type' => $img['type']]));
+            if (!$img) {
+                // the picture is gone from that site: show the YMR ship from now on (asked again after 30 days)
+                $db->prepare("UPDATE vessel_images SET status = 'none', source = '" . VI_SEARCHED . "', tried_at = NOW() WHERE name_key = ? AND url = ?")->execute([$k, $url]);
+                viDefault();
+            }
+            viCacheStore($k, $url, $img);
             $meta = ['type' => $img['type']];
         }
         while (ob_get_level() > 0) ob_end_clean();
@@ -65,16 +69,22 @@ try {
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') viOut(405, ['ok' => false, 'error' => 'POST only.']);
         $names = array_slice(array_filter(array_map('strval', (array)($_POST['names'] ?? []))), 0, 40);
         $states = viStates($db, $names);
-        $asked = 0;
-        @set_time_limit(150);
-        foreach ($states as $k => $st) {
-            if ($asked >= 2) break;
-            if ($st['status'] !== 'pending' && $st['status'] !== 'unknown') continue;
-            $asked++;
-            $new = viLookup($db, $k);
-            $states[$k] = ['status' => $new, 'img' => $new === 'found' ? viImgUrl($k) : VI_DEFAULT];
+        // one AI question at a time for the whole site (a busy server answers "busy" at once), one vessel per request
+        $busy = true;
+        $lk = $db->query("SELECT GET_LOCK('ysms_vessel_picture', 0)")->fetchColumn();
+        if ((string)$lk === '1') {
+            $busy = false;
+            @set_time_limit(90);
+            try {
+                foreach ($states as $k => $st) {
+                    if ($st['status'] !== 'pending' && $st['status'] !== 'unknown') continue;
+                    $new = viLookup($db, $k);
+                    $states[$k] = ['status' => $new, 'img' => $new === 'found' ? viImgUrl($k) : VI_DEFAULT];
+                    break;
+                }
+            } finally { $db->query("SELECT RELEASE_LOCK('ysms_vessel_picture')"); }
         }
-        viOut(200, ['ok' => true, 'states' => $states, 'more' => (bool)array_filter($states, fn($s) => in_array($s['status'], ['pending', 'unknown'], true))]);
+        viOut(200, ['ok' => true, 'busy' => $busy, 'states' => $states, 'more' => (bool)array_filter($states, fn($s) => in_array($s['status'], ['pending', 'unknown'], true))]);
     }
     viOut(400, ['ok' => false, 'error' => 'Unknown action.']);
 } catch (Throwable $e) {
