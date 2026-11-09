@@ -367,6 +367,7 @@ if (!empty($user['avatar']) && file_exists($user['avatar'])) {
 include 'includes/header.php';
 ?>
 
+<link rel="stylesheet" href="assets/css/app-pages.css?v=<?= @filemtime(__DIR__ . '/assets/css/app-pages.css') ?>">
 <style>
     .profile-card { background: white; border-radius: 16px; padding: 20px; margin: 15px; border: 1px solid var(--border-color); }
     .profile-form-control { width: 100%; padding: 11px 13px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 13.5px; background: #f8fafc; outline: none; margin-bottom: 12px; }
@@ -472,7 +473,7 @@ include 'includes/header.php';
     }
 </style>
 
-<div class="scroll-content">
+<div class="scroll-content pr-page">
     <div class="bg-white p-3 d-flex align-items-center gap-2 border-bottom profile-top-bar">
         <a href="index.php" class="text-dark"><i class="fa-solid fa-chevron-left"></i></a>
         <h5 class="fw-bold m-0 text-center flex-grow-1" style="font-size: 16px;">Account Settings</h5>
@@ -630,6 +631,20 @@ include 'includes/header.php';
     </div>
 </div>
 
+<script>
+// Phones / tablets: each section opens and closes when its title row is tapped (app style); the computer view shows them all.
+(function () {
+  if (!window.matchMedia('(max-width: 991.98px)').matches) return;
+  document.querySelectorAll('.pr-page .profile-card').forEach(function (card, i) {
+    var h = card.firstElementChild; if (!h) return;
+    h.classList.add('pr-row'); h.setAttribute('role', 'button'); h.setAttribute('tabindex', '0'); h.setAttribute('aria-expanded', 'false');
+    h.setAttribute('data-testid', 'profile-section-' + i);
+    function t() { var o = card.classList.toggle('pr-open'); h.setAttribute('aria-expanded', o ? 'true' : 'false'); }
+    h.addEventListener('click', t);
+    h.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); t(); } });
+  });
+})();
+</script>
 <?php 
 include 'includes/nav.php';
 include 'includes/footer.php';

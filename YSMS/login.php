@@ -271,6 +271,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .showcase-headline h2 { font-size: 38px; }
         }
     </style>
+    <style>
+        /* ===== Phones / tablets (below 992px): app-style sign in — white card on a blue header. Computer view unchanged. ===== */
+        .m-hero { display: none; }
+        @media (max-width: 991.98px) {
+            body { background: #f3f6fb; }
+            .split-shell { display: block; }
+            .form-panel { display: block; background: transparent; padding: 0 0 28px; min-height: 100vh; min-height: 100dvh; }
+            .form-panel::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 360px; border-radius: 0 0 32px 32px;
+                background: linear-gradient(160deg, #0b2a5b 0%, #123f86 55%, #1b6fd1 100%); z-index: 0; }
+            .bg-glow { display: none; }
+            .auth-shell { max-width: 460px; margin: 0 auto; padding: 0 16px; }
+            .m-hero { display: block; text-align: center; color: #fff; padding: calc(36px + env(safe-area-inset-top, 0px)) 8px 26px; animation: fadeDown .5s ease; }
+            .m-hero-logo { width: 150px; height: 100px; margin: 0 auto 18px; border-radius: 26px; background: #fff; display: flex; align-items: center; justify-content: center; padding: 10px 14px; box-shadow: 0 14px 30px rgba(5,18,48,.3); }
+            .m-hero-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+            .m-hero h2 { font-size: 23px; font-weight: 800; margin: 0 0 6px; letter-spacing: -.2px; }
+            .m-hero p { font-size: 13.5px; color: #c8dbf7; margin: 0; line-height: 1.45; }
+            .glass-card { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; border: 0; border-radius: 26px; padding: 24px 20px 22px;
+                box-shadow: 0 14px 34px rgba(15,23,42,.12); }
+            h1.welcome-title { color: #0b1324; text-align: left; font-size: 21px; font-weight: 800; }
+            p.welcome-sub { color: #64748b; text-align: left; margin-bottom: 20px; }
+            .field-label { color: #64748b; text-transform: none; font-size: 12.5px; letter-spacing: 0; }
+            .field-wrap i.field-icon { color: #1D63ED; }
+            .field-wrap input { background: #fff; border-color: #d6e0ee; color: #0b1324; border-radius: 14px; padding-top: 14px; padding-bottom: 14px; font-size: 16px; }
+            .field-wrap input::placeholder { color: #94a3b8; }
+            .field-wrap input:focus { border-color: #1D63ED; background: #fff; box-shadow: 0 0 0 3px rgba(29,99,237,.12); }
+            .field-wrap:focus-within i.field-icon { color: #1D63ED; }
+            .field-wrap .toggle-pass { color: #94a3b8; }
+            .field-wrap .toggle-pass:hover { color: #1D63ED; }
+            .remember-label { color: #334155; }
+            .remember-label input { accent-color: #1D63ED; width: 17px; height: 17px; }
+            .forgot-link { color: #1D63ED; font-weight: 700; }
+            .forgot-link:hover { color: #0b2a5b; }
+            .login-submit-btn { background: linear-gradient(135deg, #0b2a5b, #1D63ED); border-radius: 16px; height: 52px; padding: 0; box-shadow: 0 10px 22px rgba(29,99,237,.28); }
+            .auth-alert { background: #fdf0f1; border-color: #f5c2c7; color: #b02a37; }
+            .footer-note { color: #94a3b8; }
+        }
+    </style>
     <?php include __DIR__ . '/includes/app_shell.php'; ?>
 </head>
 <body>
@@ -325,6 +362,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="bg-glow two"></div>
 
             <div class="auth-shell">
+                <div class="m-hero" data-testid="login-mobile-hero">
+                    <div class="m-hero-logo"><img src="assets/images/ymr-ship.png" alt="YMR Survey logo"></div>
+                    <h2>YMR Survey Management</h2>
+                    <p>Marine surveys, reports and recovery — in one place</p>
+                </div>
                 <div class="brand-row">
                     <div class="brand-mark"><img src="assets/images/logo.png" alt="YMR Survey logo" class="brand-mark-img"></div>
                     <div class="brand-text">

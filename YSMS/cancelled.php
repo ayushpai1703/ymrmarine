@@ -30,9 +30,27 @@ $types = $db->query("SELECT type_name FROM survey_types WHERE type_name <> '' OR
 $init = ['q' => mb_substr(trim((string)($_GET['q'] ?? '')), 0, 100)];
 foreach (['type', 'place', 'client', 'surveyor'] as $k) $init[$k] = listFilterFirst($_GET, $k);
 
+// phone list (cards): the newest cancelled vessels this user can see; the grid is the computer view
+require_once 'includes/vessel_image.php';
+$cnRows = [];
+try {
+    $q = $db->prepare('SELECT s.*, c.company_name, u.full_name AS surveyor_name, st.type_name, p.port_name, ' . CANCELLED_DATE_SQL . ' AS shown_date '
+        . CANCELLED_FROM . " WHERE s.status = 'Cancelled' AND $scope ORDER BY shown_date DESC, s.id DESC LIMIT 300");
+    $q->execute($sp);
+    $cnRows = $q->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) { error_log('cancelled cards: ' . $e->getMessage()); }
+$cnVi = [];
+try { $cnVi = viStates($db, array_map(fn($r) => (string)($r['vessel_name'] ?? ''), $cnRows)); } catch (Throwable $e) {}
+$cnMonth = date('Y-m');
+$cnTypes = [];
+foreach ($cnRows as $r) { $t = getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? ''); foreach (array_filter(array_map('trim', explode('+', $t))) as $x) $cnTypes[$x] = ($cnTypes[$x] ?? 0) + 1; }
+ksort($cnTypes);
+
 $page_title = 'Cancelled Vessels';
 include 'includes/header.php';
 ?>
+<link rel="stylesheet" href="assets/css/mobile-card.css?v=<?= @filemtime(__DIR__ . '/assets/css/mobile-card.css') ?>">
+<link rel="stylesheet" href="assets/css/app-pages.css?v=<?= @filemtime(__DIR__ . '/assets/css/app-pages.css') ?>">
 <link rel="stylesheet" href="assets/css/invoice-airtable.css?v=<?= @filemtime(__DIR__ . '/assets/css/invoice-airtable.css') ?>">
 <style>
 /* Cancelled grid extras (everything else is the Invoice Airtable stylesheet) */
@@ -50,7 +68,7 @@ include 'includes/header.php';
 @media (max-width: 1399.98px) { .at-sum.cn { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 991.98px) { .at-sum.cn { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
-<div class="scroll-content at-page" data-testid="cancelled-vessels-page">
+<div class="scroll-content at-page cn-page" data-testid="cancelled-vessels-page">
 <?php $back_url = ''; $page_testid = 'cancelled-vessels'; include 'includes/top_app_bar.php'; ?>
 <div class="at-wrap">
     <div class="at-head" data-testid="cancelled-hero">
@@ -121,6 +139,68 @@ include 'includes/header.php';
     </div>
 </div>
 
+
+<div class="cnm ap-page" data-testid="cn-mobile">
+    <div class="ap-band ap-red">
+        <div class="ap-top"><button type="button" class="hamburger-menu-btn ap-ib ap-hb" aria-label="Open navigation menu" aria-expanded="false" data-testid="cnm-menu"><span class="hamburger-lines" aria-hidden="true"><span class="hb-line hb-line-top"></span><span class="hb-line hb-line-mid"></span><span class="hb-line hb-line-bottom"></span></span></button><div class="ap-tt"><small>Survey list</small><b>Cancelled Vessels</b></div>
+            <a class="ap-ib" href="export_cancelled.php" aria-label="Export to Excel" title="Export to Excel" data-testid="cnm-export"><i class="fa-solid fa-file-excel"></i></a></div>
+        <label class="ap-search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" placeholder="Search vessel, client, port…" data-cnm-q data-testid="cnm-search"></label>
+    </div>
+    <div class="ap-chips" data-testid="cnm-chips">
+        <button type="button" class="ap-chip on" data-cnm-f="all">All · <?= count($cnRows) ?></button>
+        <button type="button" class="ap-chip" data-cnm-f="month">This month · <?= count(array_filter($cnRows, fn($r) => substr((string)$r['shown_date'], 0, 7) === $cnMonth)) ?></button>
+        <?php foreach ($cnTypes as $t => $n): ?><button type="button" class="ap-chip" data-cnm-f="type:<?= sanitize(strtolower($t)) ?>"><?= sanitize($t) ?> · <?= (int)$n ?></button><?php endforeach; ?>
+    </div>
+    <div class="vessel-list-container ap-list">
+    <?php foreach ($cnRows as $r):
+        $nm = (string)(($r['vessel_name'] ?? '') ?: 'Vessel');
+        $tp = getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? 'N/A');
+        $dt = !empty($r['shown_date']) ? date('d M Y', strtotime((string)$r['shown_date'])) : '—';
+        $k = viKey($nm); $vs = $cnVi[$k] ?? ['status' => 'unknown', 'img' => VI_DEFAULT];
+        $tc = fn($x) => ($x = trim((string)$x)) === '' ? '' : ucwords(strtolower($x), " -/(.&'");
+        $share = implode("\n", array_filter([$nm, 'Client: ' . (($r['company_name'] ?? '') ?: '—'), 'Type of Survey: ' . $tp, 'Port: ' . (($r['port_name'] ?? '') ?: '—'), 'Date: ' . $dt, 'Status: Cancelled']));
+    ?>
+        <div class="vessel-card cc-card pvz pvz-red" data-pv-badge="Cancelled" data-pv-theme="red" onclick="location.href='vessel_detail.php?id=<?= (int)$r['id'] ?>'"
+             data-cnm-card data-month="<?= substr((string)$r['shown_date'], 0, 7) === $cnMonth ? '1' : '0' ?>" data-types="<?= sanitize(strtolower($tp)) ?>"
+             data-search="<?= sanitize(strtolower(implode(' ', [$nm, $r['company_name'] ?? '', $r['agent_name'] ?? '', $tp, $r['port_name'] ?? '', $r['report_number'] ?? '']))) ?>" data-testid="cnm-card-<?= (int)$r['id'] ?>">
+            <div class="pvz-head">
+                <span class="pvz-photo<?= $vs['status'] === 'found' ? ' real' : '' ?>"><img src="<?= sanitize($vs['img']) ?>" alt="" width="64" height="54" data-vimg="<?= sanitize($k) ?>" data-vimg-st="<?= sanitize($vs['status']) ?>" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')"></span>
+                <span class="pvz-bar" aria-hidden="true"></span>
+                <span class="cc-name pvz-name"><?= sanitize($nm) ?></span>
+                <button type="button" class="pvz-share" data-pv-share data-share-text="<?= sanitize($share) ?>" aria-label="Share vessel details" title="Share"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M8 11H6.5A2.5 2.5 0 0 0 4 13.5v5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-5A2.5 2.5 0 0 0 17.5 11H16"/></svg></button>
+            </div>
+            <div class="pvz-grid">
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17l2 2a1 1 0 0 0 3-3"/><path d="M14 14l2.5 2.5a1 1 0 0 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="M21 3l1 11h-2"/><path d="M3 3L2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></svg><div class="pvz-t"><span class="pvz-l">Client</span><b><?= sanitize($tc($r['company_name'] ?? '')) ?: '—' ?></b></div></div>
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.5"/><rect x="9" y="2.5" width="6" height="3.5" rx="1"/><path d="M11 10.5h5M11 14h5M11 17.5h5"/><circle cx="8.3" cy="10.5" r=".6"/><circle cx="8.3" cy="14" r=".6"/><circle cx="8.3" cy="17.5" r=".6"/></svg><div class="pvz-t"><span class="pvz-l">Type of Survey</span><b><?= sanitize($tp) ?></b></div></div>
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><div class="pvz-t"><span class="pvz-l">Port</span><b><?= sanitize($tc($r['port_name'] ?? '')) ?: '—' ?></b></div></div>
+                <div class="pvz-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M9.5 13.5l5 5M14.5 13.5l-5 5"/></svg><div class="pvz-t"><span class="pvz-l">Date</span><b><?= sanitize($dt) ?></b></div></div>
+            </div>
+            <?php if (trim((string)($r['remarks'] ?? '')) !== ''): ?>
+            <div class="cnm-rem"><b>Remarks ·</b> <?= sanitize(mb_strimwidth(trim((string)$r['remarks']), 0, 220, '…')) ?></div>
+            <?php endif; ?>
+        </div>
+    <?php endforeach; ?>
+        <div class="ap-empty" data-cnm-empty<?= $cnRows ? ' hidden' : '' ?> data-testid="cnm-empty"><i class="fa-solid fa-ban"></i> No cancelled vessels.</div>
+    </div>
+</div>
+<script>
+(function () {
+  var q = document.querySelector('[data-cnm-q]'), f = 'all';
+  function apply() {
+    var t = (q && q.value || '').trim().toLowerCase(), n = 0;
+    document.querySelectorAll('[data-cnm-card]').forEach(function (c) {
+      var ok = (!t || (c.getAttribute('data-search') || '').indexOf(t) >= 0) && (f === 'all' || (f === 'month' ? c.getAttribute('data-month') === '1' : (c.getAttribute('data-types') || '').indexOf(f.slice(5)) >= 0));
+      c.classList.toggle('cnm-hide', !ok); if (ok) n++;
+    });
+    var e = document.querySelector('[data-cnm-empty]'); if (e) e.hidden = n > 0;
+  }
+  if (q) q.addEventListener('input', apply);
+  document.querySelectorAll('[data-cnm-f]').forEach(function (b) { b.addEventListener('click', function () {
+    f = b.getAttribute('data-cnm-f'); document.querySelectorAll('[data-cnm-f]').forEach(function (x) { x.classList.toggle('on', x === b); }); apply(); }); });
+})();
+</script>
+<script>window.VC_CFG = window.VC_CFG || <?= json_encode(['csrf' => csrf_token(), 'def' => VI_DEFAULT]) ?>;</script>
+<script src="assets/js/vessel-cards.js?v=<?= @filemtime(__DIR__ . '/assets/js/vessel-cards.js') ?>"></script>
 <div class="at-scrim" data-scrim hidden></div>
 <aside class="at-panel" data-panel aria-hidden="true" data-testid="cn-panel">
     <div class="at-p-head"><div><div class="at-p-kind">Cancelled vessel</div><h2 data-p-title>Vessel</h2></div>

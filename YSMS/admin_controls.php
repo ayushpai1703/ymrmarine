@@ -46,6 +46,7 @@ $survey_modules = [
 
 include 'includes/header.php';
 ?>
+<link rel="stylesheet" href="assets/css/app-pages.css?v=<?= @filemtime(__DIR__ . '/assets/css/app-pages.css') ?>">
 <style>
     .admin-tabs-bar {
         display: flex;
@@ -268,7 +269,7 @@ include 'includes/header.php';
     }
 </style>
 
-<div class="scroll-content">
+<div class="scroll-content ac-page">
     <?php $page_title = 'Admin Controls'; $back_url = 'index.php'; $page_testid = 'admin-controls'; include 'includes/top_app_bar.php'; ?>
 
     <div class="vdd-hero">
@@ -280,6 +281,7 @@ include 'includes/header.php';
         </div>
     </div>
 
+    <div class="ac-m-lab" aria-hidden="true">Settings &amp; tools</div>
     <div class="admin-tabs-bar" data-testid="admin-controls-tabs">
         <?php foreach ($modules as $key => $mod): ?>
             <button type="button" class="admin-tab-btn <?= $key === $default_module ? 'active' : '' ?>" data-module="<?= sanitize($key) ?>" data-testid="admin-tab-<?= sanitize($key) ?>">
@@ -683,6 +685,11 @@ $(document).ready(function() {
         $('.admin-module-panel').removeClass('active');
         $('[data-module-panel="' + key + '"]').addClass('active');
         currentModule = key;
+        // phones / tablets: the tiles are above the list, so bring the chosen list into view
+        if (key && window.matchMedia('(max-width: 991.98px)').matches && document.readyState === 'complete') {
+            const panel = document.querySelector('[data-module-panel="' + key + '"]');
+            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
         if (!loadedModules[key]) {
             loadedModules[key] = true;
             loadModule(key, '');

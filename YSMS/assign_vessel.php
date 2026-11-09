@@ -1385,6 +1385,7 @@ include 'includes/header.php';
 
     @media (prefers-reduced-motion: reduce) { #assignVesselForm .blue-action-btn.avm-submit { transition: none; } }
 </style>
+<link rel="stylesheet" href="assets/css/app-pages.css?v=<?= @filemtime(__DIR__ . '/assets/css/app-pages.css') ?>">
 
 <?php
 $page_title = $edit_mode ? 'Edit Vessel Assignment' : ($is_requester ? 'Request Survey' : 'Assign New Vessel');
@@ -1393,7 +1394,7 @@ $page_testid = 'assign-vessel';
 include 'includes/top_app_bar.php';
 ?>
 
-<div class="scroll-content">
+<div class="scroll-content av-page">
     <div class="vdd-hero">
         <i class="fa-solid fa-ship vdd-hero-icon-bg" aria-hidden="true"></i>
         <div class="vdd-hero-ship"><i class="fa-solid fa-ship"></i></div>
