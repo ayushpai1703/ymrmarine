@@ -16,10 +16,15 @@
 const VI_DEFAULT = 'assets/images/ymr-ship.png';
 const VI_MAX_BYTES = 3145728;
 const VI_RETRY_DAYS = 30;
+// A "none" saved with source = VI_SEARCHED was looked up with web search. One with no source was
+// looked up before web search was switched on (main, Nov 2026): it is asked once more.
+const VI_SEARCHED = 'searched';
 
 function viEnsure(PDO $db): void {
     static $done = false;
     if ($done) return;
+    // cheap check first: the CREATE below runs only on the very first use
+    try { $db->query('SELECT 1 FROM vessel_images LIMIT 0'); $done = true; return; } catch (Throwable $e) {}
     $db->exec("CREATE TABLE IF NOT EXISTS `vessel_images` (
         `id` int(11) NOT NULL AUTO_INCREMENT,
         `name_key` varchar(160) NOT NULL,
@@ -57,11 +62,11 @@ function viStates(PDO $db, array $names): array {
     if (!$keys) return $out;
     viEnsure($db);
     foreach (array_chunk($keys, 200) as $part) {
-        $q = $db->prepare('SELECT name_key, status, tried_at FROM vessel_images WHERE name_key IN (' . implode(',', array_fill(0, count($part), '?')) . ')');
+        $q = $db->prepare('SELECT name_key, status, tried_at, source FROM vessel_images WHERE name_key IN (' . implode(',', array_fill(0, count($part), '?')) . ')');
         $q->execute($part);
         foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
             $st = $r['status'];
-            if ($st === 'none' && $r['tried_at'] && strtotime($r['tried_at']) < time() - VI_RETRY_DAYS * 86400) $st = 'pending';
+            if ($st === 'none' && $r['tried_at'] && (strtotime($r['tried_at']) < time() - VI_RETRY_DAYS * 86400 || (string)$r['source'] === '')) $st = 'pending';
             $out[$r['name_key']] = ['status' => $st, 'img' => $st === 'found' ? viImgUrl($r['name_key']) : VI_DEFAULT];
         }
     }
@@ -69,6 +74,20 @@ function viStates(PDO $db, array $names): array {
 }
 
 function viImgUrl(string $key): string { return 'ajax/vessel_image.php?a=img&k=' . rawurlencode($key); }
+
+/** Local copy of a found picture (temp folder, kept a week): [file path, meta path]. */
+function viCachePath(string $key, string $url): array {
+    $dir = rtrim(sys_get_temp_dir(), '/') . '/ysms_vessel_img';
+    if (!is_dir($dir)) @mkdir($dir, 0700, true);
+    $f = $dir . '/' . sha1($key . '|' . $url);
+    return [$f, $f . '.json'];
+}
+
+function viCacheStore(string $key, string $url, array $img): void {
+    [$f, $m] = viCachePath($key, $url);
+    @file_put_contents($f . '.tmp', $img['body']); @rename($f . '.tmp', $f);
+    @file_put_contents($m, json_encode(['type' => $img['type']]));
+}
 
 /** The public internet address of this host (not this server, not a private network), or null. */
 function viPublicIp(string $host): ?string {
@@ -138,11 +157,12 @@ function viLookup(PDO $db, string $key): string {
     $prompt = 'Find a real photograph of the merchant ship named "' . $name . '" (search ship photo sites such as ShipSpotting, MarineTraffic, VesselFinder, BalticShipping, MyShipTracking, FleetMon, or the owner\'s website). '
         . 'Answer only with JSON: {"image_url": "<direct https link to the photo file itself, .jpg/.jpeg/.png/.webp — not a web page>", "page_url": "<page where you saw it>", "same_ship": true|false}. '
         . 'If you cannot find a photo of this exact ship, answer {"image_url": "", "page_url": "", "same_ship": false}.';
-    $res = geminiJson([['text' => $prompt]], 60, 'vessel picture', ['search' => true]);
-    $status = 'none'; $url = null; $src = null;
+    $res = geminiJson([['text' => $prompt]], 40, 'vessel picture', ['search' => true]);
+    $status = 'none'; $url = null; $src = VI_SEARCHED;
     if ($res['ok']) {
         $cand = trim((string)($res['data']['image_url'] ?? ''));
-        if ($cand !== '' && !empty($res['data']['same_ship']) && viFetch($cand)) { $status = 'found'; $url = mb_substr($cand, 0, 1000); $src = mb_substr((string)($res['data']['page_url'] ?? ''), 0, 1000); }
+        $img = ($cand !== '' && !empty($res['data']['same_ship']) && strlen($cand) <= 1000) ? viFetch($cand) : null;
+        if ($img) { $status = 'found'; $url = $cand; $src = mb_substr((string)($res['data']['page_url'] ?? ''), 0, 1000); viCacheStore($key, $url, $img); }
     } elseif (!empty($res['retry'])) {
         $status = 'pending'; // the AI did not answer: try again later
     }
