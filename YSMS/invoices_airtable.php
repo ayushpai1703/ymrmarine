@@ -22,9 +22,9 @@ try {
     $prefs = json_decode((string)$q->fetchColumn(), true) ?: [];
 } catch (Throwable $e) { $prefs = []; }
 // filter choices: clients and ports that have invoices
-$clients = $db->query("SELECT DISTINCT c.id, c.company_name FROM invoices i JOIN surveys s ON s.id = i.survey_id JOIN clients c ON c.id = s.client_id
+$clients = $db->query("SELECT DISTINCT c.id, c.company_name FROM invoices i LEFT JOIN surveys s ON s.id = i.survey_id JOIN clients c ON c.id = " . INV_E_CLIENT . "
     WHERE i.file_path IS NOT NULL OR i.rec_file_path IS NOT NULL ORDER BY c.company_name")->fetchAll(PDO::FETCH_ASSOC);
-$ports = $db->query("SELECT DISTINCT p.id, p.port_name FROM invoices i JOIN surveys s ON s.id = i.survey_id JOIN ports p ON p.id = s.port_id
+$ports = $db->query("SELECT DISTINCT p.id, p.port_name FROM invoices i LEFT JOIN surveys s ON s.id = i.survey_id JOIN ports p ON p.id = " . INV_E_PORT . "
     WHERE i.file_path IS NOT NULL OR i.rec_file_path IS NOT NULL ORDER BY p.port_name")->fetchAll(PDO::FETCH_ASSOC);
 
 $page_title = 'Invoice Airtable';

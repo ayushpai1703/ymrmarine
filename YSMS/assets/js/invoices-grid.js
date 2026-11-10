@@ -145,11 +145,13 @@
       return '<span class="at-act inv-actions"><button type="button" class="rst" data-act="restore" data-testid="inv-restore-' + d.id + '"><i class="fa-solid fa-rotate-left"></i> Restore</button></span>';
     }
     if (S.view === 'completed') {
-      a += '<a class="gen" href="invoice_pdf.php?id=' + d.id + '" data-testid="inv-modify-' + d.id + '"><i class="fa-solid fa-pen-to-square"></i> Modify</a>' +
+      a += '<a class="gen" href="invoice_pdf.php?id=' + d.id + '" data-testid="inv-modify-' + d.id + '"><i class="fa-solid fa-file-invoice-dollar"></i> Modify</a>' +
+        '<button type="button" class="edt" data-act="editinv" title="Edit all invoice details" data-testid="inv-editinv-' + d.id + '"><i class="fa-solid fa-pen-to-square"></i> Edit</button>' +
         '<button type="button" class="del" data-act="delete" data-testid="inv-delete-' + d.id + '"><i class="fa-solid fa-trash"></i> Delete</button>';
     } else {
       a += '<a class="gen" href="invoice_pdf.php?id=' + d.id + (d.recovery_pending ? '&type=recovery' : '') + '" data-testid="inv-generate-' + d.id + '"><i class="fa-solid fa-file-invoice-dollar"></i> ' + (d.recovery_pending ? 'Recovery' : 'Generate') + '</a>';
-      a += d.has_file ? '<button type="button" data-act="edit" data-testid="inv-edit-' + d.id + '"><i class="fa-solid fa-pen"></i> Edit</button>' +
+      a += '<button type="button" class="edt" data-act="editinv" title="Edit all invoice details" data-testid="inv-editinv-' + d.id + '"><i class="fa-solid fa-pen-to-square"></i> Edit</button>';
+      a += d.has_file ? '<button type="button" data-act="edit" title="Replace the PDF or change its number, date, amount" data-testid="inv-edit-' + d.id + '"><i class="fa-solid fa-file-pen"></i> PDF</button>' +
         '<button type="button" class="del" data-act="delete" data-testid="inv-delete-' + d.id + '"><i class="fa-solid fa-trash"></i> Delete</button>'
         : '<button type="button" data-act="upload" data-testid="inv-upload-' + d.id + '"><i class="fa-solid fa-upload"></i> Upload</button>';
       if (d.can_remove) a += '<button type="button" class="del" data-act="remove" title="Delete this wrong entry (can be restored from Deleted)" data-testid="inv-remove-' + d.id + '"><i class="fa-solid fa-trash-can"></i> Delete entry</button>';
@@ -163,7 +165,7 @@
         (d.recovery_pending ? '<span class="at-pend" data-testid="inv-rec-pending-' + d.id + '">Recovery pending</span>' : '');
       case 'status': return statusCell(d);
       case 'actions': return actionsCell(d);
-      case 'vessel': return (d.vessel ? esc(d.vessel) : muted()) + (d.survey_deleted ? ' <span style="color:#DC2626;font-size:11px">· survey deleted</span>' : '');
+      case 'vessel': return (d.vessel ? esc(d.vessel) : muted()) + (d.manual ? '<span class="at-tag man" title="Added with Add Invoice">Manual</span>' : '') + (d.survey_deleted ? ' <span style="color:#DC2626;font-size:11px">· survey deleted</span>' : '');
       case 'client': return d.client ? esc(d.client) : muted();
       case 'type': return d.type ? '<span class="at-tag">' + esc(d.type) + '</span>' : muted();
       case 'port': return d.port ? esc(d.port) : muted();
@@ -426,6 +428,8 @@
         sel.value = d.status; sel.className = 'at-stsel ' + CLS[d.status]; b.hidden = true; b.disabled = false; b.innerHTML = '<i class="fa-solid fa-check"></i> Update';
         Swal.fire({ icon: 'error', title: 'Status not saved', text: e.message || 'Please try again.' });
       });
+    } else if (act === 'editinv') {
+      if (window.InvoiceForm) window.InvoiceForm.open(d);
     } else if (act === 'upload' || act === 'edit') {
       pdfForm(d, act === 'upload' ? 'Upload Invoice' : 'Edit Invoice').then(function (r) {
         if (r.isConfirmed && r.value && r.value.ok) { toast('success', act === 'upload' ? 'Invoice uploaded' : (r.value.replaced ? 'Invoice replaced' : 'Invoice details saved')); load(); }
@@ -521,12 +525,31 @@
       h += '<a class="at-btn pri" href="invoice_pdf.php?id=' + d.id + (d.recovery_pending ? '&type=recovery' : '') + '" data-testid="inv-p-generate"><i class="fa-solid fa-file-invoice-dollar"></i> ' + (d.recovery_pending ? 'Recovery Invoice' : 'Generate Invoice') + '</a>';
       h += '<button type="button" class="at-btn" data-act="' + (d.has_file ? 'edit' : 'upload') + '" data-testid="inv-p-upload"><i class="fa-solid ' + (d.has_file ? 'fa-pen' : 'fa-upload') + '"></i> ' + (d.has_file ? 'Edit / Replace PDF' : 'Upload Invoice') + '</button>';
     }
+    h += '<button type="button" class="at-btn" data-act="editinv" data-testid="inv-p-editinv"><i class="fa-solid fa-pen-to-square"></i> Edit Invoice</button>';
     if (d.has_file || S.view === 'completed') h += '<button type="button" class="at-btn danger" data-act="delete" data-testid="inv-p-delete"><i class="fa-solid fa-trash"></i> Delete</button>';
     if (d.can_remove) h += '<button type="button" class="at-btn danger" data-act="remove" data-testid="inv-p-remove"><i class="fa-solid fa-trash-can"></i> Delete entry</button>';
     h += '</div></div>';
     h += '<div class="at-sec"><div class="at-sec-h">Payments</div><a class="at-btn" href="invoices_airtable.php" data-testid="inv-p-airtable"><i class="fa-solid fa-table-cells"></i> Track payments in Invoice Airtable</a></div>';
     body.innerHTML = h + '</div>';
   }
+
+  // Add Invoice / Edit (assets/js/invoice-form.js): show the saved entry in the list straight away
+  window.INV_GRID = {
+    saved: function (row, added) {
+      var done = row.status === 'Completed';
+      if (S.view === 'deleted' || (done && S.view !== 'completed') || (!done && S.view === 'completed') || (S.f.status && S.f.status !== row.status)) {
+        S.view = done ? 'completed' : 'pending'; S.f.status = '';
+      }
+      if (added) { S.q = ''; S.page = 1; }
+      toolbarState();
+      var show = function () {
+        var tr = tbody.querySelector('tr[data-id="' + row.id + '"]');
+        if (!tr && !S.q && (row.invoice_no || row.vessel)) { S.q = row.invoice_no || row.vessel; toolbarState(); return load().then(show); } // on another page: search for it
+        if (tr) { tr.scrollIntoView({ block: 'nearest' }); tr.classList.add('flash'); setTimeout(function () { tr.classList.remove('flash'); }, 1800); }
+      };
+      load().then(show);
+    }
+  };
 
   // go
   toolbarState();

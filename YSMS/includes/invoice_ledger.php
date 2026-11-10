@@ -135,12 +135,14 @@ function ledgerBaseSql(PDO $db, string $today): string {
     $t = $db->quote($today);
     $soon = $db->quote(date('Y-m-d', strtotime($today . ' +' . LEDGER_DUE_SOON_DAYS . ' days')));
     $docs = "SELECT i.id AS invoice_id, 'invoice' AS kind, i.invoice_no AS doc_no, i.invoice_date AS doc_date, i.invoice_amount AS amount,
-                    i.file_path AS doc_path, i.file_name AS doc_name, i.survey_id, i.vessel_name AS i_vessel, i.report_number AS i_report
+                    i.file_path AS doc_path, i.file_name AS doc_name, i.survey_id, i.vessel_name AS i_vessel, i.report_number AS i_report,
+                    i.own_details AS i_own, i.client_id AS i_client, i.port_id AS i_port
              FROM invoices i
              WHERE i.deleted_at IS NULL AND (i.file_path IS NOT NULL OR EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = i.id AND ip.kind = 'invoice'))
              UNION ALL
              SELECT i.id, 'recovery', CONCAT(COALESCE(i.invoice_no, ''), 'B'), i.rec_invoice_date, i.rec_invoice_amount,
-                    i.rec_file_path, i.rec_file_name, i.survey_id, i.vessel_name, i.report_number
+                    i.rec_file_path, i.rec_file_name, i.survey_id, i.vessel_name, i.report_number,
+                    i.own_details, i.client_id, i.port_id
              FROM invoices i
              WHERE i.deleted_at IS NULL AND (i.rec_file_path IS NOT NULL OR EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = i.id AND ip.kind = 'recovery'))";
     $recv = 'COALESCE(p.received, 0)';
@@ -153,8 +155,9 @@ function ledgerBaseSql(PDO $db, string $today): string {
                      ELSE 'Unpaid' END)";
     return "(SELECT CONCAT(d.invoice_id, '-', d.kind) AS doc_key, d.invoice_id, d.kind, d.doc_no, d.doc_date, d.amount,
                     d.doc_path, d.doc_name, d.survey_id,
-                    COALESCE(s.vessel_name, d.i_vessel) AS vessel_name, COALESCE(s.report_number, d.i_report) AS survey_ref,
-                    c.company_name AS client_name, s.client_id, pt.port_name, s.port_id,
+                    IF(d.i_own = 1, d.i_vessel, COALESCE(s.vessel_name, d.i_vessel)) AS vessel_name,
+                    IF(d.i_own = 1, d.i_report, COALESCE(s.report_number, d.i_report)) AS survey_ref,
+                    c.company_name AS client_name, IF(d.i_own = 1, d.i_client, s.client_id) AS client_id, pt.port_name, IF(d.i_own = 1, d.i_port, s.port_id) AS port_id,
                     a.due_date, a.remarks, COALESCE(a.cancelled, 0) AS cancelled,
                     $recv AS received, $out AS outstanding, p.last_paid, COALESCE(p.n, 0) AS payment_count,
                     $status AS pay_status
@@ -164,8 +167,8 @@ function ledgerBaseSql(PDO $db, string $today): string {
                         FROM invoice_payments WHERE status = 'success' GROUP BY invoice_id, kind) p
                     ON p.invoice_id = d.invoice_id AND p.kind = d.kind
              LEFT JOIN surveys s ON s.id = d.survey_id
-             LEFT JOIN clients c ON c.id = s.client_id
-             LEFT JOIN ports pt ON pt.id = s.port_id) x";
+             LEFT JOIN clients c ON c.id = IF(d.i_own = 1, d.i_client, s.client_id)
+             LEFT JOIN ports pt ON pt.id = IF(d.i_own = 1, d.i_port, s.port_id)) x";
 }
 
 /** Filters from the request → [state, whereSql, params] on alias x. */

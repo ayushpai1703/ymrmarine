@@ -86,10 +86,57 @@ function invoiceEnsureGenColumns(PDO $db): void {
         'deleted_at' => 'DATETIME NULL',            // entry deleted from Invoices (kept, can be restored;
         'deleted_by' => 'INT NULL',                 //  stays so the vessel is not registered again)
         'delete_reason' => 'VARCHAR(255) NULL',
+        // Add Invoice / Edit (manual entry): the invoice's own vessel & survey details. Used instead
+        // of the linked survey's only when own_details = 1 (manual invoices, and entries whose
+        // details were changed with Edit); rows from Pending Reports keep own_details = 0 and
+        // show their survey exactly as before.
+        'own_details' => 'TINYINT(1) NOT NULL DEFAULT 0',
+        'client_id' => 'INT NULL',
+        'port_id' => 'INT NULL',
+        'survey_type_ids' => 'VARCHAR(255) NULL',
+        'survey_completed_date' => 'DATE NULL',
+        'created_by' => 'INT NULL',
+        'request_id' => 'CHAR(32) NULL',           // one per Add Invoice form; stops double saves
     ];
     foreach ($add as $col => $def) {
         if (!isset($have[$col])) $db->exec("ALTER TABLE invoices ADD COLUMN `$col` $def");
     }
+    if (!isset($have['request_id'])) {
+        try { $db->exec('ALTER TABLE invoices ADD UNIQUE KEY `uq_invoices_request` (`request_id`)'); } catch (Throwable $e) { error_log('invoices request key: ' . $e->getMessage()); }
+    }
+    // A manual invoice need not belong to a survey: survey_id may be empty (still UNIQUE, so a
+    // survey has at most one invoice entry; MySQL allows any number of NULLs in a unique key).
+    $sc = $db->query("SHOW COLUMNS FROM invoices LIKE 'survey_id'")->fetch(PDO::FETCH_ASSOC);
+    if ($sc && strtoupper((string)$sc['Null']) === 'NO') {
+        $db->exec("ALTER TABLE invoices MODIFY `survey_id` int(11) NULL COMMENT 'surveys.id (vessel + report record); empty for a manual invoice'");
+    }
+}
+
+/*
+ * What a row shows for its vessel & survey details: the invoice's own copy when own_details = 1,
+ * otherwise the linked survey (as before). Used by every list / filter / sort / export.
+ */
+const INV_E_VESSEL = 'IF(i.own_details = 1, i.vessel_name, COALESCE(s.vessel_name, i.vessel_name))';
+const INV_E_REPORT = 'IF(i.own_details = 1, i.report_number, COALESCE(s.report_number, i.report_number))';
+const INV_E_CLIENT = 'IF(i.own_details = 1, i.client_id, s.client_id)';
+const INV_E_PORT = 'IF(i.own_details = 1, i.port_id, s.port_id)';
+const INV_E_SCD = 'IF(i.own_details = 1, i.survey_completed_date, s.survey_completed_date)';
+const INV_E_TYPE_IDS = 'IF(i.own_details = 1, i.survey_type_ids, s.survey_type_ids)';
+const INV_E_TYPE_ID = "IF(i.own_details = 1, CAST(NULLIF(SUBSTRING_INDEX(i.survey_type_ids, ',', 1), '') AS UNSIGNED), s.survey_type_id)";
+
+/** FROM + joins of the Invoices list (aliases i, s, c, st, p). */
+function invoiceFromSql(): string {
+    return 'FROM invoices i
+        LEFT JOIN surveys s ON s.id = i.survey_id
+        LEFT JOIN clients c ON c.id = ' . INV_E_CLIENT . '
+        LEFT JOIN survey_types st ON st.id = ' . INV_E_TYPE_ID . '
+        LEFT JOIN ports p ON p.id = ' . INV_E_PORT;
+}
+
+/** Survey type names shown for a row of invoiceRowSql(). */
+function invoiceTypeNames(PDO $db, array $r): string {
+    if (empty($r['sid']) && empty($r['own_details'])) return '';
+    return (string)getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? '');
 }
 
 /** Stores a generated PDF under uploads/invoices/ and returns its relative path (null on failure). */
@@ -198,14 +245,10 @@ function invoiceValidatePdf(array $f, ?string &$err): bool {
 
 /** One invoice row joined with what the list shows (vessel, client, type, port, dates). */
 function invoiceRowSql(): string {
-    return "SELECT i.*, s.id AS sid, s.vessel_name AS s_vessel_name, s.report_number AS s_report_number, s.agent_name,
-               s.survey_type_ids, s.survey_completed_date, s.appointment_date, s.report_uploaded_date, s.status AS survey_status,
-               c.company_name, st.type_name, p.port_name
-        FROM invoices i
-        LEFT JOIN surveys s ON s.id = i.survey_id
-        LEFT JOIN clients c ON c.id = s.client_id
-        LEFT JOIN survey_types st ON st.id = s.survey_type_id
-        LEFT JOIN ports p ON p.id = s.port_id";
+    return 'SELECT i.*, s.id AS sid, ' . INV_E_VESSEL . ' AS s_vessel_name, ' . INV_E_REPORT . ' AS s_report_number, s.agent_name,
+               ' . INV_E_TYPE_IDS . ' AS survey_type_ids, ' . INV_E_SCD . ' AS survey_completed_date, s.appointment_date, s.report_uploaded_date, s.status AS survey_status,
+               c.company_name, st.type_name, p.port_name, ' . INV_E_CLIENT . ' AS eff_client_id, ' . INV_E_PORT . ' AS eff_port_id, ' . INV_E_TYPE_ID . ' AS survey_type_id
+        ' . invoiceFromSql();
 }
 
 /** The row as JSON for the page (what the row's cells and buttons need). */
@@ -260,9 +303,15 @@ function invoiceGridRow(PDO $db, array $r): array {
     $j['vessel'] = (string)($r['s_vessel_name'] ?? $r['vessel_name'] ?? '');
     $j['report_no'] = (string)($r['s_report_number'] ?? $r['report_number'] ?? '');
     $j['client'] = (string)($r['company_name'] ?? '');
-    $j['type'] = !empty($r['sid']) ? (string)getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? '') : '';
+    $j['type'] = invoiceTypeNames($db, $r);
     $j['port'] = (string)($r['port_name'] ?? '');
-    $j['survey_deleted'] = empty($r['sid']);
+    $j['survey_deleted'] = !empty($r['survey_id']) && empty($r['sid']);
+    $j['manual'] = ($r['registered_via'] ?? '') === 'manual';
+    $j['linked'] = !empty($r['sid']);
+    $j['client_id'] = (int)($r['eff_client_id'] ?? 0) ?: null;
+    $j['port_id'] = (int)($r['eff_port_id'] ?? 0) ?: null;
+    $j['type_ids'] = array_values(array_filter(array_map('intval', explode(',', str_replace(' ', '', (string)($r['survey_type_ids'] ?? ''))))))
+        ?: (!empty($r['survey_type_id']) ? [(int)$r['survey_type_id']] : []);
     $j['survey_completed_ymd'] = !empty($r['survey_completed_date']) && strpos((string)$r['survey_completed_date'], '0000') !== 0 ? substr((string)$r['survey_completed_date'], 0, 10) : '';
     $j['amount'] = $r['invoice_amount'] !== null ? round((float)$r['invoice_amount'], 2) : null;
     return $j;
@@ -302,21 +351,25 @@ function invoiceListFilters(array $g): array {
     $params = [];
     if ($st['q'] !== '') {
         $like = '%' . addcslashes($st['q'], '%_\\') . '%';
-        $where[] = '(COALESCE(s.vessel_name, i.vessel_name) LIKE ? OR c.company_name LIKE ? OR p.port_name LIKE ? OR COALESCE(s.report_number, i.report_number) LIKE ? OR i.invoice_no LIKE ?)';
+        $where[] = '(' . INV_E_VESSEL . ' LIKE ? OR c.company_name LIKE ? OR p.port_name LIKE ? OR ' . INV_E_REPORT . ' LIKE ? OR i.invoice_no LIKE ?)';
         array_push($params, $like, $like, $like, $like, $like);
     }
     if ($st['status'] !== '') { $where[] = 'i.invoice_status = ?'; $params[] = $st['status']; }
-    if ($st['type'] !== '') { $where[] = listFilterTypeSql([$st['type']], $params); }
+    if ($st['type'] !== '') {
+        $params[] = mb_strtolower($st['type']);
+        $where[] = "EXISTS (SELECT 1 FROM survey_types ltf WHERE LOWER(ltf.type_name) = ?
+            AND FIND_IN_SET(ltf.id, REPLACE(COALESCE(NULLIF(" . INV_E_TYPE_IDS . ", ''), " . INV_E_TYPE_ID . "), ' ', '')))";
+    }
     if ($st['month'] !== '') {
-        $where[] = 's.survey_completed_date >= ? AND s.survey_completed_date < ?';
+        $where[] = INV_E_SCD . ' >= ? AND ' . INV_E_SCD . ' < ?';
         $params[] = $st['month'] . '-01';
         $params[] = date('Y-m-d', strtotime($st['month'] . '-01 +1 month'));
     }
-    if ($st['client'] > 0) { $where[] = 's.client_id = ?'; $params[] = $st['client']; }
-    if ($st['port'] > 0) { $where[] = 's.port_id = ?'; $params[] = $st['port']; }
-    if ($st['vessel'] !== '') { $where[] = 'COALESCE(s.vessel_name, i.vessel_name) LIKE ?'; $params[] = '%' . addcslashes($st['vessel'], '%_\\') . '%'; }
-    if ($st['scd_from'] !== '') { $where[] = 's.survey_completed_date >= ?'; $params[] = $st['scd_from']; }
-    if ($st['scd_to'] !== '') { $where[] = 's.survey_completed_date < ?'; $params[] = date('Y-m-d', strtotime($st['scd_to'] . ' +1 day')); }
+    if ($st['client'] > 0) { $where[] = INV_E_CLIENT . ' = ?'; $params[] = $st['client']; }
+    if ($st['port'] > 0) { $where[] = INV_E_PORT . ' = ?'; $params[] = $st['port']; }
+    if ($st['vessel'] !== '') { $where[] = INV_E_VESSEL . ' LIKE ?'; $params[] = '%' . addcslashes($st['vessel'], '%_\\') . '%'; }
+    if ($st['scd_from'] !== '') { $where[] = INV_E_SCD . ' >= ?'; $params[] = $st['scd_from']; }
+    if ($st['scd_to'] !== '') { $where[] = INV_E_SCD . ' < ?'; $params[] = date('Y-m-d', strtotime($st['scd_to'] . ' +1 day')); }
     if ($st['ids']) { $where[] = 'i.id IN (' . implode(',', $st['ids']) . ')'; }
     return [$st, implode(' AND ', $where), $params];
 }
@@ -333,12 +386,12 @@ function invoiceListFiltersNoStatus(array $g): array {
 /** Sortable columns of the Invoices grid → SQL (aliases of invoiceRowSql()). */
 const INVOICE_LIST_SORTS = [
     'invoice_no' => "CAST(SUBSTRING_INDEX(i.invoice_no, '-', -1) AS UNSIGNED)",
-    'vessel' => 'COALESCE(s.vessel_name, i.vessel_name)',
-    'report_no' => 'COALESCE(s.report_number, i.report_number)',
+    'vessel' => INV_E_VESSEL,
+    'report_no' => INV_E_REPORT,
     'client' => 'c.company_name',
     'type' => 'st.type_name',
     'port' => 'p.port_name',
-    'survey_completed' => '(CASE WHEN YEAR(s.survey_completed_date) > 0 THEN s.survey_completed_date END)',
+    'survey_completed' => '(CASE WHEN YEAR(' . INV_E_SCD . ') > 0 THEN ' . INV_E_SCD . ' END)',
     'status' => "FIELD(i.invoice_status, 'Pending for CP Prices', 'Pending for Cost', 'Pending for Other Reason', 'Completed')",
     'invoice_date' => 'i.invoice_date',
     'amount' => 'i.invoice_amount',
@@ -367,7 +420,7 @@ function invoiceListOrderSql(string $view = 'pending'): string {
     if ($view === 'completed') {
         return "(i.invoice_no IS NULL OR i.invoice_no = '') ASC, CAST(SUBSTRING_INDEX(i.invoice_no, '-', -1) AS UNSIGNED) ASC, i.invoice_no ASC, i.id ASC";
     }
-    $scd = '(CASE WHEN YEAR(s.survey_completed_date) > 0 THEN s.survey_completed_date END)';
+    $scd = '(CASE WHEN YEAR(' . INV_E_SCD . ') > 0 THEN ' . INV_E_SCD . ' END)';
     return "($scd IS NULL) ASC, $scd DESC, i.id DESC";
 }
 
@@ -407,27 +460,105 @@ function invoiceFirstFreeNumber(PDO $db, int $n): int {
 
 /** The client's short code for invoice numbers (e.g. BB for Bainbridge). */
 function invoiceClientCode(PDO $db, int $surveyId): string {
-    require_once __DIR__ . '/report_number.php';
     $q = $db->prepare('SELECT client_id FROM surveys WHERE id = ?');
     $q->execute([$surveyId]);
-    $cid = (int)$q->fetchColumn();
-    return $cid > 0 ? preg_replace('/[^A-Z0-9]/', '', strtoupper(ensureClientHasShortCode($db, $cid))) ?: 'XX' : 'XX';
+    return invoiceCodeForClient($db, (int)$q->fetchColumn());
+}
+
+/** Short code of a client (XX when there is none). */
+function invoiceCodeForClient(PDO $db, int $clientId): string {
+    require_once __DIR__ . '/report_number.php';
+    return $clientId > 0 ? preg_replace('/[^A-Z0-9]/', '', strtoupper(ensureClientHasShortCode($db, $clientId))) ?: 'XX' : 'XX';
+}
+
+/** The client an invoice row is for (its own client for manual / edited entries, else its survey's). */
+function invoiceClientIdOf(PDO $db, int $invoiceId): int {
+    $q = $db->prepare('SELECT ' . INV_E_CLIENT . ' FROM invoices i LEFT JOIN surveys s ON s.id = i.survey_id WHERE i.id = ?');
+    $q->execute([$invoiceId]);
+    return (int)$q->fetchColumn();
+}
+
+/** The next number the series would give now (not reserved): the counter, skipping numbers in use. */
+function invoiceNextNumber(PDO $db): int {
+    invoiceEnsureSequence($db);
+    $n = (int)$db->query('SELECT next_no FROM invoice_number_seq WHERE id = 1')->fetchColumn();
+    return invoiceFirstFreeNumber($db, max(INVOICE_FIRST_NUMBER, $n));
 }
 
 /** The number the vessel's invoice has, or the one it would get now (not reserved). */
 function invoicePeekNumber(PDO $db, array $inv): string {
     if (trim((string)($inv['invoice_no'] ?? '')) !== '') return (string)$inv['invoice_no'];
-    invoiceEnsureSequence($db);
-    $n = (int)$db->query('SELECT next_no FROM invoice_number_seq WHERE id = 1')->fetchColumn();
-    return 'YMR-' . invoiceClientCode($db, (int)$inv['survey_id']) . '-' . invoiceFirstFreeNumber($db, max(INVOICE_FIRST_NUMBER, $n));
+    $cid = (int)($inv['eff_client_id'] ?? 0);
+    $code = $cid > 0 ? invoiceCodeForClient($db, $cid) : invoiceClientCode($db, (int)($inv['survey_id'] ?? 0));
+    return 'YMR-' . $code . '-' . invoiceNextNumber($db);
+}
+
+/**
+ * A typed invoice number, cleaned: upper case, no spaces; digits only → YMR-<code>-<digits>.
+ * Returns [number, null] or [null, error]. Same rule as the Generate Invoice number fix.
+ */
+function invoiceNormalizeNumber(string $typed, string $code): array {
+    $want = strtoupper(preg_replace('/\s+/', '', $typed));
+    if ($want === '') return [null, 'Enter the invoice number.'];
+    if (ctype_digit($want)) $want = 'YMR-' . $code . '-' . ltrim($want, '0');
+    if (!preg_match('/^[A-Z0-9][A-Z0-9\-\/]{0,58}[0-9]$/', $want)) {
+        return [null, 'Invoice number: letters, digits and - only, ending in its number (e.g. YMR-' . $code . '-968).'];
+    }
+    return [$want, null];
+}
+
+/** The running number at the end of an invoice number ("YMR-BB-968" → 968), or null. */
+function invoiceNumberPart(string $no): ?int {
+    return preg_match('/-([0-9]{1,9})$/', $no, $m) ? (int)$m[1] : null;
+}
+
+/**
+ * The invoice number another entry (deleted ones too — numbers are never reused) already has
+ * that clashes with $no: the same number, or the same running number under any client code
+ * (also its recovery "B" invoice). null when $no is free.
+ */
+function invoiceNumberTakenBy(PDO $db, string $no, int $exceptId = 0): ?string {
+    $n = invoiceNumberPart($no);
+    $sql = 'SELECT invoice_no FROM invoices WHERE id <> ? AND (invoice_no = ?' . ($n !== null ? ' OR invoice_no LIKE ? OR invoice_no LIKE ?' : '') . ') LIMIT 1';
+    $q = $db->prepare($sql);
+    $q->execute($n !== null ? [$exceptId, $no, '%-' . $n, '%-' . $n . 'B'] : [$exceptId, $no]);
+    $o = $q->fetchColumn();
+    return $o === false ? null : (string)$o;
+}
+
+/** Locks the number series until the transaction ends (every number written goes through it). */
+function invoiceLockSequence(PDO $db): int {
+    return (int)$db->query('SELECT next_no FROM invoice_number_seq WHERE id = 1 FOR UPDATE')->fetchColumn();
+}
+
+/** After a number is saved: the series continues after it when it is higher (call inside the lock). */
+function invoiceAdvanceSequence(PDO $db, string $no): void {
+    $n = invoiceNumberPart($no);
+    if ($n !== null && $n >= INVOICE_FIRST_NUMBER) {
+        $db->prepare('UPDATE invoice_number_seq SET next_no = GREATEST(next_no, ?) WHERE id = 1')->execute([$n + 1]);
+    }
+}
+
+/**
+ * UNIQUE key on invoice_no (extra protection against a number used twice). Added only when the
+ * stored numbers are already unique — existing rows are never changed; when two rows share a
+ * number the key is left out (logged) and the checks above still apply.
+ */
+function invoiceEnsureNumberKey(PDO $db): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    if ($db->query("SHOW INDEX FROM invoices WHERE Key_name = 'uq_invoices_no'")->fetch()) return;
+    $dup = $db->query('SELECT invoice_no FROM invoices WHERE invoice_no IS NOT NULL GROUP BY invoice_no HAVING COUNT(*) > 1 LIMIT 1')->fetchColumn();
+    if ($dup !== false) { error_log('invoices: invoice_no unique key not added — a number is stored twice'); return; }
+    try { $db->exec('ALTER TABLE invoices ADD UNIQUE KEY `uq_invoices_no` (`invoice_no`)'); }
+    catch (Throwable $e) { error_log('invoices: invoice_no unique key: ' . $e->getMessage()); }
 }
 
 /** Gives the invoice its number if it has none yet (one transaction) and returns it. */
 function invoiceAllocateNumber(PDO $db, int $invoiceId): string {
     invoiceEnsureSequence($db);
-    $s = $db->prepare('SELECT survey_id FROM invoices WHERE id = ?');
-    $s->execute([$invoiceId]);
-    $code = invoiceClientCode($db, (int)$s->fetchColumn()); // before the transaction (may save a missing client code)
+    $code = invoiceCodeForClient($db, invoiceClientIdOf($db, $invoiceId)); // before the transaction (may save a missing client code)
     $db->beginTransaction();
     try {
         $q = $db->prepare('SELECT invoice_no FROM invoices WHERE id = ? FOR UPDATE');
