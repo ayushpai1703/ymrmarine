@@ -43,7 +43,7 @@ include 'includes/header.php';
     }
 </style>
 
-<div class="scroll-content">
+<div class="scroll-content" data-list-scope>
     <?php $page_title = 'Photo Report'; $back_url = 'index.php'; $page_testid = 'photo-report'; include 'includes/top_app_bar.php'; ?>
     <div class="bg-white p-3 d-flex align-items-center border-bottom">
         <h1 class="fw-bold m-0 text-center flex-1" style="font-size: 18px; width: 100%;">Pending Vessels</h1>
@@ -52,12 +52,12 @@ include 'includes/header.php';
     <div class="search-filter-row">
         <div class="search-input-wrapper">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" id="vesselSearchInput" class="search-control" placeholder="Search by vessel name...">
+            <input type="text" id="vesselSearchInput" class="search-control" placeholder="Search by vessel name..." data-list-search autocomplete="off">
         </div>
         <button class="filter-btn"><i class="fa-solid fa-sliders"></i></button>
     </div>
 
-    <div class="vessel-list-container" id="vesselListContainer">
+    <div class="vessel-list-container" id="vesselListContainer" data-list-container>
         <?php if (!empty($surveys) && count($surveys) > 0): ?>
             
             <?php foreach ($surveys as $survey): ?>
@@ -73,7 +73,7 @@ include 'includes/header.php';
                         $display_date = date('d M Y', strtotime($survey['created_at']));
                     }
                 ?>
-                <div class="vessel-card" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'">
+                <div class="vessel-card" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-search="<?= sanitize(strtolower($vessel_name . ' ' . ($survey['company_name'] ?? ''))) ?>">
                     <div class="vessel-card-top-content">
                         <div class="vessel-avatar-info">
                             <div class="vessel-initial-avatar"><?= $first_letter ?></div>

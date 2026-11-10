@@ -95,9 +95,11 @@
   }, true);
 
   // Search box: the × clears the search.
-  document.querySelectorAll('[data-rt-search]').forEach(function (form) {
-    var input = form.querySelector('input[name="q"]');
-    var x = form.querySelector('[data-rt-search-clear]');
-    if (x && input) x.addEventListener('click', function () { input.value = ''; form.submit(); });
+  // Delegated: live search (live-search.js) swaps parts of the page.
+  document.addEventListener('click', function (ev) {
+    var x = ev.target.closest('[data-rt-search-clear]');
+    if (!x) return;
+    var form = x.closest('[data-rt-search]'), input = form && form.querySelector('input[name="q"]');
+    if (input) { input.value = ''; form.submit(); }
   });
 })();

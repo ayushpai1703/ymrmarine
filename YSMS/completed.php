@@ -479,6 +479,7 @@ include 'includes/header.php';
     <div class="list-mobile-view">
     <div class="rt-mobile-top">
         <?= rtMobileSearch($rtBase, $rt, $rtExport) ?>
+        <div class="ls-region" data-live-region="m-top">
         <div class="cv-rec-summary" data-testid="cv-recovery-mobile">
             <span><i class="fa-solid fa-droplet"></i> <?= sanitize($cvRecoveryLabel) ?></span>
             <b><?= number_format($cvRecoveryTotal, 3) ?> MT</b>
@@ -487,8 +488,9 @@ include 'includes/header.php';
         <?= rtMobileBar($rt, $is_full_access) ?>
         <?= $rtChipsHtml ?>
         <?= rtMeta($rt, $rtTotal, $rtOffset, count($rtRows)) ?>
+        </div>
     </div>
-    <div class="vessel-list-container">
+    <div class="vessel-list-container" data-live-region="m-list">
         <?php if (count($rtRows) > 0): foreach ($rtRows as $rtI => $survey):
             $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
             $typeLabel = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
@@ -558,7 +560,7 @@ include 'includes/header.php';
     <div class="list-desktop-view vessels-desktop-view">
         <div class="vd-wrap">
 
-            <div class="vd-hero" data-testid="completed-hero">
+            <div class="vd-hero" data-testid="completed-hero" data-live-region="d-hero">
                 <i class="fa-solid fa-circle-check vd-hero-icon-bg" aria-hidden="true"></i>
                 <div>
                     <div class="vd-hero-title">Completed Vessels</div>
@@ -585,8 +587,9 @@ include 'includes/header.php';
                     </button>
                     <?php endif; ?>
                 </div>
-                <a href="<?= sanitize($rtExport) ?>" class="btn-export" data-testid="rt-download"><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Download</a>
+                <a href="<?= sanitize($rtExport) ?>" class="btn-export" data-testid="rt-download" data-live-region="d-export"><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Download</a>
             </div>
+            <div class="ls-region" data-live-region="d-list">
             <?= $rtChipsHtml ?>
             <?= rtMeta($rt, $rtTotal, $rtOffset, count($rtRows)) ?>
             <div class="vd-table-card">
@@ -684,11 +687,13 @@ include 'includes/header.php';
                     <?= rtPager($rtBase, $rt, $rtPage, $rtPages) ?>
                 </div>
             </div>
+            </div>
         </div>
     </div>
 
 
-<?= rtMenus($rtBase, $rt, $rtOpts, $rtYears, $is_full_access) ?>
+<div class="ls-region" data-live-region="menus"><?= rtMenus($rtBase, $rt, $rtOpts, $rtYears, $is_full_access) ?></div>
+<script src="assets/js/live-search.js?v=<?= @filemtime(__DIR__ . '/assets/js/live-search.js') ?>"></script>
 <script src="assets/js/report-table.js?v=<?= @filemtime(__DIR__ . '/assets/js/report-table.js') ?>"></script>
 
 <script>

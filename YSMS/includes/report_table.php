@@ -415,7 +415,7 @@ function rtPager(string $base, array $st, int $page, int $pages): string {
 
 /** Search box for the desktop toolbar (looks like Pending Vessels' search). */
 function rtDeskSearch(string $base, array $st): string {
-    return '<form class="vd-search rt-vd-search" method="get" action="' . htmlspecialchars($base) . '" role="search" data-rt-search>' . rtHidden($st, ['q'])
+    return '<form class="vd-search rt-vd-search" method="get" action="' . htmlspecialchars($base) . '" role="search" data-rt-search data-live-search>' . rtHidden($st, ['q'])
         . '<i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>'
         . '<input type="search" name="q" value="' . htmlspecialchars($st['q'], ENT_QUOTES) . '" placeholder="Search vessel" aria-label="Search vessel, report no, client, agent, port" autocomplete="off" data-testid="rt-search">'
         . ($st['q'] !== '' ? '<button type="button" class="rt-search-x" data-rt-search-clear aria-label="Clear search"><i class="fa-solid fa-xmark"></i></button>' : '')
@@ -424,10 +424,10 @@ function rtDeskSearch(string $base, array $st): string {
 
 /** Phone: search row + Export to Excel (looks like Pending Vessels on a phone). */
 function rtMobileSearch(string $base, array $st, string $exportUrl): string {
-    return '<form class="search-filter-row" method="get" action="' . htmlspecialchars($base) . '" role="search" data-rt-search>' . rtHidden($st, ['q'])
+    return '<form class="search-filter-row" method="get" action="' . htmlspecialchars($base) . '" role="search" data-rt-search data-live-search>' . rtHidden($st, ['q'])
         . '<div class="search-input-wrapper"><i class="fa-solid fa-magnifying-glass"></i>'
         . '<input type="search" name="q" class="search-control" value="' . htmlspecialchars($st['q'], ENT_QUOTES) . '" placeholder="Search by vessel, report no, client or agent..." autocomplete="off" data-testid="rt-search-m"></div></form>'
-        . '<div class="pv-actions-row"><a href="' . htmlspecialchars($exportUrl) . '" class="pv-export-btn" data-testid="rt-download-m"><i class="fa-solid fa-file-excel"></i> Export to Excel</a></div>';
+        . '<div class="pv-actions-row" data-live-region="m-export"><a href="' . htmlspecialchars($exportUrl) . '" class="pv-export-btn" data-testid="rt-download-m"><i class="fa-solid fa-file-excel"></i> Export to Excel</a></div>';
 }
 
 /** "Showing 1–25 of 40 · Sorted by …" */
