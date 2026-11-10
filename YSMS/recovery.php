@@ -106,7 +106,7 @@ include 'includes/header.php';
     <?php $page_title = 'Recovery'; $back_url = 'index.php'; $page_testid = 'recovery'; include 'includes/top_app_bar.php'; ?>
 
     <div class="rc-wrap">
-        <div class="rc-cards">
+        <div class="rc-cards" data-live-region="rc-cards">
             <div class="rc-card"><div class="rc-card-l">Vessels</div><div class="rc-card-v" data-testid="rc-count"><?= $totalRows ?></div></div>
             <div class="rc-card"><div class="rc-card-l">Total Recovery</div><div class="rc-card-v rc-main" data-testid="rc-total"><?= $mt($tot['total']) ?> MT</div></div>
             <div class="rc-card"><div class="rc-card-l">VLSFO</div><div class="rc-card-v" data-testid="rc-vlsfo"><?= $mt($tot['vlsfo']) ?> MT</div></div>
@@ -114,7 +114,7 @@ include 'includes/header.php';
             <div class="rc-card"><div class="rc-card-l">HSFO</div><div class="rc-card-v" data-testid="rc-hsfo"><?= $mt($tot['hsfo']) ?> MT</div></div>
         </div>
 
-        <form method="get" class="rc-filters" data-testid="rc-filters" id="rcFilters">
+        <form method="get" class="rc-filters" data-testid="rc-filters" id="rcFilters" data-live-search>
             <input type="search" name="q" value="<?= sanitize($f['q']) ?>" placeholder="Search vessel, report no, client, port, surveyor…" data-testid="rc-q">
             <select name="month" data-testid="rc-month" aria-label="Month (Survey Completed Date)">
                 <option value="">All months</option>
@@ -154,14 +154,14 @@ include 'includes/header.php';
                 <option value="recovery-asc"<?= $f['sort'] === 'recovery-asc' ? ' selected' : '' ?>>Recovery — lowest</option>
                 <option value="name-asc"<?= $f['sort'] === 'name-asc' ? ' selected' : '' ?>>Vessel name A–Z</option>
             </select>
-            <div class="rc-actions">
+            <div class="rc-actions" data-live-region="rc-actions">
                 <button type="submit" class="rc-btn rc-btn-apply" data-testid="rc-apply"><i class="fa-solid fa-filter"></i> Apply</button>
                 <?php if ($has_filters): ?><a href="recovery.php" class="rc-btn rc-btn-clear" data-testid="rc-clear"><i class="fa-solid fa-rotate-left"></i> Clear Filters</a><?php endif; ?>
                 <a href="export_recovery.php?<?= sanitize(recoveryListQs($f, ['full' => 1])) ?>" class="rc-btn rc-btn-dl" data-testid="rc-download"><i class="fa-solid fa-file-excel"></i> Download Excel</a>
             </div>
         </form>
 
-        <div class="rc-table-wrap">
+        <div class="rc-table-wrap" data-live-region="rc-table">
             <?php if (!$rows): ?>
                 <div class="rc-empty" data-testid="rc-empty">No vessels match these filters.</div>
             <?php else: ?>
@@ -210,6 +210,7 @@ include 'includes/header.php';
             <?php endif; ?>
         </div>
 
+        <div data-live-region="rc-pages">
         <?php if ($totalPages > 1): ?>
         <nav class="rc-pages" data-testid="rc-pages">
             <?php for ($p = 1; $p <= $totalPages; $p++): ?>
@@ -219,6 +220,7 @@ include 'includes/header.php';
             <?php endfor; ?>
         </nav>
         <?php endif; ?>
+        </div>
         <div class="rc-note">Vessels in Pending Reports and Completed. Month = Survey Completed Date (same as the dashboard Recovery cards).</div>
     </div>
 </div>
@@ -233,4 +235,5 @@ document.getElementById('rcFilters').addEventListener('click', function (ev) {
     if (ev.target.closest('.ysms-ms-done')) this.submit();
 }, true);
 </script>
+<script src="assets/js/live-search.js?v=<?= @filemtime(__DIR__ . '/assets/js/live-search.js') ?>"></script>
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>

@@ -130,3 +130,4 @@ th.rt-th.static { padding: 13px 14px !important; }
   .list-desktop-view .vd-vessel { max-width: 150px; white-space: normal; }
   .list-desktop-view .vd-actions a { padding: 5px 10px; font-size: 11.5px; }
 }
+.ls-region { display: contents; } /* live search wrappers (live-search.js) */

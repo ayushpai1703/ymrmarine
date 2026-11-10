@@ -52,11 +52,11 @@ include 'includes/header.php';
         <div class="sl-actions"><a class="sl-btn pri" href="assign_vessel.php"><i class="fa-solid fa-ship"></i> Request Survey</a></div>
     </div>
     <div class="sl-card">
-        <div class="sl-tabs" data-testid="sales-survey-tabs">
+        <div class="sl-tabs" data-testid="sales-survey-tabs" data-live-region="sl-tabs">
             <a href="<?= sanitize($url(['status' => '', 'page' => ''])) ?>" class="<?= $status === '' ? 'on' : '' ?>">All<span><?= array_sum($counts) ?></span></a>
             <?php foreach ($STATUSES as $s): ?><a href="<?= sanitize($url(['status' => $s, 'page' => ''])) ?>" class="<?= $status === $s ? 'on' : '' ?>" data-testid="sales-tab-<?= $pill[$s] ?>"><?= $s ?><span><?= $counts[$s] ?></span></a><?php endforeach; ?>
         </div>
-        <form class="sl-filters" method="get" data-testid="sales-survey-filters">
+        <form class="sl-filters" method="get" data-testid="sales-survey-filters" data-live-search>
             <?php if ($status): ?><input type="hidden" name="status" value="<?= sanitize($status) ?>"><?php endif; ?>
             <input type="search" name="q" value="<?= sanitize($qs) ?>" placeholder="Search vessel, report no, client, port…" aria-label="Search" data-testid="sales-survey-search">
             <select name="client" onchange="this.form.submit()" aria-label="Client" data-testid="sales-survey-client"><option value="">All clients</option><?php foreach ($clients as $c): ?><option value="<?= (int)$c['id'] ?>"<?= $client === (int)$c['id'] ? ' selected' : '' ?>><?= sanitize($c['company_name']) ?></option><?php endforeach; ?></select>
@@ -64,6 +64,7 @@ include 'includes/header.php';
             <button class="sl-btn" type="submit"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
             <?php if ($client || $month || $qs !== ''): ?><a class="sl-btn" href="<?= sanitize($url(['client' => '', 'month' => '', 'q' => '', 'page' => ''])) ?>">Clear</a><?php endif; ?>
         </form>
+        <div data-live-region="sl-list">
         <?php if (!$rows): ?><div class="sl-empty">No surveys match.</div><?php else: ?>
         <div class="sl-t-wrap"><table class="sl-t" data-testid="sales-survey-table"><thead><tr><th>Vessel</th><th>Client</th><th>Port</th><th>Survey type</th><th>Status</th><th>Assigned</th><th>Appointment</th><th>Survey completed</th></tr></thead><tbody>
         <?php foreach ($rows as $r): ?><tr>
@@ -77,7 +78,9 @@ include 'includes/header.php';
         <div class="sl-pager"><span><?= number_format($total) ?> survey<?= $total === 1 ? '' : 's' ?> · page <?= $page ?> / <?= $pages ?></span>
             <span class="sl-actions"><?php if ($page > 1): ?><a class="sl-btn sm" href="<?= sanitize($url(['page' => $page - 1])) ?>">‹ Previous</a><?php endif; ?><?php if ($page < $pages): ?><a class="sl-btn sm" href="<?= sanitize($url(['page' => $page + 1])) ?>">Next ›</a><?php endif; ?></span></div>
         <?php endif; ?>
+        </div>
     </div>
 </div>
 </div>
+<script src="assets/js/live-search.js?v=<?= @filemtime(__DIR__ . '/assets/js/live-search.js') ?>"></script>
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>

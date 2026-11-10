@@ -277,7 +277,10 @@ $(document).ready(function() {
                 && (!surveyors.length || anyName(attr(card, 'surveyor'), surveyors))
                 && (!month || attr(card, 'month') === month)
                 && (!appointment || attr(card, 'appointment') === appointment);
-            card.style.display = show ? '' : 'none';
+            // Inline !important: the mobile card stylesheets (mobile-card.css) set
+            // display:block !important on the cards, which beat a plain style.display.
+            if (show) card.style.removeProperty('display');
+            else card.style.setProperty('display', 'none', 'important');
             if (show) {
                 visible++;
                 // Sequential "#1, #2, ..." badge — recomputed on every
