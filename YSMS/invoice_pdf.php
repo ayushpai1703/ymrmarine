@@ -37,10 +37,10 @@ if (!$inv) { http_response_code(404); exit('Invoice not found.'); }
 if (!empty($inv['deleted_at'])) { http_response_code(409); exit('This entry was deleted from Invoices. Restore it on the Invoices page (Deleted) to make its invoice.'); }
 
 $addr1 = $addr2 = '';
-if (!empty($inv['sid'])) {
+if (!empty($inv['eff_client_id'])) { // the entry's client (its survey's, or its own for a manual / edited entry)
     try { // address columns are added by invoice_generator.php / migration_client_address.sql
-        $a = $db->prepare('SELECT c.address_line1, c.address_line2 FROM surveys s JOIN clients c ON c.id = s.client_id WHERE s.id = ?');
-        $a->execute([(int)$inv['sid']]);
+        $a = $db->prepare('SELECT c.address_line1, c.address_line2 FROM clients c WHERE c.id = ?');
+        $a->execute([(int)$inv['eff_client_id']]);
         if ($ar = $a->fetch(PDO::FETCH_ASSOC)) { $addr1 = (string)$ar['address_line1']; $addr2 = (string)$ar['address_line2']; }
     } catch (Throwable $e) { /* no address columns yet */ }
 }
@@ -50,7 +50,7 @@ if (!empty($inv['sid'])) {
     $inv = array_merge($inv, $rq->fetch(PDO::FETCH_ASSOC) ?: []);
 }
 $vessel = (string)($inv['s_vessel_name'] ?? $inv['vessel_name'] ?? '');
-$type = !empty($inv['sid']) ? getCombinedSurveyTypeNames($db, $inv['survey_type_ids'] ?? '', $inv['type_name'] ?? '') : '';
+$type = invoiceTypeNames($db, $inv);
 $completed = !empty($inv['survey_completed_date']) && strpos((string)$inv['survey_completed_date'], '0000') !== 0 ? date('d M Y', strtotime($inv['survey_completed_date'])) : '';
 
 $defaults = [

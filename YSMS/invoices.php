@@ -29,10 +29,11 @@ try {
 $init = ['view' => in_array($f['view'], ['completed', 'deleted'], true) ? $f['view'] : 'pending', 'status' => $f['status'], 'q' => $f['q'], 'type' => $f['type'], 'month' => $f['month'],
     'client' => $f['client'] ?: '', 'port' => $f['port'] ?: '', 'vessel' => $f['vessel'], 'scd_from' => $f['scd_from'], 'scd_to' => $f['scd_to']];
 $types = $db->query("SELECT type_name FROM survey_types WHERE type_name <> '' ORDER BY type_name")->fetchAll(PDO::FETCH_COLUMN);
-$clients = $db->query("SELECT DISTINCT c.id, c.company_name FROM invoices i JOIN surveys s ON s.id = i.survey_id JOIN clients c ON c.id = s.client_id ORDER BY c.company_name")->fetchAll(PDO::FETCH_ASSOC);
-$ports = $db->query("SELECT DISTINCT p.id, p.port_name FROM invoices i JOIN surveys s ON s.id = i.survey_id JOIN ports p ON p.id = s.port_id ORDER BY p.port_name")->fetchAll(PDO::FETCH_ASSOC);
-$months = $db->query("SELECT DISTINCT DATE_FORMAT(s.survey_completed_date, '%Y-%m') m FROM invoices i JOIN surveys s ON s.id = i.survey_id
-    WHERE YEAR(s.survey_completed_date) > 0 ORDER BY m DESC")->fetchAll(PDO::FETCH_COLUMN);
+// filter choices: what the entries show (a manual / edited entry uses its own details)
+$clients = $db->query('SELECT DISTINCT c.id, c.company_name FROM invoices i LEFT JOIN surveys s ON s.id = i.survey_id JOIN clients c ON c.id = ' . INV_E_CLIENT . ' ORDER BY c.company_name')->fetchAll(PDO::FETCH_ASSOC);
+$ports = $db->query('SELECT DISTINCT p.id, p.port_name FROM invoices i LEFT JOIN surveys s ON s.id = i.survey_id JOIN ports p ON p.id = ' . INV_E_PORT . ' ORDER BY p.port_name')->fetchAll(PDO::FETCH_ASSOC);
+$months = $db->query("SELECT DISTINCT DATE_FORMAT(" . INV_E_SCD . ", '%Y-%m') m FROM invoices i LEFT JOIN surveys s ON s.id = i.survey_id
+    WHERE YEAR(" . INV_E_SCD . ") > 0 ORDER BY m DESC")->fetchAll(PDO::FETCH_COLUMN);
 $prefs = [];
 try {
     $db->exec("CREATE TABLE IF NOT EXISTS `invoice_list_prefs` (`user_id` int(11) NOT NULL, `prefs` text NOT NULL,
@@ -48,6 +49,7 @@ $page_title = 'Invoices';
 include 'includes/header.php';
 ?>
 <link rel="stylesheet" href="assets/css/invoice-airtable.css?v=<?= @filemtime(__DIR__ . '/assets/css/invoice-airtable.css') ?>">
+<link rel="stylesheet" href="assets/css/invoice-form.css?v=<?= @filemtime(__DIR__ . '/assets/css/invoice-form.css') ?>">
 <style>
 /* Invoices grid extras (everything else is the Invoice Airtable stylesheet) */
 .at-sum.five { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -89,7 +91,10 @@ include 'includes/header.php';
         <div class="at-title"><span class="at-logo"><i class="fa-solid fa-file-invoice-dollar"></i></span>
             <div><h1>Invoices</h1><div class="at-sub"><span data-view-label>Pending invoices</span> · <span class="at-view"><i class="fa-solid fa-table-list"></i> Grid view</span></div></div>
         </div>
-        <a class="at-link" href="invoices_airtable.php" data-testid="inv-open-airtable"><i class="fa-solid fa-table-cells"></i> Invoice Airtable</a>
+        <div class="at-head-r">
+            <a class="at-link" href="invoices_airtable.php" data-testid="inv-open-airtable"><i class="fa-solid fa-table-cells"></i> Invoice Airtable</a>
+            <button type="button" class="ivf-add" data-ivf-add data-testid="inv-add"><i class="fa-solid fa-plus"></i> Add Invoice</button>
+        </div>
     </div>
 
     <div class="at-sum five" data-testid="inv-summary">
@@ -146,7 +151,7 @@ include 'includes/header.php';
 
         <div class="at-grid" data-grid data-testid="inv-grid">
             <table class="at-t" data-testid="inv-table"><colgroup data-cols></colgroup><thead data-head></thead><tbody data-body></tbody><tfoot data-foot></tfoot></table>
-            <div class="at-empty" data-empty hidden data-testid="inv-empty"><i class="fa-solid fa-file-invoice"></i><div data-empty-text>No invoices match.</div><small>Vessels appear here when their survey documents are submitted (Pending Reports).</small></div>
+            <div class="at-empty" data-empty hidden data-testid="inv-empty"><i class="fa-solid fa-file-invoice"></i><div data-empty-text>No invoices match.</div><small>Vessels appear here when their survey documents are submitted (Pending Reports), or add one with <b>Add Invoice</b>.</small></div>
         </div>
         <div class="at-pager" data-testid="inv-pager">
             <div data-count-text class="at-count" data-testid="inv-meta">Loading…</div>
@@ -169,6 +174,55 @@ include 'includes/header.php';
 </aside>
 </div>
 
+
+<!-- Add Invoice / Edit Invoice (assets/js/invoice-form.js) -->
+<button type="button" class="ivf-add ivf-fab" data-ivf-add aria-label="Add Invoice" data-testid="inv-add-fab"><i class="fa-solid fa-plus"></i> Add Invoice</button>
+<div class="ivf-scrim" data-ivf hidden data-testid="ivf">
+  <form class="ivf" role="dialog" aria-modal="true" aria-labelledby="ivfTitle" novalidate data-ivf-form>
+    <div class="ivf-h"><span class="ic"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+        <div><h2 id="ivfTitle" data-ivf-title>Add Invoice</h2><small data-ivf-sub>Manual entry — not linked to Pending Reports</small></div>
+        <button type="button" class="x" data-ivf-close aria-label="Close"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="ivf-b">
+        <div class="ivf-no" data-ivf-nobox>
+            <div class="ivf-no-top"><label for="ivfNo">Invoice Number</label><span class="ivf-badge" data-ivf-nobadge>Auto</span>
+                <button type="button" class="ivf-lnk" data-ivf-noauto data-testid="ivf-no-auto"><i class="fa-solid fa-rotate"></i> Use next number</button></div>
+            <input id="ivfNo" name="invoice_no" autocomplete="off" spellcheck="false" maxlength="60" data-testid="ivf-no">
+            <div class="hint" data-ivf-nohint></div>
+            <div class="ivf-e" data-e="invoice_no"></div>
+        </div>
+
+        <div class="ivf-sec"><div class="ivf-sec-h"><i class="fa-solid fa-receipt"></i> Invoice details</div>
+            <div class="ivf-grid">
+                <div class="ivf-fl"><label for="ivfDate">Invoice Date <b data-req-date>*</b></label><input type="date" id="ivfDate" name="invoice_date" data-testid="ivf-date"><div class="ivf-e" data-e="invoice_date"></div></div>
+                <div class="ivf-fl"><label for="ivfStatus">Invoice Status <b>*</b></label><select id="ivfStatus" name="invoice_status" data-testid="ivf-status">
+                    <?php foreach (INVOICE_STATUSES as $s): ?><option><?= sanitize($s) ?></option><?php endforeach; ?></select><div class="ivf-e" data-e="invoice_status"></div></div>
+                <div class="ivf-fl"><label for="ivfAmt">Invoice Amount (USD)</label><div class="ivf-money"><span>$</span><input id="ivfAmt" name="invoice_amount" inputmode="decimal" placeholder="0.00" autocomplete="off" data-testid="ivf-amount"></div><div class="ivf-e" data-e="invoice_amount"></div></div>
+                <div class="ivf-fl full"><label for="ivfNotes">Notes</label><textarea id="ivfNotes" name="invoice_notes" maxlength="500" rows="2" placeholder="Optional" data-testid="ivf-notes"></textarea><div class="ivf-e" data-e="invoice_notes"></div></div>
+            </div></div>
+
+        <div class="ivf-sec"><div class="ivf-sec-h"><i class="fa-solid fa-ship"></i> Vessel &amp; survey</div>
+            <div class="ivf-grid">
+                <div class="ivf-fl full" data-ivf-linkrow><label for="ivfLinkQ">Link to a survey record <span style="font-weight:500;color:#64748b">(optional — fills the details below)</span></label>
+                    <div class="ivf-link"><input type="search" id="ivfLinkQ" placeholder="Search vessel name or report no…" autocomplete="off" data-testid="ivf-link-q">
+                        <div class="ivf-res" data-ivf-res hidden></div></div>
+                    <div class="ivf-linked" data-ivf-linked hidden><i class="fa-solid fa-link"></i><span data-ivf-linkedtxt></span><button type="button" class="ivf-lnk" data-ivf-unlink data-testid="ivf-unlink">Unlink</button></div>
+                    <div class="ivf-small">Only surveys that have no Invoices entry yet are listed.</div><div class="ivf-e" data-e="survey_id"></div></div>
+                <div class="ivf-fl"><label for="ivfVessel">Vessel Name <b>*</b></label><input id="ivfVessel" name="vessel_name" maxlength="255" autocomplete="off" data-testid="ivf-vessel"><div class="ivf-e" data-e="vessel_name"></div></div>
+                <div class="ivf-fl"><label for="ivfClient">Client <b>*</b></label><select id="ivfClient" name="client_id" data-testid="ivf-client"><option value="">Choose client…</option></select><div class="ivf-e" data-e="client_id"></div></div>
+                <div class="ivf-fl"><label for="ivfReport">Report No</label><input id="ivfReport" name="report_number" maxlength="50" autocomplete="off" data-testid="ivf-report"><div class="ivf-e" data-e="report_number"></div></div>
+                <div class="ivf-fl"><label for="ivfPort">Port Name</label><input id="ivfPort" list="ivfPorts" placeholder="Type to search ports…" autocomplete="off" data-testid="ivf-port"><datalist id="ivfPorts"></datalist><div class="ivf-e" data-e="port_id"></div></div>
+                <div class="ivf-fl"><label for="ivfScd">Survey Completed Date</label><input type="date" id="ivfScd" name="survey_completed_date" data-testid="ivf-scd"><div class="ivf-e" data-e="survey_completed_date"></div></div>
+                <div class="ivf-fl full"><label>Survey Type</label><div class="ivf-types" data-ivf-types data-testid="ivf-types"></div><div class="ivf-e" data-e="survey_type_ids"></div></div>
+            </div></div>
+
+        <div class="ivf-sec"><div class="ivf-sec-h"><i class="fa-solid fa-paperclip"></i> Invoice document <span style="font-weight:500;text-transform:none;letter-spacing:0;color:#64748b">(optional)</span></div>
+            <div class="ivf-fl"><div class="ivf-file-cur" data-ivf-filecur hidden></div><input type="file" id="ivfFile" accept="application/pdf,.pdf" data-testid="ivf-file">
+                <div class="ivf-small">PDF only, up to <?= (int)(invoiceMaxBytes() / 1048576) ?> MB. You can also use Generate Invoice later.</div><div class="ivf-e" data-e="file"></div></div></div>
+    </div>
+    <div class="ivf-f"><button type="button" class="ivf-btn" data-ivf-close data-testid="ivf-cancel">Cancel</button>
+        <button type="submit" class="ivf-btn pri" data-ivf-save data-testid="ivf-save"><i class="fa-solid fa-floppy-disk"></i> <span>Save Invoice</span></button></div>
+  </form>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 window.INV_CONFIG = <?= json_encode([
@@ -182,4 +236,5 @@ window.INV_CONFIG = <?= json_encode([
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 </script>
 <script src="assets/js/invoices-grid.js?v=<?= @filemtime(__DIR__ . '/assets/js/invoices-grid.js') ?>"></script>
+<script src="assets/js/invoice-form.js?v=<?= @filemtime(__DIR__ . '/assets/js/invoice-form.js') ?>"></script>
 <?php include 'includes/nav.php'; include 'includes/footer.php'; ?>

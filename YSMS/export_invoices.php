@@ -49,7 +49,7 @@ try {
             (string)($row['s_vessel_name'] ?? $row['vessel_name'] ?? ''),
             (string)($row['s_report_number'] ?? $row['report_number'] ?? ''),
             (string)($row['company_name'] ?? ''),
-            !empty($row['sid']) ? getCombinedSurveyTypeNames($db, $row['survey_type_ids'] ?? '', $row['type_name'] ?? '') : '',
+            invoiceTypeNames($db, $row),
             (string)($row['port_name'] ?? ''),
             (string)$row['invoice_status'],
             $done ? date('d-m-Y', strtotime($row['survey_completed_date'])) : '',
