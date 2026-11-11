@@ -307,6 +307,7 @@
     else if (st.id === 'docs') body = docsHtml();
     else body = generateHtml();
     var crumb = $('[data-crumb]'); if (crumb) crumb.textContent = st.title;
+    document.body.setAttribute('data-sr-step', st.id);
     var bar = '<ol class="sr-steps" data-testid="sr-steps">' + list.map(function (x, j) {
       var cls = j === i ? 'on' : stepDone(x.id) ? 'done' : '', can = reachable(j) || j < i;
       return '<li class="' + cls + '"><button type="button" data-goto="' + x.id + '"' + (can ? '' : ' disabled') + ' data-testid="sr-step-' + x.id + '" title="' + esc(x.title) + '">' +
@@ -314,6 +315,7 @@
     }).join('') + '</ol>';
     var next = i < list.length - 1 ? list[i + 1] : null;
     var blocked = st.id === 'vessel' && issues('vessel').length > 0;
+    var slot = $('[data-steps]'); if (slot) { slot.innerHTML = bar; bar = ''; }
     $('[data-form]').innerHTML =
       '<div class="sr-wiz" data-testid="sr-wizard">' + bar +
       '<div class="sr-wiz-top"><span data-testid="sr-step-no">Step ' + (i + 1) + ' of ' + list.length + '</span><span class="sr-muted">' + list.filter(function (x) { return stepDone(x.id); }).length + ' of ' + (list.length - 1) + ' steps complete</span></div>' +
@@ -411,18 +413,16 @@
   function totalsBar() {
     var t = allTotals();
     return '<div class="sr-totbar" data-testid="sr-totbar"><div><span>Total Tanks:</span> <b data-testid="sr-tot-tanks">' + t.n + '</b></div>' +
-      '<div class="r"><span>Total G.S.V.:</span> <b data-testid="sr-tot-gsv">' + f3c(t.gsv) + ' m³</b></div><div class="r mt"><span>Total MT (Air):</span> <b data-testid="sr-tot-mt">' + f3c(t.mt) + ' MT</b></div></div>';
+      '<div class="r mt"><span>Total Metric Tons:</span> <b data-testid="sr-tot-mt">' + f3c(t.mt) + ' MT</b></div><b hidden data-testid="sr-tot-gsv">' + f3c(t.gsv) + ' m³</b></div>';
   }
   function tankToolbar() {
     var prevTanks = S.canEdit && S.prev && Object.keys(S.prev.tanks || {}).length;
-    return '<div class="sr-tk-tools"><h3><i class="fa-solid fa-database"></i> Tank Details <span class="sr-muted">(Bunker)</span></h3><div class="sr-tk-btns">' +
-      (prevTanks ? '<button type="button" class="sr-btn" data-prev-tanks data-testid="sr-copy-prev"><i class="fa-regular fa-copy"></i> Copy from Previous</button>' : '') + '</div></div>' +
-      (S.canEdit ? '<p class="sr-xg-hint" data-testid="sr-xg-hint">Type like Excel: <kbd>Tab</kbd> next cell, <kbd>Enter</kbd> / arrow keys move, rows copied from Excel can be pasted. Grey columns are calculated. Type <b>GAUGE</b> where there is no sounding.</p>' : '');
+    return prevTanks ? '<div class="sr-tk-tools"><button type="button" class="sr-btn sm" data-prev-tanks data-testid="sr-copy-prev"><i class="fa-regular fa-copy"></i> Copy from Previous</button></div>' : '';
   }
   function tanksHtml() {
     var g = chosen();
     if (!g.length) return '<div class="sr-note warn"><i class="fa-solid fa-gas-pump"></i> Choose the fuel grades on board in Survey Details first. <button type="button" class="sr-btn sm" data-goto="survey">Go to Survey Details</button></div>';
-    return '<section class="sr-card sr-tkcard">' + tankToolbar() + gridHtml() + '</section>' + totalsBar();
+    return tankToolbar() + gridHtml() + totalsBar();
   }
   function gradeSelect(g, i) {
     return '<select data-tg="' + g + ':' + i + '" data-testid="sr-tg-' + g + '-' + i + '"' + (S.canEdit ? '' : ' disabled') + '>' + chosen().map(function (x) { return '<option value="' + x + '"' + (x === g ? ' selected' : '') + '>' + esc(gradeInfo(x).short) + '</option>'; }).join('') + '</select>';
@@ -441,13 +441,19 @@
     return a === null || b === null ? '' : (Math.round((a - b) * 1000) / 1000).toFixed(3);
   }
   function rowState(r) { return r.done && !r._editing ? 'done' : r.copy ? 'copy' : 'open'; }
-  /** One table per fuel grade, laid out like the company sheet: Tank Name · Ref. Height · Sdg. Corr'd · Volume · Density ·
-      Temp are typed straight into the cells (Excel-like), V.C.F. · G.S.V · Metric Tons are worked out (grey), then the
-      grade's totals. Empty rows wait at the end of each table: typing in one makes it a tank. A phone swipes the table
-      sideways with the tank name kept in view. */
+  /** One table per fuel grade, laid out like the company sheet and used like Excel: Tank Name · Ref. Height · Sdg. Corr'd ·
+      Volume · Density · Temp typed into the cells, Metric Tons worked out as you type (V.C.F. and G.S.V. are shown when the
+      pointer rests on it, and in the generated report), the grade's total below. Each grade opens with a set number of rows
+      (VLSFO 12, LSMGO 8, the others 6); "Add more tanks" gives one more row, any row can be deleted. Empty rows are never
+      saved or checked. A phone swipes the table sideways with the tank name kept in view. */
   var XCOLS = [['name', 'Tank', 'Name'], ['ref_height', 'Ref. Height', '(m)'], ['sounding', 'Sdg. Corr\'d', '(m)'], ['volume', 'Volume', 'Cubic Metres'], ['density', 'Density', '@15°C'], ['temp', 'Temp', 'Deg(C)']];
-  var XOUT = [['vcf', 'V.C.F.', 'T(54B)'], ['gsv', 'G.S.V', 'm³ @ 15°C'], ['mt', 'Metric', 'Tons']];
-  function xSpare(g) { S.more = S.more || {}; return 2 + (S.more[g] || 0); }
+  var XROWS = { vlsfo: 12, ulsfo: 6, hsfo: 6, lsmgo: 8 };
+  /** Empty rows shown below the tanks of a grade: at first enough to reach the grade's row count. */
+  function xSpare(g) {
+    S.spare = S.spare || {};
+    if (!(g in S.spare)) S.spare[g] = Math.max((XROWS[g] || 6) - S.data.tanks[g].length, 0);
+    return S.canEdit ? S.spare[g] : 0;
+  }
   function xCell(g, i, col, r) {
     var key = g + ':' + i, v = r ? shown(r, col) : '', dec = col === 'volume' || col === 'density' || col === 'temp';
     return '<td class="xi x-' + col + '"><label class="sr-f sr-cellf" data-tw="' + key + ':' + col + '"><input data-t="' + key + ':' + col + '" data-testid="sr-t-' + g + '-' + i + '-' + col + '" value="' + esc(v) + '"' +
@@ -457,24 +463,23 @@
     var key = g + ':' + i, t = r ? calc(r) : {}, real = !!r;
     return '<tr class="' + (real ? 'sr-row' : 'sr-spare') + '" data-tank="' + key + '" data-testid="sr-' + (real ? 'tank' : 'spare') + '-' + g + '-' + i + '">' +
       XCOLS.map(function (c) { return xCell(g, i, c[0], r); }).join('') +
-      '<td class="xo" data-rc="' + key + ':vcf">' + (t.vcf == null ? '' : t.vcf.toFixed(4)) + '</td><td class="xo" data-rc="' + key + ':gsv">' + f3c(t.gsv) + '</td><td class="xo mt" data-rc="' + key + ':mt">' + f3c(t.mt) + '</td>' +
-      '<td class="xd">' + (real && S.canEdit ? '<button type="button" data-del="' + key + '" title="Delete tank" aria-label="Delete tank" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-regular fa-trash-can"></i></button>' : '') + '</td></tr>';
+      '<td class="xo mt" tabindex="-1"><b data-rc="' + key + ':mt">' + f3c(t.mt) + '</b>' +
+        '<span class="xtip" role="tooltip">V.C.F. <b data-rc="' + key + ':vcf">' + (t.vcf == null ? '—' : t.vcf.toFixed(4)) + '</b><br>G.S.V. <b data-rc="' + key + ':gsv">' + (t.gsv == null ? '—' : f3c(t.gsv)) + '</b> m³</span></td>' +
+      '<td class="xd">' + (S.canEdit ? '<button type="button" data-del="' + key + '"' + (real ? '' : ' data-spare') + ' title="Delete row" aria-label="Delete row" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-regular fa-trash-can"></i></button>' : '') + '</td></tr>';
   }
   function gridHtml() {
-    var head = '<colgroup><col class="cw-name">' + XCOLS.slice(1).map(function () { return '<col>'; }).join('') + XOUT.map(function () { return '<col>'; }).join('') + '<col class="cw-del"></colgroup>' +
+    var head = '<colgroup><col class="cw-name">' + XCOLS.slice(1).map(function () { return '<col>'; }).join('') + '<col class="cw-mt"><col class="cw-del"></colgroup>' +
       '<thead><tr>' + XCOLS.map(function (c) { return '<th class="x-' + c[0] + '">' + c[1] + '<small>' + c[2] + '</small></th>'; }).join('') +
-      XOUT.map(function (c) { return '<th class="xo">' + c[1] + '<small>' + c[2] + '</small></th>'; }).join('') + '<th class="xd"></th></tr></thead>';
+      '<th class="xo mt">Metric<small>Tons</small></th><th class="xd"></th></tr></thead>';
     return chosen().map(function (g, gi_) {
-      var gi = gradeInfo(g), rows = S.data.tanks[g], tot = gradeTotals(g), spare = S.canEdit ? xSpare(g) : 0, body = '';
+      var gi = gradeInfo(g), rows = S.data.tanks[g], tot = gradeTotals(g), spare = xSpare(g), body = '';
       rows.forEach(function (r, i) { body += rowHtml(g, r, i); });
       for (var k = 0; k < spare; k++) body += rowHtml(g, null, rows.length + k);
-      if (!rows.length && !spare) body = '<tr><td colspan="10" class="xe">No tanks.</td></tr>';
-      return '<section class="sr-xsec" data-testid="sr-tanks-' + g + '"><h4>' + esc(gi.name) + '</h4>' +
-        '<div class="sr-xwrap"><table class="sr-xg" data-g="' + g + '" data-testid="' + (gi_ === 0 ? 'sr-tgrid' : 'sr-tgrid-' + g) + '">' + head + '<tbody>' + body + '</tbody>' +
-        '<tfoot><tr><td colspan="6" class="xl">TOTAL Cubic Metres @ 15°C</td><td class="xt" colspan="2"><b data-ggsv="' + g + '">' + f3c(tot.gsv) + '</b></td><td></td><td class="xd"></td></tr>' +
-          '<tr><td colspan="7" class="xl">TOTAL Metric Tons</td><td></td><td class="xt mt"><b data-gmt="' + g + '">' + f3c(tot.mt) + '</b></td><td class="xd"></td></tr></tfoot></table></div>' +
-        '<div class="sr-xfoot">' + (S.canEdit ? '<button type="button" data-more="' + g + '" data-testid="sr-add-' + g + '"><i class="fa-solid fa-plus"></i> Add more rows</button>' : '<span></span>') +
-          '<span class="sr-xsum">G.S.V. <b>' + '<span data-ggsv2="' + g + '">' + f3c(tot.gsv) + '</span></b> m³ · <b><span data-gmt2="' + g + '">' + f3c(tot.mt) + '</span></b> MT</span></div>' +
+      if (!rows.length && !spare) body = '<tr><td colspan="8" class="xe">No rows — press Add more tanks.</td></tr>';
+      return '<section class="sr-xsec" data-testid="sr-tanks-' + g + '"><h4><i class="fa-solid fa-droplet"></i> ' + esc(gi.name) + '</h4>' +
+        '<div class="sr-xwrap"><table class="sr-xg" data-g="' + g + '" data-testid="' + (gi_ === 0 ? 'sr-tgrid' : 'sr-tgrid-' + g) + '">' + head + '<tbody>' + body + '</tbody></table></div>' +
+        (S.canEdit ? '<div class="sr-xadd"><button type="button" data-more="' + g + '" data-testid="sr-add-' + g + '"><i class="fa-solid fa-plus"></i> Add more tanks</button></div>' : '') +
+        '<div class="sr-xtot"><span>TOTAL Metric Tons</span><b data-gmt="' + g + '">' + f3c(tot.mt) + '</b></div>' +
         '<b hidden data-testid="sr-total-' + g + '">' + f3(tot.mt) + '</b><b hidden data-testid="sr-total-gsv-' + g + '">' + f3(tot.gsv) + '</b></section>';
     }).join('');
   }
@@ -513,7 +518,7 @@
   function updateRow(g, i) {
     var r = S.data.tanks[g][i], key = g + ':' + i, t = calc(r);
     var set = function (k, v) { var e = $('[data-rc="' + key + ':' + k + '"]'); if (e) e.textContent = v; };
-    set('vcf', t.vcf == null ? '' : t.vcf.toFixed(4)); set('wcf', t.wcf == null ? '' : t.wcf.toFixed(4)); set('gsv', f3c(t.gsv)); set('mt', f3c(t.mt));
+    set('vcf', t.vcf == null ? '—' : t.vcf.toFixed(4)); set('gsv', t.gsv == null ? '—' : f3c(t.gsv)); set('mt', f3c(t.mt));
     var res = $('[data-res="' + key + '"]'); if (res) res.innerHTML = resHtml(t);
     var other = r.mode === 'ullage' ? ['sounding', sounding(r)] : ['ullage', ullageOf(r)];
     var oi = $('[data-t="' + key + ':' + other[0] + '"]'); if (oi && document.activeElement !== oi) oi.value = other[1];
@@ -749,17 +754,18 @@
       $$('[data-t]', t).forEach(function (e) { e.setAttribute('data-testid', 'sr-t-' + g + '-' + n + '-' + e.getAttribute('data-t').split(':')[2]); });
     };
     re(tr, i); tr.className = 'sr-row'; tr.setAttribute('data-testid', 'sr-tank-' + g + '-' + i);
-    var td = $('.xd', tr); if (td) td.innerHTML = '<button type="button" data-del="' + g + ':' + i + '" title="Delete tank" aria-label="Delete tank" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-regular fa-trash-can"></i></button>';
+    var db = $('.xd button', tr); if (db) db.removeAttribute('data-spare');
+    $$('[data-del]', tb).forEach(function (b) { var t = b.closest('tr'); b.setAttribute('data-del', t.getAttribute('data-tank')); b.setAttribute('data-testid', 'sr-del-' + t.getAttribute('data-tank').replace(':', '-')); });
     var n = i + 1; $$('tr.sr-spare', tb).forEach(function (t) { re(t, n); t.setAttribute('data-testid', 'sr-spare-' + g + '-' + n); n++; });
-    // always the same number of empty rows waiting below the tanks
-    for (var have = $$('tr.sr-spare', tb).length; have < xSpare(g); have++, n++) { var x = document.createElement('tbody'); x.innerHTML = rowHtml(g, null, n); tb.appendChild(x.firstChild); }
+    $$('[data-del]', tb).forEach(function (b) { var t = b.closest('tr'); b.setAttribute('data-del', t.getAttribute('data-tank')); b.setAttribute('data-testid', 'sr-del-' + t.getAttribute('data-tank').replace(':', '-')); });
+    S.spare[g] = Math.max(xSpare(g) - 1, 0); // the table keeps its number of rows, as in Excel
     // keep the tanks above the empty rows
     var firstSpare = $('tr.sr-spare', tb); if (firstSpare && firstSpare.compareDocumentPosition(tr) & Node.DOCUMENT_POSITION_FOLLOWING) { tb.insertBefore(tr, firstSpare); el.focus(); }
     return row;
   }
   function moreRows(g) {
-    S.more = S.more || {}; S.more[g] = (S.more[g] || 0) + 3; render();
-    var x = $('table[data-g="' + g + '"] tr.sr-spare [data-t$=":name"]'); if (x) { x.focus(); x.scrollIntoView({ block: 'center' }); }
+    xSpare(g); S.spare[g]++; render();
+    var all = $$('table[data-g="' + g + '"] tbody tr'), x = all.length && $('[data-t$=":name"]', all[all.length - 1]); if (x) { x.focus(); x.scrollIntoView({ block: 'center' }); }
   }
   /** Moving around the grid like Excel: Enter / ↓ next row, ↑ row above, ← → at the edge of the text the next cell. */
   function gridMove(el, dr, dc) {
@@ -781,6 +787,7 @@
     if (!lines.length || (lines.length === 1 && lines[0].indexOf('\t') < 0)) return false;
     var p = el.getAttribute('data-t').split(':'), g = p[0], i0 = +p[1], cols = XCOLS.map(function (c) { return c[0]; }), c0 = cols.indexOf(p[2]);
     if (c0 < 0) return false;
+    var before = S.data.tanks[g].length;
     lines.forEach(function (ln, k) {
       var vals = ln.split('\t'), i = i0 + k;
       while (S.data.tanks[g].length <= i) S.data.tanks[g].push(emptyRow());
@@ -793,9 +800,16 @@
       r.done = ''; r._editing = false;
       if (!blankRow(r) && !Object.keys(tankErrors(r)).length) { fmtRow(r); r.done = '1'; }
     });
+    xSpare(g); S.spare[g] = Math.max(S.spare[g] - (S.data.tanks[g].length - before), 0);
     changed(); render(); toast('success', lines.length + ' row' + (lines.length === 1 ? '' : 's') + ' pasted');
     return true;
   }
+  // like an Excel cell: taking a cell (click, tap, Tab, arrows) selects its value, so typing replaces it; a double click edits inside it
+  document.addEventListener('focusin', function (ev) { var el = ev.target; if (el.matches && el.matches('.sr-xg [data-t]')) el.select(); });
+  document.addEventListener('mousedown', function (ev) {
+    var el = ev.target; if (!el.matches || !el.matches('.sr-xg [data-t]') || el.disabled || document.activeElement === el || ev.detail > 1) return;
+    ev.preventDefault(); el.focus();
+  });
   document.addEventListener('paste', function (ev) {
     var el = ev.target; if (!el.matches || !el.matches('.sr-xg [data-t]') || !S.canEdit) return;
     var text = (ev.clipboardData || window.clipboardData).getData('text');
@@ -1017,6 +1031,10 @@
   }
   function delTank(key) {
     var p = key.split(':'), r = S.data.tanks[p[0]][+p[1]];
+    if (!r || blankRow(r)) { // an empty row: gone at once
+      if (r) S.data.tanks[p[0]].splice(+p[1], 1); else { xSpare(p[0]); S.spare[p[0]] = Math.max(S.spare[p[0]] - 1, 0); }
+      changed(); render(); return;
+    }
     var doit = function () { S.data.tanks[p[0]].splice(+p[1], 1); if (S.sheet) { S.sheet = null; document.body.classList.remove('sr-sheet-on'); } changed(); render(); };
     Swal.fire({ icon: 'question', title: 'Delete tank ' + (+p[1] + 1) + (r.name ? ' "' + r.name + '"' : '') + '?', text: 'Its readings are removed from the report.', showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#dc2626' })
       .then(function (x) { if (x.isConfirmed) doit(); });
@@ -1034,7 +1052,7 @@
   }
   // paste rows copied from Excel into a tank (name, ref. height, sounding, volume, density, temp)
   document.addEventListener('paste', function (ev) {
-    var el = ev.target; if (!el.matches || !el.matches('[data-t]')) return;
+    var el = ev.target; if (ev.defaultPrevented || !el.matches || !el.matches('[data-t]')) return; // the grid's own paste ran already
     var txt = (ev.clipboardData || window.clipboardData).getData('text');
     if (txt.indexOf('\t') < 0 && txt.indexOf('\n') < 0) return;
     ev.preventDefault();

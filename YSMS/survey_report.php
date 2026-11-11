@@ -83,6 +83,7 @@ include 'includes/header.php';
         <div class="sr-crumbs"><a href="<?= sanitize($srBack) ?>" class="sr-back" data-testid="sr-back" title="Back to <?= sanitize($srBackLabel) ?>"><i class="fa-solid fa-arrow-left"></i></a>
             <span class="sr-crumb"><span data-kindcrumb>Survey</span> Report <i>/</i> <b data-crumb>Vessel Details</b></span>
             <h1 data-title hidden>Survey report</h1><span data-subtitle hidden></span></div>
+        <nav class="sr-hsteps" data-steps aria-label="Steps"></nav>
         <div class="sr-head-r">
             <span class="sr-chip-h"><span>Vessel:</span> <b data-vchip data-testid="sr-vchip">—</b></span>
             <span class="sr-chip-h"><span>Report:</span> <b data-kchip>—</b></span>
@@ -90,6 +91,7 @@ include 'includes/header.php';
             <span class="sr-net" data-net data-testid="sr-net"></span>
             <span class="sr-save" data-save-state data-testid="sr-save-state"></span>
             <span class="sr-live" data-live hidden data-testid="sr-live"></span>
+            <button type="button" class="sr-pv-hb" data-pv="open" data-testid="sr-pv-head"><i class="fa-solid fa-eye"></i> Preview</button>
             <button type="button" class="sr-pv-fab" data-pv="open" data-testid="sr-pv-open"><i class="fa-solid fa-eye"></i> Preview</button>
         </div>
     </div>

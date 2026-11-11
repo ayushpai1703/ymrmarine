@@ -517,61 +517,100 @@ body.sr-pv-open .sr-pv-fab { display: none; }
 .srs-item b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .srs-item small { font-size: 12px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .srs-item > i:last-child { color: #94a3b8; font-size: 12px; }
-/* ---------- Tank Details: Excel-like grid (one table per grade, typed straight into the cells) ---------- */
-.sr-xg-hint { font-size: 12.5px; color: #64748b; margin: -4px 0 10px; }
-.sr-xg-hint kbd { border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 11px; background: #f8fafc; color: #334155; }
-.sr-xg-hint b { color: #6d28d9; }
-.sr-xsec { margin: 0 0 18px; }
-.sr-xsec h4 { font-size: 16px; font-weight: 800; color: #0f172a; margin: 0 0 6px; }
+/* ---------- Header: everything on one line (steps included), the page starts right below it ---------- */
+.sr-v4 .sr-head { flex-wrap: wrap; gap: 8px 10px; padding: 4px 2px 8px; margin-bottom: 10px; align-items: center; }
+.sr-v4 .sr-head .sr-crumb { display: none; }
+.sr-v4 .sr-head-r { gap: 6px; }
+.sr-v4 .sr-head .sr-chip-h { padding: 5px 10px; font-size: 12.5px; border-radius: 8px; }
+.sr-hsteps { flex: 1 1 auto; min-width: 0; }
+.sr-v4 .sr-hsteps .sr-steps { display: flex; gap: 4px; margin: 0; padding: 0; overflow-x: auto; }
+.sr-v4 .sr-hsteps .sr-steps li { flex: none; min-width: 0; }
+.sr-v4 .sr-hsteps .sr-steps li + li::before { display: none; }
+.sr-v4 .sr-hsteps .sr-steps button { flex-direction: row; gap: 6px; padding: 3px 9px 3px 3px; font-size: 12.5px; border-radius: 999px !important; border: 1px solid #e2e8f0 !important; background: #fff !important; }
+.sr-v4 .sr-hsteps .sr-steps .n { width: 24px; height: 24px; font-size: 12px; border-width: 1.5px; }
+.sr-v4 .sr-hsteps .sr-steps .t { display: none; }
+.sr-v4 .sr-hsteps .sr-steps .tm { display: none; }
+.sr-v4 .sr-hsteps .sr-steps li.on .t { display: inline; color: #0b63e5; font-weight: 700; }
+.sr-v4 .sr-hsteps .sr-steps li.on button { border-color: #0b63e5 !important; background: #eef5ff !important; }
+.sr-v4 .sr-hsteps .sr-steps li:not(.on) button { padding-right: 3px; }
+.sr-pv-hb { display: none; height: 32px; padding: 0 12px; border: 0; border-radius: 8px; font: 700 12.5px 'Lexend', system-ui, sans-serif; color: #fff; background: linear-gradient(135deg, #00A3DF, #6C4CF1); align-items: center; gap: 6px; }
+.srp-copy-h { height: 32px; padding: 0 10px; border: 1px solid #cfe0fb; background: #eef5ff; color: #0b63e5; border-radius: 8px; font-weight: 700; font-size: 12.5px; display: inline-flex; align-items: center; gap: 4px; }
+body.sr-public .srp-pv-btn { height: 32px; font-size: 12.5px; padding: 0 12px; border-radius: 8px; }
+/* the link box of the page without sign-in: on the first step only (the header keeps "Copy link") */
+body.sr-public:not([data-sr-step=vessel]) .srp-link { display: none; }
+/* Tank Details: the full width of the screen, the table straight under the header */
+body[data-sr-step=tanks] .sr-wrap { max-width: none; }
+body[data-sr-step=tanks] .sr-wiz { max-width: none; }
+body[data-sr-step=tanks] .sr-wiz-top { display: none; }
+@media (min-width: 1200px) {
+  /* signed-in page: no side preview on this step, the Preview button opens it as a window */
+  body[data-sr-step=tanks] .sr-v4 .sr-split { display: block; }
+  body[data-sr-step=tanks]:not(.sr-pv-open) .sr-v4 .sr-pv { display: none; }
+  body[data-sr-step=tanks].sr-pv-open .sr-v4 .sr-pv { position: fixed; z-index: 2000; inset: 3vh auto 3vh 50%; top: 3vh; transform: translateX(-50%); width: min(980px, 94vw); height: auto; box-shadow: 0 24px 60px rgba(15,23,42,.35); }
+  body[data-sr-step=tanks] .sr-v4 .sr-pv-x { display: inline-flex; }
+  body[data-sr-step=tanks] .sr-pv-hb { display: inline-flex; }
+}
+
+/* ---------- Tank Details: one table per grade, used like Excel ---------- */
+.sr-tk-tools { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+.sr-xsec { background: #fff; border: 1px solid #c9daf3; border-radius: 14px; overflow: hidden; margin: 0 0 14px; }
+.sr-xsec h4 { margin: 0; padding: 8px 14px; font-size: 17px; font-weight: 800; color: #0b2a5b; background: linear-gradient(180deg, #eaf2ff, #dbe8fb); display: flex; align-items: center; gap: 10px; }
+.sr-xsec h4 i { color: #1d6ff2; font-size: 18px; }
 .sr-xwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.sr-xg { width: 100%; min-width: 860px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 13.5px; font-variant-numeric: tabular-nums; }
-.sr-xg col.cw-name { width: 18%; } .sr-xg col.cw-del { width: 34px; }
-.sr-xg th { background: #f1f5f9; color: #334155; font-weight: 600; font-size: 13px; line-height: 1.25; padding: 5px 4px; text-align: center; border: 1px solid #cbd5e1; border-width: 1px 1px 1px 0; }
-.sr-xg th:first-child { border-left-width: 1px; }
-.sr-xg th small { display: block; font-weight: 500; font-size: 11px; color: #64748b; }
-.sr-xg th.xo { background: #e2e8f0; }
-.sr-xg th.xd, .sr-xg td.xd { border: 0 !important; background: transparent !important; }
-.sr-xg td { height: 30px; padding: 0; border-right: 1px solid #d6dde6; border-bottom: 1px solid #d6dde6; background: #fff; text-align: center; }
-.sr-xg tbody td:first-child { border-left: 1px solid #d6dde6; }
+.sr-xg { width: 100%; min-width: 760px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 14px; font-variant-numeric: tabular-nums; }
+.sr-xg col.cw-name { width: 19%; } .sr-xg col.cw-mt { width: 15%; } .sr-xg col.cw-del { width: 40px; }
+.sr-xg th { background: #e8f1fc; color: #0f2b5b; font-weight: 700; font-size: 13.5px; line-height: 1.2; padding: 6px 4px; text-align: center; border-bottom: 1px solid #d6e3f3; }
+.sr-xg th small { display: block; font-weight: 500; font-size: 12px; color: #334155; }
+.sr-xg th.mt { background: #dcfce7; }
+.sr-xg th.xd { background: #e8f1fc; }
+.sr-xg td { height: 34px; padding: 2px 5px; border-bottom: 1px solid #eef2f7; background: #fff; text-align: center; vertical-align: middle; }
+.sr-xg td.x-name { border-right: 1px solid #e2e8f0; text-align: left; }
 .sr-xg .sr-cellf { display: block; margin: 0; position: relative; }
-.sr-xg .sr-cellf input { display: block; width: 100%; height: 29px; border: 0; border-radius: 0; background: transparent; padding: 0 6px; font: inherit; font-size: 13.5px; text-align: center; color: #0f172a; text-transform: uppercase; min-width: 0; }
-.sr-xg td.x-name .sr-cellf input { text-align: left; font-weight: 600; }
-.sr-xg .sr-cellf input:focus { outline: 2px solid #0b63e5; outline-offset: -2px; background: #eef5ff; box-shadow: none; }
-.sr-xg .sr-cellf input.gauge { color: #6d28d9; font-weight: 700; font-size: 12px; }
-.sr-xg .sr-cellf.bad input { background: #fef2f2; outline: 1px solid #f87171; outline-offset: -1px; }
-.sr-xg .sr-cellf em { position: absolute; left: 2px; top: 100%; z-index: 5; background: #b91c1c; color: #fff; font-size: 11px; font-style: normal; padding: 2px 6px; border-radius: 4px; white-space: nowrap; display: none; }
-.sr-xg .sr-cellf.bad:focus-within em { display: block; }
-.sr-xg td.xo { background: #f8fafc; color: #334155; padding: 0 6px; white-space: nowrap; }
-.sr-xg td.xo.mt { font-weight: 700; color: #0f172a; }
-.sr-xg tr.sr-spare td.xo { background: #fbfcfd; }
-.sr-xg td.xd button { border: 0; background: none; color: #94a3b8; width: 30px; height: 28px; cursor: pointer; }
-.sr-xg td.xd button:hover { color: #dc2626; }
-.sr-xg td.xe { color: #94a3b8; font-size: 13px; }
-.sr-xg tfoot td { border: 0; background: transparent; height: 28px; }
-.sr-xg tfoot td.xl { text-align: right; font-weight: 700; font-size: 12px; color: #334155; padding-right: 10px; }
-.sr-xg tfoot td.xt { border: 1px solid #94a3b8; background: #fff; font-weight: 800; padding: 0 6px; }
-.sr-xg tfoot td.xt.mt { border-color: #166534; background: #ecfdf5; color: #166534; }
-.sr-xfoot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 6px; }
-.sr-xfoot button { border: 0; background: none; color: #0b63e5; font-weight: 600; font-size: 13px; padding: 4px 0; display: inline-flex; align-items: center; gap: 6px; }
-.sr-xsum { display: none; font-size: 12.5px; color: #166534; }
-@media (max-width: 991.98px) {
-  .sr-xwrap { border: 1px solid #d6dde6; border-radius: 8px; }
-  .sr-xg { min-width: 780px; font-size: 13px; }
-  .sr-xg col.cw-name { width: 118px; }
-  .sr-xg th.x-name, .sr-xg td.x-name { position: sticky; left: 0; z-index: 2; box-shadow: 2px 0 0 #cbd5e1; }
-  .sr-xg th.x-name { z-index: 3; }
-  .sr-xg tbody td:first-child, .sr-xg th:first-child { border-left: 0; }
-  .sr-xg tfoot { display: none; }
-  .sr-xsum { display: inline; background: #ecfdf5; border-radius: 8px; padding: 6px 10px; }
-  .sr-xsum b { color: #166534; }
-}
-/* the grid's cells stay one Excel row high (the step's big form boxes do not apply here) */
 .sr-step .sr-xg .sr-f { gap: 0; }
-.sr-step .sr-xg .sr-f input { min-height: 0; height: 29px; padding: 0 6px; border: 0; border-radius: 0; font-size: 13.5px; box-shadow: none; }
-.sr-step .sr-xg .sr-f input:focus { border: 0; box-shadow: none; }
-.sr-xfoot button { white-space: nowrap; }
+.sr-step .sr-xg .sr-f input { display: block; width: 100%; min-width: 0; min-height: 0; height: 28px; padding: 0 6px; border: 1px solid #94a3b8; border-radius: 5px; background: #fff; font: inherit; font-size: 14px; text-align: center; color: #0f172a; text-transform: uppercase; box-shadow: none; }
+.sr-step .sr-xg td.x-name .sr-f input { border-color: transparent; text-align: left; font-weight: 700; padding: 0 4px; background: transparent; }
+.sr-step .sr-xg td.x-name .sr-f input:hover { border-color: #cbd5e1; }
+.sr-step .sr-xg tr.sr-spare .sr-f input { border-color: #cbd5e1; }
+.sr-step .sr-xg tr.sr-spare td.x-name .sr-f input { border-color: #e2e8f0; border-style: dashed; }
+.sr-step .sr-xg .sr-f input:focus { outline: 0; border-color: #0b63e5; box-shadow: 0 0 0 2px rgba(11,99,229,.25); background: #f5f9ff; }
+.sr-step .sr-xg .sr-f input::selection { background: #bfdbfe; }
+.sr-xg .sr-cellf input.gauge { color: #334155; font-weight: 600; font-size: 13px; }
+.sr-step .sr-xg .sr-cellf.bad input { background: #fef2f2; border-color: #f87171; }
+.sr-xg .sr-cellf em { position: absolute; left: 0; top: 100%; z-index: 5; background: #b91c1c; color: #fff; font-size: 11px; font-style: normal; padding: 2px 6px; border-radius: 4px; white-space: nowrap; display: none; }
+.sr-xg .sr-cellf.bad:focus-within em { display: block; }
+/* Metric Tons as you type; V.C.F. / G.S.V. when the pointer rests on it (or a tap) */
+.sr-xg td.mt { position: relative; padding: 2px 6px; outline: 0; }
+.sr-xg td.mt > b { display: block; height: 28px; line-height: 28px; border-radius: 5px; background: #e5e7eb; text-align: right; padding: 0 10px; font-weight: 800; color: #0f172a; }
+.sr-xg tr.sr-spare td.mt > b { background: #f1f5f9; }
+.sr-xg .xtip { display: none; position: absolute; right: 8px; bottom: calc(100% - 4px); z-index: 6; background: #0f172a; color: #e2e8f0; font-size: 12px; line-height: 1.5; padding: 6px 10px; border-radius: 8px; white-space: nowrap; text-align: left; box-shadow: 0 6px 16px rgba(15,23,42,.25); pointer-events: none; }
+.sr-xg .xtip b { color: #fff; }
+.sr-xg tr.sr-row td.mt:hover .xtip, .sr-xg tr.sr-row td.mt:focus .xtip { display: block; }
+.sr-xg td.xd { padding: 0; }
+.sr-xg td.xd button { border: 0; background: none; color: #94a3b8; width: 34px; height: 30px; cursor: pointer; font-size: 14px; }
+.sr-xg td.xd button:hover { color: #dc2626; }
+.sr-xg td.xe { color: #64748b; font-size: 13px; height: 44px; }
+.sr-xadd { padding: 6px 12px; border-bottom: 1px solid #eef2f7; }
+.sr-xadd button { border: 0; background: none; color: #0b63e5; font-weight: 700; font-size: 13.5px; padding: 2px 0; display: inline-flex; align-items: center; gap: 6px; }
+.sr-xtot { display: flex; justify-content: flex-end; align-items: stretch; background: #e8f1fc; }
+.sr-xtot span { padding: 9px 16px; font-weight: 800; font-size: 14.5px; color: #0f2b5b; }
+.sr-xtot b { min-width: 15%; padding: 9px 16px; background: #dcfce7; color: #0f172a; font-size: 17px; font-weight: 800; text-align: right; }
 @media (max-width: 991.98px) {
-  .sr-xfoot { flex-wrap: wrap; }
-  .sr-step .sr-xg .sr-f input { font-size: 14px; height: 34px; }
-  .sr-xg td { height: 35px; }
+  .sr-xg { min-width: 640px; font-size: 13.5px; }
+  .sr-xg col.cw-name { width: 112px; }
+  .sr-xg th.x-name, .sr-xg td.x-name { position: sticky; left: 0; z-index: 2; box-shadow: 2px 0 0 #dbe5f1; }
+  .sr-xg th.x-name { z-index: 3; }
+  .sr-step .sr-xg .sr-f input { height: 32px; font-size: 14px; }
+  .sr-xg td.mt > b { height: 32px; line-height: 32px; }
+  .sr-xsec h4 { font-size: 15px; }
+  .sr-xtot span { font-size: 13px; padding: 8px 10px; } .sr-xtot b { font-size: 15px; padding: 8px 10px; }
 }
+/* one header line: only the current step shows its name, long chips are shortened */
+.sr-v4 .sr-hsteps .sr-steps li:not(.on) .t { display: none !important; }
+.sr-v4 .sr-hsteps .sr-steps li.on .t { display: inline !important; }
+.sr-v4 .sr-head .sr-chip-h { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 20px; }
+@media (min-width: 1200px) {
+  .sr-v4 .sr-head { flex-wrap: nowrap; }
+  .sr-v4 .sr-head-r { flex-wrap: nowrap; flex: 0 1 auto; min-width: 0; }
+  .sr-v4 .sr-head .sr-chip-h { max-width: 230px; }
+}
+@media (min-width: 1200px) and (max-width: 1499.98px) { .sr-v4 .sr-head .sr-chip-h:nth-of-type(3) { display: none; } }

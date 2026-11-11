@@ -111,6 +111,7 @@ $v = fn(string $f) => @filemtime(__DIR__ . '/' . $f);
         <div class="sr-crumbs"><a href="survey_report_public.php" class="sr-back" data-testid="sr-back" title="New report"><i class="fa-solid fa-arrow-left"></i></a>
             <span class="sr-crumb"><span data-kindcrumb>Survey</span> Report <i>/</i> <b data-crumb>Vessel Details</b></span>
             <h1 data-title hidden>Survey report</h1><span data-subtitle hidden></span></div>
+        <nav class="sr-hsteps" data-steps aria-label="Steps"></nav>
         <div class="sr-head-r">
             <span class="sr-chip-h"><span>Vessel:</span> <b data-vchip data-testid="sr-vchip">—</b></span>
             <span class="sr-chip-h"><span>Report:</span> <b data-kchip>—</b></span>
@@ -118,6 +119,7 @@ $v = fn(string $f) => @filemtime(__DIR__ . '/' . $f);
             <span class="sr-net" data-net data-testid="sr-net"></span>
             <span class="sr-save" data-save-state data-testid="sr-save-state"></span>
             <span class="sr-live" data-live hidden data-testid="sr-live"></span>
+            <button type="button" class="srp-copy-h" data-srp-copy title="Copy the link of this report (keep it to continue later)" data-testid="srp-copy-head"><i class="fa-solid fa-link"></i><span> Copy link</span></button>
             <button type="button" class="srp-pv-btn" data-pv="open" data-testid="srp-preview-open"><i class="fa-solid fa-eye"></i> Preview</button>
             <button type="button" class="sr-pv-fab" data-pv="open" data-testid="sr-pv-open" hidden></button>
         </div>
@@ -157,11 +159,11 @@ $v = fn(string $f) => @filemtime(__DIR__ . '/' . $f);
   var url = location.origin + location.pathname + '?t=' + <?= json_encode($token) ?>;
   try { localStorage.setItem('ysms_srp_last', <?= json_encode($token) ?>); } catch (e) {}
   var inp = document.querySelector('[data-srp-url]'); inp.value = url;
-  document.querySelector('[data-srp-copy]').addEventListener('click', function () {
-    var b = this, done = function () { b.innerHTML = '<i class="fa-solid fa-check"></i> Copied'; setTimeout(function () { b.innerHTML = '<i class="fa-regular fa-copy"></i> Copy'; }, 2000); };
+  document.querySelectorAll('[data-srp-copy]').forEach(function (cb) { cb.addEventListener('click', function () {
+    var b = this, was = b.innerHTML, done = function () { b.innerHTML = '<i class="fa-solid fa-check"></i> Copied'; setTimeout(function () { b.innerHTML = was; }, 2000); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () { inp.select(); document.execCommand('copy'); done(); });
     else { inp.select(); document.execCommand('copy'); done(); }
-  });
+  }); });
 })();
 </script>
 <script>window.SR_PAGE = <?= json_encode(['id' => $token, 'guest' => true, 'csrf' => csrf_token(), 'api' => 'ajax/survey_report_public.php',
