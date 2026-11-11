@@ -315,6 +315,15 @@ include 'includes/header.php';
         <a href="admin_daily_emails.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-daily-emails">
             <i class="fa-solid fa-envelope-circle-check"></i> Daily Emails
         </a>
+        <a href="admin_sales.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-sales-team">
+            <i class="fa-solid fa-user-tie"></i> Sales Team
+        </a>
+        <a href="login_activity.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-login-activity">
+            <i class="fa-solid fa-shield-halved"></i> Login Activity
+        </a>
+        <a href="formats_download.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-formats">
+            <i class="fa-solid fa-file-excel"></i> Formats
+        </a>
     </div>
 
     <?php foreach ($modules as $key => $mod): ?>
