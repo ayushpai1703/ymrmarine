@@ -306,6 +306,9 @@ include 'includes/header.php';
         <a href="manage_templates.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-word-templates">
             <i class="fa-solid fa-file-word"></i> Word / Photo Templates
         </a>
+        <a href="survey_reports.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-survey-reports">
+            <i class="fa-solid fa-file-lines"></i> Survey Reports
+        </a>
         <a href="admin_report_templates.php" class="admin-tab-btn text-decoration-none" data-testid="admin-tab-report-templates">
             <i class="fa-solid fa-file-excel"></i> Report Templates
         </a>
