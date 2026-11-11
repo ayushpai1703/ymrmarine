@@ -517,3 +517,61 @@ body.sr-pv-open .sr-pv-fab { display: none; }
 .srs-item b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .srs-item small { font-size: 12px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .srs-item > i:last-child { color: #94a3b8; font-size: 12px; }
+/* ---------- Tank Details: Excel-like grid (one table per grade, typed straight into the cells) ---------- */
+.sr-xg-hint { font-size: 12.5px; color: #64748b; margin: -4px 0 10px; }
+.sr-xg-hint kbd { border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 11px; background: #f8fafc; color: #334155; }
+.sr-xg-hint b { color: #6d28d9; }
+.sr-xsec { margin: 0 0 18px; }
+.sr-xsec h4 { font-size: 16px; font-weight: 800; color: #0f172a; margin: 0 0 6px; }
+.sr-xwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.sr-xg { width: 100%; min-width: 860px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.sr-xg col.cw-name { width: 18%; } .sr-xg col.cw-del { width: 34px; }
+.sr-xg th { background: #f1f5f9; color: #334155; font-weight: 600; font-size: 13px; line-height: 1.25; padding: 5px 4px; text-align: center; border: 1px solid #cbd5e1; border-width: 1px 1px 1px 0; }
+.sr-xg th:first-child { border-left-width: 1px; }
+.sr-xg th small { display: block; font-weight: 500; font-size: 11px; color: #64748b; }
+.sr-xg th.xo { background: #e2e8f0; }
+.sr-xg th.xd, .sr-xg td.xd { border: 0 !important; background: transparent !important; }
+.sr-xg td { height: 30px; padding: 0; border-right: 1px solid #d6dde6; border-bottom: 1px solid #d6dde6; background: #fff; text-align: center; }
+.sr-xg tbody td:first-child { border-left: 1px solid #d6dde6; }
+.sr-xg .sr-cellf { display: block; margin: 0; position: relative; }
+.sr-xg .sr-cellf input { display: block; width: 100%; height: 29px; border: 0; border-radius: 0; background: transparent; padding: 0 6px; font: inherit; font-size: 13.5px; text-align: center; color: #0f172a; text-transform: uppercase; min-width: 0; }
+.sr-xg td.x-name .sr-cellf input { text-align: left; font-weight: 600; }
+.sr-xg .sr-cellf input:focus { outline: 2px solid #0b63e5; outline-offset: -2px; background: #eef5ff; box-shadow: none; }
+.sr-xg .sr-cellf input.gauge { color: #6d28d9; font-weight: 700; font-size: 12px; }
+.sr-xg .sr-cellf.bad input { background: #fef2f2; outline: 1px solid #f87171; outline-offset: -1px; }
+.sr-xg .sr-cellf em { position: absolute; left: 2px; top: 100%; z-index: 5; background: #b91c1c; color: #fff; font-size: 11px; font-style: normal; padding: 2px 6px; border-radius: 4px; white-space: nowrap; display: none; }
+.sr-xg .sr-cellf.bad:focus-within em { display: block; }
+.sr-xg td.xo { background: #f8fafc; color: #334155; padding: 0 6px; white-space: nowrap; }
+.sr-xg td.xo.mt { font-weight: 700; color: #0f172a; }
+.sr-xg tr.sr-spare td.xo { background: #fbfcfd; }
+.sr-xg td.xd button { border: 0; background: none; color: #94a3b8; width: 30px; height: 28px; cursor: pointer; }
+.sr-xg td.xd button:hover { color: #dc2626; }
+.sr-xg td.xe { color: #94a3b8; font-size: 13px; }
+.sr-xg tfoot td { border: 0; background: transparent; height: 28px; }
+.sr-xg tfoot td.xl { text-align: right; font-weight: 700; font-size: 12px; color: #334155; padding-right: 10px; }
+.sr-xg tfoot td.xt { border: 1px solid #94a3b8; background: #fff; font-weight: 800; padding: 0 6px; }
+.sr-xg tfoot td.xt.mt { border-color: #166534; background: #ecfdf5; color: #166534; }
+.sr-xfoot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 6px; }
+.sr-xfoot button { border: 0; background: none; color: #0b63e5; font-weight: 600; font-size: 13px; padding: 4px 0; display: inline-flex; align-items: center; gap: 6px; }
+.sr-xsum { display: none; font-size: 12.5px; color: #166534; }
+@media (max-width: 991.98px) {
+  .sr-xwrap { border: 1px solid #d6dde6; border-radius: 8px; }
+  .sr-xg { min-width: 780px; font-size: 13px; }
+  .sr-xg col.cw-name { width: 118px; }
+  .sr-xg th.x-name, .sr-xg td.x-name { position: sticky; left: 0; z-index: 2; box-shadow: 2px 0 0 #cbd5e1; }
+  .sr-xg th.x-name { z-index: 3; }
+  .sr-xg tbody td:first-child, .sr-xg th:first-child { border-left: 0; }
+  .sr-xg tfoot { display: none; }
+  .sr-xsum { display: inline; background: #ecfdf5; border-radius: 8px; padding: 6px 10px; }
+  .sr-xsum b { color: #166534; }
+}
+/* the grid's cells stay one Excel row high (the step's big form boxes do not apply here) */
+.sr-step .sr-xg .sr-f { gap: 0; }
+.sr-step .sr-xg .sr-f input { min-height: 0; height: 29px; padding: 0 6px; border: 0; border-radius: 0; font-size: 13.5px; box-shadow: none; }
+.sr-step .sr-xg .sr-f input:focus { border: 0; box-shadow: none; }
+.sr-xfoot button { white-space: nowrap; }
+@media (max-width: 991.98px) {
+  .sr-xfoot { flex-wrap: wrap; }
+  .sr-step .sr-xg .sr-f input { font-size: 14px; height: 34px; }
+  .sr-xg td { height: 35px; }
+}
