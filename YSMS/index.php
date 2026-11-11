@@ -288,6 +288,25 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                 <?php endif; ?>
             </a>
             <?php endif; ?>
+            <?php
+            // Team Chat: members, plus Admin / Super Admin (they set up membership). Never Clients.
+            $dash_chat = null;
+            if (in_array($_SESSION['role'] ?? '', ['Admin', 'Super Admin', 'Surveyor'], true)) {
+                require_once 'includes/chat_helpers.php';
+                $dash_chat = getTeamChatNavState($db, (int)$_SESSION['user_id']);
+                if (!$dash_chat['member'] && !in_array($_SESSION['role'], ['Admin', 'Super Admin'], true)) $dash_chat = null;
+            }
+            if ($dash_chat !== null): $dash_chat_unread = (int)$dash_chat['unread'];
+            ?>
+            <a href="team_chat.php" class="dash-inbox-btn" data-testid="dashboard-team-chat-link"
+               aria-label="Group Chat<?= $dash_chat_unread > 0 ? ' (' . $dash_chat_unread . ' unread)' : '' ?>" title="Group Chat"
+               style="position:relative;width:42px;height:42px;border-radius:50%;background:#fff;border:1px solid var(--border-color);display:inline-flex;align-items:center;justify-content:center;color:#1e3a8a;font-size:17px;text-decoration:none;box-shadow:0 2px 6px rgba(15,23,42,.06);">
+                <i class="fa-solid fa-comments" aria-hidden="true"></i>
+                <?php if ($dash_chat_unread > 0): ?>
+                <span style="position:absolute;top:-4px;right:-4px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;line-height:19px;text-align:center;border:2px solid #fff;"><?= $dash_chat_unread > 99 ? '99+' : $dash_chat_unread ?></span>
+                <?php endif; ?>
+            </a>
+            <?php endif; ?>
             <?php include 'includes/profile_dropdown.php'; ?>
         </div>
     </div>
