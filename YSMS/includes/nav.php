@@ -53,7 +53,7 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
     </div>
 
     <div class="desktop-sidebar-nav-scroll">
-        <?php /* Inbox and Team Chat open from the icons next to the profile picture on the Dashboard (index.php) */ ?>
+        <?php /* Inbox and Team Chat open from the profile picture menu (includes/profile_dropdown.php) */ ?>
         <?php if ($user_role === 'Sales'): ?>
         <!-- Sales role (includes/sales.php): only its own pages; everything else is refused by config.php -->
         <div class="desktop-sidebar-section-label drawer-reveal">Sales</div>
@@ -102,13 +102,6 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-file-invoice"></i>
             <span class="bn-long">Pending Reports</span><span class="bn-short">Reports</span>
         </a>
-        <?php if (in_array($user_role, ['Admin', 'Surveyor'], true)): ?>
-        <!-- Survey Reports (Admin, Surveyor): sidebar + drawer only, so the phone bottom bar keeps its 5 slots -->
-        <a href="survey_reports.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= in_array($current_page, ['survey_reports.php', 'survey_report.php'], true) ? 'active' : '' ?>" data-testid="navigation-survey-reports-link">
-            <i class="fa-solid fa-file-signature"></i>
-            <span>Survey Reports</span>
-        </a>
-        <?php endif; ?>
         <?php if ($user_role === 'Admin'): ?>
         <!-- Invoices (Admin): sidebar + drawer only, so the phone bottom bar keeps its 5 slots -->
         <a href="invoices.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'invoices.php') ? 'active' : '' ?>" data-testid="navigation-invoices-link">
@@ -209,8 +202,19 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
     </div>
 
     <!-- Desktop only: profile photo + name (click → profile) + logout at bottom of sidebar -->
+    <?php require_once __DIR__ . '/user_menu.php'; $sbu = userMenuState(); $sbu_unread = (int)$sbu['inbox'] + (int)$sbu['chat']; ?>
     <div class="desktop-sidebar-footer" data-testid="desktop-sidebar-footer">
-        <a href="profile.php" class="desktop-sidebar-user" data-testid="sidebar-profile-user-link" title="My Profile">
+        <!-- Profile menu (click the name / photo below): My Profile, Inbox, Team Chat -->
+        <div class="sbu-menu" id="sbuMenu" role="menu" hidden data-testid="sidebar-profile-menu">
+            <a href="profile.php" class="sbu-item" role="menuitem" data-testid="sidebar-menu-profile-link"><i class="fa-regular fa-user"></i><span>My Profile</span></a>
+            <?php if ($sbu['inbox'] !== null): ?>
+            <a href="inbox.php" class="sbu-item <?= $current_page === 'inbox.php' ? 'active' : '' ?>" role="menuitem" data-testid="sidebar-menu-inbox-link"><i class="fa-solid fa-inbox"></i><span>Inbox</span><?= userMenuCount($sbu['inbox']) ?></a>
+            <?php endif; ?>
+            <?php if ($sbu['chat'] !== null): ?>
+            <a href="team_chat.php" class="sbu-item <?= $current_page === 'team_chat.php' ? 'active' : '' ?>" role="menuitem" data-testid="sidebar-menu-team-chat-link"><i class="fa-solid fa-comments"></i><span>Team Chat</span><?= userMenuCount($sbu['chat']) ?></a>
+            <?php endif; ?>
+        </div>
+        <a href="profile.php" class="desktop-sidebar-user" data-testid="sidebar-profile-user-link" title="Profile menu" aria-haspopup="true" aria-expanded="false" aria-controls="sbuMenu" data-sbu-toggle>
             <?php if ($sidebar_avatar): ?>
                 <img src="<?= sanitize($sidebar_avatar) ?>" alt="Profile" class="desktop-sidebar-user-avatar-img">
             <?php else: ?>
@@ -220,7 +224,25 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
                 <div class="desktop-sidebar-user-name" title="<?= htmlspecialchars($sidebar_user_name, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($sidebar_user_name, ENT_QUOTES, 'UTF-8') ?></div>
                 <div class="desktop-sidebar-user-role"><?= htmlspecialchars($user_role ?: 'User', ENT_QUOTES, 'UTF-8') ?></div>
             </div>
+            <?php if ($sbu_unread > 0): ?><span class="pm-count" data-testid="sidebar-menu-unread"><?= $sbu_unread > 99 ? '99+' : $sbu_unread ?></span><?php endif; ?>
+            <i class="fa-solid fa-chevron-up sbu-chev" aria-hidden="true"></i>
         </a>
+        <script>
+        (function () {
+            var t = document.querySelector('[data-sbu-toggle]'), m = document.getElementById('sbuMenu');
+            if (!t || !m) return;
+            t.addEventListener('click', function (ev) {
+                ev.preventDefault();
+                m.hidden = !m.hidden;
+                t.setAttribute('aria-expanded', String(!m.hidden));
+                t.classList.toggle('open', !m.hidden);
+            });
+            document.addEventListener('click', function (ev) {
+                if (m.hidden || ev.target.closest('[data-sbu-toggle]') || ev.target.closest('#sbuMenu')) return;
+                m.hidden = true; t.setAttribute('aria-expanded', 'false'); t.classList.remove('open');
+            });
+        })();
+        </script>
         <a href="coming_soon.php?feature=Support" class="mobile-drawer-support-link" data-testid="drawer-support-link">
             <i class="fa-solid fa-circle-question"></i>
             <span>Support</span>

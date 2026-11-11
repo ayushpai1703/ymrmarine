@@ -30,15 +30,31 @@ if (!empty($_SESSION['user_id'])) {
         }
     }
 }
+require_once __DIR__ . '/user_menu.php';
+$pm = userMenuState();
+$pm_inbox = $pm['inbox'];
+$pm_chat = $pm['chat'];
+$pm_unread = (int)$pm_inbox + (int)$pm_chat;
 ?>
 <div class="profile-menu-wrap" data-testid="global-profile-menu">
-    <button type="button" class="profile-menu-trigger" aria-label="Open profile menu" aria-expanded="false" data-testid="profile-menu-button">
+    <button type="button" class="profile-menu-trigger" aria-label="Open profile menu<?= $pm_unread > 0 ? ' (' . $pm_unread . ' unread)' : '' ?>" aria-expanded="false" data-testid="profile-menu-button">
         <img src="<?= sanitize($profile_avatar) ?>" class="profile-avatar" alt="Profile">
+        <?php if ($pm_unread > 0): ?><span class="pm-dot" aria-hidden="true" data-testid="profile-menu-unread-dot"></span><?php endif; ?>
     </button>
     <div class="profile-dropdown-menu" role="menu" data-testid="profile-dropdown-menu">
         <a href="profile.php" class="profile-dropdown-item" role="menuitem" data-testid="profile-menu-my-profile-link">
             <i class="fa-regular fa-user"></i><span>My Profile</span>
         </a>
+        <?php if ($pm_inbox !== null): ?>
+        <a href="inbox.php" class="profile-dropdown-item" role="menuitem" data-testid="profile-menu-inbox-link">
+            <i class="fa-solid fa-inbox"></i><span>Inbox</span><?= userMenuCount($pm_inbox) ?>
+        </a>
+        <?php endif; ?>
+        <?php if ($pm_chat !== null): ?>
+        <a href="team_chat.php" class="profile-dropdown-item" role="menuitem" data-testid="profile-menu-team-chat-link">
+            <i class="fa-solid fa-comments"></i><span>Team Chat</span><?= userMenuCount($pm_chat) ?>
+        </a>
+        <?php endif; ?>
         <a href="logout.php" class="profile-dropdown-item logout-item" role="menuitem" data-testid="profile-menu-logout-link">
             <i class="fa-solid fa-arrow-right-from-bracket"></i><span>Logout</span>
         </a>

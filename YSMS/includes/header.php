@@ -109,6 +109,18 @@ require_once __DIR__ . '/../config/config.php';
         .profile-dropdown-item i { width: 18px; text-align: center; }
         .profile-dropdown-item.logout-item { color: #dc2626; }
         .profile-dropdown-item.logout-item:hover { background: #fef2f2; color: #b91c1c; }
+        .profile-menu-trigger { position: relative; }
+        .pm-dot { position: absolute; top: 1px; right: 1px; width: 11px; height: 11px; border-radius: 50%; background: #dc2626; border: 2px solid #fff; }
+        .sbu-menu { display: flex; flex-direction: column; gap: 2px; padding: 6px; margin: 0 0 8px; border-radius: 12px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); }
+        .sbu-menu[hidden] { display: none; }
+        .sbu-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 9px; color: rgba(255,255,255,.82); text-decoration: none; font-size: 13px; font-weight: 600; }
+        .sbu-item i { width: 18px; text-align: center; }
+        .sbu-item:hover, .sbu-item.active { background: rgba(255,255,255,.1); color: #fff; }
+        .desktop-sidebar-user { cursor: pointer; }
+        .desktop-sidebar-user .pm-count { margin-left: 0; flex: none; }
+        .sbu-chev { color: rgba(255,255,255,.45); font-size: 11px; transition: transform .2s; transform: rotate(180deg); flex: none; }
+        .desktop-sidebar-user.open .sbu-chev { transform: rotate(0deg); }
+        .pm-count { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; }
 
         .top-app-bar { position: sticky; top: 0; z-index: 850; min-height: 70px; background: #fff; border-bottom: 1px solid var(--border-color); padding: 12px 20px; display: grid; grid-template-columns: minmax(76px, 1fr) auto minmax(76px, 1fr); align-items: center; }
         .top-app-bar-left { display: flex; align-items: center; gap: 15px; justify-self: start; }
