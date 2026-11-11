@@ -62,6 +62,8 @@
     if (v && typeof v === 'object') return '{' + Object.keys(v).filter(function (k) { return k !== '_tried'; }).sort().map(function (k) { return JSON.stringify(k) + ':' + canon(v[k]); }).join(',') + '}';
     return JSON.stringify(v == null ? '' : String(v));
   }
+  /** A generated file; the page without sign-in names its report by the secret link (P.guest). */
+  function fileUrl(id) { return P.api + '?a=file&id=' + encodeURIComponent(id) + (P.guest ? '&t=' + encodeURIComponent(P.id) : ''); }
   function uid() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function num(v) { var t = String(v == null ? '' : v).replace(/,/g, '').trim(); return t !== '' && !isNaN(t) ? parseFloat(t) : null; }
 
@@ -641,7 +643,7 @@
     list = list || S.files;
     if (!list.length) return '<span class="sr-muted">No files made yet.</span>';
     return '<table class="sr-t"><thead><tr><th>File</th><th>Made</th><th></th></tr></thead><tbody>' + list.map(function (f) {
-      var url = P.api + '?a=file&id=' + f.id;
+      var url = fileUrl(f.id);
       return '<tr data-testid="sr-file-' + f.id + '"><td><i class="fa-solid ' + (f.type === 'pdf' ? 'fa-file-pdf" style="color:#dc2626' : 'fa-file-excel" style="color:#16a34a') + '"></i> ' + esc(f.file_name) + '</td>' +
         '<td>' + esc(String(f.created_at).slice(0, 16)) + '<br><small class="sr-muted">' + esc(f.created_by_name || '') + '</small></td>' +
         '<td style="white-space:nowrap"><a href="' + url + '">Download</a>' + (f.type === 'pdf' ? ' · <a href="' + url + '&inline=1" target="_blank" rel="noopener">View</a>' : '') + '</td></tr>';
@@ -1226,7 +1228,7 @@
       render();
       var id = res.new_files && res.new_files[type];
       if (id) {
-        var a = document.createElement('a'); a.href = P.api + '?a=file&id=' + id; a.setAttribute('download', ''); a.setAttribute('data-testid', 'sr-dl-link');
+        var a = document.createElement('a'); a.href = fileUrl(id); a.setAttribute('download', ''); a.setAttribute('data-testid', 'sr-dl-link');
         document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 4000);
         toast('success', (type === 'pdf' ? 'PDF' : 'Excel') + ' report downloaded');
       }
@@ -1323,7 +1325,7 @@
         var id = res.new_files && res.new_files.pdf;
         Swal.fire({ icon: 'success', title: 'Synced — final report ready', text: 'Your offline changes are saved and the final PDF was made from the company template.',
           confirmButtonText: '<i class="fa-solid fa-file-pdf"></i> Download final PDF', showCancelButton: !!id, cancelButtonText: 'Later', showConfirmButton: !!id })
-          .then(function (r) { if (r.isConfirmed && id) { var a = document.createElement('a'); a.href = P.api + '?a=file&id=' + id; a.setAttribute('download', ''); document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 4000); } });
+          .then(function (r) { if (r.isConfirmed && id) { var a = document.createElement('a'); a.href = fileUrl(id); a.setAttribute('download', ''); document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 4000); } });
       });
     }).catch(function () { S.finalBusy = false; });
   }

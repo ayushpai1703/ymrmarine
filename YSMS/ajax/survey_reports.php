@@ -60,9 +60,11 @@ $scope = function () use ($uid): array {
 try {
     if ($a === 'token') srJson(200, ['ok' => true, 'csrf' => csrf_token()]); // a fresh token after signing in again in another tab
     if ($a === 'list') {
+        require_once __DIR__ . '/../includes/survey_report_guest.php';
+        srgEnsure($db); // reports made on the public page are marked as such
         [$w, $p] = $scope();
         $q = $db->prepare("SELECT r.id, r.survey_id, r.kind, r.version, r.data, r.updated_at, r.created_at, s.vessel_name AS s_vessel, s.report_number, s.status, t.version AS template_version,
-                u.full_name AS updated_by_name, cu.full_name AS created_by_name, (SELECT COUNT(*) FROM survey_report_files f WHERE f.report_id = r.id) AS files,
+                u.full_name AS updated_by_name, COALESCE(cu.full_name, IF(EXISTS(SELECT 1 FROM survey_report_guests g WHERE g.report_id = r.id), 'Public page (no sign-in)', NULL)) AS created_by_name, (SELECT COUNT(*) FROM survey_report_files f WHERE f.report_id = r.id) AS files,
                 (SELECT MAX(f.created_at) FROM survey_report_files f WHERE f.report_id = r.id) AS last_file,
                 (SELECT MAX(f.id) FROM survey_report_files f WHERE f.report_id = r.id AND f.type = 'pdf') AS last_pdf,
                 (SELECT MAX(f.id) FROM survey_report_files f WHERE f.report_id = r.id AND f.type = 'xlsx') AS last_xlsx,
