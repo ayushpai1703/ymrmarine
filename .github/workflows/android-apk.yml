@@ -87,8 +87,8 @@ jobs:
           YSMS_VERSION_CODE: ${{ github.run_number }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
-          cp app/build/outputs/apk/debug/app-debug.apk "../YMR-YSMS-test-${{ github.run_number }}.apk"
+          ./gradlew assembleRelease --no-daemon --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk "../YMR-YSMS-test-${{ github.run_number }}.apk"
 
       - uses: actions/upload-artifact@v7
         with:

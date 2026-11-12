@@ -28,11 +28,19 @@ android {
             keyPassword 'android'
         }
     }
+    lint {
+        // test builds: a lint warning must not stop the APK
+        checkReleaseBuilds false
+        abortOnError false
+    }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
+            // Test builds are release builds (the Flutter login screen compiled ahead of time, small and
+            // fast), signed with the same test key so they install over the older test APKs.
+            signingConfig signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
