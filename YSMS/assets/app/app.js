@@ -646,6 +646,8 @@
         return [
             me.can.assign && { k: 'assign', label: me.role === 'Client' ? 'Request survey' : 'Assign vessel', ic: 'plus', to: '#assign' },
             me.can.report_generator && { k: 'word', label: 'Word report', ic: 'file', to: 'report_generator.php' },
+            me.can.report_generator && { k: 'surveyreports', label: 'Survey reports', ic: 'file', to: 'survey_reports.php' },
+            me.role === 'Admin' && { k: 'livesr', label: 'Live survey reports', ic: 'ship', to: 'live_survey_reports.php' },
             me.can.recovery && { k: 'recovery', label: 'Recovery', ic: 'fuel', to: '#recovery' },
             me.can.chat && { k: 'chat', label: 'Team chat', ic: 'chat', to: '#chat' },
             me.can.inbox && { k: 'inbox', label: 'Inbox', ic: 'inbox', to: '#inbox' },
@@ -1090,6 +1092,8 @@
             me.can.chat && item('Team chat', 'chat', 'purple', '#chat'),
             me.can.recovery && item('Recovery', 'fuel', 'sky', '#recovery'),
             me.can.report_generator && item('Word report generator', 'file', 'orange', 'report_generator.php'),
+            me.can.report_generator && item('Survey reports', 'file', 'green', 'survey_reports.php'),
+            me.role === 'Admin' && item('Live survey reports', 'ship', 'red', 'live_survey_reports.php'),
             me.role !== 'Client' && item('Formats', 'folder', 'green', '#formats'),
             item('Cancelled vessels', 'ban', 'red', '#cancelled'),
             item('Permission copy', 'file', 'blue', 'generate_permission_copy.php'),
@@ -2176,7 +2180,8 @@
             adminItem('Login activity', 'shield', 'red', 'activity') +
             (admin ? adminItem('Manage templates', 'file', 'sky', 'templates') + adminItem('Possible duplicates', 'folder', 'orange', 'duplicates') + adminItem('Formats', 'folder', 'green', 'formats') : '') +
             '</div><div class="section-title" data-rise>More tools</div><div class="menu-card" data-rise>' +
-            (admin ? webItem('Report templates', 'file', 'green', 'admin_report_templates.php') + webItem('Invoice airtable', 'file', 'blue', 'invoices_airtable.php') + webItem('Daily emails', 'inbox', 'blue', 'admin_daily_emails.php') + webItem('Invoice templates', 'file', 'orange', 'admin_invoice_templates.php') +
+            (admin ? webItem('Survey reports', 'file', 'green', 'survey_reports.php') + webItem('Live survey reports', 'ship', 'red', 'live_survey_reports.php') +
+                webItem('Report templates', 'file', 'green', 'admin_report_templates.php') + webItem('Invoice airtable', 'file', 'blue', 'invoices_airtable.php') + webItem('Daily emails', 'inbox', 'blue', 'admin_daily_emails.php') + webItem('Invoice templates', 'file', 'orange', 'admin_invoice_templates.php') +
                 webItem('Surveyor cards', 'user', 'purple', 'admin_surveyor_cards.php') + webItem('Import ports', 'pin', 'sky', 'ports_import.php') : '') +
             webItem('Import completed vessels', 'upload', 'green', 'completed_import.php') +
             webItem('Month summary (Excel)', 'download', 'blue', 'export_month_summary.php?y=' + new Date().getFullYear() + '&m=' + (new Date().getMonth() + 1), true) +
