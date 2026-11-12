@@ -81,6 +81,9 @@ jobs:
             echo "No GOOGLE_SERVICES_JSON secret: building without push notifications"
           fi
 
+      - name: Android NDK (strips the Flutter engine's debug symbols)
+        run: yes | sdkmanager --install "ndk;27.0.12077973" > /dev/null
+
       - name: Build test APK
         working-directory: mobile/android
         env:
@@ -89,6 +92,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace
           cp app/build/outputs/apk/release/app-release.apk "../YMR-YSMS-test-${{ github.run_number }}.apk"
+          ls -la ../YMR-YSMS-test-*.apk
+          unzip -l ../YMR-YSMS-test-*.apk | sort -k1 -n | tail -12
 
       - uses: actions/upload-artifact@v7
         with:

@@ -3,6 +3,8 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.ymrmarine.ysms"
     compileSdk = rootProject.ext.compileSdkVersion
+    // the NDK strips the native libraries (Flutter engine) — without it they ship with debug symbols
+    ndkVersion = "27.0.12077973"
     defaultConfig {
         applicationId "com.ymrmarine.ysms"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -10,6 +12,8 @@ android {
         versionCode Integer.parseInt(System.getenv("YSMS_VERSION_CODE") ?: "1")
         versionName "1.0." + (System.getenv("YSMS_VERSION_CODE") ?: "0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // phones only (ARM); the Flutter engine for emulators (x86) is left out of the APK
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }
         // Deep links: the server's host from capacitor.config.json (AndroidManifest.xml ${ysmsHost}).
         manifestPlaceholders = [ysmsHost: new URL(new groovy.json.JsonSlurper().parse(file('../../capacitor.config.json')).server.url).host]
         aaptOptions {
