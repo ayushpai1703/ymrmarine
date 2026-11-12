@@ -214,6 +214,10 @@ if ($a === 'me') {
             'chat' => in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true),
             'recovery' => $role !== 'Client',
             'report_generator' => in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true),
+            // pages this server has (the same app opens staging and live)
+            'survey_reports' => in_array($role, ['Admin', 'Super Admin', 'Surveyor'], true) && is_file(__DIR__ . '/survey_reports.php'),
+            'live_survey' => $role === 'Admin' && is_file(__DIR__ . '/live_survey_reports.php'),
+            'report_templates' => $role === 'Admin' && is_file(__DIR__ . '/admin_report_templates.php'),
         ],
     ]);
 }
