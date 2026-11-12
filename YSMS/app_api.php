@@ -119,6 +119,28 @@ function appAvatar(PDO $db, int $userId): string
     return '';
 }
 
+/**
+ * Vessel pictures (includes/vessel_image.php — found by the AI from the vessel name, the same as the
+ * website's cards): img = the picture to show (null = none yet), img_k / img_st = its key and state,
+ * so the app can ask for the ones not looked up yet (ajax/vessel_image.php a=lookup).
+ */
+function appPics(PDO $db, array $items): array
+{
+    try {
+        require_once __DIR__ . '/includes/vessel_image.php';
+        $states = viStates($db, array_map(fn($i) => (string)$i['vessel'], $items));
+        foreach ($items as &$it) {
+            $k = viKey((string)$it['vessel']);
+            $st = $states[$k] ?? ['status' => 'unknown'];
+            $it['img_k'] = $k;
+            $it['img_st'] = $st['status'];
+            $it['img'] = $st['status'] === 'found' ? viImgUrl($k) : null;
+        }
+        unset($it);
+    } catch (Throwable $e) { error_log('app_api pictures: ' . $e->getMessage()); }
+    return $items;
+}
+
 function appCard(PDO $db, array $s, bool $fullAccess, string $role): array
 {
     $over = appOverdue($s, $role);
@@ -431,6 +453,7 @@ if ($a === 'list') {
     $st->execute($params);
     $items = [];
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) $items[] = appCard($db, $row, $fullAccess, $role);
+    $items = appPics($db, $items);
     appOut(['total' => $total, 'page' => $page, 'more' => $offset + count($items) < $total, 'items' => $items]);
 }
 
@@ -450,7 +473,7 @@ if ($a === 'survey') {
         || ($role === 'Client' && (int)$s['client_id'] === $clientId && $clientId > 0));
     if (!$allowed) appOut(['error' => 'not_found'], 404);
 
-    $card = appCard($db, $s, true, $role);
+    $card = appPics($db, [appCard($db, $s, true, $role)])[0];
     $docs = [];
     try {
         $ds = $db->prepare('SELECT id, file_name, file_type, file_size, uploaded_at FROM uploads WHERE survey_id = ? ORDER BY id ASC');

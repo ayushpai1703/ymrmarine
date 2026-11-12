@@ -705,12 +705,48 @@
         var when = v.status === 'Completed' ? (v.report_on || v.completed_on) : v.status === 'Pending Report' ? v.completed_on : v.appointment;
         var whenLabel = v.status === 'Completed' ? 'Report' : v.status === 'Pending Report' ? 'Surveyed' : 'Appointment';
         return '<button type="button" class="vcard press' + (over ? ' overdue ' + over.kind : '') + '" data-rise data-vessel="' + v.id + '">' +
-            '<span class="vtop"><img src="' + THUMB + '" alt="" loading="lazy"><span class="t"><b>' + esc(v.vessel) + '</b><span>' + esc(v.client) + '</span></span>' + tag + '</span>' +
+            '<span class="vtop">' + picImg(v, THUMB, 'loading="lazy"') + '<span class="t"><b>' + esc(v.vessel) + '</b><span>' + esc(v.client) + '</span></span>' + tag + '</span>' +
             '<span class="meta"><span>' + icon('pin') + esc(v.port || '—') + '</span>' +
             (v.surveyors ? '<span>' + icon('user') + esc(v.surveyors) + '</span>' : '') +
             (when ? '<span>' + icon('calendar') + whenLabel + ' ' + esc(when) + '</span>' : '') + '</span>' +
             (v.update ? '<span class="upd"><span>Latest update · </span>' + esc(v.update) + '</span>' : '') +
             '</button>';
+    }
+    /** The vessel's picture (found by the AI from its name), or the drawing until there is one. */
+    function picImg(v, fallback, extra) {
+        return '<img src="' + esc(v.img || fallback) + '" alt=""' + (v.img ? ' class="real"' : '') + (v.img_k ? ' data-vimg="' + esc(v.img_k) + '" data-vimg-st="' + esc(v.img_st || '') + '" data-vimg-def="' + esc(fallback) + '"' : '') +
+            ' onerror="this.onerror=null;this.src=this.getAttribute(\'data-vimg-def\')||\'' + fallback + '\';this.classList.remove(\'real\');var h=this.closest(\'.hero\');if(h)h.classList.remove(\'real\')"' + (extra ? ' ' + extra : '') + '>';
+    }
+    /** Ask the server (AI) for the pictures not looked up yet — a few rounds while the screen is open, like the website. */
+    var picBusy = false;
+    function lookupPics(tries) {
+        tries = tries || 0;
+        if (picBusy || tries >= 6 || !state.me) return;
+        var keys = {};
+        document.querySelectorAll('img[data-vimg]').forEach(function (im) { var st = im.getAttribute('data-vimg-st'); if (st === 'pending' || st === 'unknown') keys[im.getAttribute('data-vimg')] = 1; });
+        var list = Object.keys(keys).slice(0, 40);
+        if (!list.length) return;
+        if (document.hidden) { setTimeout(function () { lookupPics(tries); }, 5000); return; }
+        var f = new FormData(); f.append('a', 'lookup'); f.append('csrf_token', state.me.csrf);
+        list.forEach(function (k) { f.append('names[]', k); });
+        picBusy = true;
+        fetch('ajax/vessel_image.php', { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-CSRF-Token': state.me.csrf } })
+            .then(function (r) { return r.json(); }).then(function (j) {
+                picBusy = false;
+                if (!j || !j.ok) return;
+                Object.keys(j.states || {}).forEach(function (k) {
+                    var st = j.states[k];
+                    document.querySelectorAll('img[data-vimg]').forEach(function (im) {
+                        if (im.getAttribute('data-vimg') !== k) return;
+                        im.setAttribute('data-vimg-st', st.status);
+                        if (st.status === 'found' && im.getAttribute('src') !== st.img) {
+                            im.src = st.img; im.classList.add('real');
+                            var h = im.closest('.hero'); if (h) h.classList.add('real');
+                        }
+                    });
+                });
+                if (j.more) setTimeout(function () { lookupPics(tries + 1); }, j.busy ? 8000 : 1500);
+            }).catch(function () { picBusy = false; });
     }
     function skeletons(n) {
         var s = '';
@@ -747,7 +783,7 @@
                 if (reset) list.innerHTML = html || '<div class="empty"><span class="ic blue">' + icon(key === 'completed' ? 'done' : 'ship') + '</span><b>' + (q || overdue ? 'Nothing matches' : cfg.empty) + '</b></div>';
                 else list.insertAdjacentHTML('beforeend', html);
                 more = d.more; loader.hidden = !more;
-                stagger(list);
+                stagger(list); lookupPics();
             }).catch(function (e) { if (e.message !== 'login') toast('Could not load the list', 'bad'); })
               .then(function () { if (my === seq) loading = false; });
         }
@@ -798,7 +834,7 @@
                         html += '<div class="section-title">' + labels[i] + '<span>' + d.total + '</span></div>' + d.items.slice(0, 10).map(vcard).join('');
                     });
                     list.innerHTML = html || '<div class="empty"><span class="ic blue">' + icon('search') + '</span>Nothing matches “' + esc(q) + '”</div>';
-                    stagger(list);
+                    stagger(list); lookupPics();
                 }).catch(function () {});
             }, 300);
         });
@@ -830,6 +866,13 @@
             });
         }
         function render(v) {
+            // the vessel's own picture in the header (found by the AI from its name), the drawing until then
+            var hero = scr.querySelector('.hero'), himg = hero && hero.querySelector('img');
+            if (himg && v.img_k && !himg.hasAttribute('data-vimg')) {
+                var tmp = document.createElement('div'); tmp.innerHTML = picImg(v, HERO, '');
+                var ni = tmp.firstChild; hero.replaceChild(ni, himg); hero.classList.toggle('real', !!v.img);
+                if (!v.img) lookupPics();
+            }
             var over = v.overdue;
             var statusTag = { 'Pending Vessel': ['blue', 'Pending Vessel'], 'Pending Report': ['orange', 'Pending Report'], 'Completed': ['green', 'Completed'] }[v.status] || ['blue', v.status];
             var rows = [
