@@ -88,6 +88,7 @@ try {
     require_once __DIR__ . '/../../includes/upload_validation.php';
 require_once __DIR__ . '/../includes/notifications.php';
 require_once __DIR__ . '/../includes/upload_email_outbox.php'; // admin email sent after the redirect
+require_once __DIR__ . '/../includes/pdf_compress.php';       // uploaded PDFs are stored smaller
     $files_uploaded = 0;
     $uploaded_labels = [];
     $uploaded_attachments = []; // full paths for email attachments
@@ -103,12 +104,13 @@ require_once __DIR__ . '/../includes/upload_email_outbox.php'; // admin email se
         $pdf_orig = basename($_FILES['pdf_report']['name']);
         $pdf_name = time() . "_" . preg_replace('/[^A-Za-z0-9._-]/', '_', $pdf_orig);
         if (move_uploaded_file($_FILES['pdf_report']['tmp_name'], $target_dir . $pdf_name)) {
+            $pdf_pc = pdfCompress($target_dir . $pdf_name);
             // Re-uploading (e.g. to complete a stuck Pending Vessel after the
             // other required file failed earlier) replaces the previous PDF
             // row instead of adding a duplicate entry to the file list.
             $db->prepare("DELETE FROM uploads WHERE survey_id = ? AND file_type = 'Formal Report PDF'")->execute([$survey_id]);
-            $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Formal Report PDF', ?, '1.2 MB')");
-            $stmt->execute([$survey_id, $pdf_orig, "uploads/" . $pdf_name]);
+            $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Formal Report PDF', ?, ?)");
+            $stmt->execute([$survey_id, $pdf_orig, "uploads/" . $pdf_name, pdfcSizeLabel($pdf_pc['after'])]);
             $files_uploaded++;
             $uploaded_labels[] = 'PDF: ' . $pdf_orig;
             $uploaded_attachments[] = ['path' => $target_dir . $pdf_name, 'name' => $pdf_orig];
@@ -189,6 +191,7 @@ require_once __DIR__ . '/../includes/upload_email_outbox.php'; // admin email se
             $fp_name = time() . "_" . preg_replace('/[^A-Za-z0-9._-]/', '_', $fp_orig);
             $fp_bytes = (int)$_FILES['final_report_pdf']['size'];
             if (move_uploaded_file($_FILES['final_report_pdf']['tmp_name'], $target_dir . $fp_name)) {
+                $fp_bytes = pdfCompress($target_dir . $fp_name)['after'] ?: $fp_bytes;
                 $fp_size = $fp_bytes >= 1048576 ? round($fp_bytes / 1048576, 1) . ' MB' : max(1, (int)round($fp_bytes / 1024)) . ' KB';
                 $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Formal Report PDF', ?, ?)");
                 $stmt->execute([$survey_id, $fp_orig, "uploads/" . $fp_name, $fp_size]);
@@ -232,10 +235,12 @@ require_once __DIR__ . '/../includes/upload_email_outbox.php'; // admin email se
             }
             if ($ef['error'][$key] == 0 && $isAllowedExt($name, $extra_allowed)) {
                 $extra_orig = basename($name);
-                $extra_name = time() . "_" . preg_replace('/[^A-Za-z0-9._-]/', '_', $extra_orig);
+                $extra_name = time() . "_" . bin2hex(random_bytes(3)) . "_" . preg_replace('/[^A-Za-z0-9._-]/', '_', $extra_orig);
                 if (move_uploaded_file($ef['tmp_name'][$key], $target_dir . $extra_name)) {
-                    $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Field Report', ?, '512 KB')");
-                    $stmt->execute([$survey_id, $extra_orig, "uploads/" . $extra_name]);
+                    $extra_size = '512 KB';
+                    if ($isAllowedExt($extra_orig, ['pdf'])) $extra_size = pdfcSizeLabel(pdfCompress($target_dir . $extra_name)['after']);
+                    $stmt = $db->prepare("INSERT INTO uploads (survey_id, file_name, file_type, file_path, file_size) VALUES (?, ?, 'Field Report', ?, ?)");
+                    $stmt->execute([$survey_id, $extra_orig, "uploads/" . $extra_name, $extra_size]);
                     $uploaded_labels[] = 'Extra: ' . $extra_orig;
                     $extra_saved++;
                     $uploaded_attachments[] = ['path' => $target_dir . $extra_name, 'name' => $extra_orig];
