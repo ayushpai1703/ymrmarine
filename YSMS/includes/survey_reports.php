@@ -1,6 +1,6 @@
 <?php
 /**
- * Survey Reports (survey_reports.php / survey_report.php / ajax/survey_reports.php): the bunker
+ * Survey Reports (survey_reports.php / survey_report_public.php / ajax/survey_reports.php): the bunker
  * survey report of a vessel entered on the website and filled into the company's Excel report
  * template (includes/report_templates.php).
  *
@@ -192,7 +192,7 @@ function srVesselLookup(string $imoRaw, array $types): array {
         . "  \"found\": true/false, \"imo\": the IMO number of the ship the values belong to,\n";
     foreach ($want as $k => $d) $prompt .= "  \"$k\": $d,\n";
     $prompt .= "Rules: use only values a source states for THIS IMO number. If a value is not found or sources disagree, use null. Never guess or estimate. Numbers without units or thousands separators. Text in UPPER CASE.";
-    $res = geminiJson([['text' => $prompt]], 90, 'vessel lookup', ['search' => true]);
+    $res = geminiJson([['text' => $prompt]], 90, 'vessel lookup', ['search' => true, 'fast' => true]);
     if (!$res['ok']) return ['ok' => false, 'error' => $res['message'] ?? 'Vessel lookup failed. Please try again.'];
     $d = $res['data'];
     if (empty($d['found']) || preg_replace('/\D/', '', (string)($d['imo'] ?? '')) !== $imo) {
@@ -215,6 +215,59 @@ function srVesselLookup(string $imoRaw, array $types): array {
     }
     if (!$out) return ['ok' => false, 'error' => 'No vessel particulars were found for IMO ' . $imo . '. Fill the fields by hand.'];
     return ['ok' => true, 'imo' => $imo, 'fields' => $out, 'sources' => array_slice($res['sources'] ?? [], 0, 8)];
+}
+
+/**
+ * Vessel lookup, fast first: (1) particulars found for this IMO before (kept 60 days), (2) the latest report
+ * of this IMO typed in by a surveyor, (3) the AI web search (slow, 20-60 s) — its answer is kept for next time.
+ * The PHP session is released before the AI is asked, so autosave and other requests do not wait for it.
+ */
+const SR_LOOKUP_KEEP_DAYS = 60;
+function srLookupEnsure(PDO $db): void {
+    static $done = false; if ($done) return; $done = true;
+    $db->exec("CREATE TABLE IF NOT EXISTS `survey_vessel_lookup` (
+        `imo` varchar(7) NOT NULL PRIMARY KEY, `fields` longtext NOT NULL, `sources` longtext NULL, `fetched_at` datetime NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+function srLookupFast(PDO $db, string $imoRaw, array $types, int $exceptReport = 0): array {
+    [$imo, $err] = sfValidate('imo', $imoRaw);
+    if ($imo === '' || $err) return ['ok' => false, 'error' => $err ?: 'Enter the IMO number first.'];
+    $keep = function (array $f) use ($types): array {
+        $out = [];
+        foreach ($f as $k => $v) {
+            if (!isset($types[$k]) || !isset(SR_LOOKUP_FIELDS[$k]) || !is_scalar($v) || (string)$v === '') continue;
+            [$clean, $e] = sfValidate($types[$k], (string)$v);
+            if ($clean !== '' && !$e) $out[$k] = $clean;
+        }
+        return $out;
+    };
+    try {
+        srLookupEnsure($db);
+        $q = $db->prepare('SELECT fields, sources, fetched_at FROM survey_vessel_lookup WHERE imo = ? AND fetched_at > ?');
+        $q->execute([$imo, date('Y-m-d H:i:s', time() - SR_LOOKUP_KEEP_DAYS * 86400)]);
+        if ($row = $q->fetch(PDO::FETCH_ASSOC)) {
+            $f = $keep((array)json_decode((string)$row['fields'], true));
+            if ($f) return ['ok' => true, 'imo' => $imo, 'fields' => $f, 'sources' => (array)json_decode((string)$row['sources'], true), 'from' => 'saved', 'at' => $row['fetched_at']];
+        }
+        // the latest report of this IMO (what a surveyor typed and checked)
+        $q = $db->prepare("SELECT id, data, updated_at FROM survey_reports WHERE id <> ? AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.fields.imo')) = ? ORDER BY updated_at DESC LIMIT 1");
+        $q->execute([$exceptReport, $imo]);
+        if ($row = $q->fetch(PDO::FETCH_ASSOC)) {
+            $d = json_decode((string)$row['data'], true);
+            $f = $keep((array)($d['fields'] ?? []));
+            if (count($f) >= 3) return ['ok' => true, 'imo' => $imo, 'fields' => $f, 'sources' => [], 'from' => 'report', 'at' => $row['updated_at']];
+        }
+    } catch (Throwable $e) { error_log('vessel lookup (fast): ' . $e->getMessage()); }
+    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+    $res = srVesselLookup($imo, $types);
+    if ($res['ok']) {
+        try {
+            $db->prepare('REPLACE INTO survey_vessel_lookup (imo, fields, sources, fetched_at) VALUES (?, ?, ?, ?)')
+               ->execute([$imo, json_encode($res['fields']), json_encode($res['sources'] ?? []), date('Y-m-d H:i:s')]);
+        } catch (Throwable $e) { error_log('vessel lookup (keep): ' . $e->getMessage()); }
+        $res['from'] = 'web';
+    }
+    return $res;
 }
 
 // ================================================================ wizard: grades, checks, workbook
@@ -1193,7 +1246,7 @@ function srStart(PDO $db, array $survey, string $kind, int $uid): array {
     }
 }
 
-/** A report not tied to a vessel (survey_report.php opened without an id): the active template of the kind, starting values only. */
+/** A report not tied to a vessel (the report page opened without one): the active template of the kind, starting values only. */
 function srNew(PDO $db, string $kind, int $uid): array {
     rtEnsureTables($db);
     if (!isset(RT_KINDS[$kind])) return ['ok' => false, 'error' => 'Choose the report type.'];

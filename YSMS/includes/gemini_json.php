@@ -27,14 +27,22 @@ function geminiJson(array $parts, int $timeout = 120, string $logTag = 'gemini',
         'generationConfig' => ['temperature' => 0, 'maxOutputTokens' => 16384] + ($search ? [] : ['responseMimeType' => 'application/json']),
     ];
     if ($search) $req['tools'] = [['google_search' => new stdClass()]];
-    $payload = json_encode($req);
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'x-goog-api-key: ' . $apiKey], CURLOPT_TIMEOUT => $timeout, CURLOPT_CONNECTTIMEOUT => 15]);
-    $body = curl_exec($ch);
-    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $err = curl_error($ch);
-    curl_close($ch);
+    // 'fast': little "thinking" before the answer (a lookup, not a reasoning task) — much quicker.
+    // A model that does not take the setting answers 400; it is then asked again without it.
+    $fast = !empty($opts['fast']);
+    if ($fast) $req['generationConfig']['thinkingConfig'] = stripos($model, 'gemini-2') === 0 ? ['thinkingBudget' => 0] : ['thinkingLevel' => 'low'];
+    $send = function (array $req) use ($url, $apiKey, $timeout) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($req),
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'x-goog-api-key: ' . $apiKey], CURLOPT_TIMEOUT => $timeout, CURLOPT_CONNECTTIMEOUT => 15]);
+        $body = curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+        return [$body, $code, $err];
+    };
+    [$body, $code, $err] = $send($req);
+    if ($fast && $code === 400) { unset($req['generationConfig']['thinkingConfig']); [$body, $code, $err] = $send($req); }
     if ($body === false || $code < 200 || $code >= 300) {
         error_log("$logTag AI: HTTP $code" . ($err ? " ($err)" : ''));
         return ['ok' => false, 'message' => 'The AI service did not answer (' . ($code ?: 'no connection') . '). Try again, or fill the form by hand.', 'retry' => true];

@@ -1,4 +1,4 @@
-/* Offline support for Survey Reports (survey_reports.php, survey_report.php only — registered
+/* Offline support for Survey Reports (survey_reports.php, survey_report_public.php only — registered
    with scope "./survey_report", so no other YSMS page is touched).
    - Pages and the data of a report (ajax/survey_reports.php?a=get / list): network first, the
      last copy when offline.

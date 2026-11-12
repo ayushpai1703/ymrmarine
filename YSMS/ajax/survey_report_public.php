@@ -172,7 +172,7 @@ try {
         if (!srgHit($db, 'lookup')) srgLimited();
         $_SESSION['sr_lookup_at'] = time();
         $types = array_map(fn($f) => $f['type'], $eff['fields']);
-        $res = srVesselLookup((string)($_POST['imo'] ?? ''), $types);
+        $res = srLookupFast($db, (string)($_POST['imo'] ?? ''), $types, (int)$r['id']);
         srgJson($res['ok'] ? 200 : 422, $res);
     }
 } catch (Throwable $e) {

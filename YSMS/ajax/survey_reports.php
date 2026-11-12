@@ -1,13 +1,13 @@
 <?php
 /**
- * Survey Reports API (survey_reports.php, survey_report.php). Access: includes/survey_reports.php.
+ * Survey Reports API (survey_reports.php, survey_report_public.php?id=…). Access: includes/survey_reports.php.
  * CSRF for POST is checked in config.php.
  *
  *   GET  a=token                      the current CSRF token (after signing in again)
  *   GET  a=list                       reports this user can see
  *   GET  a=surveys&q=                 vessels a new report can be made for
  *   POST a=start   survey_id, kind    "Start Survey" on a vessel: opens its report (the draft when one exists, else a new one)
- *   POST a=new     kind               a report without a vessel (survey_report.php opened without an id)
+ *   POST a=new     kind               a report without a vessel (not used by the pages any more; kept for the API)
  *   GET  a=for_survey&survey_id=      the vessel's report (id, type, state) or none
  *   GET  a=tank_history&id= | &survey_id=   version history of the saved tanks (Admin only)
  *   GET  a=preview&id=                the report as it prints now, as a temporary PDF (nothing is stored)
@@ -216,7 +216,7 @@ try {
         $res = srStart($db, $s, (string)($_POST['kind'] ?? ''), $uid);
         srJson($res['ok'] ? 200 : 422, $res);
     }
-    if ($a === 'new') { // survey_report.php opened without an id: a report not tied to a vessel (Admin / Surveyor)
+    if ($a === 'new') { // a report not tied to a vessel (Admin / Surveyor)
         if (!$isPost) srJson(405, ['ok' => false, 'error' => 'POST only.']);
         if (!in_array(srRole(), ['Admin', 'Surveyor'], true)) srJson(403, ['ok' => false, 'error' => 'View only.']);
         $res = srNew($db, (string)($_POST['kind'] ?? ''), $uid);
@@ -296,7 +296,7 @@ try {
         if (time() - $last < 5) srJson(429, ['ok' => false, 'error' => 'Please wait a few seconds before the next lookup.']);
         $_SESSION['sr_lookup_at'] = time();
         $types = array_map(fn($f) => $f['type'], $eff['fields']);
-        $res = srVesselLookup((string)($_POST['imo'] ?? ''), $types);
+        $res = srLookupFast($db, (string)($_POST['imo'] ?? ''), $types, (int)$r['id']);
         srJson($res['ok'] ? 200 : 422, $res);
     }
     if ($a === 'use_latest') {

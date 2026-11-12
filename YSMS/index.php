@@ -317,26 +317,37 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
     </div>
 
     <?php if ($role === 'Admin'):
-        // 🌟 Live Survey Reports: reports being filled on the survey report link (no sign-in), last 48 hours
-        $lsrRows = [];
-        try { require_once 'includes/live_survey_reports.php'; $lsrRows = array_slice(array_values(array_filter(lsrList($db, 48, 100), fn($r) => $r['vessel'] !== '' || $r['imo'] !== '' || $r['surveyor'] !== '')), 0, 6); echo lsrCss(); }
-        catch (Throwable $e) { error_log('dashboard live survey reports: ' . $e->getMessage()); }
-        $lsrActive = count(array_filter($lsrRows, fn($r) => $r['status']['key'] !== 'done'));
+        // 🌟 Live Survey Reports: surveys being filled on the survey report link, by the time since they were started
+        //    (under 1 h in progress, 1–3 h might be completed, then completed). The live ones are listed.
+        $lsrRows = []; $lsrCount = ['progress' => 0, 'check' => 0, 'done' => 0];
+        try {
+            require_once 'includes/live_survey_reports.php';
+            $lsrAll = array_values(array_filter(lsrList($db, 24, 300), fn($r) => $r['vessel'] !== '' || $r['imo'] !== '' || $r['surveyor'] !== ''));
+            foreach ($lsrAll as $r) $lsrCount[$r['status']['key']]++;
+            $lsrRows = array_slice(array_values(array_filter($lsrAll, fn($r) => $r['status']['key'] !== 'done')), 0, 8);
+            usort($lsrRows, fn($x, $y) => [$x['status']['key'] !== 'progress', $x['status']['hours']] <=> [$y['status']['key'] !== 'progress', $y['status']['hours']]);
+            echo lsrCss();
+        } catch (Throwable $e) { error_log('dashboard live survey reports: ' . $e->getMessage()); }
     ?>
     <div class="overview-section mt-4" data-testid="dash-live-survey-reports">
         <div class="section-title-row d-flex justify-content-between align-items-center">
-            <span class="section-title"><i class="fa-solid fa-tower-broadcast text-success me-1"></i> Live Survey Reports<?= $lsrActive ? ' <span class="lsr-pill lsr-p ms-1">' . $lsrActive . ' active</span>' : '' ?></span>
-            <a href="live_survey_reports.php" class="text-decoration-none fw-semibold" style="font-size:13px" data-testid="dash-lsr-all">View all <i class="fa-solid fa-chevron-right" style="font-size:11px"></i></a>
+            <span class="section-title"><i class="fa-solid fa-tower-broadcast text-success me-1"></i> Live Surveys</span>
+            <a href="live_survey_reports.php" class="text-decoration-none fw-semibold" style="font-size:13px" data-testid="dash-lsr-all">Open Live Survey Reports <i class="fa-solid fa-chevron-right" style="font-size:11px"></i></a>
         </div>
-        <div class="bg-white rounded-4 shadow-sm mt-2" style="border:1px solid var(--border-color)">
+        <div class="bg-white rounded-4 shadow-sm mt-2" style="border:1px solid var(--border-color);overflow:hidden">
+            <div class="lsr-dash">
+                <a class="lsr-dt p" href="live_survey_reports.php?f=progress" data-testid="dash-lsr-c-progress"><i class="fa-solid fa-tower-broadcast"></i><span><b><?= $lsrCount['progress'] ?></b>In progress</span></a>
+                <a class="lsr-dt c" href="live_survey_reports.php?f=check" data-testid="dash-lsr-c-check"><i class="fa-solid fa-bell"></i><span><b><?= $lsrCount['check'] ?></b>Might be completed</span></a>
+                <a class="lsr-dt d" href="live_survey_reports.php?f=done" data-testid="dash-lsr-c-done"><i class="fa-solid fa-circle-check"></i><span><b><?= $lsrCount['done'] ?></b>Completed (24 h)</span></a>
+            </div>
             <?php if (!$lsrRows): ?>
-                <div class="p-3 text-muted" style="font-size:13px" data-testid="dash-lsr-none">No survey reports started on the link in the last 48 hours.</div>
+                <div class="px-3 pb-3 text-muted" style="font-size:13px" data-testid="dash-lsr-none">No survey in progress right now.</div>
             <?php endif; ?>
             <?php foreach ($lsrRows as $i => $r): ?>
-                <a class="lsr-row" style="<?= $i ? '' : 'border-top:0' ?>" href="survey_report.php?id=<?= (int)$r['id'] ?>" data-testid="dash-lsr-row-<?= (int)$r['id'] ?>">
+                <a class="lsr-row" href="live_survey_reports.php?id=<?= (int)$r['id'] ?>" data-testid="dash-lsr-row-<?= (int)$r['id'] ?>">
                     <span><b><?= $r['vessel'] !== '' ? sanitize($r['vessel']) : '<span class="lsr-empty">Vessel not entered yet</span>' ?></b><small>IMO <?= $r['imo'] !== '' ? sanitize($r['imo']) : '—' ?></small></span>
                     <span><?= $r['surveyor'] !== '' ? sanitize($r['surveyor']) : '<span class="lsr-empty">Surveyor not entered</span>' ?></span>
-                    <span class="lsr-hide-sm"><small><?= sanitize(lsrAgo($r['status']['hours'])) ?></small></span>
+                    <span class="lsr-hide-sm"><small>started <?= sanitize(lsrAgo($r['status']['hours'])) ?></small></span>
                     <span><?= lsrPill($r['status']) ?></span>
                 </a>
             <?php endforeach; ?>

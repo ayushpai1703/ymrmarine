@@ -1,32 +1,51 @@
 <?php
 /**
- * Survey report without signing in — a page of its own (no YSMS menu). Rules and limits:
- * includes/survey_report_guest.php; API: ajax/survey_report_public.php; editor: assets/js/survey-report.js
- * (the same wizard as survey_report.php). The preview is not a side panel here: the Preview button
- * opens it in a window (modal) with a Close button.
- *   survey_report_public.php            choose the report type → a new report
- *   survey_report_public.php?t=<token>  that report (the secret link; keep it to continue later)
+ * Survey Report — the one page for survey reports, with or without signing in (a page of its own,
+ * no YSMS menu). Editor: assets/js/survey-report.js. The preview opens in a window (modal).
+ *   survey_report_public.php            choose the report type → a new report (a private link)
+ *   survey_report_public.php?t=<token>  that report (the secret link; keep it to continue later).
+ *                                       Rules and limits: includes/survey_report_guest.php; API ajax/survey_report_public.php
+ *   survey_report_public.php?id=<id>    a report of a vessel (or any report, for the Admin) — signed in only
+ *                                       (survey_report.php sends here). Access: includes/survey_reports.php; API ajax/survey_reports.php
  */
 require_once 'config/config.php';
 require_once 'includes/survey_report_guest.php';
+require_once 'includes/survey_reports.php';
 header('X-Robots-Tag: noindex, nofollow');
 header('Referrer-Policy: no-referrer'); // the secret link never leaves in a Referer header
 
 $token = srgToken($_GET['t'] ?? '');
+$rid = $token === '' ? (int)($_GET['id'] ?? 0) : 0;
 $kinds = [];
 $notFound = false;
+$srBack = 'survey_report_public.php'; $srBackLabel = 'New report';
+if ($rid > 0) {
+    // a report by its number: only for a signed-in user who may use Survey Reports (checked again by the API)
+    if (empty($_SESSION['user_id'])) { header('Location: login.php?next=' . rawurlencode('survey_report_public.php?id=' . $rid)); exit; }
+    if (!srCanUse()) { header('Location: index.php'); exit; }
+}
 try {
     $db = getDB();
     if ($token !== '') { if (!srgReport($db, $token)) { $notFound = true; $token = ''; } }
-    if ($token === '') $kinds = srgKinds($db);
+    if ($rid > 0) {
+        $srR = srReport($db, $rid);
+        if (!$srR) { $notFound = true; $rid = 0; }
+        elseif (!empty($srR['survey'])) {
+            $sv = $srR['survey'];
+            $srBack = match ((string)$sv['status']) { 'Pending Report' => 'report_detail.php?id=' . (int)$sv['id'], 'Completed' => 'completed_detail.php?id=' . (int)$sv['id'], default => 'vessel_detail.php?id=' . (int)$sv['id'] };
+            $srBackLabel = (string)$sv['vessel_name'];
+        } else { $srBack = 'survey_reports.php'; $srBackLabel = 'Survey Reports'; }
+    }
+    if ($token === '' && $rid === 0) $kinds = srgKinds($db);
 } catch (Throwable $e) {
     error_log('survey_report_public: ' . $e->getMessage());
 }
+$editing = $token !== '' || $rid > 0;
 $v = fn(string $f) => @filemtime(__DIR__ . '/' . $f);
 $signedIn = !empty($_SESSION['user_id']);
 $signedName = (string)($_SESSION['full_name'] ?? $_SESSION['username'] ?? '');
 $signedRole = (string)($_SESSION['role'] ?? '');
-$here = 'survey_report_public.php' . ($token !== '' ? '?t=' . $token : '');
+$here = 'survey_report_public.php' . ($token !== '' ? '?t=' . $token : ($rid > 0 ? '?id=' . $rid : ''));
 $initials = strtoupper(implode('', array_map(fn($w) => mb_substr($w, 0, 1), array_slice(preg_split('/\s+/', trim($signedName)) ?: [], 0, 2)))) ?: 'U';
 $kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'onhire' => 'fa-anchor-circle-check', 'offhire3' => 'fa-people-group', 'onhire3' => 'fa-people-group', 'offhire4' => 'fa-people-line'];
 ?>
@@ -133,7 +152,7 @@ $kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'on
         <?php endif; ?>
     </div>
 </header>
-<?php if ($token === ''): ?>
+<?php if (!$editing): ?>
 <section class="srp-hero">
     <span class="tag"><i class="fa-solid fa-ship"></i> Bunker survey</span>
     <h1>Survey Report</h1>
@@ -141,7 +160,7 @@ $kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'on
 </section>
 <main class="srp-main">
     <?php if ($notFound): ?>
-        <div class="sr-note err mb-3" data-testid="srp-not-found">This report link is not valid. Start a new report below, or use the link you saved.</div>
+        <div class="sr-note err mb-3" data-testid="srp-not-found">This report was not found. Start a new report below, or use the link you saved.</div>
     <?php endif; ?>
     <?php if (!$signedIn): ?>
     <section class="srp-panel" data-srp-choice data-testid="srp-choice">
@@ -199,7 +218,7 @@ $kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'on
 <?php else: ?>
 <div class="sr-wrap sr-v4" data-testid="survey-report-page">
     <div class="sr-head">
-        <div class="sr-crumbs"><a href="survey_report_public.php" class="sr-back" data-testid="sr-back" title="New report"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="sr-crumbs"><a href="<?= sanitize($srBack) ?>" class="sr-back" data-testid="sr-back" title="Back to <?= sanitize($srBackLabel) ?>"><i class="fa-solid fa-arrow-left"></i></a>
             <span class="sr-crumb"><span data-kindcrumb>Survey</span> Report <i>/</i> <b data-crumb>Vessel Details</b></span>
             <h1 data-title hidden>Survey report</h1><span data-subtitle hidden></span></div>
         <nav class="sr-hsteps" data-steps aria-label="Steps"></nav>
@@ -210,14 +229,14 @@ $kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'on
             <span class="sr-net" data-net data-testid="sr-net"></span>
             <span class="sr-save" data-save-state data-testid="sr-save-state"></span>
             <span class="sr-live" data-live hidden data-testid="sr-live"></span>
-            <button type="button" class="srp-copy-h" data-srp-copy title="Copy the link of this report (keep it to continue later)" data-testid="srp-copy-head"><i class="fa-solid fa-link"></i><span> Copy link</span></button>
+            <?php if ($token !== ''): ?><button type="button" class="srp-copy-h" data-srp-copy title="Copy the link of this report (keep it to continue later)" data-testid="srp-copy-head"><i class="fa-solid fa-link"></i><span> Copy link</span></button><?php endif; ?>
             <button type="button" class="srp-pv-btn" data-pv="open" data-testid="srp-preview-open"><i class="fa-solid fa-eye"></i> Preview</button>
             <button type="button" class="sr-pv-fab" data-pv="open" data-testid="sr-pv-open" hidden></button>
         </div>
     </div>
-    <div class="srp-link" data-testid="srp-link"><i class="fa-solid fa-link"></i> <span>Keep this link to continue your report later:</span>
+    <?php if ($token !== ''): ?><div class="srp-link" data-testid="srp-link"><i class="fa-solid fa-link"></i> <span>Keep this link to continue your report later:</span>
         <input type="text" readonly data-srp-url aria-label="Report link" data-testid="srp-link-url">
-        <button type="button" data-srp-copy data-testid="srp-link-copy"><i class="fa-regular fa-copy"></i> Copy</button></div>
+        <button type="button" data-srp-copy data-testid="srp-link-copy"><i class="fa-regular fa-copy"></i> Copy</button></div><?php endif; ?>
     <div class="sr-split">
         <div class="sr-split-l">
             <div data-banners></div>
@@ -245,6 +264,7 @@ $kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'on
         </aside>
     </div>
 </div>
+<?php if ($token !== ''): ?>
 <script>
 (function () {
   var url = location.origin + location.pathname + '?t=' + <?= json_encode($token) ?>;
@@ -257,7 +277,9 @@ $kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'on
   }); });
 })();
 </script>
-<script>window.SR_PAGE = <?= json_encode(['id' => $token, 'guest' => true, 'csrf' => csrf_token(), 'api' => 'ajax/survey_report_public.php',
+<?php endif; ?>
+<script>window.SR_PAGE = <?= json_encode(($token !== '' ? ['id' => $token, 'guest' => true, 'api' => 'ajax/survey_report_public.php'] : ['id' => $rid, 'api' => 'ajax/survey_reports.php'])
+    + ['std' => true, 'csrf' => csrf_token(),
     'pdfjs' => 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', 'pdfjsWorker' => 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?>;</script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.14.5/dist/sweetalert2.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>

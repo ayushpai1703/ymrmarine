@@ -1,4 +1,4 @@
-/* Survey report wizard (survey_report.php). Data: ajax/survey_reports.php.
+/* Survey report wizard (survey_report_public.php). Data: ajax/survey_reports.php.
    Steps: 1 Vessel particulars (IMO + Vessel lookup, the 18 particulars) → 2 Survey particulars
    (fuel grades on board, FWE / start / completion, staff, location, drafts) → one step per chosen
    fuel grade (tank cards, one below the other) → ROB summary with the PDF / Excel downloads.
@@ -332,7 +332,7 @@
     var show = S.manual || S.lookup;
     var miss = show ? issues('vessel').filter(function (x) { return x.key !== 'f:imo'; }) : [];
     return '<section class="sr-card sr-imo" data-testid="sr-vessel"><div class="sr-lookup">' + inputHtml('imo', { label: 'IMO Number', req: true }) +
-      (S.canEdit ? '<button type="button" class="sr-btn pri" data-lookup data-online-only data-testid="sr-lookup"><i class="fa-solid fa-magnifying-glass"></i> Lookup</button>' : '') + '</div>' +
+      (S.canEdit ? '<button type="button" class="sr-btn pri" data-lookup data-online-only data-testid="sr-lookup"' + (S.looking ? ' disabled><i class="fa-solid fa-spinner fa-spin"></i> Looking up…' : '><i class="fa-solid fa-magnifying-glass"></i> Lookup') + '</button>' : '') + '</div>' +
       (S.canEdit && S.prev ? '<div class="sr-prev" data-testid="sr-prev"><button type="button" class="sr-btn alt-o" data-prev data-testid="sr-prev-fill"><i class="fa-solid fa-clock-rotate-left"></i> Fill from previous attendance</button>' +
         '<span class="sr-muted sr-small">This vessel was attended before — ' + esc(S.prev.label) + '. Fills the particulars, the grades and the tank names with heights.</span></div>' : '') +
       '<div data-lookup-info data-testid="sr-lookup-info">' + lookupInfoHtml() + '</div>' +
@@ -342,10 +342,13 @@
         '<div class="sr-grid">' + VESSEL().map(function (k) { return inputHtml(k, { req: true }); }).join('') + '</div></section>' : '');
   }
   function lookupInfoHtml() {
+    if (S.looking) return '<div class="sr-note sr-looking" data-testid="sr-looking"><i class="fa-solid fa-spinner fa-spin"></i> Finding the particulars of IMO ' + esc(S.autoImo || val('imo')) + '… <span class="sr-muted">You can carry on; they are filled in when found.</span></div>';
     if (S.lookupMsg) return '<div class="sr-note warn" data-testid="sr-lookup-msg"><i class="fa-solid fa-circle-info"></i> ' + esc(S.lookupMsg) + ' You can type the particulars in below.</div>';
     var L = S.lookup; if (!L) return '';
     var n = Object.keys(L.prev).length;
-    return '<div class="sr-note sr-ai-note"><b><i class="fa-solid fa-wand-magic-sparkles"></i> ' + n + ' field' + (n === 1 ? '' : 's') + ' filled for IMO ' + esc(L.imo) + '</b> — found on the web; please check the highlighted values against the ship\'s documents.' +
+    var where = L.from === 'report' ? 'from this vessel\'s last survey report' + (L.at ? ' (' + esc(String(L.at).slice(0, 10)) + ')' : '')
+      : L.from === 'saved' ? 'found earlier for this IMO' : 'found on the web';
+    return '<div class="sr-note sr-ai-note"><b><i class="fa-solid fa-wand-magic-sparkles"></i> ' + n + ' field' + (n === 1 ? '' : 's') + ' filled for IMO ' + esc(L.imo) + '</b> — ' + where + '; please check the highlighted values against the ship\'s documents.' +
       (S.canEdit ? ' <button type="button" class="sr-btn sm" data-undo data-testid="sr-undo"><i class="fa-solid fa-rotate-left"></i> Undo</button>' : '') +
       (L.sources.length ? '<div class="sr-src">Sources: ' + L.sources.map(function (s) { return '<a href="' + esc(s.uri) + '" target="_blank" rel="noopener noreferrer">' + esc(s.title || s.uri) + '</a>'; }).join(' · ') + '</div>' : '') + '</div>';
   }
@@ -358,21 +361,51 @@
     };
     var mean = num(val('draft_fwd')) !== null && num(val('draft_aft')) !== null ? ((num(val('draft_fwd')) + num(val('draft_aft'))) / 2).toFixed(3) : '';
     var trim = mean !== '' ? (num(val('draft_aft')) - num(val('draft_fwd'))).toFixed(3) : '';
-    var card = function (title, icon, inner, tid) { return '<section class="sr-card" data-testid="sr-grp-' + tid + '"><h3><i class="fa-solid ' + icon + '"></i> ' + title + '</h3><div class="sr-grid">' + inner + '</div></section>'; };
-    return '<section class="sr-card" data-testid="sr-grades" data-fw="grades"><h3><i class="fa-solid fa-gas-pump"></i> Fuel grades on board <b class="sr-req">*</b></h3>' +
+    var card = function (title, icon, inner, tid, keys) {
+      var st = keys ? doneOf(keys) : '';
+      return '<section class="sr-card sr-s2c" data-testid="sr-grp-' + tid + '"><h3><i class="fa-solid ' + icon + '"></i> ' + title + st + '</h3><div class="sr-grid">' + inner + '</div></section>'; };
+    /** "2 / 4" or a green tick once every required box of the group is filled */
+    function doneOf(keys) {
+      var n = keys.filter(function (k) { return String(val(k) || '').trim() !== ''; }).length;
+      return n === keys.length ? '<span class="sr-s2-ok" data-testid="sr-s2-done"><i class="fa-solid fa-circle-check"></i> Done</span>'
+        : '<span class="sr-s2-n">' + n + ' / ' + keys.length + '</span>';
+    }
+    /** one event of the survey (FWE, start, completion): date + time with a "Now" button, then the ROB of each grade */
+    var EV = [
+      { k: 'fwe', no: 'A', title: 'Engine Particulars (FWE)', sub: 'Finished With Engines', icon: 'fa-gears', d: 'fwe_date', t: 'fwe_time', rob: 'fwe', robT: 'FWE ROB' },
+      { k: 'started', no: 'B', title: 'Survey Start', sub: 'Surveyor on board', icon: 'fa-play', d: 'started_date', t: 'started_time', rob: 'started', robT: 'Log Book ROB' },
+      { k: 'completed', no: 'C', title: 'Survey Completion', sub: 'Readings finished', icon: 'fa-flag-checkered', d: 'completed_date', t: 'completed_time', extra: 'surveyor_name' }
+    ];
+    var timeline = '<section class="sr-card sr-tl" data-testid="sr-timeline"><h3><i class="fa-solid fa-timeline"></i> Survey timeline <small>Local time (LT)</small></h3>' +
+      EV.map(function (e) {
+        var keys = [e.d, e.t].concat(e.rob ? g.map(function (x) { return 'brob_' + e.rob + '_' + x; }) : []).concat(e.extra ? [e.extra] : []);
+        return '<div class="sr-tl-i" data-testid="sr-grp-' + e.k + '"><span class="sr-tl-no">' + e.no + '</span><div class="sr-tl-b">' +
+          '<div class="sr-tl-h"><b><i class="fa-solid ' + e.icon + '"></i> ' + esc(e.title) + '</b><small>' + esc(e.sub) + '</small>' + doneOf(keys) +
+            (S.canEdit ? '<button type="button" class="sr-btn sm sr-now" data-now="' + e.k + '" data-testid="sr-now-' + e.k + '"><i class="fa-regular fa-clock"></i> Now</button>' : '') + '</div>' +
+          '<div class="sr-tl-g">' + inputHtml(e.d, { req: true, label: 'Date' }) + inputHtml(e.t, { req: true, label: 'Time (LT)' }) +
+            (e.extra ? inputHtml(e.extra, req) : '') + '</div>' +
+          (e.rob ? '<div class="sr-tl-rob"><span class="sr-tl-rl">' + esc(e.robT) + ' <small>MT</small></span>' +
+            (g.length ? '<div class="sr-tl-g">' + g.map(function (x) {
+              var gr = S.cfg.grades.filter(function (y) { return y.key === x; })[0];
+              return inputHtml('brob_' + e.rob + '_' + x, { req: true, label: gr ? gr.short : x.toUpperCase() });
+            }).join('') + '</div>' : '<p class="sr-muted">Choose the fuel grades above first.</p>') + '</div>' : '') +
+          '</div></div>';
+      }).join('') + '</section>';
+    return '<section class="sr-card sr-s2g" data-testid="sr-grades" data-fw="grades"><h3><i class="fa-solid fa-gas-pump"></i> Fuel grades on board <b class="sr-req">*</b>' +
+      '<small>' + (g.length ? g.length + ' selected' : 'tap the grades the vessel has') + '</small></h3>' +
       '<div class="sr-chips">' + S.cfg.grades.map(function (x) {
         var on = g.indexOf(x.key) >= 0;
-        return '<label class="sr-chip' + (on ? ' on' : '') + '" data-testid="sr-grade-' + x.key + '"><input type="checkbox" data-grade="' + x.key + '"' + (on ? ' checked' : '') + (S.canEdit ? '' : ' disabled') + '><b>' + esc(x.short) + '</b><small>' + esc(x.name) + '</small></label>';
+        return '<label class="sr-chip' + (on ? ' on' : '') + '" data-testid="sr-grade-' + x.key + '"><input type="checkbox" data-grade="' + x.key + '"' + (on ? ' checked' : '') + (S.canEdit ? '' : ' disabled') + '><i class="fa-solid fa-check sr-chip-tick" aria-hidden="true"></i><b>' + esc(x.short) + '</b><small>' + esc(x.name) + '</small></label>';
       }).join('') + '</div><em data-err="grades"></em></section>' +
-      card('A. Engine Particulars (FWE)', 'fa-gears', inputHtml('fwe_date', req) + inputHtml('fwe_time', req) + robs('fwe'), 'fwe') +
-      card('B. Survey Start', 'fa-play', inputHtml('started_date', req) + inputHtml('started_time', req) + robs('started'), 'started') +
-      card('C. Survey Completion', 'fa-flag-checkered', inputHtml('completed_date', req) + inputHtml('completed_time', req) + inputHtml('surveyor_name', req), 'completed') +
-      card('D. Ship Staff', 'fa-user-tie', inputHtml('chief_engineer', req) + inputHtml('master', req), 'staff') +
-      card('E. Survey Location', 'fa-location-dot', inputHtml('port_name', req) + inputHtml('place', req), 'location') +
+      timeline +
+      '<div class="sr-s2-cols">' +
+      card('D. Ship Staff', 'fa-user-tie', inputHtml('chief_engineer', req) + inputHtml('master', req), 'staff', ['chief_engineer', 'master']) +
+      card('E. Survey Location', 'fa-location-dot', inputHtml('port_name', req) + inputHtml('place', req), 'location', ['port_name', 'place']) +
+      '</div>' +
       card('F. Draft Particulars', 'fa-ruler-vertical', inputHtml('draft_fwd', req) + inputHtml('draft_aft', req) +
         '<label class="sr-f calc"><span>Mean Draft (m)</span><output data-testid="sr-mean">' + mean + '</output></label>' +
-        '<label class="sr-f calc"><span>Trim (m) <small>Aft − Fwd</small></span><output data-testid="sr-trim">' + trim + '</output></label>' + inputHtml('list'), 'drafts') +
-      card('Other details', 'fa-file-lines', inputHtml('voyage_no') + inputHtml('charterers'), 'other');
+        '<label class="sr-f calc"><span>Trim (m) <small>Aft − Fwd</small></span><output data-testid="sr-trim">' + trim + '</output></label>' + inputHtml('list'), 'drafts', ['draft_fwd', 'draft_aft']) +
+      card('Other details <small>optional</small>', 'fa-file-lines', inputHtml('voyage_no') + inputHtml('charterers'), 'other');
   }
   // tank steps
   /** Readings as the surveyors write them, however typed: sounding 0.000, density 0.0000, temperature 00.0. */
@@ -429,7 +462,7 @@
     lsmgo: ['MDO NO.1 P', 'MDO NO.1 S', 'MDO NO.2 P', 'MDO NO.2 S', ['SERV 1', G_GAUGE], ['SERV 2', G_GAUGE]]
   };
   function guestDefaults() {
-    if (!P.guest || !S.canEdit) return;
+    if (!(P.guest || P.std) || !S.canEdit) return;
     S.defDone = S.defDone || {};
     var added = false;
     chosen().forEach(function (g) {
@@ -496,7 +529,7 @@
       '<td class="xd">' + (S.canEdit ? '<button type="button" data-del="' + key + '"' + (real ? '' : ' data-spare') + ' title="Delete row" aria-label="Delete row" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-regular fa-trash-can"></i></button>' : '') + '</td></tr>';
   }
   /** Link page on a phone: each tank a card that opens and closes (readings in labelled boxes, MT in its header). */
-  function cardMode() { return !!P.guest && !S.wide; }
+  function cardMode() { return !!(P.guest || P.std) && !S.wide; }
   var TC_FIELDS = [['ref_height', 'Ref. Height (m)', 'fa-ruler', 0], ['sounding', 'Sounding (m)', 'fa-water', 0], ['volume', 'Volume (m³)', 'fa-cubes', 1],
     ['density', 'Density @15°C', 'fa-flask', 1], ['temp', 'Temperature (°C)', 'fa-temperature-half', 1]];
   function tcOpen(g, r, i) {
@@ -753,6 +786,13 @@
     }
     if (t.closest('[data-back]')) { go(steps()[Math.max(0, stepIndex(S.data.step) - 1)].id); return; }
     if (t.closest('[data-lookup]')) { lookup(); return; }
+    var nowB = t.closest('[data-now]');
+    if (nowB && S.canEdit) {
+      var e = nowB.getAttribute('data-now'), d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; };
+      setVal(e === 'fwe' ? 'fwe_date' : e + '_date', d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()));
+      setVal(e === 'fwe' ? 'fwe_time' : e + '_time', z(d.getHours()) + ':' + z(d.getMinutes()));
+      changed(); render(); return;
+    }
     if (t.closest('[data-prev]')) { fillPrevious(); return; }
     if (t.closest('[data-share]')) { shareCard(); return; }
     if (t.closest('[data-undo]')) { undoLookup(); return; }
@@ -800,7 +840,9 @@
       var k = el.getAttribute('data-f'); setVal(k, el.value);
       if (S.ai[k]) { delete S.ai[k]; el.classList.remove('ai'); el.title = ''; }
       delete S.errors['f:' + k];
-      changed(); refreshLight(); return;
+      changed(); refreshLight();
+      if (k === 'imo') autoLookup(el.value);
+      return;
     }
     if (el.matches('[data-q]')) { S.q = el.value; render(); var qi = $('[data-q]'); if (qi) { qi.focus(); qi.setSelectionRange(qi.value.length, qi.value.length); } return; }
     if (el.matches('[data-t]')) {
@@ -1147,13 +1189,23 @@
   });
 
   // ---------- vessel lookup by IMO (AI + web search on the server) ----------
+  // A whole, valid IMO starts the lookup by itself (no button needed); each IMO once.
+  function autoLookup(v) {
+    clearTimeout(S.autoT);
+    v = String(v || '').replace(/\D/g, '');
+    if (!S.canEdit || v.length !== 7 || S.autoImo === v || typeError(FIELD('imo'), v) || !online()) return;
+    S.autoT = setTimeout(function () { if (val('imo') === v && !S.looking) { S.autoImo = v; lookup(); } }, 400);
+  }
   function lookup() {
+    if (S.looking) return;
     var imo = val('imo');
     var e = typeError(FIELD('imo'), imo);
     if (imo === '' || e) { S.showErr.vessel = true; showErrors(); toast('error', e || 'Enter the 7-digit IMO number first.'); var i = $('[data-f=imo]'); if (i) i.focus(); return; }
-    var btn = $('[data-lookup]'); btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Looking up…';
-    S.lookupMsg = '';
+    var btn = $('[data-lookup]'); if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Looking up…'; }
+    S.lookupMsg = ''; S.looking = true; S.autoImo = imo;
+    var info = $('[data-lookup-info]'); if (info) info.innerHTML = lookupInfoHtml();
     post({ a: 'lookup', id: P.id, imo: imo }).then(function (res) {
+      S.looking = false; res = res || { ok: false };
       S.manual = true;
       if (!res.ok) { S.lookupMsg = res.error || 'Nothing found for this IMO.'; S.lookup = null; render(); return; }
       var prev = {};
@@ -1163,7 +1215,7 @@
         if (old === res.fields[k]) return;
         prev[k] = old; setVal(k, res.fields[k]); S.ai[k] = true;
       });
-      S.lookup = { imo: res.imo, prev: prev, sources: res.sources || [] };
+      S.lookup = { imo: res.imo, prev: prev, sources: res.sources || [], from: res.from || 'web', at: res.at || '' };
       if (Object.keys(prev).length) changed();
       render();
     });

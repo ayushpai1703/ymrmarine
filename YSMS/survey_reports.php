@@ -3,8 +3,8 @@
  * Survey Reports (menu: Admin, Surveyor) — the bunker survey reports entered on the website and filled
  * into the company's Excel report (Admin uploads it under Report Templates).
  * Start Survey: find the pending vessel → its Start / Resume card (includes/survey_report_card.php,
- * ?survey_id=…, with the Admin's tank history); or a report without a vessel (survey_report.php).
- * The list below; each report opens in survey_report.php. Data: ajax/survey_reports.php.
+ * ?survey_id=…, with the Admin's tank history); or a report without a vessel (survey_report_public.php).
+ * The list below; each report opens in survey_report_public.php. Data: ajax/survey_reports.php.
  */
 require_once 'config/config.php';
 require_once 'includes/survey_reports.php';
@@ -35,7 +35,7 @@ include 'includes/header.php';
         <h3><i class="fa-solid fa-play"></i> Start Survey</h3>
         <div class="srs-row">
             <div class="srs-q"><i class="fa-solid fa-magnifying-glass"></i><input type="search" data-srs-q placeholder="Vessel name or report no." autocomplete="off" data-testid="srs-q"></div>
-            <a class="sr-btn" href="survey_report.php" data-testid="srs-new"><i class="fa-solid fa-file-circle-plus"></i> Report without a vessel</a>
+            <a class="sr-btn" href="survey_report_public.php" data-testid="srs-new"><i class="fa-solid fa-file-circle-plus"></i> Report without a vessel</a>
         </div>
         <div class="srs-res" data-srs-res data-testid="srs-results"></div>
     </div>
@@ -79,7 +79,7 @@ include 'includes/header.php';
           '<td>' + esc(String(r.updated_at).slice(0, 16)) + '<br><small class="sr-muted">' + esc(r.updated_by_name || '') + '</small></td>' +
           '<td>' + (+r.files ? dl + '<br><small class="sr-muted">' + r.files + ' file' + (+r.files === 1 ? '' : 's') + ', latest ' + esc(String(r.last_file).slice(0, 16)) + '</small>' : '<span class="sr-muted">none yet</span>') + '</td>' +
           (admin ? '<td data-testid="sr-list-changes-' + r.id + '">' + (+r.tank_changes ? '<b style="color:#b45309">' + r.tank_changes + '</b> change' + (+r.tank_changes === 1 ? '' : 's') : '<span class="sr-muted">0</span>') + '</td>' : '') +
-          '<td><a class="sr-btn" href="survey_report.php?id=' + r.id + '" data-testid="sr-open-' + r.id + '"><i class="fa-solid fa-pen-to-square"></i> Open</a></td></tr>';
+          '<td><a class="sr-btn" href="survey_report_public.php?id=' + r.id + '" data-testid="sr-open-' + r.id + '"><i class="fa-solid fa-pen-to-square"></i> Open</a></td></tr>';
       }).join('') + '</tbody></table></div>' : '<div class="sr-empty"><i class="fa-solid fa-file-circle-plus"></i><div>No survey reports yet.</div></div>';
   });
 })();

@@ -81,7 +81,7 @@ $srcWhen = fn($v) => $v ? date('d M Y, H:i', strtotime((string)$v)) : '';
             <?php endif; ?>
         </div>
         <?php if ($srcReport): ?>
-            <a class="src-btn" href="survey_report.php?id=<?= (int)$srcReport['id'] ?>" data-testid="src-resume"><i class="fa-solid fa-<?= srCanEdit($srcSurvey, $srcReport) ? 'play' : 'eye' ?>"></i> <?= srCanEdit($srcSurvey, $srcReport) ? 'Resume Survey' : 'Open report' ?></a>
+            <a class="src-btn" href="survey_report_public.php?id=<?= (int)$srcReport['id'] ?>" data-testid="src-resume"><i class="fa-solid fa-<?= srCanEdit($srcSurvey, $srcReport) ? 'play' : 'eye' ?>"></i> <?= srCanEdit($srcSurvey, $srcReport) ? 'Resume Survey' : 'Open report' ?></a>
         <?php else: ?>
             <button type="button" class="src-btn" id="srStart" data-testid="src-start" <?= $srcPre ? '' : 'disabled' ?>><i class="fa-solid fa-play"></i> Start Survey</button>
         <?php endif; ?>
@@ -123,7 +123,7 @@ $srcWhen = fn($v) => $v ? date('d M Y, H:i', strtotime((string)$v)) : '';
       start.disabled = true; err.hidden = true;
       var f = new FormData(); f.append('a', 'start'); f.append('survey_id', SID); f.append('kind', k.value); f.append('csrf_token', CSRF);
       fetch(API, { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-CSRF-Token': CSRF } }).then(function (r) { return r.json(); }).then(function (res) {
-        if (res.ok) { location.href = 'survey_report.php?id=' + res.id; return; }
+        if (res.ok) { location.href = 'survey_report_public.php?id=' + res.id; return; }
         err.textContent = res.error || 'Could not start the survey.'; err.hidden = false; start.disabled = false;
       }).catch(function () { err.textContent = 'Network error — please try again.'; err.hidden = false; start.disabled = false; });
     });

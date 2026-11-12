@@ -1,7 +1,7 @@
 <?php
 /**
  * Live Survey Reports — Admin only. The reports filled on the survey report link (survey_report_public.php):
- *  - three counts: Surveys in live (< 4 h since start), Might be completed (4–24 h), Completed (24 h +)
+ *  - three counts: Survey in progress (< 1 h since start), Might be completed (1–3 h), Completed (3 h +)
  *  - pick a vessel → its tank tables as they are now, every changed reading highlighted (all its versions on hover),
  *    then the totals: version 1 (the first readings of every tank) and after each later change — total MT,
  *    the log book ROB and the difference
@@ -20,74 +20,107 @@ $page_title = 'Live Survey Reports';
 include 'includes/header.php';
 ?>
 <style>
-.lv { padding: 14px 18px 120px; max-width: 1500px; font-family: 'Lexend', system-ui, sans-serif; }
-.lv h1 { font-size: 22px; font-weight: 800; margin: 0 0 4px; color: #0f172a; }
-.lv-sub { font-size: 13px; color: #64748b; margin-bottom: 14px; }
-.lv-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
-.lv-tile { border: 0; text-align: left; border-radius: 16px; padding: 14px 16px; color: #fff; cursor: pointer; box-shadow: 0 6px 18px rgba(15,23,42,.12); position: relative; overflow: hidden; }
-.lv-tile b { display: block; font-size: 30px; line-height: 1.1; }
-.lv-tile span { font-size: 13.5px; font-weight: 600; opacity: .95; }
-.lv-tile i { position: absolute; right: 14px; top: 14px; font-size: 26px; opacity: .35; }
-.lv-tile.p { background: linear-gradient(135deg, #0284c7, #0ea5e9); }
-.lv-tile.c { background: linear-gradient(135deg, #d97706, #f59e0b); }
-.lv-tile.d { background: linear-gradient(135deg, #15803d, #22c55e); }
-.lv-tile.on { outline: 3px solid #0f172a; outline-offset: 2px; }
-.lv-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 14px; align-items: start; }
-.lv-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; }
-.lv-list { max-height: calc(100vh - 220px); overflow: auto; }
-.lv-item { display: block; width: 100%; border: 0; border-top: 1px solid #eef2f7; background: #fff; text-align: left; padding: 10px 12px; cursor: pointer; }
+.lv { padding: 16px 20px 120px; max-width: 1560px; margin: 0 auto; font-family: 'Lexend', system-ui, sans-serif; color: #0f172a; }
+.lv-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+.lv-top .ic { width: 46px; height: 46px; border-radius: 14px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; display: grid; place-items: center; font-size: 20px; box-shadow: 0 6px 16px rgba(22,163,74,.25); }
+.lv-top h1 { font-size: 22px; font-weight: 800; margin: 0; }
+.lv-top p { margin: 2px 0 0; font-size: 12.5px; color: #64748b; }
+.lv-top .sp { flex: 1; }
+.lv-upd { font-size: 12px; color: #64748b; display: inline-flex; align-items: center; gap: 8px; }
+.lv-upd .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 4px rgba(34,197,94,.18); }
+.lv-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+.lv-tile { display: flex; align-items: center; gap: 14px; border: 1.5px solid #e6edf7; text-align: left; border-radius: 16px; padding: 16px 18px; background: #fff; cursor: pointer; box-shadow: 0 2px 10px rgba(15,23,42,.04); transition: border-color .15s, box-shadow .15s, transform .15s; font: inherit; color: inherit; }
+.lv-tile:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(15,23,42,.08); }
+.lv-tile i { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 20px; flex: none; }
+.lv-tile b { display: block; font-size: 28px; line-height: 1; font-weight: 800; }
+.lv-tile span { display: block; font-size: 13.5px; font-weight: 700; margin-top: 4px; }
+.lv-tile small { display: block; font-size: 11.5px; color: #94a3b8; font-weight: 600; }
+.lv-tile.p i { background: #e0f2fe; color: #0369a1; } .lv-tile.c i { background: #fef3c7; color: #b45309; } .lv-tile.d i { background: #dcfce7; color: #15803d; }
+.lv-tile.p.on { border-color: #0ea5e9; background: #f0f9ff; } .lv-tile.c.on { border-color: #f59e0b; background: #fffbeb; } .lv-tile.d.on { border-color: #22c55e; background: #f0fdf4; }
+.lv-grid { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px; align-items: start; }
+.lv-card { background: #fff; border: 1px solid #e6edf7; border-radius: 16px; box-shadow: 0 2px 10px rgba(15,23,42,.04); }
+.lv-side { position: sticky; top: 76px; overflow: hidden; }
+.lv-search { padding: 12px; border-bottom: 1px solid #eef2f7; position: relative; }
+.lv-search input { width: 100%; height: 40px; border: 1px solid #dbe5f2; border-radius: 10px; padding: 0 12px 0 36px; font: inherit; font-size: 13.5px; background: #f8fafc; }
+.lv-search input:focus { outline: 0; border-color: #0b63e5; background: #fff; box-shadow: 0 0 0 3px rgba(11,99,229,.12); }
+.lv-search i { position: absolute; left: 25px; top: 25px; color: #94a3b8; font-size: 13px; }
+.lv-list { max-height: calc(100vh - 290px); overflow: auto; }
+.lv-item { display: flex; gap: 10px; width: 100%; border: 0; border-top: 1px solid #f1f5f9; background: #fff; text-align: left; padding: 12px 14px; cursor: pointer; font: inherit; color: inherit; }
 .lv-item:first-child { border-top: 0; }
 .lv-item:hover { background: #f8fbff; } .lv-item.on { background: #eef5ff; box-shadow: inset 3px 0 0 #0b63e5; }
-.lv-item b { font-size: 14px; color: #0f172a; } .lv-item small { display: block; color: #64748b; font-size: 12px; }
-.lv-item .lsr-pill { margin-top: 6px; font-size: 11px; }
-.lv-empty { padding: 30px 16px; text-align: center; color: #94a3b8; }
-.lv-sec { padding: 14px 16px; border-top: 1px solid #eef2f7; }
-.lv-sec:first-child { border-top: 0; }
-.lv-sec h3 { font-size: 15px; font-weight: 800; margin: 0 0 10px; color: #0f2b5b; display: flex; align-items: center; gap: 8px; }
-.lv-head { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
-.lv-head .v { font-size: 20px; font-weight: 800; color: #0f172a; }
-.lv-head .m { font-size: 13px; color: #475569; }
-.lv-btn { height: 34px; border: 1px solid #cbd5e1; background: #fff; border-radius: 8px; padding: 0 12px; font-weight: 700; font-size: 13px; color: #0f172a; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.lv-item .sd { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex: none; }
+.lv-item .sd.progress { background: #0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.15); } .lv-item .sd.check { background: #f59e0b; } .lv-item .sd.done { background: #22c55e; }
+.lv-item .bd { min-width: 0; flex: 1; }
+.lv-item b { font-size: 14px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-item small { display: block; color: #64748b; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-item .lsr-pill { margin-top: 6px; font-size: 11px; padding: 3px 9px; }
+.lv-empty { padding: 34px 16px; text-align: center; color: #94a3b8; font-size: 13.5px; }
+.lv-empty i { display: block; font-size: 26px; margin-bottom: 8px; color: #cbd5e1; }
+.lv-detail { display: grid; gap: 14px; min-width: 0; }
+.lv-sec { background: #fff; border: 1px solid #e6edf7; border-radius: 16px; box-shadow: 0 2px 10px rgba(15,23,42,.04); padding: 16px 18px; min-width: 0; }
+.lv-sec h3 { font-size: 15px; font-weight: 800; margin: 0 0 12px; color: #0f2b5b; display: flex; align-items: center; gap: 8px; }
+.lv-sec h3 i { color: #0b63e5; }
+.lv-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.lv-hero .v { font-size: 21px; font-weight: 800; }
+.lv-hero .sp { flex: 1; }
+.lv-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 14px; }
+.lv-facts div { background: #f8fafc; border: 1px solid #eef2f7; border-radius: 12px; padding: 9px 12px; }
+.lv-facts span { display: block; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
+.lv-facts b { display: block; font-size: 13.5px; margin-top: 2px; overflow-wrap: anywhere; }
+.lv-btn { height: 36px; border: 1px solid #cbd5e1; background: #fff; border-radius: 10px; padding: 0 13px; font-weight: 700; font-size: 13px; color: #0f172a; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; text-decoration: none; font-family: inherit; }
 .lv-btn:hover { border-color: #0b63e5; color: #0b63e5; }
-.lv-btn.danger { border-color: #fecaca; color: #b91c1c; } .lv-btn.ok { border-color: #bbf7d0; color: #166534; }
+.lv-btn.pri { background: #0b63e5; border-color: #0b63e5; color: #fff; } .lv-btn.pri:hover { background: #0a56c7; color: #fff; }
+.lv-btn.danger { border-color: #fecaca; color: #b91c1c; } .lv-btn.danger:hover { background: #fef2f2; }
+.lv-btn.ok { border-color: #bbf7d0; color: #166534; } .lv-btn.ok:hover { background: #f0fdf4; }
 .lv-lock { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13.5px; }
-.lv-lock .st { font-weight: 700; } .lv-lock .st.l { color: #b91c1c; } .lv-lock .st.s { color: #92400e; } .lv-lock .st.o { color: #166534; }
-.lv-tw { overflow-x: auto; }
+.lv-lock .st { font-weight: 700; padding: 6px 12px; border-radius: 10px; } .lv-lock .st.l { color: #b91c1c; background: #fef2f2; } .lv-lock .st.s { color: #92400e; background: #fffbeb; } .lv-lock .st.o { color: #166534; background: #f0fdf4; }
+.lv-tw { overflow-x: auto; border: 1px solid #eef2f7; border-radius: 12px; }
 .lv-t { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; min-width: 720px; }
-.lv-t th { background: #e8f1fc; color: #0f2b5b; font-weight: 700; font-size: 12.5px; padding: 7px 8px; text-align: center; border-bottom: 1px solid #d6e3f3; white-space: nowrap; }
-.lv-t th.mt { background: #dcfce7; }
-.lv-t td { padding: 6px 8px; border-bottom: 1px solid #eef2f7; text-align: center; white-space: nowrap; }
+.lv-t th { background: #f1f6fd; color: #0f2b5b; font-weight: 700; font-size: 12px; padding: 9px 10px; text-align: center; border-bottom: 1px solid #e2eaf5; white-space: nowrap; }
+.lv-t th.mt { background: #e9f9ef; }
+.lv-t td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; text-align: center; white-space: nowrap; }
+.lv-t tbody tr:last-child td { border-bottom: 0; }
+.lv-t tbody tr:hover td { background: #fafcff; }
 .lv-t td.n { text-align: left; font-weight: 700; }
 .lv-t td.mt { font-weight: 800; text-align: right; }
-.lv-t td.chg { background: #fef3c7; font-weight: 800; color: #92400e; cursor: help; position: relative; }
+.lv-t td.chg { background: #fef3c7 !important; font-weight: 800; color: #92400e; cursor: help; position: relative; }
 .lv-t td.chg::after { content: attr(data-v); position: absolute; top: 1px; right: 3px; font-size: 9.5px; color: #b45309; font-weight: 800; }
 .lv-t tr.gone td { color: #94a3b8; text-decoration: line-through; }
 .lv-t tr.open td { color: #94a3b8; }
 .lv-ver { font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 8px; background: #f1f5f9; color: #334155; }
 .lv-ver.c { background: #fef3c7; color: #92400e; }
-.lv-gt { font-size: 13px; color: #334155; margin: 6px 0 14px; }
+.lv-gt { display: inline-flex; gap: 6px; font-size: 13px; color: #334155; margin-top: 10px; background: #f8fafc; border-radius: 10px; padding: 6px 12px; }
 .lv-d td.dif.neg { color: #b91c1c; font-weight: 800; } .lv-d td.dif.pos { color: #166534; font-weight: 800; }
 .lv-d tr.v1 td { background: #f0f9ff; font-weight: 700; }
 .lv-d td.what { text-align: left; white-space: normal; min-width: 220px; font-size: 12.5px; }
 .lv-d td.up { background: #fef3c7; }
-.lv-note { font-size: 12px; color: #64748b; margin-top: 6px; }
+.lv-note { font-size: 12px; color: #64748b; margin-top: 8px; }
 .lv-f td.dl { text-align: left; white-space: normal; font-size: 12px; color: #475569; }
-@media (max-width: 991.98px) { .lv-grid { grid-template-columns: 1fr; } .lv-list { max-height: 360px; } .lv-tiles { gap: 8px; } .lv-tile b { font-size: 24px; } .lv-tile span { font-size: 12px; } }
+@media (max-width: 991.98px) { .lv { padding: 12px 12px 120px; } .lv-grid { grid-template-columns: 1fr; } .lv-side { position: static; } .lv-list { max-height: 340px; }
+  .lv-tiles { gap: 8px; } .lv-tile { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; } .lv-tile i { width: 38px; height: 38px; font-size: 16px; } .lv-tile b { font-size: 22px; } .lv-tile span { font-size: 12px; } .lv-tile small { display: none; } }
 </style>
 <?= lsrCss() ?>
 <div class="scroll-content" data-testid="live-survey-reports-page">
 <?php $back_url = 'index.php'; $page_testid = 'live-survey-reports'; include 'includes/top_app_bar.php'; ?>
 <div class="lv">
-    <h1><i class="fa-solid fa-tower-broadcast text-success me-2"></i>Live Survey Reports</h1>
-    <div class="lv-sub">Reports filled on the survey report link. From the time a report was started: under 4 h <b>in live</b>, 4–24 h <b>might be completed</b>, after 24 h <b>completed</b>. Refreshes every minute.</div>
+    <div class="lv-top">
+        <span class="ic"><i class="fa-solid fa-tower-broadcast"></i></span>
+        <div><h1>Live Survey Reports</h1><p>Surveys filled on the survey report page, by the time since they were started.</p></div>
+        <span class="sp"></span>
+        <span class="lv-upd"><span class="dot"></span><span data-upd>Updating…</span></span>
+        <button type="button" class="lv-btn" data-reload data-testid="lv-reload"><i class="fa-solid fa-rotate"></i> Refresh</button>
+    </div>
     <div class="lv-tiles" data-testid="lv-tiles">
-        <button type="button" class="lv-tile p" data-f="progress" data-testid="lv-tile-progress"><i class="fa-solid fa-tower-broadcast"></i><b data-c="progress">–</b><span>Surveys in Live</span></button>
-        <button type="button" class="lv-tile c" data-f="check" data-testid="lv-tile-check"><i class="fa-solid fa-bell"></i><b data-c="check">–</b><span>Might be Completed</span></button>
-        <button type="button" class="lv-tile d" data-f="done" data-testid="lv-tile-done"><i class="fa-solid fa-circle-check"></i><b data-c="done">–</b><span>Completed</span></button>
+        <button type="button" class="lv-tile p" data-f="progress" data-testid="lv-tile-progress"><i class="fa-solid fa-tower-broadcast"></i><span><b data-c="progress">–</b><span>Survey in progress</span><small>Started less than 1 hour ago</small></span></button>
+        <button type="button" class="lv-tile c" data-f="check" data-testid="lv-tile-check"><i class="fa-solid fa-bell"></i><span><b data-c="check">–</b><span>Might be completed</span><small>1 to 3 hours — check now</small></span></button>
+        <button type="button" class="lv-tile d" data-f="done" data-testid="lv-tile-done"><i class="fa-solid fa-circle-check"></i><span><b data-c="done">–</b><span>Completed</span><small>More than 3 hours</small></span></button>
     </div>
     <div class="lv-grid">
-        <div class="lv-card lv-list" data-list data-testid="lv-list"><div class="lv-empty">Loading…</div></div>
-        <div class="lv-card" data-detail data-testid="lv-detail"><div class="lv-empty">Choose a vessel on the left.</div></div>
+        <div class="lv-card lv-side">
+            <div class="lv-search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" data-q placeholder="Search vessel, IMO or surveyor" aria-label="Search" data-testid="lv-search"></div>
+            <div class="lv-list" data-list data-testid="lv-list"><div class="lv-empty">Loading…</div></div>
+        </div>
+        <div class="lv-detail" data-detail data-testid="lv-detail"><div class="lv-sec lv-empty"><i class="fa-solid fa-ship"></i>Choose a vessel on the left.</div></div>
     </div>
 </div>
 </div>
@@ -96,7 +129,8 @@ include 'includes/header.php';
 (function () {
   'use strict';
   var API = 'ajax/live_survey_reports.php', CSRF = <?= json_encode(csrf_token()) ?>;
-  var S = { rows: [], filter: '', sel: +(new URLSearchParams(location.search).get('id') || 0), det: null };
+  var Q = new URLSearchParams(location.search);
+  var S = { rows: [], q: '', filter: ['progress', 'check', 'done'].indexOf(Q.get('f')) >= 0 ? Q.get('f') : '', sel: +(new URLSearchParams(location.search).get('id') || 0), det: null };
   var $ = function (s, r) { return (r || document).querySelector(s); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function num(v) { var t = String(v == null ? '' : v).replace(/,/g, '').trim(); return t !== '' && !isNaN(t) ? parseFloat(t) : null; }
@@ -111,6 +145,7 @@ include 'includes/header.php';
     return fetch(API + '?a=list', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j.ok) throw new Error(j.error);
       S.rows = j.rows;
+      $('[data-upd]').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
       Object.keys(j.count).forEach(function (k) { $('[data-c="' + k + '"]').textContent = j.count[k]; });
       list();
       if (!S.sel && S.rows.length) S.sel = S.rows[0].id;
@@ -119,17 +154,18 @@ include 'includes/header.php';
   }
   function list() {
     document.querySelectorAll('.lv-tile').forEach(function (t) { t.classList.toggle('on', t.getAttribute('data-f') === S.filter); });
-    var rows = S.rows.filter(function (r) { return !S.filter || r.status.key === S.filter; });
+    var q = S.q.trim().toLowerCase();
+    var rows = S.rows.filter(function (r) { return (!S.filter || r.status.key === S.filter) && (!q || [r.vessel, r.imo, r.surveyor].join(' ').toLowerCase().indexOf(q) >= 0); });
     $('[data-list]').innerHTML = rows.length ? rows.map(function (r) {
-      return '<button type="button" class="lv-item' + (r.id === S.sel ? ' on' : '') + '" data-id="' + r.id + '" data-testid="lv-item-' + r.id + '"><b>' + esc(r.vessel || 'Vessel not entered yet') + '</b>' +
-        '<small>IMO ' + esc(r.imo || '—') + ' · ' + esc(r.surveyor || 'Surveyor not entered') + '</small><small>' + esc(r.kind) + ' · ' + esc(r.ago) + (r.tank_changes ? ' · <b style="color:#b45309">' + r.tank_changes + ' change' + (r.tank_changes === 1 ? '' : 's') + '</b>' : '') + '</small>' + pill(r.status) + '</button>';
-    }).join('') : '<div class="lv-empty">No reports here.</div>';
+      return '<button type="button" class="lv-item' + (r.id === S.sel ? ' on' : '') + '" data-id="' + r.id + '" data-testid="lv-item-' + r.id + '"><span class="sd ' + r.status.key + '"></span><span class="bd"><b>' + esc(r.vessel || 'Vessel not entered yet') + '</b>' +
+        '<small>IMO ' + esc(r.imo || '—') + ' · ' + esc(r.surveyor || 'Surveyor not entered') + '</small><small>' + esc(r.kind) + ' · started ' + esc(r.ago) + (r.tank_changes ? ' · <b style="display:inline;font-size:12px;color:#b45309">' + r.tank_changes + ' change' + (r.tank_changes === 1 ? '' : 's') + '</b>' : '') + '</small>' + pill(r.status) + '</span></button>';
+    }).join('') : '<div class="lv-empty"><i class="fa-regular fa-folder-open"></i>' + (q || S.filter ? 'No survey matches.' : 'No survey reports yet.') + '</div>';
   }
 
   // ---------- one report
   function detail(id) {
     return fetch(API + '?a=detail&id=' + id, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
-      if (!j.ok) { $('[data-detail]').innerHTML = '<div class="lv-empty">' + esc(j.error) + '</div>'; return; }
+      if (!j.ok) { $('[data-detail]').innerHTML = '<div class="lv-sec lv-empty">' + esc(j.error) + '</div>'; return; }
       S.det = j; render();
     });
   }
@@ -142,12 +178,13 @@ include 'includes/header.php';
   function render() {
     var d = S.det, r = d.report, calc = d.calc;
     var hist = {}; (d.history || []).forEach(function (t) { hist[t.tank_id] = t; });
-    var h = '<div class="lv-sec"><div class="lv-head"><span class="v" data-testid="lv-vessel">' + esc(r.vessel || 'Vessel not entered yet') + '</span>' + pill(r.status) +
-      '<span class="m">IMO <b>' + esc(r.imo || '—') + '</b></span><span class="m">Surveyor <b>' + esc(r.surveyor || '—') + '</b>' + (r.signed_in_as ? ' (signed in: ' + esc(r.signed_in_as) + ')' : ' (no sign-in)') + '</span>' +
-      '<span class="m">' + esc(r.kind) + ' · started ' + esc(when(r.started_at)) + ' (' + esc(r.ago) + ') · last saved ' + esc(when(r.updated_at)) + '</span>' +
-      '<a class="lv-btn" href="survey_report.php?id=' + r.id + '" data-testid="lv-open"><i class="fa-solid fa-up-right-from-square"></i> Open report</a></div></div>';
+    var fact = function (k, v) { return '<div><span>' + k + '</span><b>' + v + '</b></div>'; };
+    var h = '<div class="lv-sec"><div class="lv-hero"><span class="v" data-testid="lv-vessel">' + esc(r.vessel || 'Vessel not entered yet') + '</span>' + pill(r.status) + '<span class="sp"></span>' +
+      '<a class="lv-btn pri" href="survey_report_public.php?id=' + r.id + '" data-testid="lv-open"><i class="fa-solid fa-up-right-from-square"></i> Open report</a></div>' +
+      '<div class="lv-facts">' + fact('IMO', esc(r.imo || '—')) + fact('Surveyor', esc(r.surveyor || '—') + '<small class="lv-note" style="display:block;margin:0">' + (r.signed_in_as ? 'signed in: ' + esc(r.signed_in_as) : 'no sign-in') + '</small>') +
+        fact('Report', esc(r.kind)) + fact('Started', esc(when(r.started_at)) + '<small class="lv-note" style="display:block;margin:0">' + esc(r.ago) + '</small>') + fact('Last saved', esc(when(r.updated_at))) + '</div></div>';
     h += lockHtml(d.lock);
-    if (!d.grades.length) h += '<div class="lv-sec"><span class="lv-note">No fuel grades chosen yet.</span></div>';
+    if (!d.grades.length) h += '<div class="lv-sec lv-empty"><i class="fa-solid fa-gas-pump"></i>No fuel grades chosen yet.</div>';
     d.grades.forEach(function (g) { h += gradeHtml(g, hist, calc); });
     h += diffHtml(d, calc);
     h += filesHtml(d.files || []);
@@ -238,6 +275,7 @@ include 'includes/header.php';
   // ---------- events
   document.addEventListener('click', function (e) {
     var b;
+    if (e.target.closest('[data-reload]')) { load(); return; }
     if ((b = e.target.closest('.lv-tile'))) { var f = b.getAttribute('data-f'); S.filter = S.filter === f ? '' : f; list(); return; }
     if ((b = e.target.closest('.lv-item'))) { S.sel = +b.getAttribute('data-id'); history.replaceState(null, '', '?id=' + S.sel); list(); detail(S.sel); if (innerWidth < 992) $('[data-detail]').scrollIntoView({ behavior: 'smooth' }); return; }
     if ((b = e.target.closest('[data-lock],[data-unlock]'))) {
@@ -250,6 +288,7 @@ include 'includes/header.php';
       }).catch(function () { b.disabled = false; alert('No connection.'); });
     }
   });
+  document.addEventListener('input', function (e) { if (e.target.matches('[data-q]')) { S.q = e.target.value; list(); } });
   load();
   setInterval(function () { if (!document.hidden) load(); }, 60000);
 })();

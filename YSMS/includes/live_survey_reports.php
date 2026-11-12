@@ -3,19 +3,19 @@
  * Live Survey Reports (Admin): the reports being filled on the page without sign-in
  * (survey_report_public.php), shown by the three values the surveyor types — Surveyor Name,
  * IMO number, Vessel Name — with a status from the time the report was started:
- *   under 4 hours   → Survey in live
- *   4 to 24 hours   → Might be completed — check now
- *   24 hours and on → Completed
+ *   under 1 hour    → Survey in progress
+ *   1 to 3 hours    → Might be completed — check now
+ *   3 hours and on  → Completed
  * Used by live_survey_reports.php and the Admin dashboard (index.php). Read-only.
  */
 require_once __DIR__ . '/survey_report_guest.php';
 
-const LSR_PROGRESS_HOURS = 4;
-const LSR_DONE_HOURS = 24;
+const LSR_PROGRESS_HOURS = 1;
+const LSR_DONE_HOURS = 3;
 
 function lsrStatus(int $startedTs, ?int $now = null): array {
     $h = (($now ?? time()) - $startedTs) / 3600;
-    if ($h < LSR_PROGRESS_HOURS) return ['key' => 'progress', 'label' => 'Survey in live', 'hours' => $h];
+    if ($h < LSR_PROGRESS_HOURS) return ['key' => 'progress', 'label' => 'Survey in progress', 'hours' => $h];
     if ($h < LSR_DONE_HOURS) return ['key' => 'check', 'label' => 'Might be completed — check now', 'hours' => $h];
     return ['key' => 'done', 'label' => 'Completed', 'hours' => $h];
 }
@@ -73,5 +73,11 @@ function lsrCss(): string {
 .lsr-row:hover{background:#f8fbff}.lsr-row b{font-weight:700}.lsr-row small{display:block;color:#64748b;font-size:11.5px}
 .lsr-empty{color:#94a3b8;font-style:italic;font-weight:500}
 @media (max-width:767.98px){.lsr-row{grid-template-columns:minmax(0,1fr) auto}.lsr-row .lsr-hide-sm{display:none}}
+.lsr-dash{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px}
+.lsr-dt{display:flex;align-items:center;gap:10px;border-radius:12px;padding:10px 12px;border:1px solid #eef2f7;text-decoration:none;color:#0f172a;background:#fbfdff}
+.lsr-dt i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none}
+.lsr-dt b{display:block;font-size:20px;line-height:1}.lsr-dt span{font-size:11.5px;color:#64748b;font-weight:600}
+.lsr-dt.p i{background:#e0f2fe;color:#0369a1}.lsr-dt.c i{background:#fef3c7;color:#b45309}.lsr-dt.d i{background:#dcfce7;color:#15803d}
+@media (max-width:575.98px){.lsr-dash{gap:6px;padding:10px}.lsr-dt{flex-direction:column;align-items:flex-start;gap:6px;padding:8px}.lsr-dt b{font-size:18px}}
 </style>';
 }
