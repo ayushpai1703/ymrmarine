@@ -93,7 +93,7 @@
     });
   }
   function start(res, fromCache) {
-    S.cfg = res.config; S.report = res.report; S.canEdit = res.can_edit; S.files = res.files || []; S.offlineMode = fromCache;
+    S.cfg = res.config; S.report = res.report; S.canEdit = res.can_edit; S.locked = !!res.locked; S.files = res.files || []; S.offlineMode = fromCache;
     S.version = res.report.version; S.data = normalise(res.report.data);
     var local = read(LS);
     if (local && local.dirty) {
@@ -295,7 +295,7 @@
   }
   function render() {
     var note = '';
-    if (!S.canEdit) note = '<div class="sr-note warn"><i class="fa-solid fa-lock"></i> View only.</div>';
+    if (!S.canEdit) note = S.locked ? '<div class="sr-note warn" data-testid="sr-locked"><i class="fa-solid fa-lock"></i> This report is locked by the Admin — read only. Ask the Admin for edit access.</div>' : '<div class="sr-note warn"><i class="fa-solid fa-lock"></i> View only.</div>';
     else if (S.offlineMode) note = '<div class="sr-note warn"><i class="fa-solid fa-plane"></i> Offline — saved on this device, sent when you are back online.</div>';
     $('[data-banners]').innerHTML = (S.signedOut ? signedOutHtml() : '') + note;
     S.wide = window.matchMedia('(min-width: 992px)').matches;

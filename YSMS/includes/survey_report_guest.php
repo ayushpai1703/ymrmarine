@@ -28,7 +28,40 @@ function srgEnsure(PDO $db): void {
         `id` int(11) NOT NULL AUTO_INCREMENT, `ip` varchar(45) NOT NULL, `action` varchar(20) NOT NULL, `created_at` datetime NOT NULL,
         PRIMARY KEY (`id`), KEY `idx_srgh` (`ip`, `action`, `created_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // who started it when signed in; when the Admin locks it (read-only on the link from lock_at on)
+    $have = array_column($db->query("SHOW COLUMNS FROM survey_report_guests")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+    foreach (['user_id' => 'int(11) DEFAULT NULL', 'lock_at' => 'datetime DEFAULT NULL', 'lock_by' => 'int(11) DEFAULT NULL'] as $c => $def) {
+        if (!in_array($c, $have, true)) $db->exec("ALTER TABLE survey_report_guests ADD COLUMN `$c` $def");
+    }
+    // every download of a made report from the link (shown to the Admin)
+    $db->exec("CREATE TABLE IF NOT EXISTS `survey_report_downloads` (
+        `id` int(11) NOT NULL AUTO_INCREMENT, `report_id` int(11) NOT NULL, `file_id` int(11) NOT NULL, `user_id` int(11) DEFAULT NULL,
+        `ip` varchar(45) NOT NULL DEFAULT '', `downloaded_at` datetime NOT NULL,
+        PRIMARY KEY (`id`), KEY `idx_srd_report` (`report_id`, `file_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $done = true;
+}
+
+/** The link's lock of a report made on the link: ['lock_at' => ?string, 'locked' => bool]; not a link report → null. */
+function srgLock(PDO $db, int $reportId): ?array {
+    srgEnsure($db);
+    $q = $db->prepare('SELECT lock_at FROM survey_report_guests WHERE report_id = ?');
+    $q->execute([$reportId]);
+    $row = $q->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return null;
+    $at = $row['lock_at'] ?: null;
+    return ['lock_at' => $at, 'locked' => $at !== null && strtotime($at) <= time()];
+}
+
+/** Record a download of a made report (from the link or by a signed-in non-Admin). */
+function srgLogDownload(PDO $db, int $reportId, int $fileId): void {
+    try {
+        srgEnsure($db);
+        $db->prepare('INSERT INTO survey_report_downloads (report_id, file_id, user_id, ip, downloaded_at) VALUES (?, ?, ?, ?, ?)')
+           ->execute([$reportId, $fileId, (int)($_SESSION['user_id'] ?? 0) ?: null, getClientIp(), date('Y-m-d H:i:s')]);
+    } catch (Throwable $e) {
+        error_log('srgLogDownload: ' . $e->getMessage());
+    }
 }
 
 /** A well-formed token (64 hex characters) or ''. */
@@ -53,18 +86,19 @@ function srgHit(PDO $db, string $action): bool {
 function srgReport(PDO $db, string $token): ?array {
     if ($token === '') return null;
     srgEnsure($db);
-    $q = $db->prepare('SELECT r.*, NULL AS updated_by_name FROM survey_report_guests g JOIN survey_reports r ON r.id = g.report_id WHERE g.token_hash = ? AND r.survey_id IS NULL');
+    $q = $db->prepare('SELECT r.*, NULL AS updated_by_name, g.lock_at FROM survey_report_guests g JOIN survey_reports r ON r.id = g.report_id WHERE g.token_hash = ? AND r.survey_id IS NULL');
     $q->execute([hash('sha256', $token)]);
     $r = $q->fetch(PDO::FETCH_ASSOC);
     if (!$r) return null;
     $r['survey'] = null;
+    $r['locked'] = !empty($r['lock_at']) && strtotime($r['lock_at']) <= time();
     $r['data'] = json_decode((string)$r['data'], true) ?: ['fields' => [], 'tanks' => []];
     $r['id'] = (int)$r['id']; $r['version'] = (int)$r['version']; $r['template_id'] = (int)$r['template_id'];
     return $r;
 }
 
 /** A new report of the active template of $kind, not tied to a vessel → its token. */
-function srgNew(PDO $db, string $kind): array {
+function srgNew(PDO $db, string $kind, int $uid = 0): array {
     srgEnsure($db);
     if (!isset(RT_KINDS[$kind])) return ['ok' => false, 'error' => 'Choose the report type.'];
     $t = rtActive($db, $kind);
@@ -73,11 +107,15 @@ function srgNew(PDO $db, string $kind): array {
     $now = date('Y-m-d H:i:s');
     $db->beginTransaction();
     try {
-        $db->prepare('INSERT INTO survey_reports (survey_id, template_id, kind, data, version, created_by, created_at, updated_by, updated_at) VALUES (NULL, ?, ?, ?, 1, NULL, ?, NULL, ?)')
-           ->execute([$t['id'], $kind, json_encode(srDefaults(rtEffective($t), null)), $now, $now]);
+        $data = srDefaults(rtEffective($t), null);
+        if ($uid && isset($data['fields']['surveyor_name']) && $data['fields']['surveyor_name'] === '') { // signed in: their name to start with
+            $data['fields']['surveyor_name'] = strtoupper(trim((string)($_SESSION['full_name'] ?? '')));
+        }
+        $db->prepare('INSERT INTO survey_reports (survey_id, template_id, kind, data, version, created_by, created_at, updated_by, updated_at) VALUES (NULL, ?, ?, ?, 1, ?, ?, ?, ?)')
+           ->execute([$t['id'], $kind, json_encode($data), $uid ?: null, $now, $uid ?: null, $now]);
         $id = (int)$db->lastInsertId();
-        $db->prepare('INSERT INTO survey_report_guests (report_id, token_hash, ip, created_at) VALUES (?, ?, ?, ?)')
-           ->execute([$id, hash('sha256', $token), getClientIp(), $now]);
+        $db->prepare('INSERT INTO survey_report_guests (report_id, token_hash, ip, created_at, user_id) VALUES (?, ?, ?, ?, ?)')
+           ->execute([$id, hash('sha256', $token), getClientIp(), $now, $uid ?: null]);
         $db->commit();
     } catch (Throwable $e) {
         if ($db->inTransaction()) $db->rollBack();

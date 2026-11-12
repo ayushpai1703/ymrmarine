@@ -52,6 +52,14 @@ $isPost = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST';
 @set_time_limit(180);
 @ini_set('memory_limit', '512M');
 
+// a report made on the link and locked by the Admin: read only for everyone but the Admin
+$srLinkLocked = function (array $r) use ($db): bool {
+    if (srRole() === 'Admin' || !empty($r['survey'])) return false;
+    require_once __DIR__ . '/../includes/survey_report_guest.php';
+    $l = srgLock($db, (int)$r['id']);
+    return $l !== null && $l['locked'];
+};
+
 $scope = function () use ($uid): array {
     if (in_array(srRole(), ['Admin', 'Super Admin'], true)) return ['1=1', []];
     return ['(r.created_by = ? OR s.surveyor_id = ? OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = ?))', [$uid, $uid, $uid]];
@@ -101,6 +109,7 @@ try {
         if (!$f || !srReport($db, (int)$f['report_id']) || !($abs = rtAbs($f['file_path']))) srJson(404, ['ok' => false, 'error' => 'File not found.']);
         // the Excel stays in the system (the Word report generator reads it); only the Admin can download it
         if ($f['type'] !== 'pdf' && srRole() !== 'Admin') srJson(403, ['ok' => false, 'error' => 'The Excel report is kept in the system and used by the Word report generator.']);
+        if (srRole() !== 'Admin') { require_once __DIR__ . '/../includes/survey_report_guest.php'; if (srgLock($db, (int)$f['report_id']) !== null) srgLogDownload($db, (int)$f['report_id'], (int)$f['id']); }
         $pdf = $f['type'] === 'pdf';
         header('Content-Type: ' . ($pdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
         header('Content-Disposition: ' . ($pdf && !empty($_GET['inline']) ? 'inline' : 'attachment') . '; filename="' . str_replace('"', '', $f['file_name']) . '"');
@@ -131,7 +140,7 @@ try {
         srJson(200, ['ok' => true, 'report' => ['id' => $r['id'], 'version' => $r['version'], 'data' => $r['data'], 'updated_at' => $r['updated_at'], 'updated_by' => $r['updated_by_name'],
             'vessel' => srTitle($r), 'survey_id' => (int)$r['survey_id'], 'status' => $r['survey']['status'] ?? '', 'kind' => $r['kind'], 'kind_label' => RT_KINDS[$r['kind']] ?? $r['kind']],
             'is_admin' => srRole() === 'Admin',
-            'can_edit' => srCanEdit($r['survey'], $r), 'config' => srEditorConfig($t), 'files' => srFiles($db, $r['id']),
+            'can_edit' => srCanEdit($r['survey'], $r) && !$srLinkLocked($r), 'locked' => $srLinkLocked($r), 'config' => srEditorConfig($t), 'files' => srFiles($db, $r['id']),
             'newer_template' => $active && $active['id'] !== $t['id'] ? ['id' => $active['id'], 'version' => $active['version']] : null]);
     }
     if ($a === 'tank_history') { // Admin only — checked before anything is looked up
@@ -216,6 +225,7 @@ try {
 
     $r = srReport($db, (int)($_POST['id'] ?? 0));
     if (!$r) srJson(404, ['ok' => false, 'error' => 'Report not found.']);
+    if ($srLinkLocked($r)) srJson(423, ['ok' => false, 'locked' => true, 'error' => 'This report is locked by the Admin (read only). Ask the Admin for edit access.']);
     if (!srCanEdit($r['survey'], $r)) srJson(403, ['ok' => false, 'error' => srRole() === 'Super Admin' ? 'View only.' : 'This vessel is no longer pending — the report can no longer be changed.']);
     $t = rtTemplate($db, $r['template_id']);
     $eff = rtEffective($t);

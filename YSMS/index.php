@@ -316,7 +316,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         </div>
     </div>
 
-    <?php if (in_array($role, ['Admin', 'Super Admin'], true)):
+    <?php if ($role === 'Admin'):
         // 🌟 Live Survey Reports: reports being filled on the survey report link (no sign-in), last 48 hours
         $lsrRows = [];
         try { require_once 'includes/live_survey_reports.php'; $lsrRows = array_slice(array_values(array_filter(lsrList($db, 48, 100), fn($r) => $r['vessel'] !== '' || $r['imo'] !== '' || $r['surveyor'] !== '')), 0, 6); echo lsrCss(); }

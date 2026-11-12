@@ -12,6 +12,9 @@ try {
 } catch (Throwable $e) { error_log('login.php super admin role ensure: ' . $e->getMessage()); }
 
 $error = '';
+// After signing in, go back to the survey report link when it sent the user here (only that page, never another site)
+$login_next = (string)($_POST['next'] ?? $_GET['next'] ?? '');
+if (!preg_match('/^survey_report_public\.php(\?t=[0-9a-f]{64})?$/', $login_next)) $login_next = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username']);
     $password = trim($_POST['password']);
@@ -53,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        header("Location: index.php");
+        header('Location: ' . ($login_next !== '' ? $login_next : 'index.php'));
         exit;
     } else {
         $error = "Invalid credential parameters. Please check username/password.";
@@ -384,6 +387,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
 
                     <form action="login.php" method="POST" novalidate id="loginForm">
+                        <?php if ($login_next !== ''): ?><input type="hidden" name="next" value="<?= sanitize($login_next) ?>"><?php endif; ?>
                         <div class="field-group">
                             <label class="field-label" for="username">Username</label>
                             <div class="field-wrap">

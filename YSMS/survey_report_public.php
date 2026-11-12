@@ -23,6 +23,8 @@ try {
     error_log('survey_report_public: ' . $e->getMessage());
 }
 $v = fn(string $f) => @filemtime(__DIR__ . '/' . $f);
+$signedIn = !empty($_SESSION['user_id']);
+$signedName = (string)($_SESSION['full_name'] ?? $_SESSION['username'] ?? '');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -62,6 +64,9 @@ $v = fn(string $f) => @filemtime(__DIR__ . '/' . $f);
         .srp-link input { flex: 1 1 260px; min-width: 0; height: 34px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 12.5px; color: #334155; background: #fff; }
         .srp-link button { height: 34px; border: 1px solid #0b63e5; background: #fff; color: #0b63e5; border-radius: 8px; font-weight: 700; font-size: 12.5px; padding: 0 12px; }
         .srp-new { max-width: 720px; margin: 24px auto; }
+        .srp-new[hidden] { display: none; }
+        .srp-choice-b { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+        .srp-choice-b .sr-btn { text-decoration: none; }
     </style>
 </head>
 <body class="sr-public">
@@ -71,7 +76,18 @@ $v = fn(string $f) => @filemtime(__DIR__ . '/' . $f);
 </header>
 <?php if ($token === ''): ?>
 <div class="sr-wrap sr-v4">
-    <section class="sr-card sr-newrep srp-new" data-testid="srp-new">
+    <?php if (!$signedIn): ?>
+    <section class="sr-card srp-new srp-choice" data-srp-choice data-testid="srp-choice">
+        <h3><i class="fa-solid fa-user-check"></i> Survey Report</h3>
+        <p class="sr-muted">Sign in with your YSMS account, or carry on without signing in.</p>
+        <div class="srp-choice-b">
+            <a class="sr-btn pri" href="login.php?next=survey_report_public.php" data-testid="srp-login"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
+            <button type="button" class="sr-btn" data-srp-guest data-testid="srp-guest"><i class="fa-solid fa-arrow-right"></i> Continue without login</button>
+        </div>
+    </section>
+    <?php endif; ?>
+    <section class="sr-card sr-newrep srp-new" data-testid="srp-new"<?= $signedIn ? '' : ' hidden data-srp-kinds' ?>>
+        <?php if ($signedIn): ?><div class="sr-note" data-testid="srp-signed-in"><i class="fa-solid fa-circle-user"></i> Signed in as <b><?= sanitize($signedName) ?></b></div><?php endif; ?>
         <h3><i class="fa-solid fa-file-circle-plus"></i> New Survey Report</h3>
         <?php if ($notFound): ?>
             <div class="sr-note err" data-testid="srp-not-found">This report link is not valid. Start a new report below, or use the link you saved.</div>
@@ -93,6 +109,11 @@ $v = fn(string $f) => @filemtime(__DIR__ . '/' . $f);
 <script>
 (function () {
   var csrf = <?= json_encode(csrf_token()) ?>, busy = false;
+  // without signing in: the choice first (remembered for this browser tab)
+  var choice = document.querySelector('[data-srp-choice]'), kinds = document.querySelector('[data-srp-kinds]');
+  function guest() { if (choice) choice.hidden = true; if (kinds) kinds.hidden = false; try { sessionStorage.setItem('ysms_srp_guest', '1'); } catch (e) {} }
+  try { if (sessionStorage.getItem('ysms_srp_guest') === '1') guest(); } catch (e) {}
+  var gb = document.querySelector('[data-srp-guest]'); if (gb) gb.addEventListener('click', guest);
   try { var last = localStorage.getItem('ysms_srp_last'); if (last && /^[0-9a-f]{64}$/.test(last)) { var l = document.querySelector('[data-last]'); if (l) { l.hidden = false; l.querySelector('a').href = '?t=' + last; } } } catch (e) {}
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-new-kind]'); if (!b || busy) return;

@@ -47,7 +47,7 @@ try {
     if ($a === 'new') {
         if (!$isPost) srgJson(405, ['ok' => false, 'error' => 'POST only.']);
         if (!srgHit($db, 'new')) srgLimited();
-        $res = srgNew($db, (string)($_POST['kind'] ?? ''));
+        $res = srgNew($db, (string)($_POST['kind'] ?? ''), (int)($_SESSION['user_id'] ?? 0)); // signed in: the report is theirs too
         srgJson($res['ok'] ? 200 : 422, $res);
     }
     if ($a === 'file') {
@@ -61,6 +61,7 @@ try {
         header('Content-Length: ' . filesize($abs));
         header('Cache-Control: private, no-store');
         header('X-Content-Type-Options: nosniff');
+        srgLogDownload($db, $r['id'], (int)$f['id']); // the Admin sees every download
         while (ob_get_level() > 0) ob_end_clean();
         readfile($abs);
         exit;
@@ -79,7 +80,7 @@ try {
     if ($a === 'get') {
         srgJson(200, ['ok' => true, 'report' => ['id' => $token, 'version' => $r['version'], 'data' => $r['data'], 'updated_at' => $r['updated_at'], 'updated_by' => null,
             'vessel' => srTitle($r), 'survey_id' => 0, 'status' => '', 'kind' => $r['kind'], 'kind_label' => RT_KINDS[$r['kind']] ?? $r['kind']],
-            'is_admin' => false, 'guest' => true, 'can_edit' => true, 'config' => srEditorConfig($t), 'files' => $pdfs(), 'newer_template' => null]);
+            'is_admin' => false, 'guest' => true, 'can_edit' => !$r['locked'], 'locked' => $r['locked'], 'config' => srEditorConfig($t), 'files' => $pdfs(), 'newer_template' => null]);
     }
     if ($a === 'version') srgJson(200, ['ok' => true, 'version' => $r['version']]);
     if ($a === 'verify') srgJson(200, ['ok' => true] + srVerify($t, $r['data']));
@@ -101,6 +102,7 @@ try {
     }
     if ($a === 'previous') srgJson(200, ['ok' => true, 'previous' => null]); // earlier attendances are never shown here
     if (!$isPost) srgJson(400, ['ok' => false, 'error' => 'Unknown action.']);
+    if ($r['locked']) srgJson(423, ['ok' => false, 'locked' => true, 'error' => 'This report is locked by the Admin (read only). Ask the Admin for edit access.']);
     $eff = rtEffective($t);
 
     if ($a === 'save' || $a === 'generate') {

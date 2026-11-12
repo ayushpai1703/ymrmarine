@@ -3,9 +3,9 @@
  * Live Survey Reports (Admin): the reports being filled on the page without sign-in
  * (survey_report_public.php), shown by the three values the surveyor types — Surveyor Name,
  * IMO number, Vessel Name — with a status from the time the report was started:
- *   under 4 hours   → Survey in progress
+ *   under 4 hours   → Survey in live
  *   4 to 24 hours   → Might be completed — check now
- *   24 hours and on → Survey done
+ *   24 hours and on → Completed
  * Used by live_survey_reports.php and the Admin dashboard (index.php). Read-only.
  */
 require_once __DIR__ . '/survey_report_guest.php';
@@ -15,9 +15,9 @@ const LSR_DONE_HOURS = 24;
 
 function lsrStatus(int $startedTs, ?int $now = null): array {
     $h = (($now ?? time()) - $startedTs) / 3600;
-    if ($h < LSR_PROGRESS_HOURS) return ['key' => 'progress', 'label' => 'Survey in progress', 'hours' => $h];
+    if ($h < LSR_PROGRESS_HOURS) return ['key' => 'progress', 'label' => 'Survey in live', 'hours' => $h];
     if ($h < LSR_DONE_HOURS) return ['key' => 'check', 'label' => 'Might be completed — check now', 'hours' => $h];
-    return ['key' => 'done', 'label' => 'Survey done', 'hours' => $h];
+    return ['key' => 'done', 'label' => 'Completed', 'hours' => $h];
 }
 
 function lsrAgo(float $hours): string {
