@@ -419,7 +419,35 @@
     var prevTanks = S.canEdit && S.prev && Object.keys(S.prev.tanks || {}).length;
     return prevTanks ? '<div class="sr-tk-tools"><button type="button" class="sr-btn sm" data-prev-tanks data-testid="sr-copy-prev"><i class="fa-regular fa-copy"></i> Copy from Previous</button></div>' : '';
   }
+  /** Page without sign-in: the usual tanks of each grade are already in the table, readings 0.000 (settling / service tanks
+      GAUGE), density and temperature left to type. Added once per grade when its table is still empty; any can be renamed or deleted. */
+  var G_GAUGE = { ref_height: 'GAUGE', sounding: 'GAUGE' };
+  var DEFAULT_TANKS = {
+    vlsfo: ['1P', '1S', '2P', '2S', '3P', '3S', ['SETT 1', G_GAUGE], ['SERV 1', G_GAUGE], ['SETT 2', G_GAUGE], ['SERV 2', G_GAUGE], 'OVERFLOW'],
+    hsfo: ['TANK NO.1', 'TANK NO.2', 'TANK NO.3'],
+    ulsfo: ['TANK NO.1', 'TANK NO.2', 'TANK NO.3'],
+    lsmgo: ['MDO NO.1 P', 'MDO NO.1 S', 'MDO NO.2 P', 'MDO NO.2 S', ['SERV 1', G_GAUGE], ['SERV 2', G_GAUGE]]
+  };
+  function guestDefaults() {
+    if (!P.guest || !S.canEdit) return;
+    S.defDone = S.defDone || {};
+    var added = false;
+    chosen().forEach(function (g) {
+      if (S.defDone[g] || !DEFAULT_TANKS[g]) return;
+      S.defDone[g] = true;
+      if (S.data.tanks[g].some(function (r) { return !blankRow(r); })) return;
+      S.data.tanks[g] = DEFAULT_TANKS[g].map(function (t) {
+        var r = emptyRow(), nm = typeof t === 'string' ? t : t[0], over = typeof t === 'string' ? {} : t[1];
+        r.name = nm; r.ref_height = over.ref_height || '0.000'; r.sounding = over.sounding || '0.000'; r.volume = '0.000';
+        return r;
+      });
+      if (S.spare) delete S.spare[g];
+      added = true;
+    });
+    if (added) changed(true);
+  }
   function tanksHtml() {
+    guestDefaults();
     var g = chosen();
     if (!g.length) return '<div class="sr-note warn"><i class="fa-solid fa-gas-pump"></i> Choose the fuel grades on board in Survey Details first. <button type="button" class="sr-btn sm" data-goto="survey">Go to Survey Details</button></div>';
     return tankToolbar() + gridHtml() + totalsBar();
