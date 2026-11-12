@@ -495,7 +495,49 @@
         '<span class="xtip" role="tooltip">V.C.F. <b data-rc="' + key + ':vcf">' + (t.vcf == null ? '—' : t.vcf.toFixed(4)) + '</b><br>G.S.V. <b data-rc="' + key + ':gsv">' + (t.gsv == null ? '—' : f3c(t.gsv)) + '</b> m³</span></td>' +
       '<td class="xd">' + (S.canEdit ? '<button type="button" data-del="' + key + '"' + (real ? '' : ' data-spare') + ' title="Delete row" aria-label="Delete row" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-regular fa-trash-can"></i></button>' : '') + '</td></tr>';
   }
+  /** Link page on a phone: each tank a card that opens and closes (readings in labelled boxes, MT in its header). */
+  function cardMode() { return !!P.guest && !S.wide; }
+  var TC_FIELDS = [['ref_height', 'Ref. Height (m)', 'fa-ruler', 0], ['sounding', 'Sounding (m)', 'fa-water', 0], ['volume', 'Volume (m³)', 'fa-cubes', 1],
+    ['density', 'Density @15°C', 'fa-flask', 1], ['temp', 'Temperature (°C)', 'fa-temperature-half', 1]];
+  function tcOpen(g, r, i) {
+    S.tcOpen = S.tcOpen || {};
+    if (r.id in S.tcOpen) return S.tcOpen[r.id];
+    if (!(('_' + g) in S.tcOpen)) { // at first: the first tank still to complete is open
+      var first = -1;
+      S.data.tanks[g].some(function (x, k) { if (Object.keys(tankErrors(x)).length) { first = k; return true; } return false; });
+      S.tcOpen['_' + g] = first;
+    }
+    return S.tcOpen['_' + g] === i;
+  }
+  function cardHtml(g, r, i) {
+    var key = g + ':' + i, t = calc(r), open = tcOpen(g, r, i), short = gradeInfo(g).short, dis = S.canEdit ? '' : ' disabled';
+    var box = function (f) {
+      var v = shown(r, f[0]);
+      return '<label class="sr-f sr-cellf sr-tc-f' + (f[0] === 'temp' ? ' w' : '') + '" data-tw="' + key + ':' + f[0] + '"><i class="fa-solid ' + f[2] + '"></i><span class="l">' + f[1] + '</span>' +
+        '<input data-t="' + key + ':' + f[0] + '" data-testid="sr-t-' + g + '-' + i + '-' + f[0] + '" value="' + esc(v) + '"' + (f[3] ? ' inputmode="decimal"' : '') + dis + ' autocomplete="off" spellcheck="false"' + (/^GAUGE$/i.test(v) ? ' class="gauge"' : '') + '><em data-terr="' + key + ':' + f[0] + '"></em></label>';
+    };
+    return '<div class="sr-tc sr-row' + (open ? ' open' : '') + '" data-tank="' + key + '" data-testid="sr-tank-' + g + '-' + i + '">' +
+      '<div class="sr-tc-h" data-tc="' + key + '" role="button" aria-expanded="' + open + '" data-testid="sr-tc-toggle-' + g + '-' + i + '"><i class="fa-solid fa-chevron-right sr-tc-c"></i><i class="fa-solid fa-database sr-tc-i"></i>' +
+        '<b class="sr-tc-n"><span data-tc-name="' + key + '">' + esc(r.name || 'New tank') + '</span> <small>(' + esc(short) + ')</small></b>' +
+        '<span class="sr-tc-mt">MT: <b data-rc="' + key + ':mt">' + (t.mt == null ? '—' : f3c(t.mt)) + '</b></span></div>' +
+      '<div class="sr-tc-b"><label class="sr-f sr-cellf sr-tc-f w" data-tw="' + key + ':name"><i class="fa-solid fa-tag"></i><span class="l">Tank name</span><input data-t="' + key + ':name" data-testid="sr-t-' + g + '-' + i + '-name" value="' + esc(r.name) + '"' + dis + ' autocomplete="off"><em data-terr="' + key + ':name"></em></label>' +
+        TC_FIELDS.map(box).join('') +
+        '<span hidden data-rc="' + key + ':vcf"></span><span hidden data-rc="' + key + ':gsv"></span>' +
+        (S.canEdit ? '<div class="sr-tc-a"><button type="button" class="sr-btn sm danger" data-del="' + key + '" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-regular fa-trash-can"></i> Delete tank</button></div>' : '') +
+      '</div></div>';
+  }
+  function cardsHtml() {
+    return chosen().map(function (g) {
+      var gi = gradeInfo(g), rows = S.data.tanks[g], tot = gradeTotals(g);
+      return '<section class="sr-tcg" data-testid="sr-tanks-' + g + '"><div class="sr-tcg-h"><i class="fa-solid fa-gas-pump"></i><b>' + esc(gi.short) + ' Tanks</b>' +
+        '<span>Total MT: <b data-gmt="' + g + '">' + f3c(tot.mt) + '</b></span></div>' +
+        (rows.map(function (r, i) { return cardHtml(g, r, i); }).join('') || '<div class="sr-tc-none">No tanks yet.</div>') +
+        (S.canEdit ? '<button type="button" class="sr-tc-add" data-add="' + g + '" data-testid="sr-add-' + g + '"><i class="fa-solid fa-plus"></i> Add ' + esc(gi.short) + ' tank</button>' : '') +
+        '<b hidden data-testid="sr-total-' + g + '">' + f3(tot.mt) + '</b><b hidden data-testid="sr-total-gsv-' + g + '">' + f3(tot.gsv) + '</b></section>';
+    }).join('');
+  }
   function gridHtml() {
+    if (cardMode()) return cardsHtml();
     var head = '<colgroup><col class="cw-name">' + XCOLS.slice(1).map(function () { return '<col>'; }).join('') + '<col class="cw-mt"><col class="cw-del"></colgroup>' +
       '<thead><tr>' + XCOLS.map(function (c) { return '<th class="x-' + c[0] + '">' + c[1] + '<small>' + c[2] + '</small></th>'; }).join('') +
       '<th class="xo mt">Metric<small>Tons</small></th><th class="xd"></th></tr></thead>';
@@ -571,9 +613,9 @@
     changed(true); markRow(g, i);
   }
   function markRow(g, i) {
-    var r = S.data.tanks[g][i], tr = $('tr[data-tank="' + g + ':' + i + '"]');
+    var r = S.data.tanks[g][i], tr = $('.sr-row[data-tank="' + g + ':' + i + '"]');
     if (!tr) return;
-    var html = rowHtml(g, r, i), tmp = document.createElement('tbody'); tmp.innerHTML = html;
+    var html = tr.classList.contains('sr-tc') ? cardHtml(g, r, i) : rowHtml(g, r, i), tmp = document.createElement(tr.tagName === 'TR' ? 'tbody' : 'div'); tmp.innerHTML = html;
     var nw = tmp.firstChild; tr.parentNode.replaceChild(nw, tr); showErrors();
   }
   function resHtml(t) {
@@ -716,6 +758,11 @@
     if (t.closest('[data-undo]')) { undoLookup(); return; }
     if (t.closest('[data-manual]')) { S.manual = true; render(); var f = $('[data-f=vessel_name]'); if (f) f.focus(); return; }
     if ((b = t.closest('[data-more]'))) { moreRows(b.getAttribute('data-more')); return; }
+    if ((b = t.closest('[data-tc]'))) {
+      var card = b.closest('.sr-tc'), rr = S.data.tanks[b.getAttribute('data-tc').split(':')[0]][+b.getAttribute('data-tc').split(':')[1]];
+      S.tcOpen = S.tcOpen || {}; var op = !card.classList.contains('open'); if (rr) S.tcOpen[rr.id] = op;
+      card.classList.toggle('open', op); b.setAttribute('aria-expanded', op); return;
+    }
     if ((b = t.closest('[data-gfold]'))) { if (!S.wide) { var gf = b.getAttribute('data-gfold'), sec = b.closest('.sr-gsec'); S.gOpen = S.gOpen || {}; S.gOpen[gf] = !sec.classList.contains('open'); sec.classList.toggle('open', S.gOpen[gf]); b.setAttribute('aria-expanded', S.gOpen[gf] ? 'true' : 'false'); } return; }
     if ((b = t.closest('[data-add]'))) { addTank(b.getAttribute('data-add')); return; }
     if ((b = t.closest('[data-open]'))) { openSheet(b.getAttribute('data-open')); return; }
@@ -765,6 +812,7 @@
       else if (p[2] === 'ullage') { r.mode = 'ullage'; r.ullage = el.value; r.sounding = sounding(r); }
       else { r[p[2]] = el.value; if (p[2] === 'ref_height' && r.mode === 'ullage') r.sounding = sounding(r); }
       if (p[2] === 'ref_height' || p[2] === 'sounding') el.classList.toggle('gauge', /^GAUGE$/i.test(el.value.trim()));
+      if (p[2] === 'name') { var tn = $('[data-tc-name="' + p[0] + ':' + p[1] + '"]'); if (tn) tn.textContent = el.value || 'New tank'; }
       updateRow(p[0], +p[1]);
       changed(); showErrors();
     }
@@ -833,7 +881,7 @@
     return true;
   }
   // like an Excel cell: taking a cell (click, tap, Tab, arrows) selects its value, so typing replaces it; a double click edits inside it
-  document.addEventListener('focusin', function (ev) { var el = ev.target; if (el.matches && el.matches('.sr-xg [data-t]')) el.select(); });
+  document.addEventListener('focusin', function (ev) { var el = ev.target; if (el.matches && el.matches('.sr-xg [data-t], .sr-tc [data-t]')) el.select(); });
   document.addEventListener('mousedown', function (ev) {
     var el = ev.target; if (!el.matches || !el.matches('.sr-xg [data-t]') || el.disabled || document.activeElement === el || ev.detail > 1) return;
     ev.preventDefault(); el.focus();
@@ -845,10 +893,10 @@
   });
   // the grid: leaving a row saves a complete tank (its version), like "Save tank"
   document.addEventListener('focusout', function (ev) {
-    var tr = ev.target.closest && ev.target.closest('tr.sr-row'); if (!tr) return;
+    var tr = ev.target.closest && ev.target.closest('.sr-row'); if (!tr) return;
     var key = tr.getAttribute('data-tank');
     setTimeout(function () {
-      var a = document.activeElement, now = a && a.closest && a.closest('tr.sr-row');
+      var a = document.activeElement, now = a && a.closest && a.closest('.sr-row');
       if (now && now.getAttribute('data-tank') === key) return;
       var p = key.split(':'); finishRow(p[0], +p[1]);
     }, 0);
@@ -992,6 +1040,7 @@
   }
   function addTank(g) {
     var row = emptyRow(); S.data.tanks[g].push(row); changed();
+    S.tcOpen = S.tcOpen || {}; S.tcOpen[row.id] = true;
     var key = g + ':' + (S.data.tanks[g].length - 1);
     S.gOpen = S.gOpen || {}; S.gOpen[g] = true;
     render(); var n = $('[data-t="' + key + ':name"]'); if (n) { n.focus(); n.scrollIntoView({ block: 'center' }); }

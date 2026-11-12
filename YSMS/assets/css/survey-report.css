@@ -614,3 +614,40 @@ body[data-sr-step=tanks] .sr-wiz-top { display: none; }
   .sr-v4 .sr-head .sr-chip-h { max-width: 230px; }
 }
 @media (min-width: 1200px) and (max-width: 1499.98px) { .sr-v4 .sr-head .sr-chip-h:nth-of-type(3) { display: none; } }
+/* ---------- Tank Details on a phone (link page): one card per tank ---------- */
+.sr-tcg { margin: 0 0 16px; }
+.sr-tcg-h { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: linear-gradient(180deg, #eef4fd, #e2ecfa); border: 1px solid #d5e3f6; margin-bottom: 10px; }
+.sr-tcg-h > i { color: #0b3c7a; font-size: 18px; }
+.sr-tcg-h > b { font-size: 16px; font-weight: 800; color: #0b1e46; }
+.sr-tcg-h span { margin-left: auto; font-size: 13px; font-weight: 700; color: #0b1e46; white-space: nowrap; }
+.sr-tcg-h span b { display: inline-block; margin-left: 4px; padding: 5px 10px; border-radius: 9px; background: #d6e6fb; font-size: 15px; font-weight: 800; }
+.sr-tc { background: #fff; border: 1px solid #dbe5f2; border-radius: 14px; margin-bottom: 10px; overflow: hidden; transition: box-shadow .15s, border-color .15s; }
+.sr-tc.open { border-color: #9cc2f3; box-shadow: 0 6px 18px rgba(11,99,229,.10); }
+.sr-tc-h { display: flex; align-items: center; gap: 10px; padding: 12px; cursor: pointer; user-select: none; }
+.sr-tc.open .sr-tc-h { background: linear-gradient(180deg, #f3f8ff, #ecf3fd); border-bottom: 1px solid #e3ecf8; }
+.sr-tc-c { color: #475569; font-size: 13px; width: 14px; transition: transform .15s; }
+.sr-tc.open .sr-tc-c { transform: rotate(90deg); }
+.sr-tc-i { color: #1d6ff2; font-size: 20px; }
+.sr-tc-n { font-size: 15px; font-weight: 700; color: #0f172a; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-tc-n small { font-weight: 600; color: #64748b; font-size: 12.5px; }
+.sr-tc-mt { margin-left: auto; flex: none; padding: 6px 10px; border-radius: 9px; background: #e6effc; font-size: 12.5px; font-weight: 700; color: #0b1e46; white-space: nowrap; }
+.sr-tc-mt b { font-weight: 800; font-size: 14px; }
+.sr-tc-b { display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; }
+.sr-tc.open .sr-tc-b { display: grid; }
+.sr-step .sr-tc-f { position: relative; display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 8px; row-gap: 0; align-items: center; margin: 0;
+  border: 1px solid #d5dfeb; border-radius: 12px; padding: 8px 10px; background: #fff; }
+.sr-tc-f.w { grid-column: 1 / -1; }
+.sr-tc-f > i { grid-row: 1 / span 2; color: #1d6ff2; font-size: 18px; text-align: center; }
+.sr-tc-f .l { font-size: 12px; color: #334155; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr-step .sr-tc-f input { border: 0; padding: 0; min-height: 0; height: 28px; font-size: 17px; font-weight: 700; color: #0f172a; background: transparent; border-radius: 0; box-shadow: none; text-transform: uppercase; width: 100%; }
+.sr-step .sr-tc-f input:focus { outline: 0; box-shadow: none; border: 0; }
+.sr-step .sr-tc-f:focus-within { border-color: #0b63e5; box-shadow: 0 0 0 3px rgba(11,99,229,.15); }
+.sr-step .sr-tc-f input.gauge { color: #6d28d9; font-size: 15px; }
+.sr-step .sr-tc-f.bad { border-color: #f87171; background: #fef2f2; }
+.sr-tc-f em { grid-column: 2; font-size: 11px; font-style: normal; color: #b91c1c; }
+.sr-tc-f em:empty { display: none; }
+.sr-tc-a { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+.sr-tc-add { width: 100%; border: 1.5px dashed #9cc2f3; background: #f5f9ff; color: #0b63e5; font-weight: 700; font-size: 14px; border-radius: 12px; padding: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.sr-tc-none { padding: 16px; text-align: center; color: #94a3b8; font-size: 13px; }
+/* phone: the vessel / report / date chips stay out of the header (as before) */
+@media (max-width: 991.98px) { .sr-v4 .sr-head .sr-chip-h { display: none; } }
