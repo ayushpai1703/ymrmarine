@@ -175,9 +175,15 @@ function replaceUploadedDocument(PDO $db, int $documentId, array $newFile, int $
         return ['success' => false, 'message' => 'Could not save the new file. Please try again.', 'upload' => null];
     }
     @chmod($destAbs, 0640);
+    $newBytes = (int) ($newFile['size'] ?? 0);
+    if ($ext === 'pdf') {   // a replaced PDF is made smaller too (includes/pdf_compress.php)
+        require_once __DIR__ . '/pdf_compress.php';
+        $pc = pdfCompress($destAbs);
+        if ($pc['compressed']) { $newBytes = $pc['after']; @chmod($destAbs, 0640); }
+    }
 
     $newRel = $targetDirRel . '/' . $safeName;
-    $newSizeLabel = formatDocumentFileSize((int) ($newFile['size'] ?? 0));
+    $newSizeLabel = formatDocumentFileSize($newBytes);
 
     try {
         $db->beginTransaction();

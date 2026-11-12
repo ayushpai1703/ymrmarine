@@ -24,6 +24,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && docker-php-ext-install pdo pdo_mysql gd zip fileinfo opcache \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Ghostscript makes uploaded PDFs smaller (YSMS/includes/pdf_compress.php); without it they are
+# stored as uploaded.
+RUN apt-get update && apt-get install -y --no-install-recommends ghostscript \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Configure Apache to listen on Cloud Run's port
 RUN sed -i 's/Listen 80/Listen 8080/' /etc/apache2/ports.conf && \
     sed -i 's/<VirtualHost \*:80>/<VirtualHost *:8080>/' /etc/apache2/sites-available/000-default.conf
