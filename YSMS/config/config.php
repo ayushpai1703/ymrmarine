@@ -142,9 +142,35 @@ function getGreeting() {
     }
 }
 
+/**
+ * The page asked for, to open again after signing in (login.php?next=…): a page of YSMS (or of
+ * report-generator/) opened with GET, with its query string. Never login / logout, never ajax/.
+ */
+function ysmsLoginNextFromRequest(): string {
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') return '';
+    $file = realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
+    $root = realpath(dirname(__DIR__));
+    if (!$file || !$root || strpos($file, $root . DIRECTORY_SEPARATOR) !== 0) return '';
+    $rel = str_replace(DIRECTORY_SEPARATOR, '/', substr($file, strlen($root) + 1));
+    $qs = (string)($_SERVER['QUERY_STRING'] ?? '');
+    $next = $rel . ($qs !== '' ? '?' . $qs : '');
+    return ysmsSafeLoginNext($next);
+}
+
+/** $next when it is a YSMS page to go to after signing in, else '' (so it can never send anyone to another site). */
+function ysmsSafeLoginNext(string $next): string {
+    if ($next === '' || strlen($next) > 1500) return '';
+    if (!preg_match('~^(report-generator/)?[A-Za-z0-9_-]+\.php(\?[^\s"\'<>\\#]*)?$~', $next)) return '';
+    $path = strtok($next, '?');
+    if (in_array(basename($path), ['login.php', 'logout.php'], true) || in_array($path, ['index.php', 'app.php'], true)) return '';
+    return is_file(dirname(__DIR__) . '/' . $path) ? $next : '';
+}
+
 function checkAuth() {
     if (!isset($_SESSION['user_id'])) {
-        header("Location: login.php");
+        // back to this page after signing in (pages only; ajax/ answers stay as they were)
+        $next = ysmsLoginNextFromRequest();
+        header('Location: login.php' . ($next !== '' ? '?next=' . rawurlencode($next) : ''));
         exit();
     }
     csrf_require();
