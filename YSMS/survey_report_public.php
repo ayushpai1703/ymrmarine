@@ -25,6 +25,10 @@ try {
 $v = fn(string $f) => @filemtime(__DIR__ . '/' . $f);
 $signedIn = !empty($_SESSION['user_id']);
 $signedName = (string)($_SESSION['full_name'] ?? $_SESSION['username'] ?? '');
+$signedRole = (string)($_SESSION['role'] ?? '');
+$here = 'survey_report_public.php' . ($token !== '' ? '?t=' . $token : '');
+$initials = strtoupper(implode('', array_map(fn($w) => mb_substr($w, 0, 1), array_slice(preg_split('/\s+/', trim($signedName)) ?: [], 0, 2)))) ?: 'U';
+$kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'onhire' => 'fa-anchor-circle-check', 'offhire3' => 'fa-people-group', 'onhire3' => 'fa-people-group', 'offhire4' => 'fa-people-line'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -41,12 +45,60 @@ $signedName = (string)($_SESSION['full_name'] ?? $_SESSION['username'] ?? '');
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/survey-report.css?v=<?= $v('assets/css/survey-report.css') ?>">
     <style>
-        body.sr-public { margin: 0; background: #f4f7fb; font-family: 'Lexend', system-ui, sans-serif; color: #0f172a; }
-        .srp-top { display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: #fff; border-bottom: 1px solid #e5e7eb; }
-        .srp-top img { height: 34px; width: auto; }
-        .srp-top b { font-size: 15px; letter-spacing: .02em; }
-        .srp-top span { font-size: 12px; color: #64748b; display: block; }
-        .sr-public .sr-wrap { margin: 0 auto; padding-bottom: 60px; }
+        body.sr-public { margin: 0; background: #f3f6fb; font-family: 'Lexend', system-ui, sans-serif; color: #0f172a; min-height: 100vh; display: flex; flex-direction: column; }
+        /* top bar */
+        .srp-top { position: sticky; top: 0; z-index: 1030; background: linear-gradient(90deg, #0b1e46, #12346e); color: #fff; box-shadow: 0 2px 14px rgba(11,30,70,.25); }
+        .srp-top-in { display: flex; align-items: center; gap: 12px; padding: 10px 20px; max-width: 1500px; margin: 0 auto; }
+        .srp-brand { display: flex; align-items: center; gap: 11px; text-decoration: none; color: #fff; min-width: 0; }
+        .srp-brand .lg { width: 40px; height: 40px; border-radius: 11px; background: #fff; display: grid; place-items: center; flex: none; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+        .srp-brand .lg img { width: 30px; height: 30px; object-fit: contain; }
+        .srp-brand b { display: block; font-size: 16px; font-weight: 800; letter-spacing: .06em; line-height: 1.1; }
+        .srp-brand small { display: block; font-size: 11.5px; color: #9fc3ff; letter-spacing: .04em; }
+        .srp-top-sp { flex: 1; }
+        .srp-user { display: flex; align-items: center; gap: 10px; }
+        .srp-av { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #00A3DF, #6C4CF1); display: grid; place-items: center; font-weight: 800; font-size: 13.5px; flex: none; }
+        .srp-un { line-height: 1.15; min-width: 0; } .srp-un b { display: block; font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; } .srp-un small { color: #9fc3ff; font-size: 11.5px; }
+        .srp-tb { height: 36px; padding: 0 14px; border-radius: 9px; font: 700 13px 'Lexend', system-ui, sans-serif; display: inline-flex; align-items: center; gap: 7px; text-decoration: none; border: 1px solid rgba(255,255,255,.35); color: #fff; background: rgba(255,255,255,.06); white-space: nowrap; }
+        .srp-tb:hover { background: rgba(255,255,255,.16); color: #fff; }
+        .srp-tb.solid { background: #fff; color: #0b1e46; border-color: #fff; } .srp-tb.solid:hover { background: #e8f1ff; color: #0b1e46; }
+        @media (max-width: 575.98px) { .srp-un, .srp-tb .t { display: none; } .srp-top-in { padding: 8px 12px; } .srp-brand small { display: none; } }
+        /* landing */
+        .srp-hero { background: radial-gradient(1200px 400px at 80% -10%, rgba(0,163,223,.35), transparent 60%), linear-gradient(180deg, #12346e, #0b1e46); color: #fff; padding: 46px 20px 120px; text-align: center; }
+        .srp-hero h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 800; margin: 0 0 10px; letter-spacing: -.01em; }
+        .srp-hero p { margin: 0 auto; max-width: 620px; color: #c8dcff; font-size: 15px; }
+        .srp-hero .tag { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7fd3ff; background: rgba(0,163,223,.14); border: 1px solid rgba(127,211,255,.35); padding: 5px 12px; border-radius: 999px; margin-bottom: 16px; }
+        .srp-main { max-width: 860px; width: 100%; margin: -86px auto 0; padding: 0 16px 40px; position: relative; }
+        .srp-panel { background: #fff; border-radius: 20px; box-shadow: 0 18px 50px rgba(11,30,70,.16); padding: 26px; border: 1px solid #e6edf7; }
+        .srp-panel[hidden] { display: none; }
+        .srp-panel h2 { font-size: 19px; font-weight: 800; margin: 0 0 4px; color: #0b1e46; }
+        .srp-panel .sub { color: #64748b; font-size: 13.5px; margin: 0 0 18px; }
+        .srp-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .srp-opt { display: flex; gap: 14px; align-items: flex-start; text-align: left; padding: 18px; border-radius: 16px; border: 1.5px solid #dbe5f2; background: #fff; cursor: pointer; text-decoration: none; color: #0f172a; transition: all .15s; font: inherit; }
+        .srp-opt:hover { border-color: #0b63e5; box-shadow: 0 8px 22px rgba(11,99,229,.12); transform: translateY(-1px); color: #0f172a; }
+        .srp-opt .ic { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; font-size: 19px; flex: none; }
+        .srp-opt.a .ic { background: #e8f1ff; color: #0b63e5; } .srp-opt.b .ic { background: #e9f9ef; color: #16a34a; }
+        .srp-opt b { display: block; font-size: 15.5px; margin-bottom: 3px; } .srp-opt span { font-size: 12.5px; color: #64748b; }
+        .srp-kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+        .srp-kind { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 14px; border: 1.5px solid #dbe5f2; background: #fff; cursor: pointer; text-align: left; font: inherit; color: #0f172a; transition: all .15s; }
+        .srp-kind:hover { border-color: #0b63e5; background: #f7faff; box-shadow: 0 6px 18px rgba(11,99,229,.1); }
+        .srp-kind[disabled] { opacity: .6; cursor: progress; }
+        .srp-kind .ic { width: 40px; height: 40px; border-radius: 11px; background: linear-gradient(135deg, #0b63e5, #00A3DF); color: #fff; display: grid; place-items: center; flex: none; }
+        .srp-kind b { font-size: 14.5px; display: block; } .srp-kind span { font-size: 12px; color: #64748b; }
+        .srp-kind .go { margin-left: auto; color: #94a3b8; }
+        .srp-who { display: flex; align-items: center; gap: 10px; background: #f0f7ff; border: 1px solid #d5e6fb; border-radius: 12px; padding: 10px 14px; margin-bottom: 18px; font-size: 13.5px; color: #1e3a8a; }
+        .srp-last { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: #fffbeb; border: 1px solid #fde68a; font-size: 13.5px; color: #92400e; }
+        .srp-last[hidden] { display: none; }
+        .srp-last a { font-weight: 700; color: #b45309; text-decoration: none; }
+        .srp-feat { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+        .srp-feat div { display: flex; gap: 10px; align-items: center; font-size: 12.5px; color: #475569; background: #fff; border: 1px solid #e6edf7; border-radius: 14px; padding: 12px 14px; }
+        .srp-feat i { color: #0b63e5; font-size: 16px; }
+        .srp-foot { margin-top: auto; text-align: center; font-size: 12px; color: #94a3b8; padding: 18px; }
+        @media (max-width: 640px) { .srp-opts, .srp-feat { grid-template-columns: 1fr; } .srp-panel { padding: 18px; } .srp-hero { padding: 30px 16px 104px; } }
+        .sr-public .sr-wrap { margin: 0 auto; padding-bottom: 60px; width: 100%; max-width: 1320px; box-sizing: border-box; }
+        .sr-public .sr-wiz { max-width: none; }
+        body.sr-public[data-sr-step=tanks] .sr-wrap { max-width: none; }
+        @media (min-width: 992px) { .sr-public .sr-v4 .sr-head { background: #fff; border: 1px solid #e6edf7; border-radius: 14px; padding: 10px 14px; margin-top: 14px; box-shadow: 0 4px 14px rgba(11,30,70,.05); } }
+        .sr-public .srp-link { background: #fff; border-color: #e6edf7; box-shadow: 0 4px 14px rgba(11,30,70,.05); }
         /* the preview is never a side panel here: the Preview button opens it as a window */
         .sr-public .sr-v4 .sr-split { display: block; }
         .sr-public .sr-pv-fab, .sr-public .sr-pv-exp { display: none !important; }
@@ -63,58 +115,76 @@ $signedName = (string)($_SESSION['full_name'] ?? $_SESSION['username'] ?? '');
         .srp-link { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #eef5ff; border: 1px solid #cfe0fb; color: #1e3a8a; border-radius: 12px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; }
         .srp-link input { flex: 1 1 260px; min-width: 0; height: 34px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 12.5px; color: #334155; background: #fff; }
         .srp-link button { height: 34px; border: 1px solid #0b63e5; background: #fff; color: #0b63e5; border-radius: 8px; font-weight: 700; font-size: 12.5px; padding: 0 12px; }
-        .srp-new { max-width: 720px; margin: 24px auto; }
-        .srp-new[hidden] { display: none; }
-        .srp-choice-b { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
-        .srp-choice-b .sr-btn { text-decoration: none; }
     </style>
 </head>
 <body class="sr-public">
-<header class="srp-top">
-    <img src="assets/images/logo.png" alt="">
-    <div><b>YMR MARINE</b><span>Survey Report</span></div>
+<header class="srp-top" data-testid="srp-top">
+    <div class="srp-top-in">
+        <a class="srp-brand" href="survey_report_public.php"><span class="lg"><img src="assets/images/logo.png" alt=""></span><span><b>YMR MARINE</b><small>Survey Report</small></span></a>
+        <span class="srp-top-sp"></span>
+        <?php if ($signedIn): ?>
+            <div class="srp-user" data-testid="srp-signed-in">
+                <span class="srp-av"><?= sanitize($initials) ?></span>
+                <span class="srp-un"><b><?= sanitize($signedName) ?></b><small><?= sanitize($signedRole) ?></small></span>
+                <a class="srp-tb" href="logout.php?next=<?= rawurlencode($here) ?>" data-testid="srp-logout"><i class="fa-solid fa-right-from-bracket"></i><span class="t"> Logout</span></a>
+            </div>
+        <?php else: ?>
+            <a class="srp-tb solid" href="login.php?next=<?= rawurlencode($here) ?>" data-testid="srp-top-login"><i class="fa-solid fa-right-to-bracket"></i><span class="t"> Login</span></a>
+        <?php endif; ?>
+    </div>
 </header>
 <?php if ($token === ''): ?>
-<div class="sr-wrap sr-v4">
+<section class="srp-hero">
+    <span class="tag"><i class="fa-solid fa-ship"></i> Bunker survey</span>
+    <h1>Survey Report</h1>
+    <p>Enter the vessel, survey and tank readings on site. The report is saved as you type, previewed as it will print, and made from the company template.</p>
+</section>
+<main class="srp-main">
+    <?php if ($notFound): ?>
+        <div class="sr-note err mb-3" data-testid="srp-not-found">This report link is not valid. Start a new report below, or use the link you saved.</div>
+    <?php endif; ?>
     <?php if (!$signedIn): ?>
-    <section class="sr-card srp-new srp-choice" data-srp-choice data-testid="srp-choice">
-        <h3><i class="fa-solid fa-user-check"></i> Survey Report</h3>
-        <p class="sr-muted">Sign in with your YSMS account, or carry on without signing in.</p>
-        <div class="srp-choice-b">
-            <a class="sr-btn pri" href="login.php?next=survey_report_public.php" data-testid="srp-login"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
-            <button type="button" class="sr-btn" data-srp-guest data-testid="srp-guest"><i class="fa-solid fa-arrow-right"></i> Continue without login</button>
+    <section class="srp-panel" data-srp-choice data-testid="srp-choice">
+        <h2>How would you like to continue?</h2>
+        <p class="sub">Sign in with your YSMS account, or start straight away without signing in.</p>
+        <div class="srp-opts">
+            <a class="srp-opt a" href="login.php?next=survey_report_public.php" data-testid="srp-login"><span class="ic"><i class="fa-solid fa-user-shield"></i></span><span><b>Login</b><span>With your YSMS account — the report is kept with your account.</span></span></a>
+            <button type="button" class="srp-opt b" data-srp-guest data-testid="srp-guest"><span class="ic"><i class="fa-solid fa-arrow-right"></i></span><span><b>Continue without login</b><span>Start now; keep the report's private link to come back to it.</span></span></button>
         </div>
     </section>
     <?php endif; ?>
-    <section class="sr-card sr-newrep srp-new" data-testid="srp-new"<?= $signedIn ? '' : ' hidden data-srp-kinds' ?>>
-        <?php if ($signedIn): ?><div class="sr-note" data-testid="srp-signed-in"><i class="fa-solid fa-circle-user"></i> Signed in as <b><?= sanitize($signedName) ?></b></div><?php endif; ?>
-        <h3><i class="fa-solid fa-file-circle-plus"></i> New Survey Report</h3>
-        <?php if ($notFound): ?>
-            <div class="sr-note err" data-testid="srp-not-found">This report link is not valid. Start a new report below, or use the link you saved.</div>
-        <?php endif; ?>
+    <section class="srp-panel" data-testid="srp-new"<?= $signedIn ? '' : ' hidden data-srp-kinds' ?>>
+        <?php if ($signedIn): ?><div class="srp-who"><i class="fa-solid fa-circle-check"></i><span>Signed in as <b><?= sanitize($signedName) ?></b> — this report will be kept with your account.</span></div><?php endif; ?>
+        <h2>Start a new report</h2>
         <?php if (!$kinds): ?>
             <div class="sr-note warn" data-testid="srp-no-kinds">Survey reports are not available right now.</div>
         <?php else: ?>
-            <p class="sr-muted">Choose the report type. Your report is saved as you type; keep its link to continue later.</p>
-            <div class="sr-newrep-k">
+            <p class="sub">Choose the report type.</p>
+            <div class="srp-kinds">
                 <?php foreach ($kinds as $k => $l): ?>
-                    <button type="button" class="sr-btn" data-new-kind="<?= sanitize($k) ?>" data-testid="srp-new-<?= sanitize($k) ?>"><i class="fa-solid fa-file-lines"></i> <?= sanitize($l) ?></button>
+                    <button type="button" class="srp-kind" data-new-kind="<?= sanitize($k) ?>" data-testid="srp-new-<?= sanitize($k) ?>"><span class="ic"><i class="fa-solid <?= sanitize($kindIcons[$k] ?? 'fa-file-lines') ?>"></i></span><span><b><?= sanitize($l) ?></b><span>New report</span></span><i class="fa-solid fa-chevron-right go"></i></button>
                 <?php endforeach; ?>
             </div>
-            <div class="sr-note" data-last hidden data-testid="srp-last"><i class="fa-solid fa-clock-rotate-left"></i> <a href="#" data-last-link>Continue your last report on this device</a></div>
-            <div class="sr-note err" data-new-err hidden data-testid="srp-new-err"></div>
+            <div class="srp-last" data-last hidden data-testid="srp-last"><span><i class="fa-solid fa-clock-rotate-left"></i> You have a report on this device.</span><a href="#" data-last-link>Continue it <i class="fa-solid fa-arrow-right"></i></a></div>
+            <div class="sr-note err mt-3" data-new-err hidden data-testid="srp-new-err"></div>
         <?php endif; ?>
     </section>
-</div>
+    <div class="srp-feat">
+        <div><i class="fa-solid fa-floppy-disk"></i> Saved as you type</div>
+        <div><i class="fa-solid fa-file-pdf"></i> Preview and PDF from the company template</div>
+        <div><i class="fa-solid fa-link"></i> Private link to continue later</div>
+    </div>
+</main>
 <script>
 (function () {
   var csrf = <?= json_encode(csrf_token()) ?>, busy = false;
   // without signing in: the choice first (remembered for this browser tab)
   var choice = document.querySelector('[data-srp-choice]'), kinds = document.querySelector('[data-srp-kinds]');
+  var lastA = document.querySelector('[data-last-link]');
   function guest() { if (choice) choice.hidden = true; if (kinds) kinds.hidden = false; try { sessionStorage.setItem('ysms_srp_guest', '1'); } catch (e) {} }
   try { if (sessionStorage.getItem('ysms_srp_guest') === '1') guest(); } catch (e) {}
   var gb = document.querySelector('[data-srp-guest]'); if (gb) gb.addEventListener('click', guest);
-  try { var last = localStorage.getItem('ysms_srp_last'); if (last && /^[0-9a-f]{64}$/.test(last)) { var l = document.querySelector('[data-last]'); if (l) { l.hidden = false; l.querySelector('a').href = '?t=' + last; } } } catch (e) {}
+  try { var last = localStorage.getItem('ysms_srp_last'); if (last && /^[0-9a-f]{64}$/.test(last)) { var l = document.querySelector('[data-last]'); if (l) { l.hidden = false; lastA.href = '?t=' + last; } } } catch (e) {}
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-new-kind]'); if (!b || busy) return;
     busy = true; b.disabled = true;
@@ -195,5 +265,6 @@ $signedName = (string)($_SESSION['full_name'] ?? $_SESSION['username'] ?? '');
 <script src="assets/js/report-calc.js?v=<?= $v('assets/js/report-calc.js') ?>"></script>
 <script src="assets/js/survey-report.js?v=<?= $v('assets/js/survey-report.js') ?>"></script>
 <?php endif; ?>
+<footer class="srp-foot">© <?= date('Y') ?> YMR Marine · Survey Management System</footer>
 </body>
 </html>

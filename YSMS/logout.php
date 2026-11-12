@@ -19,8 +19,12 @@ if (!empty($_COOKIE['ysms_rm'])) {
     appRememberForget(getDB());
 }
 
+// after signing out, a page that works without signing in may be opened again (e.g. the survey report link)
+$logout_next = ysmsSafeLoginNext((string)($_GET['next'] ?? ''));
+if ($logout_next !== '' && strtok($logout_next, '?') !== 'survey_report_public.php') $logout_next = '';
+
 $_SESSION = [];
 session_destroy();
-header("Location: login.php");
+header('Location: ' . ($logout_next !== '' ? $logout_next : 'login.php'));
 exit;
 ?>
