@@ -12,6 +12,13 @@ if (isset($_SESSION['user_id'])) {
     }
 }
 
+// 🌟 Android app: this phone's "stay signed in" token goes too (fingerprint login stays, see
+// includes/app_login_tokens.php).
+if (!empty($_COOKIE['ysms_rm'])) {
+    require_once 'includes/app_login_tokens.php';
+    appRememberForget(getDB());
+}
+
 $_SESSION = [];
 session_destroy();
 header("Location: login.php");

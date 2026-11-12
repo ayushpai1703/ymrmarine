@@ -34,6 +34,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // includes/login_activity_helpers.php — every error is swallowed).
         recordLoginAttempt($db, $user, $username, true);
 
+        // 🌟 Android app: stay signed in on this phone until Log out (includes/app_login_tokens.php).
+        require_once 'includes/app_login_tokens.php';
+        if (appIsAppRequest() && !empty($_POST['remember'])) appRememberIssue($db, (int)$user['id']);
+
 
         // 🌟 New-format popup: if Admin uploaded/replaced a format in the last 7 days,
         // show a one-time "please use these formats" popup to the surveyor on this login.
@@ -305,6 +309,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .footer-note { color: #94a3b8; }
         }
     </style>
+    <?php include __DIR__ . '/includes/app_shell.php'; ?>
 </head>
 <body>
     <div class="split-shell">

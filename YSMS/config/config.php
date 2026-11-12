@@ -585,4 +585,11 @@ function ensureFloatingNotesTable(PDO $db): void {
         error_log('ensureFloatingNotesTable: ' . $e->getMessage());
     }
 }
+
+// 🌟 Android app: signed in until Log out. The PHP session can end (expiry, a new server instance);
+// the app's remember cookie then signs the user back in. See includes/app_login_tokens.php.
+if (empty($_SESSION['user_id']) && !empty($_COOKIE['ysms_rm'])) {
+    require_once __DIR__ . '/../includes/app_login_tokens.php';
+    try { appRememberRestore(getDB()); } catch (Throwable $e) { error_log('app remember restore: ' . $e->getMessage()); }
+}
 ?>
