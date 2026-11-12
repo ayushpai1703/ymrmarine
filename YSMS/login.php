@@ -12,6 +12,8 @@ try {
 } catch (Throwable $e) { error_log('login.php super admin role ensure: ' . $e->getMessage()); }
 
 $error = '';
+// After signing in, open the page that sent the user here (a YSMS page only, never another site: config.php ysmsSafeLoginNext)
+$login_next = ysmsSafeLoginNext((string)($_POST['next'] ?? $_GET['next'] ?? ''));
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username']);
     $password = trim($_POST['password']);
@@ -38,7 +40,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_once 'includes/app_login_tokens.php';
         if (appIsAppRequest() && !empty($_POST['remember'])) appRememberIssue($db, (int)$user['id']);
 
-
         // 🌟 New-format popup: if Admin uploaded/replaced a format in the last 7 days,
         // show a one-time "please use these formats" popup to the surveyor on this login.
         if ($user['role_name'] === 'Surveyor') {
@@ -54,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        header("Location: index.php");
+        header('Location: ' . ($login_next !== '' ? $login_next : 'index.php'));
         exit;
     } else {
         $error = "Invalid credential parameters. Please check username/password.";
@@ -385,6 +386,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
 
                     <form action="login.php" method="POST" novalidate id="loginForm">
+                        <?php if ($login_next !== ''): ?><input type="hidden" name="next" value="<?= sanitize($login_next) ?>"><?php endif; ?>
                         <div class="field-group">
                             <label class="field-label" for="username">Username</label>
                             <div class="field-wrap">
