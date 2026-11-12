@@ -3,3 +3,7 @@ include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
 
 apply from: 'capacitor.settings.gradle'
+
+// The login screen is Flutter (mobile/flutter_login, add-to-app). Run `flutter pub get` in that folder first.
+setBinding(new Binding([gradle: this]))
+evaluate(new File(settingsDir.parentFile, 'flutter_login/.android/include_flutter.groovy'))

@@ -290,6 +290,9 @@ svg.i { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none;
 /* ---------- Login ---------- */
 .login { background: var(--bg); }
 .login .scr-body { padding-bottom: 24px; }
+/* Android app: the Flutter login screen is shown on top; this one stays a plain navy page behind it */
+.scr.login.fl-mode { background: var(--navy); }
+.scr.login.fl-mode .scr-body > * { visibility: hidden; }
 .login-top { background: var(--navy); color: #fff; height: 290px; border-radius: 0 0 36px 36px; padding: 44px 28px 0; display: flex; flex-direction: column; gap: 18px; position: relative; overflow: hidden; }
 .login-top svg.waves { position: absolute; left: 0; bottom: 0; width: 100%; height: 160px; }
 .login-top svg.waves path { animation: drift 7s ease-in-out infinite alternate; }

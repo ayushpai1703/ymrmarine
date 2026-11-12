@@ -434,23 +434,27 @@
             this.innerHTML = icon(show ? 'eyeOff' : 'eye');
             this.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
         });
+        /** Sign in with login.php (the session cookie stays in this WebView). Rejects with the message to show. */
+        function doLogin(u, p, remember) {
+            return fetch('login.php', {
+                method: 'POST', credentials: 'same-origin', redirect: 'manual',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ username: u, password: p, remember: remember ? '1' : '' }).toString()
+            }).then(function (r) {
+                // login.php answers a correct sign-in with a redirect to index.php.
+                if (r.type === 'opaqueredirect' || r.redirected || (r.status >= 300 && r.status < 400)) return loadMe();
+                throw new Error('bad');
+            }).then(function () { try { localStorage.setItem('ysmsLastUser', u); } catch (e) {} }, function (x) {
+                throw new Error(x && x.message === 'bad' ? 'Wrong username or password.' : 'Could not connect. Check the internet and try again.');
+            });
+        }
         form.addEventListener('submit', function (e) {
             e.preventDefault();
             var u = form.username.value.trim(), p = form.password.value;
             if (!u || !p) { fail('Enter your username and password.'); return; }
             btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Signing in…';
             err.hidden = true;
-            fetch('login.php', {
-                method: 'POST', credentials: 'same-origin', redirect: 'manual',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ username: u, password: p, remember: form.remember.checked ? '1' : '' }).toString()
-            }).then(function (r) {
-                // login.php answers a correct sign-in with a redirect to index.php.
-                if (r.type === 'opaqueredirect' || r.redirected || (r.status >= 300 && r.status < 400)) return loadMe();
-                throw new Error('bad');
-            }).then(signedIn).catch(function (x) {
-                fail(x && x.message === 'bad' ? 'Wrong username or password.' : 'Could not connect. Check the internet and try again.');
-            });
+            doLogin(u, p, form.remember.checked).then(signedIn).catch(function (x) { fail(x.message); });
         });
         function signedIn() {
             haptic('MEDIUM');
@@ -460,13 +464,39 @@
         }
         // Fingerprint login: only when it was turned on in Profile on this phone.
         var fp = scr.querySelector('[data-fp-login]');
-        if (BIO && BIO.bioKeyHas) BIO.bioKeyHas().then(function (r) {
-            if (!r.has) return;
-            var who = ''; try { who = localStorage.getItem('ysmsBioName') || ''; } catch (e) {}
-            fp.hidden = false;
-            fp.querySelector('small').textContent = who ? 'as ' + who : '';
-            if (state.autoFp !== false) { state.autoFp = false; setTimeout(fpLogin, 450); }
-        }).catch(function () {});
+        // Android app: the login screen is the Flutter screen (YsmsNativePlugin.flutterLoginOpen); this page
+        // signs in for it. An app without it (older APK) answers "not implemented": the form here is used.
+        var FL = !!BIO, hasFp = false, fpWho = '';
+        if (FL) scr.classList.add('fl-mode');
+        function flOpen(msg) {
+            if (!FL || !scr.isConnected) return;
+            var last = ''; try { last = localStorage.getItem('ysmsLastUser') || ''; } catch (e) {}
+            BIO.flutterLoginOpen({ error: msg || '', username: last, fp: hasFp, fpName: fpWho, version: '' }).catch(flOff);
+        }
+        function flOff() { FL = false; scr.classList.remove('fl-mode'); if (msg0) fail(msg0); }
+        var msg0 = '';
+        if (FL) {
+            if (!state.flListen) { state.flListen = true; BIO.addListener('flutterLogin', function (ev) { if (state.flHandler) state.flHandler(ev || {}); }); }
+            state.flHandler = function (ev) {
+                if (!scr.isConnected) return;
+                if (ev.action === 'login') {
+                    doLogin(String(ev.username || '').trim(), String(ev.password || ''), !!ev.remember).then(function () {
+                        BIO.flutterLoginResult({ ok: true }).catch(function () {}); signedIn();
+                    }, function (x) { BIO.flutterLoginResult({ ok: false, error: x.message }).catch(function () {}); });
+                } else if (ev.action === 'fingerprint') fpLogin();
+                else if (ev.action === 'forgot') go('forgot');
+            };
+        }
+        var fpCheck = BIO && BIO.bioKeyHas ? BIO.bioKeyHas().catch(function () { return {}; }) : Promise.resolve({});
+        fpCheck.then(function (r) {
+            if (r && r.has) {
+                hasFp = true; try { fpWho = localStorage.getItem('ysmsBioName') || ''; } catch (e) {}
+                fp.hidden = false;
+                fp.querySelector('small').textContent = fpWho ? 'as ' + fpWho : '';
+                if (state.autoFp !== false) { state.autoFp = false; setTimeout(fpLogin, FL ? 200 : 450); return; }
+            }
+            flOpen();
+        });
         fp.addEventListener('click', fpLogin);
         function fpLogin() {
             err.hidden = true;
@@ -485,6 +515,11 @@
             }).catch(function (x) {
                 fp.disabled = false; fp.querySelector('b').textContent = 'Login with fingerprint';
                 var m = x && x.message || '';
+                if (FL) {   // back to the Flutter login screen, with the reason unless it was just cancelled
+                    if (x && x.code === 'invalidated') hasFp = false;
+                    if (/^(10|13|5)$/.test(String(x && x.code)) || /cancel/i.test(m)) m = '';
+                    msg0 = m; flOpen(m); return;
+                }
                 if (x && x.code === 'invalidated') { fp.hidden = true; fail(m); return; }
                 // Cancelled or "Use password": just stay on the form.
                 if (/^(10|13|5)$/.test(String(x && x.code)) || /cancel/i.test(m)) return;

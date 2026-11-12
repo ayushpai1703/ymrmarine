@@ -30,7 +30,9 @@ import javax.crypto.spec.GCMParameterSpec;
  *  - fingerprint login: bioKeySave / bioKeyRead / bioKeyHas / bioKeyClear keep the server's device
  *    key (ajax/app_bio_login.php) encrypted with an Android Keystore key that only a strong
  *    biometric unlocks, and that a newly added fingerprint invalidates;
- *  - pushReady(): whether this build has a Firebase config, so push notifications can register.
+ *  - pushReady(): whether this build has a Firebase config, so push notifications can register;
+ *  - the Flutter login screen: flutterLoginOpen / flutterLoginResult and the "flutterLogin" event,
+ *    see FlutterLogin.java.
  */
 @CapacitorPlugin(name = "YsmsNative")
 public class YsmsNativePlugin extends Plugin {
@@ -247,5 +249,46 @@ public class YsmsNativePlugin extends Plugin {
         JSObject r = new JSObject();
         r.put("ready", id != 0);
         call.resolve(r);
+    }
+
+    // ---------- Flutter login screen (FlutterLogin.java) ----------
+    private static YsmsNativePlugin instance;
+
+    @Override
+    public void load() {
+        instance = this;
+        // start the login screen's engine now, so it opens at once when the page asks for it
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> FlutterLogin.engine(getContext()));
+    }
+
+    static void emitLogin(JSObject ev) {
+        if (instance != null) instance.notifyListeners("flutterLogin", ev, true);
+    }
+
+    @PluginMethod
+    public void flutterLoginOpen(PluginCall call) {
+        JSObject opts = call.getData();
+        getActivity().runOnUiThread(() -> {
+            FlutterLogin.open(getActivity(), opts);
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
+    public void flutterLoginResult(PluginCall call) {
+        boolean ok = Boolean.TRUE.equals(call.getBoolean("ok", false));
+        String error = call.getString("error", "");
+        getActivity().runOnUiThread(() -> {
+            FlutterLogin.result(ok, error);
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
+    public void flutterLoginClose(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            FlutterLogin.close();
+            call.resolve();
+        });
     }
 }
