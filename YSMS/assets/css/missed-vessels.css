@@ -177,19 +177,6 @@ html.mv-lock, html.mv-lock body { overflow: hidden; }
 .mvc .mvp-act { margin-top: 10px; }
 .mvc .mvp-act a, .mvc .mvp-act button { height: 34px; padding: 0 12px; font-size: 12.5px; flex: 1 1 auto; justify-content: center; }
 
-/* Dashboard (index.php): second row with Cancelled + Missed */
-.overview-grid.mv-ov2 { grid-template-columns: repeat(2, 1fr); margin-top: 12px; }
-.ov-card.cancelled-ov { background: #FEF2F2; }
-.ov-card.cancelled-ov .ov-icon { background: rgba(220, 38, 38, .12); color: #DC2626; }
-.ov-card.cancelled-ov .ov-count { color: #991B1B; }
-.ov-card.missed-ov { background: var(--mv-al); }
-.ov-card.missed-ov .ov-icon { background: rgba(217, 119, 6, .15); color: var(--mv-a); }
-.ov-card.missed-ov .ov-count { color: var(--mv-ad); }
-.ha-page .ov-card.cancelled-ov::after { background: #DC2626; }
-.ha-page .ov-card.missed-ov::after { background: var(--mv-a); }
-.ha-page .ov-card.cancelled-ov .ov-icon { background: #FEE2E2 !important; color: #DC2626 !important; }
-.ha-page .ov-card.missed-ov .ov-icon { background: #FEF3C7 !important; color: var(--mv-a) !important; }
-.ha-page .overview-grid.mv-ov2 { margin-top: 10px; }
 .vdd-mv .mv-banner, .vdd-mv .mv-hist { margin: 0 0 16px; }
 .dapp-chip.st-missed { background: #FEF3C7; color: #B45309; }
 .dapp > .mv-banner, .dapp > .mv-hist { margin: 12px 0; }
