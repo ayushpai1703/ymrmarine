@@ -1,0 +1,127 @@
+# Builds the YSMS Flutter app (mobile/ysms_app) as two apps and attaches them to the run:
+#   staging → app id com.ymrmarine.ysms.staging, "YSMS Staging", the staging server and its data
+#   live    → app id com.ymrmarine.ysms, "YMR YSMS", the live server (installs over the earlier live test APK)
+# Android: APKs signed with the test key. iOS: unsigned builds (.ipa) — installing on iPhones needs an
+# Apple Developer account to sign them (not set up yet).
+# It only builds files; nothing is deployed and no server or database is touched.
+name: Flutter app
+
+on:
+  push:
+    branches: [staging]
+    paths:
+      - 'mobile/ysms_app/**'
+      - '.github/workflows/flutter-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flutter-app-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.47.8
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mobile/ysms_app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [staging, live]
+    defaults:
+      run:
+        working-directory: mobile/ysms_app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - uses: android-actions/setup-android@v4
+      - name: Android NDK (strips the Flutter engine's debug symbols)
+        run: yes | sdkmanager --install "ndk;27.0.12077973" > /dev/null
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build APK (${{ matrix.flavor }})
+        run: |
+          # version code above the earlier test APKs, so this installs over them
+          flutter build apk --release --flavor ${{ matrix.flavor }} \
+            --target-platform android-arm,android-arm64 \
+            --build-number $((100000 + ${{ github.run_number }}))
+          out="YMR-YSMS-${{ matrix.flavor }}-${{ github.run_number }}.apk"
+          cp build/app/outputs/flutter-apk/app-${{ matrix.flavor }}-release.apk "$out"
+          ls -la "$out"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: YMR-YSMS-${{ matrix.flavor }}-apk-${{ github.run_number }}
+          path: mobile/ysms_app/YMR-YSMS-*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+  ios:
+    needs: test
+    runs-on: macos-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [staging, live]
+    defaults:
+      run:
+        working-directory: mobile/ysms_app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: App id and name (${{ matrix.flavor }})
+        if: matrix.flavor == 'staging'
+        run: |
+          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com.ymrmarine.ysms;/PRODUCT_BUNDLE_IDENTIFIER = com.ymrmarine.ysms.staging;/g' ios/Runner.xcodeproj/project.pbxproj
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName YSMS Staging" ios/Runner/Info.plist
+      - name: Build iOS app, unsigned (${{ matrix.flavor }})
+        run: |
+          flutter build ios --release --no-codesign \
+            --dart-define=YSMS_FLAVOR=${{ matrix.flavor }} \
+            --build-number $((100000 + ${{ github.run_number }}))
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          out="YMR-YSMS-${{ matrix.flavor }}-${{ github.run_number }}-unsigned.ipa"
+          zip -qry "$out" Payload
+          ls -la "$out"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: YMR-YSMS-${{ matrix.flavor }}-ios-unsigned-${{ github.run_number }}
+          path: mobile/ysms_app/YMR-YSMS-*-unsigned.ipa
+          retention-days: 30
+          if-no-files-found: error

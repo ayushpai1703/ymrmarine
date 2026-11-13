@@ -8,6 +8,7 @@ on:
     branches: [staging]
     paths:
       - 'mobile/**'
+      - '!mobile/ysms_app/**'   # the Flutter app has its own workflow (flutter-app.yml)
       - '.github/workflows/android-apk.yml'
   workflow_dispatch:
     inputs:
