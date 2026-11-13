@@ -125,6 +125,13 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-ban"></i>
             <span>Cancelled</span>
         </a>
+        <?php if (in_array($user_role, ['Admin', 'Super Admin', 'Surveyor'], true)): ?>
+        <!-- Missed Vessels (includes/missed_vessels.php): sidebar + drawer only, so the phone bottom bar keeps its slots -->
+        <a href="missed.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'missed.php') ? 'active' : '' ?>" data-testid="navigation-missed-link">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Missed Vessels</span>
+        </a>
+        <?php endif; ?>
         <a href="recovery.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'recovery.php') ? 'active' : '' ?>" data-testid="navigation-recovery-link">
             <i class="fa-solid fa-gas-pump"></i>
             <span>Recovery</span>

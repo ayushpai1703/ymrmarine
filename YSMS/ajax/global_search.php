@@ -60,6 +60,7 @@ try {
 $statusDetailPage = [
     'Pending Vessel' => 'vessel_detail.php',
     'Cancelled'       => 'vessel_detail.php',
+    'Missed'          => 'vessel_detail.php',
     'Pending Report' => 'report_detail.php',
     'Completed'      => 'completed_detail.php',
 ];

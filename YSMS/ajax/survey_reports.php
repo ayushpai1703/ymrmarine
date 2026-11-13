@@ -96,7 +96,7 @@ try {
     if ($a === 'surveys') {
         [$w, $p] = $scope();
         $like = '%' . addcslashes(mb_substr(trim((string)($_GET['q'] ?? '')), 0, 60), '%_\\') . '%';
-        $st = srRole() === 'Admin' ? "s.status <> 'Cancelled'" : "s.status IN ('Pending Vessel', 'Pending Report')";
+        $st = srRole() === 'Admin' ? "s.status NOT IN ('Cancelled', 'Missed')" : "s.status IN ('Pending Vessel', 'Pending Report')";
         $q = $db->prepare("SELECT s.id, s.vessel_name, s.report_number, s.status, p.port_name, DATE(s.assign_date) AS assigned FROM surveys s LEFT JOIN ports p ON p.id = s.port_id
             WHERE $w AND $st AND (s.vessel_name LIKE ? OR s.report_number LIKE ?) ORDER BY FIELD(s.status, 'Pending Report', 'Pending Vessel', 'Completed'), s.assign_date DESC LIMIT 50");
         $q->execute([...$p, $like, $like]);

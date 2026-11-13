@@ -123,9 +123,12 @@ try {
             echo json_encode(['success' => false, 'message' => 'Only assigned (pending) vessels can be cancelled here.']);
             exit;
         }
+        // Adds 'Cancelled' only when the status column lacks it, keeping every other value
+        // (e.g. 'Missed'). The old fixed ENUM list here would have dropped values added later.
         try {
-            $db->exec("ALTER TABLE surveys MODIFY COLUMN status ENUM('Pending Vessel','Pending Report','Completed','Cancelled') DEFAULT 'Pending Vessel'");
-        } catch (Exception $e) {}
+            require_once __DIR__ . '/../includes/missed_vessels.php';
+            ensureSurveyStatusValues($db, ['Cancelled']);
+        } catch (Throwable $e) { error_log('cancel status enum: ' . $e->getMessage()); }
 
         $chk = $db->prepare("SELECT id FROM surveys WHERE id = ? AND status = ?");
         $chk->execute([$id, $status]);
