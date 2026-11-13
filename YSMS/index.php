@@ -300,7 +300,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         <div class="overview-grid">
             <div class="ov-card pending-vessel" onclick="location.href='vessels.php'">
                 <div class="ov-icon"><i class="fa-solid fa-ship"></i></div>
-                <div class="ov-count"<?= $role !== 'Client' ? ' data-mv-count="pending"' : '' ?>><?= $pending_vessels ?></div>
+                <div class="ov-count"><?= $pending_vessels ?></div>
                 <div class="ov-label">Pending<br>Vessels</div>
             </div>
             <div class="ov-card pending-report" onclick="location.href='reports.php'">
@@ -314,42 +314,6 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                 <div class="ov-label">Completed<br>Vessels</div>
             </div>
         </div>
-        <?php
-        // Cancelled + Missed Vessels (second row; counts in the same scope as their list pages)
-        require_once 'includes/cancelled_list.php';
-        require_once 'includes/missed_vessels.php';
-        $ov_cancelled = 0;
-        try { [$ovSc, $ovSp] = cancelledScope($db); $ovQ = $db->prepare("SELECT COUNT(*) FROM surveys s WHERE s.status = 'Cancelled' AND $ovSc"); $ovQ->execute($ovSp); $ov_cancelled = (int)$ovQ->fetchColumn(); } catch (Throwable $e) { error_log('dashboard cancelled count: ' . $e->getMessage()); }
-        $ov_show_missed = missedCanViewList();
-        $ov_missed = $ov_show_missed ? missedCount($db) : 0;
-        ?>
-        <link rel="stylesheet" href="assets/css/missed-vessels.css?v=<?= @filemtime(__DIR__ . '/assets/css/missed-vessels.css') ?>">
-        <div class="overview-grid mv-ov2"<?= $ov_show_missed ? '' : ' style="grid-template-columns:1fr"' ?> data-testid="dashboard-ov-row2">
-            <div class="ov-card cancelled-ov" onclick="location.href='cancelled.php'" data-testid="dashboard-cancelled-card">
-                <div class="ov-icon"><i class="fa-solid fa-ban"></i></div>
-                <div class="ov-count" data-testid="dashboard-cancelled-count"><?= $ov_cancelled ?></div>
-                <div class="ov-label">Cancelled<br>Vessels</div>
-            </div>
-            <?php if ($ov_show_missed): ?>
-            <div class="ov-card missed-ov" onclick="location.href='missed.php'" data-testid="dashboard-missed-card">
-                <div class="ov-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-                <div class="ov-count" data-mv-count="missed" data-testid="dashboard-missed-count"><?= $ov_missed ?></div>
-                <div class="ov-label">Missed<br>Vessels</div>
-            </div>
-            <?php endif; ?>
-        </div>
-        <?php if ($ov_show_missed): ?>
-        <script>
-        // back to the dashboard from the browser cache (after marking / restoring elsewhere): fresh counts
-        window.addEventListener('pageshow', function (e) {
-          if (!e.persisted) return;
-          fetch('ajax/missed_vessels.php?a=counts', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
-            if (!j.ok) return;
-            ['pending', 'missed'].forEach(function (k) { document.querySelectorAll('[data-mv-count="' + k + '"]').forEach(function (el) { el.textContent = j[k]; }); });
-          }).catch(function () {});
-        });
-        </script>
-        <?php endif; ?>
     </div>
 
     <div class="overview-section mt-4">
