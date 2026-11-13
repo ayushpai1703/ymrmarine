@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Start screen: the app's navy, then the Flutter screens -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><color android:color="#0b1e46"/></item>
+    <item><bitmap android:gravity="center" android:src="@mipmap/ic_launcher_foreground"/></item>
+</layer-list>
