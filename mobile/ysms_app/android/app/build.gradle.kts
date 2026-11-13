@@ -31,13 +31,13 @@ android {
         create("staging") {
             dimension = "server"
             applicationId = "com.ymrmarine.ysms.staging"
-            resValue("string", "app_name", "YSMS Staging")
+            manifestPlaceholders["appName"] = "YSMS Staging"
         }
         create("live") {
             dimension = "server"
             // The same app id as the earlier live test APK, so this installs over it.
             applicationId = "com.ymrmarine.ysms"
-            resValue("string", "app_name", "YMR YSMS")
+            manifestPlaceholders["appName"] = "YMR YSMS"
         }
     }
 
