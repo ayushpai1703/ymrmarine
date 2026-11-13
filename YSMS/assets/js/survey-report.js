@@ -299,6 +299,7 @@
     else if (S.offlineMode) note = '<div class="sr-note warn"><i class="fa-solid fa-plane"></i> Offline — saved on this device, sent when you are back online.</div>';
     $('[data-banners]').innerHTML = (S.signedOut ? signedOutHtml() : '') + note;
     S.wide = window.matchMedia('(min-width: 992px)').matches;
+    if (S.wide) xlLoad();
     var list = steps(), i = stepIndex(S.data.step), st = list[i], body;
     if (st.id === 'vessel') body = vesselHtml();
     else if (st.id === 'survey') body = surveyHtml();
@@ -483,7 +484,21 @@
     guestDefaults();
     var g = chosen();
     if (!g.length) return '<div class="sr-note warn"><i class="fa-solid fa-gas-pump"></i> Choose the fuel grades on board in Survey Details first. <button type="button" class="sr-btn sm" data-goto="survey">Go to Survey Details</button></div>';
+    if (xlOn()) return window.SRXL.html();
     return tankToolbar() + gridHtml() + totalsBar();
+  }
+  /** Desktop / laptop (≥992px): the Excel-style sheet (assets/js/survey-report-xl.js), loaded only on a computer screen
+      and never on a phone, where the tank cards stay as they are. Off with ?classic=1 (or SR_PAGE.xl = false). */
+  var XL_ON = !!P.xl && !/[?&]classic=1\b/.test(location.search);
+  function xlOn() { return XL_ON && S.wide && !!window.SRXL; }
+  function xlLoad() {
+    if (!XL_ON || !S.wide || window.SRXL || S.xlLoading) return;
+    S.xlLoading = true;
+    var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = P.xl.css; document.head.appendChild(l);
+    var sc = document.createElement('script'); sc.src = P.xl.js; sc.async = true;
+    sc.onload = function () { if (window.SRXL && S.data && S.data.step === 'tanks' && S.wide) render(); };
+    sc.onerror = function () { S.xlLoading = false; }; // stays on the plain grid
+    document.head.appendChild(sc);
   }
   function gradeSelect(g, i) {
     return '<select data-tg="' + g + ':' + i + '" data-testid="sr-tg-' + g + '-' + i + '"' + (S.canEdit ? '' : ' disabled') + '>' + chosen().map(function (x) { return '<option value="' + x + '"' + (x === g ? ' selected' : '') + '>' + esc(gradeInfo(x).short) + '</option>'; }).join('') + '</select>';
@@ -633,6 +648,7 @@
     if ((x = $('[data-testid=sr-tot-tanks]'))) x.textContent = all.n;
     if ((x = $('[data-testid=sr-tot-gsv]'))) x.textContent = f3c(all.gsv) + ' m³';
     if ((x = $('[data-testid=sr-tot-mt]'))) x.textContent = f3c(all.mt) + ' MT';
+    if (window.SRXL && window.SRXL.updated) window.SRXL.updated(g, i, t);
   }
   function trackOf(r) { return [sounding(r), r.volume, r.density, r.temp].map(function (v) { var n = num(v); return n === null ? String(v || '') : String(n); }).join('|'); }
   /** Leaving a row (grid) or closing the sheet after typing: a complete tank is saved (its version is written). */
@@ -648,7 +664,7 @@
   function markRow(g, i) {
     var r = S.data.tanks[g][i], tr = $('.sr-row[data-tank="' + g + ':' + i + '"]');
     if (!tr) return;
-    var html = tr.classList.contains('sr-tc') ? cardHtml(g, r, i) : rowHtml(g, r, i), tmp = document.createElement(tr.tagName === 'TR' ? 'tbody' : 'div'); tmp.innerHTML = html;
+    var html = tr.classList.contains('sr-tc') ? cardHtml(g, r, i) : tr.classList.contains('xl-row') && window.SRXL ? window.SRXL.row(g, r, i) : rowHtml(g, r, i), tmp = document.createElement(tr.tagName === 'TR' ? 'tbody' : 'div'); tmp.innerHTML = html;
     var nw = tmp.firstChild; tr.parentNode.replaceChild(nw, tr); showErrors();
   }
   function resHtml(t) {
@@ -943,7 +959,7 @@
       var p = key.split(':'); finishRow(p[0], +p[1]);
     }, 0);
   });
-  var lastWide = null;
+  var lastWide = window.matchMedia('(min-width: 992px)').matches; // the first resize across the breakpoint counts too
   window.addEventListener('resize', function () { var w = window.matchMedia('(min-width: 992px)').matches; if (S.data && lastWide !== null && w !== lastWide && S.data.step === 'tanks') render(); lastWide = w; });
   document.addEventListener('keydown', function (ev) { // Enter: lookup from the IMO box, otherwise the next box
     var gt = ev.target;
@@ -1545,6 +1561,12 @@
     }).catch(function () { S.finalBusy = false; });
   }
   window.addEventListener('online', function () { setTimeout(finalAfterOffline, 1500); });
+
+  // the desktop sheet (survey-report-xl.js) works on the same data with the same functions
+  window.SR_INT = { S: S, P: P, $: $, $$: $$, esc: esc, f3: f3, f3c: f3c, num: num, val: val, calc: calc, shown: shown, chosen: chosen, gradeInfo: gradeInfo,
+    gradeTotals: gradeTotals, allTotals: allTotals, xSpare: xSpare, blankRow: blankRow, emptyRow: emptyRow, tankErrors: tankErrors, fmtRow: fmtRow,
+    render: render, changed: changed, saveNow: saveNow, gridPaste: gridPaste, delTank: delTank, copyTank: copyTank, moreRows: moreRows,
+    summaryRows: summaryRows, calcHtml: calcHtml, label: label, toast: toast, online: online };
 
   // ---------- offline support ----------
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('survey_report_sw.js', { scope: './survey_report' }).catch(function () {});
