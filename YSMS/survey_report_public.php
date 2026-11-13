@@ -130,6 +130,13 @@ $kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'on
             body.sr-public.sr-pv-open::after { content: ''; position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 1999; }
             body.sr-public.sr-pv-open .sr-v4 .sr-pv { inset: 3vh auto 3vh 50%; transform: translateX(-50%); width: min(980px, 94vw); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 60px rgba(15,23,42,.35); }
         }
+        /* phone: Previous / Next fixed to the very bottom (this page has no app menu below), no Preview button on Tank Details */
+        @media (max-width: 991.98px) {
+            .sr-public .sr-wiz-nav { bottom: 0; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -4px 14px rgba(11,30,70,.08); }
+            .sr-public .sr-wrap { padding-bottom: 96px; }
+            body.sr-public[data-sr-step=tanks] .srp-pv-btn { display: none !important; }
+            .srp-pv-btn { bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important; } /* other steps: above Previous / Next */
+        }
         @media (max-width: 991.98px) { .srp-pv-btn { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 1040; height: 46px; border-radius: 999px; } }
         .srp-link { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #eef5ff; border: 1px solid #cfe0fb; color: #1e3a8a; border-radius: 12px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; }
         .srp-link input { flex: 1 1 260px; min-width: 0; height: 34px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 12.5px; color: #334155; background: #fff; }

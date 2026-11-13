@@ -577,11 +577,12 @@
   function cardsHtml() {
     return chosen().map(function (g) {
       var gi = gradeInfo(g), rows = S.data.tanks[g], tot = gradeTotals(g);
-      return '<section class="sr-tcg" data-testid="sr-tanks-' + g + '"><div class="sr-tcg-h"><i class="fa-solid fa-gas-pump"></i><b>' + esc(gi.short) + ' Tanks</b>' +
-        '<span>Total MT: <b data-gmt="' + g + '">' + f3c(tot.mt) + '</b></span></div>' +
+      var shut = !!(S.tgShut && S.tgShut[g]);
+      return '<section class="sr-tcg' + (shut ? ' shut' : '') + '" data-testid="sr-tanks-' + g + '"><div class="sr-tcg-h" data-tgfold="' + g + '" role="button" aria-expanded="' + !shut + '" data-testid="sr-tcg-toggle-' + g + '"><i class="fa-solid fa-chevron-down sr-tcg-c"></i><i class="fa-solid fa-gas-pump"></i><b>' + esc(gi.short) + ' Tanks</b>' +
+        '<span>Total MT: <b data-gmt="' + g + '">' + f3c(tot.mt) + '</b></span></div><div class="sr-tcg-b">' +
         (rows.map(function (r, i) { return cardHtml(g, r, i); }).join('') || '<div class="sr-tc-none">No tanks yet.</div>') +
         (S.canEdit ? '<button type="button" class="sr-tc-add" data-add="' + g + '" data-testid="sr-add-' + g + '"><i class="fa-solid fa-plus"></i> Add ' + esc(gi.short) + ' tank</button>' : '') +
-        '<b hidden data-testid="sr-total-' + g + '">' + f3(tot.mt) + '</b><b hidden data-testid="sr-total-gsv-' + g + '">' + f3(tot.gsv) + '</b></section>';
+        '</div><b hidden data-testid="sr-total-' + g + '">' + f3(tot.mt) + '</b><b hidden data-testid="sr-total-gsv-' + g + '">' + f3(tot.gsv) + '</b></section>';
     }).join('');
   }
   function gridHtml() {
@@ -814,6 +815,10 @@
     if (t.closest('[data-undo]')) { undoLookup(); return; }
     if (t.closest('[data-manual]')) { S.manual = true; render(); var f = $('[data-f=vessel_name]'); if (f) f.focus(); return; }
     if ((b = t.closest('[data-more]'))) { moreRows(b.getAttribute('data-more')); return; }
+    if ((b = t.closest('[data-tgfold]'))) { // a grade row on a phone: its tanks fold away (grade name left, Total MT right)
+      var tg = b.getAttribute('data-tgfold'), tsec = b.closest('.sr-tcg'); S.tgShut = S.tgShut || {};
+      S.tgShut[tg] = !tsec.classList.contains('shut'); tsec.classList.toggle('shut', S.tgShut[tg]); b.setAttribute('aria-expanded', S.tgShut[tg] ? 'false' : 'true'); return;
+    }
     if ((b = t.closest('[data-tc]'))) {
       var card = b.closest('.sr-tc'), rr = S.data.tanks[b.getAttribute('data-tc').split(':')[0]][+b.getAttribute('data-tc').split(':')[1]];
       S.tcOpen = S.tcOpen || {}; var op = !card.classList.contains('open'); if (rr) S.tcOpen[rr.id] = op;

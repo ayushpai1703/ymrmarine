@@ -618,6 +618,10 @@ body[data-sr-step=tanks] .sr-wiz-top { display: none; }
 .sr-tcg { margin: 0 0 16px; }
 .sr-tcg-h { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: linear-gradient(180deg, #eef4fd, #e2ecfa); border: 1px solid #d5e3f6; margin-bottom: 10px; }
 .sr-tcg-h > i { color: #0b3c7a; font-size: 18px; }
+.sr-tcg-h { cursor: pointer; user-select: none; }
+.sr-tcg-h > .sr-tcg-c { font-size: 13px; width: 14px; color: #475569; transition: transform .15s; }
+.sr-tcg.shut .sr-tcg-c { transform: rotate(-90deg); }
+.sr-tcg.shut .sr-tcg-b { display: none; }
 .sr-tcg-h > b { font-size: 16px; font-weight: 800; color: #0b1e46; }
 .sr-tcg-h span { margin-left: auto; font-size: 13px; font-weight: 700; color: #0b1e46; white-space: nowrap; }
 .sr-tcg-h span b { display: inline-block; margin-left: 4px; padding: 5px 10px; border-radius: 9px; background: #d6e6fb; font-size: 15px; font-weight: 800; }
