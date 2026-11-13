@@ -271,7 +271,55 @@ $can_replace_docs = canReplaceDocument($db, $role, $current_user_id, (int)$surve
 require_once 'includes/admin_inline_edit.php';
 aieInit($db, $survey);
 
+// Missed Vessels (includes/missed_vessels.php): Mark as Missed on a Pending Vessel, and the
+// reason + history + Edit Remarks / Restore on a Missed one — each only for who may do it.
+require_once 'includes/missed_vessels.php';
+$mvSurvey = ['id' => (int)$survey['id'], 'status' => (string)($survey['status'] ?? '')];
+$mvBtn = ['id' => (int)$survey['id'], 'vessel' => (string)$survey['vessel_name'], 'client' => (string)($survey['company_name'] ?? ''),
+    'port' => (string)($survey['port_name'] ?? ''), 'surveyor' => (string)$combined_surveyor_names];
+$mvCanMark = missedCanMark($db, $mvSurvey);
+$mvIsMissed = $mvSurvey['status'] === MISSED_STATUS;
+$mvSees = missedCanSee($db, $mvSurvey);
+$mvRec = null; $mvHist = [];
+try {
+    if ($mvSees) { $mvRec = $mvIsMissed ? missedRecord($db, (int)$survey['id']) : null; $mvHist = missedHistory($db, (int)$survey['id']); }
+} catch (Throwable $e) { error_log('vessel_detail missed: ' . $e->getMessage()); }
+$mvBlock = '';
+if ($mvSees && ($mvIsMissed || $mvHist)) {
+    ob_start();
+    if ($mvIsMissed): ?>
+    <div class="mv-banner" data-testid="vd-missed-banner">
+        <div class="mv-banner-h"><i class="fa-solid fa-triangle-exclamation"></i><b>Missed Vessel</b><span class="mvp-pill">Missed</span></div>
+        <div class="mv-banner-r" data-mv-remarks-of="<?= (int)$survey['id'] ?>" data-testid="vd-missed-remarks"><?= sanitize((string)($mvRec['remarks'] ?? '')) ?: '—' ?></div>
+        <div class="mv-banner-m">Marked <?= missedWhen($mvRec['marked_at'] ?? null) ?><?= !empty($mvRec['marked_by_name']) ? ' by ' . sanitize($mvRec['marked_by_name']) : '' ?><?php if (!empty($mvRec['remarks_updated_at'])): ?> · Edited <?= missedWhen($mvRec['remarks_updated_at']) ?><?= !empty($mvRec['edited_by_name']) ? ' by ' . sanitize($mvRec['edited_by_name']) : '' ?><?php endif; ?></div>
+        <?php if (missedCanEdit($db, $mvSurvey) || missedCanRestore($mvSurvey)): ?>
+        <div class="mv-banner-a">
+            <?php if (missedCanEdit($db, $mvSurvey)): ?><button type="button" <?= missedBtnData('edit', $mvBtn + ['remarks' => (string)($mvRec['remarks'] ?? '')]) ?> data-mv-reload data-testid="vd-missed-edit"><i class="fa-solid fa-pen"></i> Edit Remarks</button><?php endif; ?>
+            <?php if (missedCanRestore($mvSurvey)): ?><button type="button" class="rs" <?= missedBtnData('restore', $mvBtn) ?> data-mv-reload data-testid="vd-missed-restore"><i class="fa-solid fa-rotate-left"></i> Restore to Pending Vessels</button><?php endif; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif;
+    if ($mvHist): ?>
+    <div class="mv-hist" data-testid="vd-status-history">
+        <h4><i class="fa-solid fa-clock-rotate-left"></i> Status History</h4>
+        <ol>
+        <?php foreach ($mvHist as $h): ?>
+            <li class="<?= sanitize((string)$h['action_type']) ?>">
+                <div class="t"><?= sanitize(missedActionLabel((string)$h['action_type'])) ?></div>
+                <div class="m"><?= missedWhen($h['action_at']) ?><?= !empty($h['by_name']) ? ' · ' . sanitize($h['by_name']) : '' ?><?= ($h['previous_status'] && $h['new_status'] && $h['previous_status'] !== $h['new_status']) ? ' · ' . sanitize($h['previous_status']) . ' → ' . sanitize($h['new_status']) : '' ?></div>
+                <?php if ((string)$h['remarks'] !== ''): ?><div class="r"><?= sanitize((string)$h['remarks']) ?></div><?php endif; ?>
+                <?php if ($h['action_type'] === 'remark_updated' && (string)$h['previous_remarks'] !== ''): ?><div class="r">Previous: <s><?= sanitize((string)$h['previous_remarks']) ?></s></div><?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+        </ol>
+    </div>
+    <?php endif;
+    $mvBlock = ob_get_clean();
+}
+
 include 'includes/header.php';
+if ($mvCanMark || $mvBlock !== '') echo missedAssets();
 ?>
 
 <style>
@@ -605,7 +653,11 @@ include 'includes/header.php';
                 <?php endif; ?>
                 <button type="button" class="dapp-act sh" data-pv-share data-share-text="<?= sanitize($appointment_block) ?>" data-testid="vessel-detail-share"><i class="fa-solid fa-share-nodes"></i>Share</button>
             </div>
+            <?php if ($mvCanMark): ?>
+            <div class="mv-card-act" style="padding:10px 0 0"><button type="button" class="mv-mark-btn" <?= missedBtnData('mark', $mvBtn) ?> data-mv-reload data-testid="vessel-detail-mark-missed"><i class="fa-solid fa-triangle-exclamation"></i> Mark as Missed</button></div>
+            <?php endif; ?>
         </div>
+        <?= $mvBlock ?>
 
         <div class="dapp-card">
             <div class="dapp-sec-h"><span class="si"><i class="fa-solid fa-ship"></i></span><b>Survey Details</b></div>
@@ -777,8 +829,12 @@ include 'includes/header.php';
                     <?php if ($is_admin): ?>
                         <a href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>" class="vdd-btn-edit" data-testid="vessel-detail-edit-link-desktop"><i class="fa-solid fa-pen"></i> Edit</a>
                     <?php endif; ?>
+                    <?php if ($mvCanMark): ?>
+                        <button type="button" class="mv-mark-btn" style="padding:9px 14px;font-size:13px;border-radius:10px" <?= missedBtnData('mark', $mvBtn) ?> data-mv-reload data-testid="vessel-detail-mark-missed-desktop"><i class="fa-solid fa-triangle-exclamation"></i> Mark as Missed</button>
+                    <?php endif; ?>
                 </div>
             </div>
+            <?php if ($mvBlock !== ''): ?><div class="vdd-mv"><?= $mvBlock ?></div><?php endif; ?>
 
             <div class="vdd-grid">
                 <div>

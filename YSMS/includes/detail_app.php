@@ -21,6 +21,7 @@ function daStatus(string $status): array {
         'Pending Vessel' => ['Pending Survey', 'st-pending'],
         'Pending Report' => ['Pending Report', 'st-report'],
         'Completed' => ['Completed', 'st-done'],
+        'Missed' => ['Missed', 'st-missed'],
         default => [$status !== '' ? $status : 'N/A', 'st-other'],
     };
 }
