@@ -472,10 +472,6 @@ include 'includes/header.php';
 
 .vd-badge { background: #d1fae5 !important; color: #065f46 !important; box-shadow: 0 0 0 1px rgba(6,95,70,.1) !important; }
 .vd-badge .dot { background: #059669 !important; }
-    /* Admin: Add Completed Vessel (assign_vessel.php?completed=1) */
-    .btn-export.ce-add-btn { background: linear-gradient(135deg, #22c55e, #15803d); box-shadow: 0 6px 16px rgba(21,128,61,.28); }
-    .btn-export.ce-add-btn:hover { box-shadow: 0 10px 22px rgba(21,128,61,.38); }
-    .ce-add-m { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 14px 12px; padding: 12px 14px; border-radius: 14px; background: linear-gradient(90deg, #22c55e, #15803d); color: #fff !important; font-weight: 700; font-size: 13.5px; text-decoration: none; box-shadow: 0 8px 18px rgba(21,128,61,.25); }
 </style>
 <div class="scroll-content" data-list-scope data-testid="completed-surveys-page">
     <?php $page_title = 'Completed Surveys'; $back_url = ''; $page_testid = 'completed-surveys'; include 'includes/top_app_bar.php'; ?>
@@ -483,9 +479,6 @@ include 'includes/header.php';
     <div class="list-mobile-view">
     <div class="rt-mobile-top">
         <?= rtMobileSearch($rtBase, $rt, $rtExport) ?>
-        <?php if ($role === 'Admin'): ?>
-        <a href="assign_vessel.php?completed=1" class="ce-add-m" data-testid="completed-add-vessel-mobile"><i class="fa-solid fa-plus"></i> Add Completed Vessel</a>
-        <?php endif; ?>
         <div class="ls-region" data-live-region="m-top">
         <div class="cv-rec-summary" data-testid="cv-recovery-mobile">
             <span><i class="fa-solid fa-droplet"></i> <?= sanitize($cvRecoveryLabel) ?></span>
@@ -594,9 +587,6 @@ include 'includes/header.php';
                     </button>
                     <?php endif; ?>
                 </div>
-                <?php if ($role === 'Admin'): ?>
-                <a href="assign_vessel.php?completed=1" class="btn-export ce-add-btn" data-testid="completed-add-vessel"><span class="vd-export-icon"><i class="fa-solid fa-plus"></i></span> Add Completed Vessel</a>
-                <?php endif; ?>
                 <a href="<?= sanitize($rtExport) ?>" class="btn-export" data-testid="rt-download" data-live-region="d-export"><span class="vd-export-icon"><i class="fa-solid fa-arrow-down"></i></span> Download</a>
             </div>
             <div class="ls-region" data-live-region="d-list">

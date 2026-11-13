@@ -15,7 +15,7 @@ $is_sales_role = (($_SESSION['role'] ?? '') === 'Sales');
 $is_requester = $is_client_role || $is_sales_role;
 // 🌟 Completed Vessel Entry (Admin): this same form, with the survey dates, recovery and report
 // files, saves an already-completed survey straight into Completed Vessels
-// (includes/completed_entry.php). Opened from Completed Vessels → "Add Completed Vessel".
+// (includes/completed_entry.php). Opened from Admin Controls → Completed Surveys → "Add Completed Vessel".
 $completed_mode = (($_SESSION['role'] ?? '') === 'Admin') && (($_GET['completed'] ?? $_POST['completed_entry'] ?? '') === '1') && empty($_GET['edit_id']);
 if ($completed_mode) require_once __DIR__ . '/includes/completed_entry.php';
 
@@ -1420,7 +1420,7 @@ include 'includes/header.php';
 
 <?php
 $page_title = $completed_mode ? 'Add Completed Vessel' : ($edit_mode ? 'Edit Vessel Assignment' : ($is_requester ? 'Request Survey' : 'Assign New Vessel'));
-$back_url = $completed_mode ? 'completed.php' : ($edit_mode ? 'vessel_detail.php?id=' . (int)$edit_id : ($is_sales_role ? 'sales_dashboard.php' : 'index.php'));
+$back_url = $completed_mode ? 'admin_controls.php?tab=completed_surveys' : ($edit_mode ? 'vessel_detail.php?id=' . (int)$edit_id : ($is_sales_role ? 'sales_dashboard.php' : 'index.php'));
 $page_testid = 'assign-vessel';
 include 'includes/top_app_bar.php';
 ?>

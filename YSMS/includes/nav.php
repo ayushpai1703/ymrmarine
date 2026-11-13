@@ -1,7 +1,7 @@
 <?php
 $current_page = basename($_SERVER['PHP_SELF']);
-// Add Completed Vessel (assign_vessel.php?completed=1) belongs to Completed Vessels
-if ($current_page === 'assign_vessel.php' && ($_GET['completed'] ?? '') === '1') $current_page = 'completed.php';
+// Add Completed Vessel (assign_vessel.php?completed=1) opens from Admin Controls → Completed Surveys
+if ($current_page === 'assign_vessel.php' && ($_GET['completed'] ?? '') === '1') $current_page = 'admin_controls.php';
 // సెషన్‌లో ఉన్న యూజర్ రోల్‌ను తెచ్చుకోవడం (Admin లేదా Surveyor)
 $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
 $sidebar_user_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : (isset($_SESSION['username']) ? $_SESSION['username'] : 'User');
