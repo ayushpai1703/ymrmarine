@@ -289,7 +289,7 @@
     else {
       var t = f.type === 'date' ? 'date' : f.type === 'time' ? 'time' : 'text';
       var mode = /^(num|int|imo)/.test(f.type) ? ' inputmode="decimal"' : '';
-      inp = '<input type="' + t + '"' + mode + attrs + ' value="' + esc(v) + '" maxlength="200" autocomplete="off">';
+      inp = '<input type="' + t + '"' + mode + attrs + ' value="' + esc(v) + '" maxlength="200" autocomplete="off"' + (t === 'text' ? ' placeholder=" "' : '') + '>'; // " ": the label sits in the empty box (phone)
     }
     return '<label class="sr-f' + (opts.wide ? ' wide' : '') + '" data-fw="' + k + '"><span>' + esc(opts.label || label(k)) + (opts.req ? ' <b class="sr-req">*</b>' : '') + '</span>' + inp + '<em data-err="' + k + '"></em></label>';
   }
@@ -547,13 +547,13 @@
     var box = function (f) {
       var v = shown(r, f[0]);
       return '<label class="sr-f sr-cellf sr-tc-f' + (f[0] === 'temp' ? ' w' : '') + '" data-tw="' + key + ':' + f[0] + '"><i class="fa-solid ' + f[2] + '"></i><span class="l">' + f[1] + '</span>' +
-        '<input data-t="' + key + ':' + f[0] + '" data-testid="sr-t-' + g + '-' + i + '-' + f[0] + '" value="' + esc(v) + '"' + (f[3] ? ' inputmode="decimal"' : '') + dis + ' autocomplete="off" spellcheck="false"' + (/^GAUGE$/i.test(v) ? ' class="gauge"' : '') + '><em data-terr="' + key + ':' + f[0] + '"></em></label>';
+        '<input data-t="' + key + ':' + f[0] + '" data-testid="sr-t-' + g + '-' + i + '-' + f[0] + '" value="' + esc(v) + '"' + (f[3] ? ' inputmode="decimal"' : '') + dis + ' autocomplete="off" spellcheck="false" placeholder=" "' + (/^GAUGE$/i.test(v) ? ' class="gauge"' : '') + '><em data-terr="' + key + ':' + f[0] + '"></em></label>';
     };
     return '<div class="sr-tc sr-row' + (open ? ' open' : '') + '" data-tank="' + key + '" data-testid="sr-tank-' + g + '-' + i + '">' +
       '<div class="sr-tc-h" data-tc="' + key + '" role="button" aria-expanded="' + open + '" data-testid="sr-tc-toggle-' + g + '-' + i + '"><i class="fa-solid fa-chevron-right sr-tc-c"></i><i class="fa-solid fa-database sr-tc-i"></i>' +
         '<b class="sr-tc-n"><span data-tc-name="' + key + '">' + esc(r.name || 'New tank') + '</span> <small>(' + esc(short) + ')</small></b>' +
         '<span class="sr-tc-mt">MT: <b data-rc="' + key + ':mt">' + (t.mt == null ? '—' : f3c(t.mt)) + '</b></span></div>' +
-      '<div class="sr-tc-b"><label class="sr-f sr-cellf sr-tc-f w" data-tw="' + key + ':name"><i class="fa-solid fa-tag"></i><span class="l">Tank name</span><input data-t="' + key + ':name" data-testid="sr-t-' + g + '-' + i + '-name" value="' + esc(r.name) + '"' + dis + ' autocomplete="off"><em data-terr="' + key + ':name"></em></label>' +
+      '<div class="sr-tc-b"><label class="sr-f sr-cellf sr-tc-f w" data-tw="' + key + ':name"><i class="fa-solid fa-tag"></i><span class="l">Tank name</span><input data-t="' + key + ':name" data-testid="sr-t-' + g + '-' + i + '-name" value="' + esc(r.name) + '"' + dis + ' autocomplete="off" placeholder=" "><em data-terr="' + key + ':name"></em></label>' +
         TC_FIELDS.map(box).join('') +
         '<span hidden data-rc="' + key + ':vcf"></span><span hidden data-rc="' + key + ':gsv"></span>' +
         (S.canEdit ? '<div class="sr-tc-a"><button type="button" class="sr-btn sm danger" data-del="' + key + '" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-regular fa-trash-can"></i> Delete tank</button></div>' : '') +

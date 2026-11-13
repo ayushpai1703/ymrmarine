@@ -703,3 +703,49 @@ body[data-sr-step=tanks] .sr-wiz-top { display: none; }
   .sr-tl-g { gap: 8px 10px; }
   .sr-tl .sr-f input { padding-left: 8px; padding-right: 6px; font-size: 14px; }
 }
+
+/* ---- Phone / tablet: outlined fields with a floating label ----
+   Empty: the field name sits inside the box. Typing or filled: it moves up onto the top-left of the border, small.
+   (Only where the browser supports :has; otherwise the label stays above the box as before.) */
+@supports selector(:has(*)) {
+  /* tank cards */
+  .sr-step .sr-tc-f { --flbg: #fff; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: auto; min-height: 58px; padding: 6px 12px 6px 10px; overflow: visible; }
+  .sr-step .sr-tc-f > i { grid-row: 1 / span 2; }
+  .sr-step .sr-tc-f input { grid-column: 2; height: 44px; font-size: 17px; }
+  .sr-tc-f .l { position: absolute; z-index: 2; left: 46px; top: 29px; transform: translateY(-50%); max-width: calc(100% - 58px); padding: 0 5px; margin-left: -5px;
+    font-size: 15px; font-weight: 500; color: #64748b; pointer-events: none; transition: top .15s ease, left .15s ease, font-size .15s ease, color .15s ease;
+    background: linear-gradient(to bottom, transparent 38%, var(--flbg) 38%); line-height: 1.2; }
+  .sr-tc-f:focus-within .l, .sr-tc-f:has(input:not(:placeholder-shown)) .l, .sr-tc-f:has(input:disabled) .l { top: 0; left: 14px; font-size: 12px; font-weight: 700; color: #475569; }
+  .sr-step .sr-tc-f:focus-within .l { color: #0b63e5; }
+  .sr-step .sr-tc-f.bad { --flbg: #fef2f2; }
+  .sr-step .sr-tc-f.bad .l { color: #b91c1c; }
+  .sr-step .sr-tc-f input::placeholder { color: transparent; }
+  .sr-tc-b { row-gap: 14px; padding-top: 16px; }
+}
+@media (max-width: 991.98px) {
+  @supports selector(:has(*)) {
+    /* the other fields of the steps (vessel, survey details, timeline, sheets …) */
+    .sr-step .sr-f:not(.sr-cellf) { --flbg: #fff; position: relative; display: block; margin-top: 7px; }
+    .sr-step .sr-f:not(.sr-cellf) > span { position: absolute; z-index: 2; left: 9px; top: 24px; transform: translateY(-50%); max-width: calc(100% - 18px); padding: 0 5px;
+      font-size: 15px; font-weight: 500; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; line-height: 1.25;
+      transition: top .15s ease, font-size .15s ease, color .15s ease; background: linear-gradient(to bottom, transparent 38%, var(--flbg) 38%); }
+    .sr-step .sr-f:not(.sr-cellf) > input, .sr-step .sr-f:not(.sr-cellf) > select { height: 48px; min-height: 48px; }
+    .sr-step .sr-f:not(.sr-cellf) > input::placeholder { color: transparent; }
+    .sr-step .sr-f:not(.sr-cellf):focus-within > span,
+    .sr-step .sr-f:not(.sr-cellf):has(> input:not(:placeholder-shown)) > span,
+    .sr-step .sr-f:not(.sr-cellf):has(> input:disabled) > span,
+    .sr-step .sr-f:not(.sr-cellf):has(> select) > span,
+    .sr-step .sr-f:not(.sr-cellf):has(> input[type=date]) > span,
+    .sr-step .sr-f:not(.sr-cellf):has(> input[type=time]) > span,
+    .sr-step .sr-f.calc > span { top: 0; font-size: 12px; font-weight: 700; color: #475569; }
+    .sr-step .sr-f:not(.sr-cellf):focus-within > span { color: #0b63e5; }
+    .sr-step .sr-f.bad:not(.sr-cellf) { --flbg: #fef2f2; }
+    .sr-step .sr-f.bad:not(.sr-cellf) > span { color: #b91c1c; }
+    .sr-step .sr-f:not(.sr-cellf):has(> .ai) { --flbg: #f5f3ff; }
+    .sr-step .sr-f.calc { --flbg: #f1f5f9; }
+    .sr-step .sr-f.calc output { min-height: 48px; }
+    .sr-step .sr-f:not(.sr-cellf) > em:not(:empty) { display: block; margin-top: 4px; }
+    /* a field alone on its row takes the whole row, so its name is not cut */
+    .sr-tl-g > .sr-f:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  }
+}
