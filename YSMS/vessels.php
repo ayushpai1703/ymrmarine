@@ -16,10 +16,6 @@ $user_id = $_SESSION['user_id'];
 // no Edit button — but must not be scoped down to "their own" surveys like a Surveyor).
 $is_full_access = in_array($role, ['Admin', 'Super Admin'], true);
 $can_edit = ($role === 'Admin');
-// Mark as Missed (includes/missed_vessels.php): Admin on any pending vessel; a Surveyor on the
-// vessels listed here for them (their own assignments). The server checks again.
-$can_mark_missed = in_array($role, ['Admin', 'Surveyor'], true);
-if ($can_mark_missed) require_once 'includes/missed_vessels.php';
 $is_client_role = ($role === 'Client');
 $client_row_id = 0;
 if ($is_client_role) {
@@ -243,7 +239,6 @@ foreach ($surveys as $pv_row) {
 }
 
 include 'includes/header.php';
-if ($can_mark_missed) echo missedAssets();
 ?>
 <link rel="stylesheet" href="assets/css/report-table.css?v=<?= @filemtime(__DIR__ . '/assets/css/report-table.css') ?>">
 <link rel="stylesheet" href="assets/css/mobile-card.css?v=<?= @filemtime(__DIR__ . '/assets/css/mobile-card.css') ?>">
@@ -710,7 +705,7 @@ if ($can_mark_missed) echo missedAssets();
                         $surveyorNames = getCombinedSurveyorNames($db, $survey['id'], $survey['surveyor_name'] ?? 'N/A');
                         $needsSurveyor = $is_full_access && (int)($survey['client_submitted'] ?? 0) === 1 && (int)($survey['surveyor_id'] ?? 0) === 1;
                     ?>
-                    <div class="vessel-card vessel-card--stacked cc-card pvx pvz" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-mv-row="<?= (int)$survey['id'] ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
+                    <div class="vessel-card vessel-card--stacked cc-card pvx pvz" onclick="location.href='vessel_detail.php?id=<?= $survey['id'] ?>'" data-survey-card data-name="<?= sanitize(strtolower($vessel_name)) ?>" data-type="<?= sanitize(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? '')) ?>" data-place="<?= sanitize($survey['port_name'] ?? '') ?>" data-client="<?= sanitize($survey['company_name'] ?? '') ?>" data-surveyor="<?= sanitize($surveyorNames) ?>" data-status="<?= $vessel_status_flag ?>" data-date="<?= surveyAppointmentTs($survey) ?>" data-appointment="<?= sanitize((string)($survey['appointment_date'] ?? '')) ?>" data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $survey['type_name'] ?? '', $survey['port_name'] ?? '']))) ?>" data-testid="pending-vessel-card-<?= (int)$survey['id'] ?>">
                         <?php
                             $pvType = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', !empty($survey['type_name']) ? $survey['type_name'] : 'N/A');
                             $pvAppt = !empty($survey['appointment_date']) ? date('d M Y', strtotime($survey['appointment_date'])) : '—';
@@ -769,9 +764,6 @@ if ($can_mark_missed) echo missedAssets();
                                 <div class="pvz-upd-none">No updates recorded yet.</div>
                             <?php endif; ?>
                         </div>
-                        <?php if ($can_mark_missed): ?>
-                        <div class="mv-card-act"><button type="button" class="mv-mark-btn" <?= missedBtnData('mark', ['id' => $survey['id'], 'vessel' => $vessel_name, 'client' => $survey['company_name'] ?? '', 'port' => $survey['port_name'] ?? '', 'surveyor' => $surveyorNames]) ?> data-mv-reload data-testid="pending-vessel-mark-missed-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-triangle-exclamation"></i> Mark as Missed</button></div>
-                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -794,7 +786,7 @@ if ($can_mark_missed) echo missedAssets();
                 </div>
                 <div class="vd-hero-stats">
                     <div class="vd-hero-stat">
-                        <div class="n" data-mv-count="pending"><?= (int)$pv_total ?></div>
+                        <div class="n"><?= (int)$pv_total ?></div>
                         <div class="l">Total</div>
                     </div>
                     <div class="vd-hero-stat warn">
@@ -905,7 +897,7 @@ if ($can_mark_missed) echo missedAssets();
                                 $appt_src = $survey['appointment_date'] ?? '';
                                 $appt_disp = (!empty($appt_src) && $appt_src !== '0000-00-00') ? date('d M Y', strtotime($appt_src)) : '—';
                             ?>
-                            <tr class="vd-row" data-mv-row="<?= (int)$survey['id'] ?>"
+                            <tr class="vd-row"
                                 data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '', $surveyorNames, $survey['report_number'] ?? '']))) ?>"
                                 data-name="<?= sanitize(strtolower($vessel_name)) ?>"
                                 data-type="<?= sanitize(strtolower(getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? ''))) ?>"
@@ -975,9 +967,6 @@ if ($can_mark_missed) echo missedAssets();
                                         <a href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-eye"></i> View</a>
                                         <?php if ($can_edit): ?>
                                         <a class="edit" href="assign_vessel.php?edit_id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-pen"></i> Edit</a>
-                                        <?php endif; ?>
-                                        <?php if ($can_mark_missed): ?>
-                                        <button type="button" class="mv-mark-btn" <?= missedBtnData('mark', ['id' => $survey['id'], 'vessel' => $vessel_name, 'client' => $survey['company_name'] ?? '', 'port' => $survey['port_name'] ?? '', 'surveyor' => $surveyorNames]) ?> data-mv-reload data-testid="pending-vessel-desk-mark-missed-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-triangle-exclamation"></i> Missed</button>
                                         <?php endif; ?>
                                     </div>
                                 </td>
