@@ -724,7 +724,7 @@
       '<section class="sr-card"><h3><i class="fa-solid fa-file-export"></i> Preview &amp; Generate</h3><div class="sr-out" data-testid="sr-output">' +
       '<button type="button" class="sr-btn pri big" data-gen="pdf" data-online-only' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-download-pdf"><i class="fa-solid fa-file-pdf"></i> Download PDF Report</button>' +
       '<button type="button" class="sr-btn big" data-pv="load" data-testid="sr-preview-summary"><i class="fa-solid fa-eye"></i> Preview Report</button></div>' +
-      '<p class="sr-small sr-muted"><i class="fa-solid fa-circle-info"></i> The PDF is made by the server from the company template; its Excel is kept in the system for the Word report.</p>' +
+      '<p class="sr-small sr-muted"><i class="fa-solid fa-circle-info"></i> The PDF is made in the YMR report format on the company letterhead; its Excel is kept in the system for the Word report.</p>' +
       '<button type="button" class="sr-link" data-offline-pdf data-testid="sr-offline-pdf"' + (all.length ? ' hidden' : '') + '><i class="fa-solid fa-plane"></i> No internet? Download a draft PDF made on this device</button></section>';
   }
   /** Admin: the version history of the saved tanks (Sounding, Volume, Density, Temperature). */
@@ -1498,7 +1498,7 @@
       };
       var foot = function () {
         doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, grey);
-        doc.text('DRAFT made on this device without internet — the final report is made by the YSMS server from the company template.', W / 2, 290, { align: 'center' });
+        doc.text('DRAFT made on this device without internet — the final report is made by the YSMS server.', W / 2, 290, { align: 'center' });
       };
       var vessel = val('vessel_name') || S.report.vessel, grades = chosen();
       // ---- page 1: particulars + tank tables
@@ -1559,7 +1559,7 @@
         store(LS + '_offpdf', null);
         S.files = res.files || S.files; if (res.version) S.version = res.version;
         var id = res.new_files && res.new_files.pdf;
-        Swal.fire({ icon: 'success', title: 'Synced — final report ready', text: 'Your offline changes are saved and the final PDF was made from the company template.',
+        Swal.fire({ icon: 'success', title: 'Synced — final report ready', text: 'Your offline changes are saved and the final PDF was made on the YMR letterhead.',
           confirmButtonText: '<i class="fa-solid fa-file-pdf"></i> Download final PDF', showCancelButton: !!id, cancelButtonText: 'Later', showConfirmButton: !!id })
           .then(function (r) { if (r.isConfirmed && id) { var a = document.createElement('a'); a.href = fileUrl(id); a.setAttribute('download', ''); document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 4000); } });
       });

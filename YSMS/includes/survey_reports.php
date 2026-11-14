@@ -122,13 +122,16 @@ function srGenerate(PDO $db, array $report, bool $pdf, int $uid): array {
     $pdfError = '';
     if ($pdf) {
         $prel = 'uploads/survey_reports/' . $report['id'] . '/' . $stamp . '.pdf';
-        // the PDF: every grade on TABLES 54B (one A4 page) + the certificate, from its own build
-        [$pbook, , $pprint] = srBuildBook($tpl, $report['data'], true);
-        $ptmp = sys_get_temp_dir() . '/ysms_srpdf_' . bin2hex(random_bytes(5)) . '.xlsx';
-        rtSave($pbook, $ptmp, rtAbs($tpl['file_path']));
-        $pbook->disconnectWorksheets();
-        $p = rtPdf($ptmp, $pprint, dirname(__DIR__) . '/' . $prel);
-        @unlink($ptmp);
+        require_once __DIR__ . '/survey_report_pdf.php';
+        if (srOwnPdfAvailable()) $p = srOwnPdf($tpl, $report, dirname(__DIR__) . '/' . $prel); // YMR's own format on the letterhead
+        else { // no dompdf: the template printed by LibreOffice, as before
+            [$pbook, , $pprint] = srBuildBook($tpl, $report['data'], true);
+            $ptmp = sys_get_temp_dir() . '/ysms_srpdf_' . bin2hex(random_bytes(5)) . '.xlsx';
+            rtSave($pbook, $ptmp, rtAbs($tpl['file_path']));
+            $pbook->disconnectWorksheets();
+            $p = rtPdf($ptmp, $pprint, dirname(__DIR__) . '/' . $prel);
+            @unlink($ptmp);
+        }
         if ($p['ok']) { $ins->execute([$report['id'], $tpl['id'], 'pdf', $base . '.pdf', $prel, filesize(dirname(__DIR__) . '/' . $prel), $uid ?: null, $now]); $files['pdf'] = (int)$db->lastInsertId(); }
         else $pdfError = $p['error'];
     }
@@ -1276,9 +1279,20 @@ function srPreviewPdf(array $tpl, array $report): array {
     $dir = sys_get_temp_dir() . '/ysms_sr_preview';
     if (!is_dir($dir)) @mkdir($dir, 0700, true);
     foreach (glob($dir . '/*') ?: [] as $f) if (filemtime($f) < time() - 3600) @unlink($f);
-    $key = $report['id'] . '-' . $report['version'] . '-' . $tpl['id'] . '-' . substr(sha1(json_encode($report['data'])), 0, 12);
+    require_once __DIR__ . '/survey_report_pdf.php';
+    $own = srOwnPdfAvailable();
+    $key = ($own ? 'y' : '') . $report['id'] . '-' . $report['version'] . '-' . $tpl['id'] . '-' . substr(sha1(json_encode($report['data'])), 0, 12);
     $pdf = $dir . '/' . $key . '.pdf';
     if (is_file($pdf)) return ['ok' => true, 'pdf' => $pdf];
+    if ($own) { // the same PDF as the download: YMR's own format on the letterhead
+        $tmp = $dir . '/' . $key . '.' . bin2hex(random_bytes(4)) . '.pdf';
+        try {
+            $p = srOwnPdf($tpl, $report, $tmp);
+            if (!$p['ok']) return ['ok' => false, 'error' => $p['error']];
+            if (!@rename($tmp, $pdf) && !is_file($pdf)) return ['ok' => false, 'error' => 'The preview could not be stored.'];
+            return ['ok' => true, 'pdf' => $pdf];
+        } finally { @unlink($tmp); }
+    }
     [$book, , $print] = srBuildBook($tpl, $report['data'], true); // as the PDF prints
     // own temp names, then an atomic rename: two people previewing the same version at once never clash
     $tmp = $dir . '/' . $key . '.' . bin2hex(random_bytes(4));

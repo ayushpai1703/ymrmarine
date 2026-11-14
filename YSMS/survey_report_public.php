@@ -163,7 +163,7 @@ $kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'on
 <section class="srp-hero">
     <span class="tag"><i class="fa-solid fa-ship"></i> Bunker survey</span>
     <h1>Survey Report</h1>
-    <p>Enter the vessel, survey and tank readings on site. The report is saved as you type, previewed as it will print, and made from the company template.</p>
+    <p>Enter the vessel, survey and tank readings on site. The report is saved as you type, previewed as it will print, and made on the YMR letterhead.</p>
 </section>
 <main class="srp-main">
     <?php if ($notFound): ?>
@@ -197,7 +197,7 @@ $kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'on
     </section>
     <div class="srp-feat">
         <div><i class="fa-solid fa-floppy-disk"></i> Saved as you type</div>
-        <div><i class="fa-solid fa-file-pdf"></i> Preview and PDF from the company template</div>
+        <div><i class="fa-solid fa-file-pdf"></i> Preview and PDF on the YMR letterhead</div>
         <div><i class="fa-solid fa-link"></i> Private link to continue later</div>
     </div>
 </main>
