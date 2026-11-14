@@ -295,7 +295,7 @@ const SR_SUMMARY_SHEET = 'ROB SUMMARY';
 const SR_VESSEL_KEYS = ['vessel_name', 'flag', 'port_of_registry', 'grt', 'nrt', 'holds', 'builder', 'keel_month', 'keel_year',
     'operator', 'callsign', 'loa', 'breadth', 'depth', 'summer_draft', 'summer_dwt', 'class'];
 /** Survey particulars that must be filled (ROB of each chosen grade is added). */
-const SR_SURVEY_REQUIRED = ['owners', 'fwe_date', 'fwe_time', 'started_date', 'started_time', 'completed_date', 'completed_time', 'surveyor_name',
+const SR_SURVEY_REQUIRED = ['owners', 'charterers', 'fwe_date', 'fwe_time', 'started_date', 'started_time', 'completed_date', 'completed_time', 'surveyor_name',
     'chief_engineer', 'master', 'port_name', 'place', 'draft_fwd', 'draft_aft'];
 /** Values the template has no cell for (kept in data.extra; printed on the ROB SUMMARY sheet). */
 function srExtraFieldDefs(): array {

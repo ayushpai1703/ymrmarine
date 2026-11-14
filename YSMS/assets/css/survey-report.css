@@ -762,3 +762,9 @@ body[data-sr-step=tanks] .sr-wiz-top { display: none; }
   .sr-tl-row .sr-tl-b { display: flex; flex-direction: column; }
   .sr-tl-row .sr-tl-g { grid-template-columns: 1fr 1fr; }
 }
+
+/* timeline boxes without the A / B / C circles: no connector line, the box takes the full width */
+.sr-tl-i.sr-tl-plain::before { display: none; }
+.sr-tl-i.sr-tl-plain { padding-bottom: 12px; }
+.sr-tl-plain .sr-tl-h small { color: #94a3b8; font-size: 11.5px; font-weight: 500; }
+@media (min-width: 992px) { .sr-tl-row .sr-tl-i.sr-tl-plain { padding-bottom: 0; } }

@@ -372,16 +372,14 @@
     }
     /** one event of the survey (FWE, start, completion): date + time with a "Now" button, then the ROB of each grade */
     var EV = [
-      { k: 'fwe', no: 'A', title: 'Engine Particulars (FWE)', sub: 'Finished With Engines', icon: 'fa-gears', d: 'fwe_date', t: 'fwe_time', rob: 'fwe', robT: 'FWE ROB' },
-      { k: 'started', no: 'B', title: 'Survey Start', sub: 'Surveyor on board', icon: 'fa-play', d: 'started_date', t: 'started_time', rob: 'started', robT: 'Log Book ROB' },
-      { k: 'completed', no: 'C', title: 'Survey Completion', sub: 'Readings finished', icon: 'fa-flag-checkered', d: 'completed_date', t: 'completed_time' }
+      { k: 'fwe', title: 'Finish With Engine (FWE)', sub: 'As per Engine Logbook', icon: 'fa-gears', d: 'fwe_date', t: 'fwe_time', rob: 'fwe', robT: 'FWE ROB' },
+      { k: 'started', title: 'Survey Start Time', sub: 'As per Engine Logbook', icon: 'fa-play', d: 'started_date', t: 'started_time', rob: 'started', robT: 'Log Book ROB' },
+      { k: 'completed', title: 'Survey Completed Time', sub: '1-2 hours from start time', icon: 'fa-flag-checkered', d: 'completed_date', t: 'completed_time' }
     ];
     var timeline = '<section class="sr-card sr-tl" data-testid="sr-timeline"><h3><i class="fa-solid fa-timeline"></i> Survey timeline <small>Local time (LT)</small></h3><div class="sr-tl-row">' +
       EV.map(function (e) {
-        var keys = [e.d, e.t].concat(e.rob ? g.map(function (x) { return 'brob_' + e.rob + '_' + x; }) : []).concat(e.extra ? [e.extra] : []);
-        return '<div class="sr-tl-i" data-testid="sr-grp-' + e.k + '"><span class="sr-tl-no">' + e.no + '</span><div class="sr-tl-b">' +
-          '<div class="sr-tl-h"><b><i class="fa-solid ' + e.icon + '"></i> ' + esc(e.title) + '</b><small>' + esc(e.sub) + '</small>' + doneOf(keys) +
-            (S.canEdit ? '<button type="button" class="sr-btn sm sr-now" data-now="' + e.k + '" data-testid="sr-now-' + e.k + '"><i class="fa-regular fa-clock"></i> Now</button>' : '') + '</div>' +
+        return '<div class="sr-tl-i sr-tl-plain" data-testid="sr-grp-' + e.k + '"><div class="sr-tl-b">' +
+          '<div class="sr-tl-h"><b><i class="fa-solid ' + e.icon + '"></i> ' + esc(e.title) + '</b><small data-testid="sr-tl-sub-' + e.k + '">' + esc(e.sub) + '</small></div>' +
           '<div class="sr-tl-g">' + inputHtml(e.d, { req: true, label: 'Date' }) + inputHtml(e.t, { req: true, label: 'Time (LT)' }) +
             (e.extra ? inputHtml(e.extra, req) : '') + '</div>' +
           (e.rob ? '<div class="sr-tl-rob"><span class="sr-tl-rl">' + esc(e.robT) + ' <small>MT</small></span>' +
@@ -399,13 +397,13 @@
       }).join('') + '</div><em data-err="grades"></em></section>' +
       timeline +
       (function () { // every other survey detail in one card, as the vessel particulars in step 1
-        var keys = ['owners', 'port_name', 'place', 'draft_aft', 'draft_fwd', 'master', 'chief_engineer', 'surveyor_name'];
+        var keys = ['owners', 'charterers', 'port_name', 'place', 'draft_aft', 'draft_fwd', 'master', 'chief_engineer', 'surveyor_name'];
         return card('Survey particulars', 'fa-clipboard-list',
-          inputHtml('owners', { req: true, label: 'Owners' }) + inputHtml('charterers', { label: 'Charterers' }) +
+          inputHtml('owners', { req: true, label: 'Owners' }) + inputHtml('charterers', { req: true, label: 'Charterers' }) +
           inputHtml('port_name', req) + inputHtml('place', { req: true, label: 'Place of Survey' }) + inputHtml('voyage_no', { label: 'Voyage No.' }) +
           inputHtml('draft_aft', { req: true, label: 'Draft Aft (m)' }) + inputHtml('draft_fwd', { req: true, label: 'Draft Fwd (m)' }) +
           '<label class="sr-f calc"><span>Trim (m) <small>Aft − Fwd, worked out</small></span><output data-testid="sr-trim">' + trim + '</output></label>' + inputHtml('list', { label: 'List (degrees)' }) +
-          inputHtml('master', { req: true, label: 'Master (Capt.)' }) + inputHtml('chief_engineer', { req: true, label: 'Chief Engineer' }) + inputHtml('surveyor_name', { req: true, label: 'Surveyor' }), 'details', keys) +
+          inputHtml('master', { req: true, label: 'Master (Capt.)' }) + inputHtml('chief_engineer', { req: true, label: 'Chief Engineer' }) + inputHtml('surveyor_name', { req: true, label: 'Surveyor Name' }), 'details', keys) +
           '<p class="sr-muted sr-small sr-s2-tip"><i class="fa-solid fa-circle-info"></i> Names print in capital letters on the report, however they are typed.</p>';
       })();
   }
