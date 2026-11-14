@@ -128,7 +128,7 @@
     if (!('caches' in window)) return;
     var urls = [location.href];
     $$('script[src]').forEach(function (x) { urls.push(x.src); });
-    urls.push(new URL(BANNER, location.href).href); // the letterhead banner of the draft PDF
+    urls.push(new URL(LOGO, location.href).href, new URL(BANNER, location.href).href); // the letterhead of the PDF made offline
     $$('link[rel=stylesheet][href]').forEach(function (x) { urls.push(x.href); });
     try { performance.getEntriesByType('resource').forEach(function (e) { if (/\.(woff2?|ttf|otf|png|jpe?g|svg|webp|css|js)(\?|$)/i.test(e.name)) urls.push(e.name); }); } catch (e) {}
     caches.open('ysms-sr-v1').then(function (c) {
@@ -743,7 +743,7 @@
       '<button type="button" class="sr-btn pri big" data-gen="pdf" data-online-only' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-download-pdf"><i class="fa-solid fa-file-pdf"></i> Download PDF Report</button>' +
       '<button type="button" class="sr-btn big" data-pv="load" data-testid="sr-preview-summary"><i class="fa-solid fa-eye"></i> Preview Report</button></div>' +
       '<p class="sr-small sr-muted"><i class="fa-solid fa-circle-info"></i> The PDF is made in the YMR report format on the company letterhead; its Excel is kept in the system for the Word report.</p>' +
-      '<button type="button" class="sr-link" data-offline-pdf data-testid="sr-offline-pdf"' + (all.length ? ' hidden' : '') + '><i class="fa-solid fa-plane"></i> No internet? Download a draft PDF made on this device</button></section>';
+      '<button type="button" class="sr-link" data-offline-pdf data-testid="sr-offline-pdf"' + (all.length ? ' hidden' : '') + '><i class="fa-solid fa-plane"></i> No internet? Download the PDF made on this device</button></section>';
   }
   /** Admin: the version history of the saved tanks (Sounding, Volume, Density, Temperature). */
   var HCOLS = [['sounding', 'Sounding'], ['volume', 'Volume'], ['density', 'Density'], ['temperature', 'Temp']];
@@ -1550,81 +1550,175 @@
       }
     });
   }
-  // ---------- draft PDF made on this device (no internet) ----------
-  // The final report is made by the server from the company template. Without internet the
-  // surveyor still gets a PDF: the same particulars, tank tables and ROB summary, drawn here with
-  // jsPDF and marked DRAFT. When the connection is back the data is saved and the final PDF (and
-  // the Excel kept in the system) is made by itself.
-  var BANNER = 'assets/images/survey-letterhead.png';
-  function imgData(url) {
-    return fetch(url, { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error(); return r.blob(); }).then(function (b) {
-      return new Promise(function (ok, no) { var fr = new FileReader(); fr.onload = function () { var im = new Image(); im.onload = function () { ok({ data: fr.result, w: im.naturalWidth, h: im.naturalHeight }); }; im.onerror = no; im.src = fr.result; }; fr.onerror = no; fr.readAsDataURL(b); });
-    }).catch(function () { return null; });
+  // ---------- the report made on this device (no internet) ----------
+  // The final report is made by the server (includes/survey_report_pdf.php). Without internet the same
+  // report is drawn here with jsPDF in the same YMR format: letterhead, vessel name + IMO, the header
+  // lines with the BROB of each grade, drafts, one tank table per grade (readings with S / U), TOTAL
+  // Metric Tons, the remark, the MT of each grade and the three signatures in one row — on one page.
+  // When the connection is back the data is saved and the server's PDF is made by itself.
+  var LOGO = 'assets/images/ymr-logo-horizontal.svg', BANNER = 'assets/images/survey-letterhead.png';
+  // load them once as images while online, so the offline cache (survey_report_sw.js) has them later
+  try { [LOGO, BANNER].forEach(function (u) { var im = new Image(); im.src = u; }); } catch (e) {}
+  /** An image as PNG data (the vector logo drawn sharp on a canvas, w px wide), or null. */
+  function imgPng(url, w) {
+    return new Promise(function (ok) {
+      var im = new Image();
+      im.onload = function () {
+        try {
+          var cw = w || im.naturalWidth, ch = Math.round(cw * im.naturalHeight / im.naturalWidth), c = document.createElement('canvas'); c.width = cw; c.height = ch;
+          var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, cw, ch); x.drawImage(im, 0, 0, cw, ch);
+          ok({ data: c.toDataURL('image/png'), w: cw, h: ch });
+        } catch (e) { ok(null); }
+      };
+      im.onerror = function () { ok(null); };
+      im.src = url;
+    });
+  }
+  function pNum(v, d) { var n = num(v); d = d == null ? 3 : d; return n === null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+  function pRead(col, v) {
+    v = String(v == null ? '' : v).trim(); if (v === '') return '—';
+    var n = num(v); if (n === null) return v.toUpperCase();
+    var d = { ref_height: 3, sounding: 3, volume: 3, density: 4, temp: 1 }[col]; return d == null ? v : pNum(n, d);
+  }
+  var MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+  function pDate(v) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ''); if (!m) return v || '';
+    var d = +m[3], s = d % 100 >= 11 && d % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th', 'th'][d % 10];
+    return d + s + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1];
+  }
+  /** The reading of the Sounding column as printed: "0.012 S", "1.250 U" (the ullage typed), or the plain value. */
+  function pSdg(r) {
+    if (r.mode === 'ullage') return pRead('sounding', r.ullage) + ' U';
+    var s = sounding(r); return pRead('sounding', s) + (r.su === 's' && num(s) !== null ? ' S' : '');
+  }
+  /** The report drawn at print scale k (1 = full size; text and spacing shrink, the letterhead keeps its size). */
+  function ymrPdf(k, logo, banner) {
+    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, L = 10, CW = W - 20, PT = 0.3528, BOT = 286;
+    var f = function (pt) { return pt * k; }, mm = function (pt) { return pt * k * PT; }, lw = Math.max(0.5 * k, 0.3) * PT;
+    var up = function (key) { return val(key).toUpperCase(); }, y = 7;
+    doc.setLineHeightFactor(1.15);
+    // letterhead
+    if (logo) {
+      var lgw = k >= 0.5 ? 182 : 160, lgh = lgw * logo.h / logo.w;
+      doc.addImage(logo.data, 'PNG', (W - lgw) / 2, y, lgw, lgh); y += lgh + 4.6;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.4); doc.setTextColor(59, 95, 149);
+      var lab = 'REGISTERED OFFICE ADDRESS:', all = lab + ' Runwal Elegante, A2605, Lokhandwala, Andheri West, Mumbai, Maharashtra- 400058', x0 = (W - doc.getTextWidth(all)) / 2;
+      doc.text(all, x0, y); doc.setDrawColor(59, 95, 149); doc.setLineWidth(0.15); doc.line(x0, y + 0.6, x0 + doc.getTextWidth(lab), y + 0.6);
+      y += 4.3; var aw = CW * 0.92, ax = (W - aw) / 2;
+      doc.text('e-mail: ops@ymrmarine.com', ax, y); doc.text('Phone: +919820482713', W / 2, y, { align: 'center' }); doc.text('http://www.ymrmarine.com', ax + aw, y, { align: 'right' });
+      y += 2.4;
+    } else if (banner) {
+      var bh = CW * banner.h / banner.w; if (bh > 40) bh = 40; doc.addImage(banner.data, 'PNG', (W - bh * banner.w / banner.h) / 2, y, bh * banner.w / banner.h, bh); y += bh + 1.5;
+    } else {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(0, 160, 226); doc.text('YMR MARINE SOLUTIONS', W / 2, y + 8, { align: 'center' }); y += 11;
+    }
+    doc.setDrawColor(61, 139, 214); doc.setLineWidth(0.9 * PT); doc.line(L, y, W - L, y); y += 2.1;
+    // vessel name and IMO
+    var vessel = (val('vessel_name') || S.report.vessel || '').toUpperCase() || 'BUNKER SURVEY REPORT';
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(f(18.5)); doc.setTextColor(11, 60, 122); y += mm(18.5) * 0.85;
+    doc.text(vessel, W / 2, y, { align: 'center' });
+    if (val('imo')) {
+      y += mm(3) + mm(9.5);
+      doc.setFontSize(f(9.5)); doc.setFont('helvetica', 'normal'); var a = 'IMO No. ', aW = doc.getTextWidth(a); doc.setFont('helvetica', 'bold'); var bW = doc.getTextWidth(val('imo')), sx = (W - aW - bW) / 2;
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(0); doc.text(a, sx, y); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 58, 138); doc.text(val('imo'), sx + aW, y);
+    }
+    y += mm(9) + mm(3);
+    var grades = chosen().filter(function (g) { return S.data.tanks[g].some(function (r) { return !blankRow(r); }); }), nb = grades.length;
+    var base = { font: 'helvetica', fontSize: f(8.2), textColor: 0, lineColor: 0, lineWidth: 0, cellPadding: { top: mm(1.6), bottom: mm(1.6), left: mm(3), right: mm(3) }, valign: 'middle', overflow: 'linebreak' };
+    var C = function (content, o) { o = o || {}; return { content: content == null ? '' : String(content), colSpan: o.span || 1, styles: { lineWidth: o.b ? lw : 0, halign: o.al || 'left', fontStyle: o.bold ? 'bold' : 'normal' } }; };
+    var cols = function (ws) { var t = ws.reduce(function (s, x) { return s + x; }, 0), o = {}; ws.forEach(function (x, i) { o[i] = { cellWidth: CW * x / t }; }); return o; };
+    // header lines: the BROB of each grade beside FWE and Survey Started, the grade names right above them
+    var blank = function () { var o = [C('')]; grades.forEach(function () { o.push(C('')); }); o.push(C('')); return nb ? o : []; };
+    var brob = function (p) { var o = [C('BROB:', { al: 'right' })]; grades.forEach(function (g) { var v = val('brob_' + p + '_' + g); o.push(C(v === '' ? '' : pNum(v), { b: 1 })); }); o.push(C('M.Tons')); return nb ? o : []; };
+    var heads = function () { var o = [C('')]; grades.forEach(function (g) { o.push(C(gradeInfo(g).short, { b: 1 })); }); o.push(C('')); return nb ? o : []; };
+    var line = function (label, v, time, right, bold) {
+      var o = [C(label, { b: 1, bold: bold })];
+      if (time === '') o.push(C(v, { b: 1, span: 2, bold: bold })); else o.push(C(v, { b: 1, bold: bold }), C(time, { b: 1, al: 'center', bold: bold }));
+      o.push(C(time !== '' ? 'Hrs LT' : '', { bold: bold })); return o.concat(right);
+    };
+    var hw = [22, 22, 8, 7].concat(nb ? [6] : []).concat(grades.map(function () { return 10; })).concat(nb ? [8] : []);
+    doc.autoTable({ startY: y, margin: { left: L, right: L }, tableWidth: CW, theme: 'plain', styles: base, columnStyles: cols(hw), body: [
+      line('Owners', up('owners'), '', blank()), line('Charterers', up('charterers'), '', heads()),
+      line('FWE', pDate(val('fwe_date')), val('fwe_time'), brob('fwe')), line('Survey Started', pDate(val('started_date')), val('started_time'), brob('started')),
+      line('Survey Completed', pDate(val('completed_date')), val('completed_time'), blank(), true), line('Place of Survey', val('place'), '', blank()), line('Voyage No.', val('voyage_no'), '', blank())] });
+    y = doc.lastAutoTable.finalY + mm(6);
+    // drafts
+    var fa = num(val('draft_aft')), ff = num(val('draft_fwd')), li = num(val('list')), d2 = function (n) { return n === null ? '' : n.toFixed(2); };
+    doc.autoTable({ startY: y, margin: { left: L, right: L }, tableWidth: CW, theme: 'plain', styles: base, columnStyles: cols([13, 14, 10, 26, 13, 14, 10]), body: [
+      [C('Draft Aft', { b: 1 }), C(d2(fa), { b: 1 }), C('Meters', { b: 1 }), C(''), C('Trim:', { b: 1 }), C(fa !== null && ff !== null ? (Math.round((fa - ff) * 1000) / 1000).toFixed(2) : '', { b: 1 }), C('Meters', { b: 1 })],
+      [C('Draft Fwd', { b: 1 }), C(d2(ff), { b: 1 }), C('Meters', { b: 1 }), C(''), C('List', { b: 1 }), C(d2(li), { b: 1 }), C('Degrees', { b: 1 })]] });
+    y = doc.lastAutoTable.finalY + mm(10);
+    // one table per grade: thin grey lines between the tanks, only TOTAL Metric Tons
+    var tw = [15].concat([1, 2, 3, 4, 5, 6, 7, 8].map(function () { return 85 / 8; }));
+    grades.forEach(function (g, gi) {
+      var rows = S.data.tanks[g].filter(function (r) { return !blankRow(r); }), anyU = rows.some(function (r) { return r.mode === 'ullage'; });
+      if (gi) y += mm(8);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(f(11)); doc.setTextColor(0); y += mm(11) * 0.8; doc.text(gradeInfo(g).name || gradeInfo(g).short, L, y); y += mm(3);
+      var body = rows.map(function (r) {
+        var t = calc(r);
+        return [String(r.name || '').toUpperCase(), pRead('ref_height', r.ref_height), pSdg(r), pRead('volume', r.volume), pRead('density', r.density), pRead('temp', r.temp), pNum(t.vcf, 4), pNum(t.gsv), pNum(t.mt)];
+      });
+      var last = body.length - 1;
+      doc.autoTable({ startY: y, margin: { left: L, right: L }, tableWidth: CW, theme: 'plain', columnStyles: cols(tw),
+        styles: Object.assign({}, base, { fontSize: f(7.8), halign: 'center', cellPadding: { top: mm(1.5), bottom: mm(1.5), left: mm(2), right: mm(2) } }),
+        headStyles: { fontStyle: 'normal', fontSize: f(7.6), lineWidth: lw, cellPadding: mm(2) },
+        head: [['Tank\nName:', 'Ref. Height\n(m)', (anyU ? 'Sdg. / Ullage' : "Sdg. Corr'd") + '\n(m)', 'Volume\nCubic Metres', 'Density\n@15°C', 'Temp\nDeg(C)', 'V.C.F.\nT(54B)', 'G.S.V\nm³ @ 15°C', 'Metric\nTons']],
+        body: body,
+        didParseCell: function (d) { if (d.section === 'body' && d.column.index === 0) d.cell.styles.halign = 'left'; },
+        didDrawCell: function (d) {
+          if (d.section !== 'body') return;
+          var c = d.cell; doc.setDrawColor(0); doc.setLineWidth(lw);
+          doc.line(c.x, c.y, c.x, c.y + c.height); doc.line(c.x + c.width, c.y, c.x + c.width, c.y + c.height);
+          if (d.row.index === last) { doc.line(c.x, c.y + c.height, c.x + c.width, c.y + c.height); return; }
+          doc.setDrawColor(180, 191, 204); doc.setLineWidth(Math.max(0.3 * k, 0.3) * PT); doc.line(c.x, c.y + c.height, c.x + c.width, c.y + c.height);
+        } });
+      doc.autoTable({ startY: doc.lastAutoTable.finalY, margin: { left: L, right: L }, tableWidth: CW, theme: 'plain', columnStyles: cols([58, 28, 14]),
+        styles: Object.assign({}, base, { fontSize: f(7.8), cellPadding: { top: mm(1.5), bottom: mm(1.5), left: mm(3), right: mm(3) } }),
+        body: [[C(''), C('TOTAL Metric Tons', { b: 1, bold: 1, al: 'right' }), { content: pNum(gradeTotals(g).mt), styles: { lineWidth: lw, halign: 'right', fontStyle: 'bold', fontSize: f(8.6) } }]] });
+      y = doc.lastAutoTable.finalY;
+    });
+    // remark, MT of each grade, the signatures in one row with room to sign and stamp
+    y += mm(8) + mm(6);
+    var remark = val('remarks') || 'All bunker tanks were carefully sounded together with Ch. Engineer/his representative and the quantities, as calculated from the vessels calibration tables, were found and agreed to be at the time of survey :';
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(f(8.2)); doc.setTextColor(0);
+    var rl = doc.splitTextToSize(remark, CW); y += mm(8.2) * 0.8; doc.text(rl, L, y, { lineHeightFactor: 1.35 }); y += (rl.length - 1) * mm(8.2) * 1.35 + mm(10);
+    if (nb) {
+      doc.autoTable({ startY: y, margin: { left: L, right: L }, tableWidth: CW * 0.46, theme: 'plain', styles: base, columnStyles: { 0: { cellWidth: CW * 0.46 * 0.45 }, 1: { cellWidth: CW * 0.46 * 0.35 }, 2: { cellWidth: CW * 0.46 * 0.20 } },
+        body: grades.map(function (g) { return [C(gradeInfo(g).short, { b: 1, al: 'center' }), C(pNum(gradeTotals(g).mt), { b: 1, al: 'center', bold: 1 }), C('MT', { b: 1, al: 'center' })]; }) });
+      y = doc.lastAutoTable.finalY + mm(6);
+    }
+    var sigH = mm(10) + mm(62) + mm(8) * 1.35 * 3.2;
+    if (y + sigH > BOT) { doc.addPage(); y = 12; }
+    y += mm(10) + mm(62);
+    var colW = CW * 0.3, gap = (CW - 3 * colW) / 2, sig = function (i, lines) {
+      var x = L + i * (colW + gap); doc.setDrawColor(0); doc.setLineWidth(0.7 * k * PT); doc.line(x, y, x + colW, y);
+      doc.setFontSize(f(8)); lines.forEach(function (t, j) { doc.setFont('helvetica', j ? 'normal' : 'bold'); doc.text(t, x, y + mm(2) + mm(8) * (0.85 + j * 1.35)); });
+    };
+    sig(0, ['The Master', 'CAPT. ' + up('master')]); sig(1, ['The Chief Engineer', 'MR. ' + up('chief_engineer')]); sig(2, ['Independent Marine Surveyor', 'MR. ' + up('surveyor_name'), 'For YMR MARINE SOLUTIONS LLP']);
+    y += mm(2) + mm(8) * 1.35 * 3;
+    // footer on every page
+    var now = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+    var stamp = p2(now.getDate()) + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][now.getMonth()] + ' ' + now.getFullYear() + ' ' + p2(now.getHours()) + ':' + p2(now.getMinutes());
+    for (var pg = 1; pg <= doc.getNumberOfPages(); pg++) {
+      doc.setPage(pg); doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.18); doc.line(L, 289, W - L, 289);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139);
+      doc.text(vessel + ' · Generated by YMR Marine YSMS on ' + stamp + ' (offline)', L, 292);
+      if (doc.getNumberOfPages() > 1) doc.text('Page ' + pg + ' of ' + doc.getNumberOfPages(), W - L, 292, { align: 'right' });
+    }
+    return { doc: doc, fits: doc.getNumberOfPages() === 1 && y <= BOT };
   }
   function offlinePdf() {
     if (!window.jspdf || !window.jspdf.jsPDF) { Swal.fire({ icon: 'error', title: 'Not available', text: 'The PDF tools are not on this device yet — open the report once while online.' }); return; }
     var all = issues();
     if (all.length) { Swal.fire({ icon: 'warning', title: 'Please complete the report first', html: '<ul class="sr-swal-list">' + all.slice(0, 8).map(function (x) { return '<li>' + esc(x.msg) + '</li>'; }).join('') + '</ul>' }); return; }
-    imgData(BANNER).then(function (banner) {
-      var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 12;
-      var navy = [15, 43, 91], grey = [100, 116, 139];
-      var head = function () {
-        var y = M;
-        if (banner) { var bw = W - 2 * M, h = bw * banner.h / banner.w; if (h > 42) { h = 42; bw = h * banner.w / banner.h; } doc.addImage(banner.data, 'PNG', (W - bw) / 2, y, bw, h); y += h + 3; } // the letterhead, in proportion
-        else { doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(0, 163, 223); doc.text('YMR MARINE SOLUTIONS', W / 2, y + 8, { align: 'center' }); y += 14; }
-        doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: 0.08 })); doc.setFont('helvetica', 'bold'); doc.setFontSize(80); doc.setTextColor(220, 38, 38);
-        doc.text('DRAFT', W / 2, 170, { align: 'center', angle: 35 }); doc.restoreGraphicsState();
-        return y;
-      };
-      var foot = function () {
-        doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, grey);
-        doc.text('DRAFT made on this device without internet — the final report is made by the YSMS server.', W / 2, 290, { align: 'center' });
-      };
-      var vessel = val('vessel_name') || S.report.vessel, grades = chosen();
-      // ---- page 1: particulars + tank tables
-      var y = head();
-      doc.setTextColor.apply(doc, navy); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(vessel, W / 2, y + 2, { align: 'center' });
-      doc.setFontSize(9.5); if (val('imo')) doc.text('IMO No. ' + val('imo'), W / 2, y + 7, { align: 'center' });
-      doc.setFontSize(10.5); doc.text((S.report.kind_label || 'Bunker') .toUpperCase() + ' — BUNKER SURVEY', W / 2, y + 13, { align: 'center' });
-      y += 18;
-      var dt = function (d, t) { return [d, t ? t + ' Hrs LT' : ''].filter(Boolean).join('  '); };
-      var part = [['Owners', val('owners')], ['Charterers', val('charterers')], ['FWE', dt(val('fwe_date'), val('fwe_time'))], ['Survey Started', dt(val('started_date'), val('started_time'))],
-        ['Survey Completed', dt(val('completed_date'), val('completed_time'))], ['Place of Survey', [val('place'), val('port_name')].filter(Boolean).join(', ')], ['Voyage No.', val('voyage_no')],
-        ['Draft Fwd / Aft', [val('draft_fwd'), val('draft_aft')].filter(Boolean).join(' / ') + ' m'], ['List', val('list') ? val('list') + '°' : '']];
-      doc.autoTable({ startY: y, margin: { left: M, right: W / 2 + 2 }, body: part, theme: 'grid', styles: { fontSize: 7.5, cellPadding: 1.2, lineColor: [148, 163, 184], lineWidth: 0.15, textColor: 20 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 30 } } });
-      var y1 = doc.lastAutoTable.finalY;
-      var brob = grades.map(function (g) { return [gradeInfo(g).short, val('brob_fwe_' + g), val('brob_started_' + g)]; });
-      doc.autoTable({ startY: y, margin: { left: W / 2 + 6, right: M }, head: [['BROB (MT)', 'At FWE', 'Survey started']], body: brob, theme: 'grid',
-        headStyles: { fillColor: navy, textColor: 255, fontStyle: 'bold', fontSize: 7.5, cellPadding: 1.2 }, styles: { fontSize: 7.5, cellPadding: 1.2, halign: 'right', lineColor: [148, 163, 184], lineWidth: 0.15 }, columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } } });
-      y = Math.max(y1, doc.lastAutoTable.finalY) + 6;
-      grades.forEach(function (g) {
-        var rows = S.data.tanks[g] || []; if (!rows.length) return;
-        var gt = gradeTotals(g), body = rows.map(function (r) {
-          var t = calc(r);
-          return [r.name, r.ref_height, fmtT('sounding', sounding(r)), r.volume, fmtT('density', r.density), fmtT('temp', r.temp), t.vcf == null ? '' : t.vcf.toFixed(4), f3(t.gsv), f3(t.mt)];
-        });
-        body.push([{ content: 'TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } }, { content: f3(gt.gsv), styles: { fontStyle: 'bold' } }, { content: f3(gt.mt), styles: { fontStyle: 'bold' } }]);
-        if (y > 250) { foot(); doc.addPage(); y = head(); }
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor.apply(doc, navy); doc.text(gradeInfo(g).name || gradeInfo(g).short, M, y);
-        doc.autoTable({ startY: y + 2, margin: { left: M, right: M }, head: [['Tank', 'Ref. Ht (m)', 'Sounding (m)', 'Volume (m³)', 'Density @15°C', 'Temp (°C)', 'V.C.F.', 'G.S.V. (m³)', 'MT in Air']], body: body, theme: 'grid',
-          headStyles: { fillColor: [230, 246, 252], textColor: navy, fontSize: 7, halign: 'center', cellPadding: 1.2 }, styles: { fontSize: 7.5, cellPadding: 1.1, halign: 'right', lineColor: [148, 163, 184], lineWidth: 0.15, textColor: 20 },
-          columnStyles: { 0: { halign: 'left', cellWidth: 34 } }, didDrawPage: function () {} });
-        y = doc.lastAutoTable.finalY + 7;
-      });
-      foot();
-      // signatures under the tables (no separate ROB summary page — the report is the tank page; the certificate is made by the server)
-      if (y > 235) { foot(); doc.addPage(); y = head(); }
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(30, 41, 59);
-      doc.text(doc.splitTextToSize('All bunker tanks were carefully sounded together with the Chief Engineer / his representative and the quantities calculated from the vessel\'s calibration tables.', W - 2 * M), M, y);
-      y += 22;
-      var sig = function (x, t, n) { doc.setDrawColor(100); doc.line(x, y, x + 70, y); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.text(t, x, y + 5); doc.setFont('helvetica', 'normal'); doc.text(n || '', x, y + 10); };
-      sig(M, 'The Master', val('master')); sig(W - M - 70, 'Independent Marine Surveyor', val('surveyor_name')); y += 22;
-      sig(M, 'The Chief Engineer', val('chief_engineer'));
-      foot();
-      var name = (vessel + ' - ' + (S.report.kind_label || 'SURVEY') + ' - DRAFT').toUpperCase().replace(/[^A-Z0-9 .\-]+/g, '').trim() + '.pdf';
-      doc.save(name);
-      store(LS + '_offpdf', { at: Date.now(), version: S.version }); // make the final report as soon as the connection is back
-      toast('success', 'Draft PDF saved on this device');
+    Promise.all([imgPng(LOGO, 2800), imgPng(BANNER)]).then(function (im) {
+      var out = null;
+      [1, 0.9, 0.8, 0.72, 0.65, 0.58, 0.52, 0.46, 0.41, 0.36, 0.32].some(function (k) { out = ymrPdf(k, im[0], im[1]); return out.fits; }); // the whole report on one page
+      var vessel = val('vessel_name') || S.report.vessel || 'SURVEY';
+      var name = (vessel + ' - ' + (S.report.kind_label || 'SURVEY') + ' REPORT').toUpperCase().replace(/[^A-Z0-9 .\-]+/g, '').trim() + '.pdf';
+      out.doc.save(name);
+      store(LS + '_offpdf', { at: Date.now(), version: S.version }); // make the server's report as soon as the connection is back
+      toast('success', 'PDF saved on this device');
     });
   }
   /** Back online after a draft PDF was made offline: save, then make the final PDF (and the Excel kept in the system). */
