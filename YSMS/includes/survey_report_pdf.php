@@ -74,6 +74,7 @@ function srOwnPdfHtml(array $eff, array $report, array $tpl, array $results, flo
     $date = fn($k) => preg_match('/^\d{4}-\d{2}-\d{2}$/', $val($k)) ? sfDateText($val($k)) : $val($k);
     $grades = array_values(array_filter(srChosenGrades($eff, $data), fn($g) => srTankRows($data, $g)));
     $num = fn($k) => is_numeric($val($k)) ? (float)$val($k) : null;
+    $up = fn($k) => mb_strtoupper($val($k), 'UTF-8'); // names print in capitals however they were typed
 
     // header block: the field report's own lines; the log book BROB of each grade beside FWE and Survey Started
     $brobHead = ''; $brobRow = ['fwe' => '', 'started' => ''];
@@ -87,9 +88,8 @@ function srOwnPdfHtml(array $eff, array $report, array $tpl, array $results, flo
     $brobCells = fn(string $p) => $nb ? '<td class="bl">BROB:</td>' . $brobRow[$p] . '<td class="bu">M.Tons</td>' : '';
     $blank = $nb ? '<td></td>' . str_repeat('<td></td>', $nb) . '<td></td>' : '';
     $head = '<table class="hd">' .
-        ($nb ? '<tr><td class="hl0"></td><td></td><td></td><td></td><td></td>' . $brobHead . '<td></td></tr>' : '') .
-        $line('Owners', $val('owners'), '', $blank) .
-        $line('Charterers', $val('charterers'), '', $blank) .
+        $line('Owners', $up('owners'), '', $blank) .
+        $line('Charterers', $up('charterers'), '', $nb ? '<td></td>' . $brobHead . '<td></td>' : '') . // the grade names right above their BROB values
         $line('FWE', $date('fwe_date'), $val('fwe_time'), $brobCells('fwe')) .
         $line('Survey Started', $date('started_date'), $val('started_time'), $brobCells('started')) .
         $line('Survey Completed', $date('completed_date'), $val('completed_time'), $blank, true) .
@@ -114,8 +114,7 @@ function srOwnPdfHtml(array $eff, array $report, array $tpl, array $results, flo
             foreach (['ref_height', 'sounding', 'volume', 'density', 'temp'] as $c) $h .= '<td>' . $e(srPdfReading($c, $r[$c])) . '</td>';
             $h .= '<td>' . srPdfNum($x['vcf'] ?? null, 4) . '</td><td>' . srPdfNum($x['gsv'] ?? null) . '</td><td>' . srPdfNum($x['mt'] ?? null) . '</td></tr>';
         }
-        $h .= '</tbody></table><table class="tt"><tr><td class="sp"></td><td class="lb">TOTAL Cubic Metres @ 15°C</td><td class="v">' . srPdfNum($tot['gsv'] ?? null) . '</td><td class="nb"></td></tr>' .
-            '<tr><td class="sp"></td><td class="lb r" colspan="2">TOTAL Metric Tons</td><td class="v">' . srPdfNum($tot['completed'] ?? null) . '</td></tr></table></div>';
+        $h .= '</tbody></table><table class="tt"><tr><td class="sp"></td><td class="lb r">TOTAL Metric Tons</td><td class="v">' . srPdfNum($tot['completed'] ?? null) . '</td></tr></table></div>';
         $tanks .= $h;
     }
 
@@ -123,15 +122,17 @@ function srOwnPdfHtml(array $eff, array $report, array $tpl, array $results, flo
     $remark = $val('remarks') !== '' ? $val('remarks') : 'All bunker tanks were carefully sounded together with Ch. Engineer/his representative and the quantities, as calculated from the vessels calibration tables, were found and agreed to be at the time of survey :';
     $sum = '';
     foreach ($grades as $g) $sum .= '<tr><td class="g">' . $e(SR_GRADES[$g][0]) . '</td><td class="m">' . srPdfNum($results['grades'][$g]['completed'] ?? null) . '</td><td class="u">MT</td></tr>';
-    $sig = fn(array $lines) => '<div class="ln"></div>' . implode('<br>', array_map($e, $lines));
+    $sig = fn(array $lines) => '<div class="box"></div><div class="ln"></div><b>' . $e($lines[0]) . '</b><br>' . implode('<br>', array_map($e, array_slice($lines, 1)));
     $end = '<div class="end"><p class="rem">' . nl2br($e($remark)) . '</p>' . ($sum ? '<table class="sum">' . $sum . '</table>' : '') .
-        '<table class="sig"><tr><td>' . $sig(['The Master', 'Capt. ' . $val('master')]) . '</td><td></td><td></td></tr>' .
-        '<tr><td>' . $sig(['The Chief Engineer', 'Mr. ' . $val('chief_engineer')]) . '</td><td></td><td>' . $sig(['Independent Marine Surveyor', 'For YMR MARINE SOLUTIONS LLP', 'Mr. ' . $val('surveyor_name')]) . '</td></tr></table></div>';
+        '<table class="sig"><tr><td>' . $sig(['The Master', 'CAPT. ' . $up('master')]) . '</td><td class="g"></td>' .
+        '<td>' . $sig(['The Chief Engineer', 'MR. ' . $up('chief_engineer')]) . '</td><td class="g"></td>' .
+        '<td>' . $sig(['Independent Marine Surveyor', 'MR. ' . $up('surveyor_name'), 'For YMR MARINE SOLUTIONS LLP']) . '</td></tr></table></div>';
 
     $kind = RT_KINDS[$tpl['kind']] ?? $tpl['kind'];
     $vessel = strtoupper($val('vessel_name'));
     $sub = strtoupper($kind) . ' - BUNKER SURVEY REPORT';
-    $lh = is_file(SR_LETTERHEAD) ? 'data:image/png;base64,' . base64_encode((string)file_get_contents(SR_LETTERHEAD)) : '';
+    $logo = dirname(__DIR__) . '/assets/images/ymr-logo-horizontal.svg'; // the vector logo: sharp at any size
+    $lh = is_file($logo) ? 'data:image/svg+xml;base64,' . base64_encode((string)file_get_contents($logo)) : '';
 
     $css = '
 @page { margin: 7mm 10mm 11mm 10mm; }
@@ -139,7 +140,7 @@ body { font-family: "DejaVu Sans", sans-serif; font-size: 8.2pt; color: #000; }
 #lh { text-align: center; margin: 0 0 6pt; padding: 0 0 4pt; border-bottom: 0.9pt solid #3d8bd6; }
 #ft { position: fixed; bottom: -8mm; left: 0; right: 0; font-size: 7pt; color: #64748b; border-top: 0.5pt solid #cbd5e1; padding-top: 3pt; }
 .ttl { text-align: center; margin: 0 0 9pt; }
-.ttl h1 { font-size: 17pt; margin: 0; color: #0b3c7a; letter-spacing: .8pt; }
+.ttl h1 { font-size: 18.5pt; margin: 0; color: #0b3c7a; letter-spacing: .8pt; }
 .ttl div { font-size: 9.5pt; font-weight: bold; color: #1e3a8a; margin-top: 3pt; }
 .ttl div span { color: #000; font-weight: normal; }
 table { border-collapse: collapse; }
@@ -168,30 +169,34 @@ h3 { font-size: 11pt; margin: 8pt 0 3pt; page-break-after: avoid; }
 .tk th.tn { text-align: center; }
 .tt { width: 100%; }
 .tt td { padding: 1.5pt 3pt; font-size: 7.8pt; }
-.tt .sp { width: 45%; }
-.tt .lb { font-weight: bold; border: 0.5pt solid #000; border-top: 0; }
+.tt .sp { width: 58%; }
+.tt .lb { font-weight: bold; border: 0.5pt solid #000; border-top: 0; width: 28%; }
 .tt .lb.r { text-align: right; }
-.tt .v { font-weight: bold; text-align: right; border: 0.5pt solid #000; border-top: 0; width: 12%; font-size: 8.6pt; }
-.tt .nb { width: 12%; }
+.tt .v { font-weight: bold; text-align: right; border: 0.5pt solid #000; border-top: 0; width: 14%; font-size: 8.6pt; }
 .grade { margin-bottom: 8pt; }
 .end { page-break-inside: avoid; margin-top: 6pt; }
 .rem { margin: 0 0 10pt; line-height: 1.35; }
 .sum { margin: 0 0 6pt; width: 46%; }
 .sum td { border: 0.5pt solid #000; padding: 1.6pt 4pt; }
 .sum .g { text-align: center; width: 45%; } .sum .m { text-align: center; font-weight: bold; width: 35%; } .sum .u { text-align: center; }
-.sig { width: 100%; margin-top: 18pt; }
-.sig td { width: 36%; vertical-align: bottom; padding: 22pt 0 0; }
-.sig td:nth-child(2) { width: 28%; }
-.sig .ln { border-top: 0.6pt solid #000; height: 1pt; margin-bottom: 2pt; }
+.sig { width: 100%; margin-top: 10pt; page-break-inside: avoid; }
+.sig td { width: 30%; vertical-align: top; font-size: 8pt; line-height: 1.35; }
+.sig td.g { width: 5%; }
+.sig .box { height: 62pt; } /* room to sign and stamp */
+.sig .ln { border-top: 0.7pt solid #000; height: 1pt; margin-bottom: 2pt; }
 ';
     // scaled print: every pt size (fonts, spacing, borders) × $k, borders never thinner than 0.3pt
     $css = preg_replace_callback('/(\d+(?:\.\d+)?)pt\b/', fn($m) => max((float)$m[1] < 1 ? 0.3 : 0, round((float)$m[1] * $k, 2)) . 'pt', $css);
     $lhW = $k >= 0.5 ? 182 : 160; // the letterhead across the page (only a very long report makes it a little smaller)
-    return '<!doctype html><html><head><meta charset="utf-8"><style>' . $css . '#lh img { width: ' . $lhW . 'mm; }
+    // the letterhead keeps its size at any scale: the vector logo across the page, the office address under it
+    $lhCss = '#lh img { width: ' . $lhW . 'mm; } #lh .ad { color: #3b5f95; font-size: 8.4pt; margin-top: 5pt; line-height: 1.45; } #lh .ad u { text-decoration: underline; }
+#lh .ad table { width: 92%; margin: 0 auto; border-collapse: collapse; } #lh .ad td { padding: 0; font-size: 8.4pt; color: #3b5f95; }';
+    return '<!doctype html><html><head><meta charset="utf-8"><style>' . $css . $lhCss . '
 </style></head><body>' .
-        ($lh ? '<div id="lh"><img src="' . $lh . '" alt="YMR Marine Solutions"></div>' : '') .
-        '<div id="ft">' . $e($vessel . ' — ' . $sub) . ' · Generated by YMR Marine YSMS on ' . $e(date('d M Y H:i')) . '</div>' .
-        '<div class="ttl"><h1>' . $e($vessel !== '' ? $vessel : 'BUNKER SURVEY REPORT') . '</h1><div>' . $e($sub) . ($val('imo') !== '' ? ' &nbsp;|&nbsp; <span>IMO No.</span> ' . $e($val('imo')) : '') . '</div></div>' .
+        ($lh ? '<div id="lh"><img src="' . $lh . '" alt="YMR Marine Solutions"><div class="ad"><u>REGISTERED OFFICE ADDRESS:</u> Runwal Elegante, A2605, Lokhandwala, Andheri West, Mumbai, Maharashtra- 400058' .
+            '<table><tr><td style="text-align:left">e-mail: ops@ymrmarine.com</td><td style="text-align:center">Phone: +919820482713</td><td style="text-align:right">http://www.ymrmarine.com</td></tr></table></div></div>' : '') .
+        '<div id="ft">' . $e($vessel !== '' ? $vessel : $sub) . ' · Generated by YMR Marine YSMS on ' . $e(date('d M Y H:i')) . '</div>' .
+        '<div class="ttl"><h1>' . $e($vessel !== '' ? $vessel : 'BUNKER SURVEY REPORT') . '</h1>' . ($val('imo') !== '' ? '<div><span>IMO No.</span> ' . $e($val('imo')) . '</div>' : '') . '</div>' .
         $head . $drafts . $tanks . $end .
         '</body></html>';
 }
