@@ -290,11 +290,12 @@ const SR_GRADES = [
 const SR_EXTRA_SLOT = ['ulsfo' => 'vlsfo', 'hsmgo' => 'lsmgo'];
 const SR_EXTRA_SHEET = 'TABLES 54B (ULSFO-HSMGO)';
 const SR_SUMMARY_SHEET = 'ROB SUMMARY';
-/** The 18 vessel particulars of step 1 (with the IMO): what Vessel lookup fills. */
-const SR_VESSEL_KEYS = ['vessel_name', 'flag', 'port_of_registry', 'grt', 'nrt', 'owners', 'holds', 'builder', 'keel_month', 'keel_year',
+/** The vessel particulars of step 1 (with the IMO): what Vessel lookup fills. Owners are entered in step 2 with the
+    charterers (the lookup still fills them when it finds them). */
+const SR_VESSEL_KEYS = ['vessel_name', 'flag', 'port_of_registry', 'grt', 'nrt', 'holds', 'builder', 'keel_month', 'keel_year',
     'operator', 'callsign', 'loa', 'breadth', 'depth', 'summer_draft', 'summer_dwt', 'class'];
 /** Survey particulars that must be filled (ROB of each chosen grade is added). */
-const SR_SURVEY_REQUIRED = ['fwe_date', 'fwe_time', 'started_date', 'started_time', 'completed_date', 'completed_time', 'surveyor_name',
+const SR_SURVEY_REQUIRED = ['owners', 'fwe_date', 'fwe_time', 'started_date', 'started_time', 'completed_date', 'completed_time', 'surveyor_name',
     'chief_engineer', 'master', 'port_name', 'place', 'draft_fwd', 'draft_aft'];
 /** Values the template has no cell for (kept in data.extra; printed on the ROB SUMMARY sheet). */
 function srExtraFieldDefs(): array {
@@ -1345,7 +1346,7 @@ function srPrevious(PDO $db, array $report): ?array {
         $k = vesselHistoryKey((string)$n);
         return $k !== '' && in_array($k, $keys, true);
     };
-    $vesselKeys = array_merge(['imo'], SR_VESSEL_KEYS);
+    $vesselKeys = array_merge(['imo'], SR_VESSEL_KEYS, ['owners']);
     $grades = array_keys(srGradeList($eff));
 
     // 1. an earlier report on the website

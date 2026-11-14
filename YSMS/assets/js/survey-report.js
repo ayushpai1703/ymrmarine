@@ -360,8 +360,7 @@
       if (!g.length) return '<p class="sr-muted sr-span">Choose the fuel grades above to enter the ROB.</p>';
       return g.map(function (x) { return inputHtml('brob_' + kind + '_' + x, req); }).join('');
     };
-    var mean = num(val('draft_fwd')) !== null && num(val('draft_aft')) !== null ? ((num(val('draft_fwd')) + num(val('draft_aft'))) / 2).toFixed(3) : '';
-    var trim = mean !== '' ? (num(val('draft_aft')) - num(val('draft_fwd'))).toFixed(3) : '';
+    var trim = num(val('draft_fwd')) !== null && num(val('draft_aft')) !== null ? (num(val('draft_aft')) - num(val('draft_fwd'))).toFixed(3) : '';
     var card = function (title, icon, inner, tid, keys) {
       var st = keys ? doneOf(keys) : '';
       return '<section class="sr-card sr-s2c" data-testid="sr-grp-' + tid + '"><h3><i class="fa-solid ' + icon + '"></i> ' + title + st + '</h3><div class="sr-grid">' + inner + '</div></section>'; };
@@ -375,7 +374,7 @@
     var EV = [
       { k: 'fwe', no: 'A', title: 'Engine Particulars (FWE)', sub: 'Finished With Engines', icon: 'fa-gears', d: 'fwe_date', t: 'fwe_time', rob: 'fwe', robT: 'FWE ROB' },
       { k: 'started', no: 'B', title: 'Survey Start', sub: 'Surveyor on board', icon: 'fa-play', d: 'started_date', t: 'started_time', rob: 'started', robT: 'Log Book ROB' },
-      { k: 'completed', no: 'C', title: 'Survey Completion', sub: 'Readings finished', icon: 'fa-flag-checkered', d: 'completed_date', t: 'completed_time', extra: 'surveyor_name' }
+      { k: 'completed', no: 'C', title: 'Survey Completion', sub: 'Readings finished', icon: 'fa-flag-checkered', d: 'completed_date', t: 'completed_time' }
     ];
     var timeline = '<section class="sr-card sr-tl" data-testid="sr-timeline"><h3><i class="fa-solid fa-timeline"></i> Survey timeline <small>Local time (LT)</small></h3>' +
       EV.map(function (e) {
@@ -398,15 +397,13 @@
         var on = g.indexOf(x.key) >= 0;
         return '<label class="sr-chip' + (on ? ' on' : '') + '" data-testid="sr-grade-' + x.key + '"><input type="checkbox" data-grade="' + x.key + '"' + (on ? ' checked' : '') + (S.canEdit ? '' : ' disabled') + '><i class="fa-solid fa-check sr-chip-tick" aria-hidden="true"></i><b>' + esc(x.short) + '</b><small>' + esc(x.name) + '</small></label>';
       }).join('') + '</div><em data-err="grades"></em></section>' +
+      card('Owners &amp; Charterers', 'fa-building', inputHtml('owners', { req: true, label: 'Owners' }) + inputHtml('charterers', { label: 'Charterers' }), 'parties', ['owners']) +
       timeline +
-      '<div class="sr-s2-cols">' +
-      card('D. Ship Staff', 'fa-user-tie', inputHtml('chief_engineer', req) + inputHtml('master', req), 'staff', ['chief_engineer', 'master']) +
-      card('E. Survey Location', 'fa-location-dot', inputHtml('port_name', req) + inputHtml('place', req), 'location', ['port_name', 'place']) +
-      '</div>' +
-      card('F. Draft Particulars', 'fa-ruler-vertical', inputHtml('draft_fwd', req) + inputHtml('draft_aft', req) +
-        '<label class="sr-f calc"><span>Mean Draft (m)</span><output data-testid="sr-mean">' + mean + '</output></label>' +
-        '<label class="sr-f calc"><span>Trim (m) <small>Aft − Fwd</small></span><output data-testid="sr-trim">' + trim + '</output></label>' + inputHtml('list'), 'drafts', ['draft_fwd', 'draft_aft']) +
-      card('Other details <small>optional</small>', 'fa-file-lines', inputHtml('voyage_no') + inputHtml('charterers'), 'other');
+      card('Place &amp; Voyage', 'fa-location-dot', inputHtml('port_name', req) + inputHtml('place', { req: true, label: 'Place of Survey' }) + inputHtml('voyage_no', { label: 'Voyage No.' }), 'location', ['port_name', 'place']) +
+      card('Drafts &amp; List', 'fa-ruler-vertical', inputHtml('draft_aft', { req: true, label: 'Draft Aft (m)' }) + inputHtml('draft_fwd', { req: true, label: 'Draft Fwd (m)' }) +
+        '<label class="sr-f calc"><span>Trim (m) <small>Aft − Fwd, worked out</small></span><output data-testid="sr-trim">' + trim + '</output></label>' + inputHtml('list', { label: 'List (degrees)' }), 'drafts', ['draft_aft', 'draft_fwd']) +
+      card('Names for the signatures', 'fa-signature', inputHtml('master', { req: true, label: 'Master (Capt.)' }) + inputHtml('chief_engineer', { req: true, label: 'Chief Engineer' }) + inputHtml('surveyor_name', { req: true, label: 'Surveyor' }), 'staff', ['master', 'chief_engineer', 'surveyor_name']) +
+      '<p class="sr-muted sr-small sr-s2-tip"><i class="fa-solid fa-circle-info"></i> Names print in capital letters on the report, however they are typed.</p>';
   }
   // tank steps
   /** Readings as the surveyors write them, however typed: sounding 0.000, density 0.0000, temperature 00.0. */
@@ -1231,7 +1228,7 @@
       if (!res.ok) { S.lookupMsg = res.error || 'Nothing found for this IMO.'; S.lookup = null; render(); return; }
       var prev = {};
       Object.keys(res.fields).forEach(function (k) {
-        if (VESSEL().indexOf(k) < 0) return;
+        if (VESSEL().indexOf(k) < 0 && k !== 'owners') return; // owners: found with the particulars, shown in step 2
         var old = val(k);
         if (old === res.fields[k]) return;
         prev[k] = old; setVal(k, res.fields[k]); S.ai[k] = true;
