@@ -287,8 +287,8 @@ $kindIcons = ['rob' => 'fa-gas-pump', 'offhire' => 'fa-anchor-circle-xmark', 'on
 <?php endif; ?>
 <script>window.SR_PAGE = <?= json_encode(($token !== '' ? ['id' => $token, 'guest' => true, 'api' => 'ajax/survey_report_public.php'] : ['id' => $rid, 'api' => 'ajax/survey_reports.php'])
     + ['std' => true, 'csrf' => csrf_token(),
-    // Tank Details on a computer: the Excel-style sheet, loaded by the page only on a wide screen (false = the plain grid)
-    'xl' => ['js' => 'assets/js/survey-report-xl.js?v=' . $v('assets/js/survey-report-xl.js'), 'css' => 'assets/css/survey-report-xl.css?v=' . $v('assets/css/survey-report-xl.css')],
+    // Tank Details on a computer: one plain 9-column table per grade (the Excel-style sheet, survey-report-xl.js, is off)
+    'xl' => false,
     'pdfjs' => 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', 'pdfjsWorker' => 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?>;</script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.14.5/dist/sweetalert2.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>

@@ -516,17 +516,19 @@
     return a === null || b === null ? '' : (Math.round((a - b) * 1000) / 1000).toFixed(3);
   }
   function rowState(r) { return r.done && !r._editing ? 'done' : r.copy ? 'copy' : 'open'; }
-  /** One table per fuel grade, laid out like the company sheet and used like Excel: Tank Name · Ref. Height · Sdg. Corr'd ·
-      Volume · Density · Temp typed into the cells, Metric Tons worked out as you type (V.C.F. and G.S.V. are shown when the
-      pointer rests on it, and in the generated report), the grade's total below. Each grade opens with a set number of rows
-      (VLSFO 12, LSMGO 8, the others 6); "Add more tanks" gives one more row, any row can be deleted. Empty rows are never
-      saved or checked. A phone swipes the table sideways with the tank name kept in view. */
-  var XCOLS = [['name', 'Tank', 'Name'], ['ref_height', 'Ref. Height', '(m)'], ['sounding', 'Sdg. Corr\'d', '(m)'], ['volume', 'Volume', 'Cubic Metres'], ['density', 'Density', '@15°C'], ['temp', 'Temp', 'Deg(C)']];
-  var XROWS = { vlsfo: 12, ulsfo: 6, hsfo: 6, lsmgo: 8 };
+  /** Computer screen: one compact table per fuel grade with the vessel's tanks. Tank Name · Reference Height · Sounding /
+      Ullage · Volume · Density @ 15°C · Temperature are typed into the cells; VCF · GSV · Metric Tons are worked out as you
+      type (grey, not editable), the grade's total below. "Add Tank" gives one more row, any row can be deleted. Empty rows
+      are never saved or checked. */
+  var XCOLS = [['name', 'Tank Name', ''], ['ref_height', 'Reference Height', '(m)'], ['sounding', 'Sounding / Ullage', '(m)'], ['volume', 'Volume', '(m³)'], ['density', 'Density', '@ 15°C'], ['temp', 'Temperature', '(°C)']];
+  /** Worked out by report-calc.js (the template's formulas), never typed: grey cells. */
+  var XCALC = [['vcf', 'VCF', ''], ['gsv', 'GSV', '(m³)'], ['mt', 'Metric Tons', '(MT)']];
+  /** Order of the grade tables on a computer. */
+  var XORDER = ['vlsfo', 'lsmgo', 'ulsfo', 'hsfo', 'hsmgo'];
   /** Empty rows shown below the tanks of a grade: at first enough to reach the grade's row count. */
   function xSpare(g) {
     S.spare = S.spare || {};
-    if (!(g in S.spare)) S.spare[g] = Math.max((XROWS[g] || 6) - S.data.tanks[g].length, 0);
+    if (!(g in S.spare)) S.spare[g] = 0; // only the vessel's tanks; Add Tank gives one more row
     return S.canEdit ? S.spare[g] : 0;
   }
   function xCell(g, i, col, r) {
@@ -538,8 +540,9 @@
     var key = g + ':' + i, t = r ? calc(r) : {}, real = !!r;
     return '<tr class="' + (real ? 'sr-row' : 'sr-spare') + '" data-tank="' + key + '" data-testid="sr-' + (real ? 'tank' : 'spare') + '-' + g + '-' + i + '">' +
       XCOLS.map(function (c) { return xCell(g, i, c[0], r); }).join('') +
-      '<td class="xo mt" tabindex="-1"><b data-rc="' + key + ':mt">' + f3c(t.mt) + '</b>' +
-        '<span class="xtip" role="tooltip">V.C.F. <b data-rc="' + key + ':vcf">' + (t.vcf == null ? '—' : t.vcf.toFixed(4)) + '</b><br>G.S.V. <b data-rc="' + key + ':gsv">' + (t.gsv == null ? '—' : f3c(t.gsv)) + '</b> m³</span></td>' +
+      '<td class="xo x-vcf"><b data-rc="' + key + ':vcf" data-testid="sr-c-' + g + '-' + i + '-vcf">' + (t.vcf == null ? (real ? '—' : '') : t.vcf.toFixed(4)) + '</b></td>' +
+      '<td class="xo x-gsv"><b data-rc="' + key + ':gsv" data-testid="sr-c-' + g + '-' + i + '-gsv">' + (t.gsv == null ? (real ? '—' : '') : f3c(t.gsv)) + '</b></td>' +
+      '<td class="xo mt"><b data-rc="' + key + ':mt" data-testid="sr-c-' + g + '-' + i + '-mt">' + f3c(t.mt) + '</b></td>' +
       '<td class="xd">' + (S.canEdit ? '<button type="button" data-del="' + key + '"' + (real ? '' : ' data-spare') + ' title="Delete row" aria-label="Delete row" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-regular fa-trash-can"></i></button>' : '') + '</td></tr>';
   }
   /** Link page on a phone: each tank a card that opens and closes (readings in labelled boxes, MT in its header). */
@@ -586,17 +589,18 @@
   }
   function gridHtml() {
     if (cardMode()) return cardsHtml();
-    var head = '<colgroup><col class="cw-name">' + XCOLS.slice(1).map(function () { return '<col>'; }).join('') + '<col class="cw-mt"><col class="cw-del"></colgroup>' +
-      '<thead><tr>' + XCOLS.map(function (c) { return '<th class="x-' + c[0] + '">' + c[1] + '<small>' + c[2] + '</small></th>'; }).join('') +
-      '<th class="xo mt">Metric<small>Tons</small></th><th class="xd"></th></tr></thead>';
-    return chosen().map(function (g, gi_) {
+    var head = '<colgroup><col class="cw-name">' + XCOLS.slice(1).map(function () { return '<col>'; }).join('') + '<col class="cw-vcf"><col class="cw-gsv"><col class="cw-mt"><col class="cw-del"></colgroup>' +
+      '<thead><tr>' + XCOLS.map(function (c) { return '<th class="x-' + c[0] + '">' + c[1] + (c[2] ? '<small>' + c[2] + '</small>' : '') + '</th>'; }).join('') +
+      XCALC.map(function (c) { return '<th class="xo x-' + c[0] + '">' + c[1] + (c[2] ? '<small>' + c[2] + '</small>' : '') + '</th>'; }).join('') + '<th class="xd"></th></tr></thead>';
+    var list = chosen().slice().sort(function (a, b) { return (XORDER.indexOf(a) + 1 || 99) - (XORDER.indexOf(b) + 1 || 99); });
+    return list.map(function (g, gi_) {
       var gi = gradeInfo(g), rows = S.data.tanks[g], tot = gradeTotals(g), spare = xSpare(g), body = '';
       rows.forEach(function (r, i) { body += rowHtml(g, r, i); });
       for (var k = 0; k < spare; k++) body += rowHtml(g, null, rows.length + k);
-      if (!rows.length && !spare) body = '<tr><td colspan="8" class="xe">No rows — press Add more tanks.</td></tr>';
-      return '<section class="sr-xsec" data-testid="sr-tanks-' + g + '"><h4><i class="fa-solid fa-droplet"></i> ' + esc(gi.name) + '</h4>' +
+      if (!rows.length && !spare) body = '<tr><td colspan="10" class="xe">No tanks yet — press Add Tank.</td></tr>';
+      return '<section class="sr-xsec" data-testid="sr-tanks-' + g + '"><h4>' + esc(gi.short) + ' <small>' + esc(gi.name) + '</small></h4>' +
         '<div class="sr-xwrap"><table class="sr-xg" data-g="' + g + '" data-testid="' + (gi_ === 0 ? 'sr-tgrid' : 'sr-tgrid-' + g) + '">' + head + '<tbody>' + body + '</tbody></table></div>' +
-        (S.canEdit ? '<div class="sr-xadd"><button type="button" data-more="' + g + '" data-testid="sr-add-' + g + '"><i class="fa-solid fa-plus"></i> Add more tanks</button></div>' : '') +
+        (S.canEdit ? '<div class="sr-xadd"><button type="button" data-more="' + g + '" data-testid="sr-add-' + g + '"><i class="fa-solid fa-plus"></i> Add Tank</button></div>' : '') +
         '<div class="sr-xtot"><span>TOTAL Metric Tons</span><b data-gmt="' + g + '">' + f3c(tot.mt) + '</b></div>' +
         '<b hidden data-testid="sr-total-' + g + '">' + f3(tot.mt) + '</b><b hidden data-testid="sr-total-gsv-' + g + '">' + f3(tot.gsv) + '</b></section>';
     }).join('');
