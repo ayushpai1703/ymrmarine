@@ -445,7 +445,7 @@
   function f3c(v) { return v === null || v === undefined || v === '' || isNaN(v) ? '' : (+v).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
   function totalsBar() {
     var t = allTotals();
-    return '<div class="sr-totbar" data-testid="sr-totbar"><div><span>Total Tanks:</span> <b data-testid="sr-tot-tanks">' + t.n + '</b></div>' +
+    return '<div class="sr-totbar" data-testid="sr-totbar">' + (cardMode() ? '<div><span>Total Tanks:</span> <b data-testid="sr-tot-tanks">' + t.n + '</b></div>' : '<div></div>') +
       '<div class="r mt"><span>Total Metric Tons:</span> <b data-testid="sr-tot-mt">' + f3c(t.mt) + ' MT</b></div><b hidden data-testid="sr-tot-gsv">' + f3c(t.gsv) + ' m³</b></div>';
   }
   function tankToolbar() {
@@ -543,7 +543,7 @@
       '<td class="xo x-vcf"><b data-rc="' + key + ':vcf" data-testid="sr-c-' + g + '-' + i + '-vcf">' + (t.vcf == null ? (real ? '—' : '') : t.vcf.toFixed(4)) + '</b></td>' +
       '<td class="xo x-gsv"><b data-rc="' + key + ':gsv" data-testid="sr-c-' + g + '-' + i + '-gsv">' + (t.gsv == null ? (real ? '—' : '') : f3c(t.gsv)) + '</b></td>' +
       '<td class="xo mt"><b data-rc="' + key + ':mt" data-testid="sr-c-' + g + '-' + i + '-mt">' + f3c(t.mt) + '</b></td>' +
-      '<td class="xd">' + (S.canEdit ? '<button type="button" data-del="' + key + '"' + (real ? '' : ' data-spare') + ' title="Delete row" aria-label="Delete row" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-regular fa-trash-can"></i></button>' : '') + '</td></tr>';
+      '<td class="xd">' + (S.canEdit ? '<button type="button" tabindex="-1" data-del="' + key + '"' + (real ? '' : ' data-spare') + ' title="Delete row" aria-label="Delete row" data-testid="sr-del-' + g + '-' + i + '"><i class="fa-regular fa-trash-can"></i></button>' : '') + '</td></tr>';
   }
   /** Link page on a phone: each tank a card that opens and closes (readings in labelled boxes, MT in its header). */
   function cardMode() { return !!(P.guest || P.std) && !S.wide; }
@@ -590,7 +590,7 @@
   function gridHtml() {
     if (cardMode()) return cardsHtml();
     var head = '<colgroup><col class="cw-name">' + XCOLS.slice(1).map(function () { return '<col>'; }).join('') + '<col class="cw-vcf"><col class="cw-gsv"><col class="cw-mt"><col class="cw-del"></colgroup>' +
-      '<thead><tr>' + XCOLS.map(function (c) { return '<th class="x-' + c[0] + '">' + c[1] + (c[2] ? '<small>' + c[2] + '</small>' : '') + '</th>'; }).join('') +
+      '<thead><tr>' + XCOLS.map(function (c) { return '<th class="x-' + c[0] + '">' + c[1] + ' <i class="req">*</i>' + (c[2] ? '<small>' + c[2] + '</small>' : '') + '</th>'; }).join('') +
       XCALC.map(function (c) { return '<th class="xo x-' + c[0] + '">' + c[1] + (c[2] ? '<small>' + c[2] + '</small>' : '') + '</th>'; }).join('') + '<th class="xd"></th></tr></thead>';
     var list = chosen().slice().sort(function (a, b) { return (XORDER.indexOf(a) + 1 || 99) - (XORDER.indexOf(b) + 1 || 99); });
     return list.map(function (g, gi_) {
@@ -915,10 +915,11 @@
     var rows = $$('tr', tb).filter(function (t) { return $('td.xi', t); }), ri = rows.indexOf(tr), tr2 = rows[ri + dr];
     var cells = function (t) { return $$('td.xi input', t); };
     if (dc) { var c = cells(tr)[ci + dc]; if (c) { c.focus(); c.select(); return true; } return false; }
-    if (!tr2) { // past the last row of this grade: the next grade's first row
-      if (dr < 0) return false;
-      var sec = el.closest('.sr-xsec').nextElementSibling; while (sec && !sec.classList.contains('sr-xsec')) sec = sec.nextElementSibling;
-      tr2 = sec && $('tbody tr', sec); if (!tr2) return false;
+    if (!tr2) { // past the last row of this grade: the next grade's first row (up on the first row: the grade above's last row)
+      var sib = dr < 0 ? 'previousElementSibling' : 'nextElementSibling';
+      var sec = el.closest('.sr-xsec')[sib]; while (sec && !sec.classList.contains('sr-xsec')) sec = sec[sib];
+      var rs = sec ? $$('tbody tr', sec).filter(function (t) { return $('td.xi', t); }) : [];
+      tr2 = dr < 0 ? rs[rs.length - 1] : rs[0]; if (!tr2) return false;
     }
     var x = cells(tr2)[ci]; if (x) { x.focus(); x.select(); return true; }
     return false;
@@ -948,6 +949,8 @@
   }
   // like an Excel cell: taking a cell (click, tap, Tab, arrows) selects its value, so typing replaces it; a double click edits inside it
   document.addEventListener('focusin', function (ev) { var el = ev.target; if (el.matches && el.matches('.sr-xg [data-t], .sr-tc [data-t]')) el.select(); });
+  document.addEventListener('focusout', function (ev) { var el = ev.target; if (el.matches && el.matches('.sr-xg [data-t]')) el.setAttribute('data-edit', '0'); });
+  document.addEventListener('dblclick', function (ev) { var el = ev.target; if (el.matches && el.matches('.sr-xg [data-t]')) el.setAttribute('data-edit', '1'); });
   document.addEventListener('mousedown', function (ev) {
     var el = ev.target; if (!el.matches || !el.matches('.sr-xg [data-t]') || el.disabled || document.activeElement === el || ev.detail > 1) return;
     ev.preventDefault(); el.focus();
@@ -972,11 +975,12 @@
   document.addEventListener('keydown', function (ev) { // Enter: lookup from the IMO box, otherwise the next box
     var gt = ev.target;
     if (gt.matches && gt.matches('.sr-xg [data-t]') && !ev.altKey && !ev.ctrlKey && !ev.metaKey) {
-      var atStart = gt.selectionStart === 0 && gt.selectionEnd === 0, atEnd = gt.selectionStart === gt.value.length;
+      // like Excel: arrow keys go to the next cell; after a double click (or F2) left / right move inside the value until the cell is left
+      var edit = gt.getAttribute('data-edit') === '1';
+      if (ev.key === 'F2') { ev.preventDefault(); gt.setAttribute('data-edit', '1'); var n = gt.value.length; gt.setSelectionRange(n, n); return; }
       if (ev.key === 'Enter' || ev.key === 'ArrowDown') { ev.preventDefault(); gridMove(gt, ev.shiftKey && ev.key === 'Enter' ? -1 : 1, 0); return; }
       if (ev.key === 'ArrowUp') { ev.preventDefault(); gridMove(gt, -1, 0); return; }
-      if (ev.key === 'ArrowLeft' && atStart && gridMove(gt, 0, -1)) { ev.preventDefault(); return; }
-      if (ev.key === 'ArrowRight' && atEnd && gridMove(gt, 0, 1)) { ev.preventDefault(); return; }
+      if ((ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && !edit && !ev.shiftKey) { ev.preventDefault(); gridMove(gt, 0, ev.key === 'ArrowLeft' ? -1 : 1); return; }
       return;
     }
     if (ev.key !== 'Enter' || !ev.target.matches('[data-f],[data-t]')) return;

@@ -795,4 +795,5 @@ body[data-sr-step=tanks] .sr-wiz-top { display: none; }
   .sr-xtot { background: #f3f6fa; border-top: 1px solid #d5dde8; }
   .sr-xtot span { font-size: 13.5px; padding: 8px 12px; }
   .sr-xtot b { min-width: 11%; background: #e5e9ef; font-size: 15px; padding: 8px 12px; }
+  .sr-xg th .req { color: #dc2626; font-style: normal; }
 }
