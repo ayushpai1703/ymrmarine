@@ -134,9 +134,9 @@ function srOwnPdfHtml(array $eff, array $report, array $tpl, array $results, flo
     $lh = is_file(SR_LETTERHEAD) ? 'data:image/png;base64,' . base64_encode((string)file_get_contents(SR_LETTERHEAD)) : '';
 
     $css = '
-@page { margin: 8mm 12mm 12mm 12mm; }
+@page { margin: 7mm 10mm 11mm 10mm; }
 body { font-family: "DejaVu Sans", sans-serif; font-size: 8.2pt; color: #000; }
-#lh { text-align: center; margin: 0 0 4pt; }
+#lh { text-align: center; margin: 0 0 6pt; padding: 0 0 4pt; border-bottom: 0.9pt solid #3d8bd6; }
 #ft { position: fixed; bottom: -8mm; left: 0; right: 0; font-size: 7pt; color: #64748b; border-top: 0.5pt solid #cbd5e1; padding-top: 3pt; }
 .ttl { text-align: center; margin: 0 0 9pt; }
 .ttl h1 { font-size: 17pt; margin: 0; color: #0b3c7a; letter-spacing: .8pt; }
@@ -162,7 +162,7 @@ table { border-collapse: collapse; }
 h3 { font-size: 11pt; margin: 8pt 0 3pt; page-break-after: avoid; }
 .tk { width: 100%; }
 .tk th { font-weight: normal; font-size: 7.6pt; text-align: center; border: 0.5pt solid #000; padding: 2pt; }
-.tk td { border: 0.5pt solid #000; border-top: 0; border-bottom: 0; text-align: center; padding: 1.3pt 2pt; font-size: 7.8pt; }
+.tk td { border: 0.5pt solid #000; border-top: 0; border-bottom: 0.3pt solid #b4bfcc; text-align: center; padding: 1.5pt 2pt; font-size: 7.8pt; }
 .tk tbody tr:last-child td { border-bottom: 0.5pt solid #000; }
 .tk .tn { text-align: left; width: 15%; }
 .tk th.tn { text-align: center; }
@@ -186,7 +186,7 @@ h3 { font-size: 11pt; margin: 8pt 0 3pt; page-break-after: avoid; }
 ';
     // scaled print: every pt size (fonts, spacing, borders) × $k, borders never thinner than 0.3pt
     $css = preg_replace_callback('/(\d+(?:\.\d+)?)pt\b/', fn($m) => max((float)$m[1] < 1 ? 0.3 : 0, round((float)$m[1] * $k, 2)) . 'pt', $css);
-    $lhW = round(172 * max(0.6, min(1, $k + 0.15)), 1); // the letterhead shrinks less than the text
+    $lhW = $k >= 0.5 ? 182 : 160; // the letterhead across the page (only a very long report makes it a little smaller)
     return '<!doctype html><html><head><meta charset="utf-8"><style>' . $css . '#lh img { width: ' . $lhW . 'mm; }
 </style></head><body>' .
         ($lh ? '<div id="lh"><img src="' . $lh . '" alt="YMR Marine Solutions"></div>' : '') .
