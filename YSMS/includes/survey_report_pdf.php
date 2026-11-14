@@ -1,10 +1,13 @@
 <?php
 /**
  * Survey report PDF in YMR's own format (no company Excel layout): the YMR letterhead
- * (assets/images/survey-letterhead.png) on every page, then the values typed on the survey report
- * page: vessel particulars, survey dates and place, drafts, bunkers ROB as per log book, the
- * tank readings of each grade with V.C.F., G.S.V. and metric tons, the ROB summary, remarks and
- * signatures. Rendered by dompdf (installed by the Docker image, as for the invoices).
+ * (assets/images/survey-letterhead.png) on every page, the vessel name as the title with the
+ * report type and IMO number under it, then as the field report: owners, charterers, FWE /
+ * survey started (with the log book BROB of each grade) / survey completed, place, voyage,
+ * drafts with trim and list; one table per grade (Tank, Ref. Height, Sdg. Corr'd, Volume,
+ * Density, Temp, V.C.F., G.S.V., Metric Tons) with its totals; the remark, the MT of each grade
+ * and the signatures of the Master, the Chief Engineer and the surveyor.
+ * Rendered by dompdf (installed by the Docker image, as for the invoices).
  *
  * The calculation methodology is not changed: V.C.F., G.S.V. and MT come from the report
  * template's own formulas (srBuildBook + srResults), exactly as in the Excel kept for the Word
@@ -63,144 +66,123 @@ function srOwnPdfHtml(array $eff, array $report, array $tpl, array $results): st
     $data = $report['data'];
     $e = 'srPdfE';
     $val = fn($k) => srVal($data, $k);
-    $label = fn($k) => $eff['fields'][$k]['label'] ?? (srExtraFieldDefs()[$k][0] ?? (SF_FIELDS[$k][0] ?? $k));
-    $when = function (string $p) use ($val) {
-        $d = $val($p . '_date'); $t = $val($p . '_time');
-        $s = trim(($d !== '' ? sfDateText($d) : '') . ($t !== '' ? '  ' . $t . ' Hrs LT' : ''));
-        return $s;
-    };
-    $kv = function (array $rows) use ($e) { // [[label, value], …] in two columns
-        $rows = array_values(array_filter($rows, fn($r) => trim((string)$r[1]) !== ''));
-        if (!$rows) return '';
-        $h = '<table class="kv">';
-        for ($i = 0; $i < count($rows); $i += 2) {
-            $h .= '<tr>';
-            foreach ([$rows[$i], $rows[$i + 1] ?? null] as $r) $h .= $r ? '<th>' . $e($r[0]) . '</th><td>' . $e($r[1]) . '</td>' : '<th></th><td></td>';
-            $h .= '</tr>';
-        }
-        return $h . '</table>';
-    };
-    $sec = fn(string $title, string $body, bool $keep = true) => $body === '' ? '' : '<div class="sec' . ($keep ? ' keep' : '') . '"><h2>' . srPdfE($title) . '</h2>' . $body . '</div>'; // a short section never splits over two pages
-    $grades = srChosenGrades($eff, $data);
+    $date = fn($k) => preg_match('/^\d{4}-\d{2}-\d{2}$/', $val($k)) ? sfDateText($val($k)) : $val($k);
+    $grades = array_values(array_filter(srChosenGrades($eff, $data), fn($g) => srTankRows($data, $g)));
+    $num = fn($k) => is_numeric($val($k)) ? (float)$val($k) : null;
 
-    // vessel
-    $vesselKeys = ['vessel_name', 'imo', 'flag', 'port_of_registry', 'callsign', 'class', 'grt', 'nrt', 'summer_dwt', 'summer_draft', 'loa', 'breadth', 'depth', 'holds', 'builder', 'keel_month', 'keel_year', 'voyage_no'];
-    $rows = [];
-    foreach ($vesselKeys as $k) {
-        $v = $val($k);
-        if ($k === 'keel_month' || $k === 'keel_year') continue;
-        $rows[] = [rtrim(preg_replace('/\s*\((m)\)$/', ' (m)', $label($k))), $v];
-    }
-    $keel = trim($val('keel_month') . ' ' . $val('keel_year'));
-    if ($keel !== '') $rows[] = ['Keel laid', $keel];
-    $vessel = $kv($rows);
-    $parties = $kv(array_map(fn($k) => [$label($k), $val($k)], ['owners', 'operator', 'charterers', 'next_charterer']));
-    // survey
-    $survey = $kv([['Port', $val('port_name')], ['Place of survey', $val('place')], ['FWE', $when('fwe')], ['Alongside', $val('alongside')],
-        ['Survey started', $when('started')], ['Survey completed', $when('completed')],
-        ['Place of redelivery', $val('redelivery_place')], ['Redelivery', trim(($val('redelivery_date') !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $val('redelivery_date')) ? sfDateText($val('redelivery_date')) : $val('redelivery_date')) . ' ' . $val('redelivery_time'))]]);
-    // drafts
-    $fa = is_numeric($val('draft_aft')) ? (float)$val('draft_aft') : null; $ff = is_numeric($val('draft_fwd')) ? (float)$val('draft_fwd') : null;
-    $drafts = $kv([['Draft forward (m)', $ff === null ? '' : srPdfNum($ff)], ['Draft aft (m)', $fa === null ? '' : srPdfNum($fa)],
-        ['Mean draft (m)', $fa !== null && $ff !== null ? srPdfNum(round(($fa + $ff) / 2, 3)) : ''], ['Trim (m)', $fa !== null && $ff !== null ? srPdfNum(round($fa - $ff, 3)) : ''],
-        ['List (degrees)', is_numeric($val('list')) ? srPdfNum($val('list'), 2) : '']]);
-    // bunkers ROB as per log book
-    $brob = '';
-    $brows = '';
-    foreach ($grades as $g) {
-        $a = $val('brob_fwe_' . $g); $b = $val('brob_started_' . $g);
-        if ($a === '' && $b === '') continue;
-        $brows .= '<tr><td class="l">' . $e(SR_GRADES[$g][0]) . '</td><td>' . srPdfNum($a) . '</td><td>' . srPdfNum($b) . '</td></tr>';
-    }
-    if ($brows !== '') $brob = '<table class="grid"><thead><tr><th class="l">Grade</th><th>ROB at FWE (MT)</th><th>ROB at survey start (MT)</th></tr></thead><tbody>' . $brows . '</tbody></table>';
-    // tanks
+    // header block: the field report's own lines; the log book BROB of each grade beside FWE and Survey Started
+    $brobHead = ''; $brobRow = ['fwe' => '', 'started' => ''];
+    foreach ($grades as $g) $brobHead .= '<td class="bh">' . $e(SR_GRADES[$g][0]) . '</td>';
+    foreach (['fwe', 'started'] as $p) foreach ($grades as $g) $brobRow[$p] .= '<td class="bv">' . ($val('brob_' . $p . '_' . $g) === '' ? '' : srPdfNum($val('brob_' . $p . '_' . $g))) . '</td>';
+    $nb = count($grades);
+    $line = function (string $label, string $v, string $time = '', string $right = '', bool $bold = false) use ($e) {
+        $mid = $time === '' ? '<td class="hv" colspan="2">' . $e($v) . '</td>' : '<td class="hv">' . $e($v) . '</td><td class="ht">' . $e($time) . '</td>'; // no time: the value takes its box
+        return '<tr' . ($bold ? ' class="bd"' : '') . '><td class="hl">' . $e($label) . '</td>' . $mid . '<td class="hu">' . ($time !== '' ? 'Hrs LT' : '') . '</td>' . $right . '</tr>';
+    };
+    $brobCells = fn(string $p) => $nb ? '<td class="bl">BROB:</td>' . $brobRow[$p] . '<td class="bu">M.Tons</td>' : '';
+    $blank = $nb ? '<td></td>' . str_repeat('<td></td>', $nb) . '<td></td>' : '';
+    $head = '<table class="hd">' .
+        ($nb ? '<tr><td class="hl0"></td><td></td><td></td><td></td><td></td>' . $brobHead . '<td></td></tr>' : '') .
+        $line('Owners', $val('owners'), '', $blank) .
+        $line('Charterers', $val('charterers'), '', $blank) .
+        $line('FWE', $date('fwe_date'), $val('fwe_time'), $brobCells('fwe')) .
+        $line('Survey Started', $date('started_date'), $val('started_time'), $brobCells('started')) .
+        $line('Survey Completed', $date('completed_date'), $val('completed_time'), $blank, true) .
+        $line('Place of Survey', $val('place'), '', $blank) .
+        $line('Voyage No.', $val('voyage_no'), '', $blank) . '</table>';
+    $fa = $num('draft_aft'); $ff = $num('draft_fwd');
+    $dr = fn($l, $v, $u) => '<td class="hl">' . $l . '</td><td class="dv">' . ($v === null ? '' : $e($v)) . '</td><td class="du">' . $u . '</td>';
+    $drafts = '<table class="dr"><tr>' . $dr('Draft Aft', $fa === null ? null : number_format($fa, 2, '.', ''), 'Meters') . '<td class="gap"></td>' .
+        $dr('Trim:', $fa !== null && $ff !== null ? number_format(round($fa - $ff, 3), 2, '.', '') : null, 'Meters') . '</tr><tr>' .
+        $dr('Draft Fwd', $ff === null ? null : number_format($ff, 2, '.', ''), 'Meters') . '<td class="gap"></td>' .
+        $dr('List', $num('list') === null ? null : number_format($num('list'), 2, '.', ''), 'Degrees') . '</tr></table>';
+
+    // one table per grade, as the field report
     $tanks = '';
     foreach ($grades as $g) {
-        $rowsG = srTankRows($data, $g);
-        if (!$rowsG) continue;
         $res = $results['tanks'][$g] ?? []; $tot = $results['grades'][$g] ?? [];
-        $h = '<table class="grid tk"><thead><tr><th>#</th><th class="l">Tank</th><th>Ref. Ht<br><small>(m)</small></th><th>Sounding<br><small>(m)</small></th><th>Volume<br><small>(m³)</small></th><th>Density<br><small>@15°C</small></th><th>Temp<br><small>(°C)</small></th><th>V.C.F.</th><th>G.S.V.<br><small>(m³ @15°C)</small></th><th>MT<br><small>(in air)</small></th></tr></thead><tbody>';
-        foreach ($rowsG as $i => $r) {
+        $h = '<div class="grade"><h3>' . $e(SR_GRADES[$g][1]) . '</h3><table class="tk"><thead><tr>' .
+            '<th class="tn">Tank<br>Name:</th><th>Ref. Height<br>(m)</th><th>Sdg. Corr\'d<br>(m)</th><th>Volume<br>Cubic Metres</th><th>Density<br>@15°C</th><th>Temp<br>Deg(C)</th><th>V.C.F.<br>T(54B)</th><th>G.S.V<br>m³ @ 15°C</th><th>Metric<br>Tons</th></tr></thead><tbody>';
+        foreach (srTankRows($data, $g) as $i => $r) {
             $x = $res[$i] ?? [];
-            $h .= '<tr><td>' . ($i + 1) . '</td><td class="l">' . $e(strtoupper($r['name'])) . '</td>';
+            $h .= '<tr><td class="tn">' . $e(strtoupper($r['name'])) . '</td>';
             foreach (['ref_height', 'sounding', 'volume', 'density', 'temp'] as $c) $h .= '<td>' . $e(srPdfReading($c, $r[$c])) . '</td>';
-            $h .= '<td>' . srPdfNum($x['vcf'] ?? null, 4) . '</td><td>' . srPdfNum($x['gsv'] ?? null) . '</td><td class="b">' . srPdfNum($x['mt'] ?? null) . '</td></tr>';
+            $h .= '<td>' . srPdfNum($x['vcf'] ?? null, 4) . '</td><td>' . srPdfNum($x['gsv'] ?? null) . '</td><td>' . srPdfNum($x['mt'] ?? null) . '</td></tr>';
         }
-        $h .= '</tbody><tfoot><tr><td colspan="8" class="r">TOTAL ' . $e(SR_GRADES[$g][0]) . '</td><td>' . srPdfNum($tot['gsv'] ?? null) . '</td><td>' . srPdfNum($tot['completed'] ?? null) . '</td></tr></tfoot></table>';
-        $tanks .= '<div class="grade"><h3>' . $e(SR_GRADES[$g][1]) . ' (' . $e(SR_GRADES[$g][0]) . ')</h3>' . $h . '</div>';
+        $h .= '</tbody></table><table class="tt"><tr><td class="sp"></td><td class="lb">TOTAL Cubic Metres @ 15°C</td><td class="v">' . srPdfNum($tot['gsv'] ?? null) . '</td><td class="nb"></td></tr>' .
+            '<tr><td class="sp"></td><td class="lb r" colspan="2">TOTAL Metric Tons</td><td class="v">' . srPdfNum($tot['completed'] ?? null) . '</td></tr></table></div>';
+        $tanks .= $h;
     }
-    // ROB summary
+
+    // the remark, the MT of each grade, the signatures
+    $remark = $val('remarks') !== '' ? $val('remarks') : 'All bunker tanks were carefully sounded together with Ch. Engineer/his representative and the quantities, as calculated from the vessels calibration tables, were found and agreed to be at the time of survey :';
     $sum = '';
-    $srows = '';
-    foreach ($grades as $g) {
-        if (!isset($results['grades'][$g]) || !srTankRows($data, $g)) continue;
-        $x = $results['grades'][$g];
-        $d = $x['difference'];
-        $srows .= '<tr><td class="l">' . $e(SR_GRADES[$g][0]) . '</td><td>' . srPdfNum($x['completed']) . '</td><td>' . srPdfNum($x['logbook']) . '</td><td class="b">' . ($d === null ? '—' : ($d > 0 ? '+' : '') . srPdfNum($d)) . '</td></tr>';
-    }
-    if ($srows !== '') {
-        $td = $results['total_difference'] ?? 0;
-        $sum = '<table class="grid sum"><thead><tr><th class="l">Fuel grade</th><th>Survey completed ROB (MT)</th><th>Log book ROB (MT)</th><th>Difference (MT)</th></tr></thead><tbody>' . $srows . '</tbody>' .
-            '<tfoot><tr><td colspan="3" class="r">TOTAL DIFFERENCE</td><td>' . ($td > 0 ? '+' : '') . srPdfNum($td) . '</td></tr></tfoot></table>' .
-            '<p class="note">Survey completed ROB = sum of the metric tons (in air) of the tanks of each grade. Log book ROB = ROB at the survey start as per the engine-room log book. Difference = Survey completed − Log book.</p>';
-    }
-    // remarks
-    $rem = '';
-    foreach (['remarks', 'offhire_remark'] as $k) if ($val($k) !== '') $rem .= '<p class="rem">' . nl2br($e($val($k))) . '</p>';
-    // signatures
-    $sig = '<table class="sig"><tr>' .
-        '<td><div class="ln"></div><b>The Master</b><br>' . ($val('master') !== '' ? 'Capt. ' . $e($val('master')) : '&nbsp;') . '<br><small>' . $e(strtoupper($val('vessel_name'))) . '</small></td>' .
-        '<td><div class="ln"></div><b>The Chief Engineer</b><br>' . ($val('chief_engineer') !== '' ? 'Mr. ' . $e($val('chief_engineer')) : '&nbsp;') . '<br><small>&nbsp;</small></td>' .
-        '<td><div class="ln"></div><b>For YMR MARINE SOLUTIONS LLP</b><br>' . ($val('surveyor_name') !== '' ? 'Mr. ' . $e($val('surveyor_name')) : '&nbsp;') . '<br><small>Independent Marine Surveyor</small></td>' .
-        '</tr></table>';
+    foreach ($grades as $g) $sum .= '<tr><td class="g">' . $e(SR_GRADES[$g][0]) . '</td><td class="m">' . srPdfNum($results['grades'][$g]['completed'] ?? null) . '</td><td class="u">MT</td></tr>';
+    $sig = fn(array $lines) => '<div class="ln"></div>' . implode('<br>', array_map($e, $lines));
+    $end = '<div class="end"><p class="rem">' . nl2br($e($remark)) . '</p>' . ($sum ? '<table class="sum">' . $sum . '</table>' : '') .
+        '<table class="sig"><tr><td>' . $sig(['The Master', 'Capt. ' . $val('master')]) . '</td><td></td><td></td></tr>' .
+        '<tr><td>' . $sig(['The Chief Engineer', 'Mr. ' . $val('chief_engineer')]) . '</td><td></td><td>' . $sig(['Independent Marine Surveyor', 'For YMR MARINE SOLUTIONS LLP', 'Mr. ' . $val('surveyor_name')]) . '</td></tr></table></div>';
 
     $kind = RT_KINDS[$tpl['kind']] ?? $tpl['kind'];
-    $title = 'BUNKER SURVEY REPORT';
-    $sub = strtoupper($kind) . ($val('vessel_name') !== '' ? ' — ' . strtoupper($val('vessel_name')) : '');
-    $date = $val('completed_date') !== '' ? sfDateText($val('completed_date')) : sfDateText(date('Y-m-d'));
+    $vessel = strtoupper($val('vessel_name'));
+    $sub = strtoupper($kind) . ' - BUNKER SURVEY REPORT';
     $lh = is_file(SR_LETTERHEAD) ? 'data:image/png;base64,' . base64_encode((string)file_get_contents(SR_LETTERHEAD)) : '';
 
     return '<!doctype html><html><head><meta charset="utf-8"><style>
 @page { margin: 47mm 12mm 16mm 12mm; }
-body { font-family: "DejaVu Sans", sans-serif; font-size: 8.6pt; color: #0f172a; }
+body { font-family: "DejaVu Sans", sans-serif; font-size: 8.2pt; color: #000; }
 #lh { position: fixed; top: -43mm; left: 0; right: 0; text-align: center; }
 #lh img { width: 172mm; }
 #ft { position: fixed; bottom: -11mm; left: 0; right: 0; font-size: 7pt; color: #64748b; border-top: 0.5pt solid #cbd5e1; padding-top: 3pt; }
-.ttl { text-align: center; margin: 0 0 8pt; }
-.ttl h1 { font-size: 14pt; margin: 0; color: #0b3c7a; letter-spacing: 1pt; }
-.ttl div { font-size: 9.5pt; font-weight: bold; color: #1e3a8a; margin-top: 2pt; }
-.meta { width: 100%; font-size: 8pt; color: #475569; margin-bottom: 6pt; }
-.meta td.r { text-align: right; }
-.sec { margin: 0 0 9pt; }
-.keep { page-break-inside: avoid; }
-h2, h3 { page-break-after: avoid; }
-h2 { font-size: 9.5pt; color: #fff; background: #3d8bd6; margin: 0 0 4pt; padding: 3pt 6pt; text-transform: uppercase; letter-spacing: .5pt; }
-h3 { font-size: 9pt; color: #0b3c7a; margin: 6pt 0 3pt; }
-table { border-collapse: collapse; width: 100%; }
-.kv th { width: 19%; text-align: left; font-weight: bold; color: #334155; background: #f1f6fc; border: 0.5pt solid #cbd5e1; padding: 3pt 5pt; vertical-align: top; }
-.kv td { width: 31%; border: 0.5pt solid #cbd5e1; padding: 3pt 5pt; vertical-align: top; }
-.grid th { background: #e3eefb; color: #0b3c7a; font-weight: bold; border: 0.5pt solid #94a3b8; padding: 3pt 3pt; text-align: center; font-size: 7.8pt; }
-.grid th small { font-weight: normal; color: #475569; font-size: 6.8pt; }
-.grid td { border: 0.5pt solid #cbd5e1; padding: 2.6pt 4pt; text-align: right; }
-.grid .l { text-align: left; } .grid .r { text-align: right; } .grid .b { font-weight: bold; }
-.grid tbody tr:nth-child(even) td { background: #f8fafc; }
-.grid tfoot td { font-weight: bold; background: #e8f3fd; border: 0.5pt solid #94a3b8; }
-.tk td:first-child { text-align: center; color: #64748b; width: 4%; }
-.grade { page-break-inside: auto; }
-.sum td, .sum th { font-size: 8.6pt; }
-.note { font-size: 7pt; color: #64748b; font-style: italic; margin: 3pt 0 0; }
-.rem { margin: 0 0 4pt; line-height: 1.45; text-align: justify; }
-.sig { margin-top: 26pt; page-break-inside: avoid; }
-.sig td { width: 33.3%; padding: 0 8pt; vertical-align: top; font-size: 8.4pt; }
-.sig .ln { border-top: 0.6pt solid #0f172a; margin: 0 0 3pt; height: 1pt; }
-.sig small { color: #64748b; }
+.ttl { text-align: center; margin: 0 0 9pt; }
+.ttl h1 { font-size: 17pt; margin: 0; color: #0b3c7a; letter-spacing: .8pt; }
+.ttl div { font-size: 9.5pt; font-weight: bold; color: #1e3a8a; margin-top: 3pt; }
+.ttl div span { color: #000; font-weight: normal; }
+table { border-collapse: collapse; }
+.hd { width: 100%; margin-bottom: 6pt; }
+.hd td { padding: 1.6pt 3pt; white-space: nowrap; }
+.hd .hl { width: 22%; border: 0.5pt solid #000; }
+.hd .hv { width: 22%; border: 0.5pt solid #000; border-left: 0; }
+.hd .ht { width: 8%; text-align: center; border: 0.5pt solid #000; border-left: 0; }
+.hd .hu { width: 7%; }
+.hd .bl { text-align: right; width: 6%; }
+.hd .bh, .hd .bv { border: 0.5pt solid #000; width: 10%; }
+.hd .bu { width: 8%; }
+.hd tr.bd td { font-weight: bold; }
+.dr { width: 100%; margin-bottom: 10pt; }
+.dr td { padding: 1.6pt 3pt; }
+.dr .hl { border: 0.5pt solid #000; width: 13%; }
+.dr .dv { border: 0.5pt solid #000; width: 14%; }
+.dr .du { border: 0.5pt solid #000; width: 10%; }
+.dr .gap { width: 26%; }
+h3 { font-size: 11pt; margin: 8pt 0 3pt; page-break-after: avoid; }
+.tk { width: 100%; }
+.tk th { font-weight: normal; font-size: 7.6pt; text-align: center; border: 0.5pt solid #000; padding: 2pt; }
+.tk td { border: 0.5pt solid #000; border-top: 0; border-bottom: 0; text-align: center; padding: 1.3pt 2pt; font-size: 7.8pt; }
+.tk tbody tr:last-child td { border-bottom: 0.5pt solid #000; }
+.tk .tn { text-align: left; width: 15%; }
+.tk th.tn { text-align: center; }
+.tt { width: 100%; }
+.tt td { padding: 1.5pt 3pt; font-size: 7.8pt; }
+.tt .sp { width: 45%; }
+.tt .lb { font-weight: bold; border: 0.5pt solid #000; border-top: 0; }
+.tt .lb.r { text-align: right; }
+.tt .v { font-weight: bold; text-align: right; border: 0.5pt solid #000; border-top: 0; width: 12%; font-size: 8.6pt; }
+.tt .nb { width: 12%; }
+.grade { margin-bottom: 8pt; }
+.end { page-break-inside: avoid; margin-top: 6pt; }
+.rem { margin: 0 0 10pt; line-height: 1.35; }
+.sum { margin: 0 0 6pt; width: 46%; }
+.sum td { border: 0.5pt solid #000; padding: 1.6pt 4pt; }
+.sum .g { text-align: center; width: 45%; } .sum .m { text-align: center; font-weight: bold; width: 35%; } .sum .u { text-align: center; }
+.sig { width: 100%; margin-top: 18pt; }
+.sig td { width: 36%; vertical-align: bottom; padding: 22pt 0 0; }
+.sig td:nth-child(2) { width: 28%; }
+.sig .ln { border-top: 0.6pt solid #000; height: 1pt; margin-bottom: 2pt; }
 </style></head><body>' .
         ($lh ? '<div id="lh"><img src="' . $lh . '" alt="YMR Marine Solutions"></div>' : '') .
-        '<div id="ft">' . $e($sub) . ' · Generated by YMR Marine YSMS on ' . $e(date('d M Y H:i')) . '</div>' .
-        '<div class="ttl"><h1>' . $title . '</h1><div>' . $e($sub) . '</div></div>' .
-        '<table class="meta"><tr><td>Report type: <b>' . $e($kind) . '</b></td><td class="r">Date: <b>' . $e($date) . '</b></td></tr></table>' .
-        $sec('Vessel particulars', $vessel) . $sec('Owners & charterers', $parties) . $sec('Survey details', $survey) .
-        $sec('Drafts & list', $drafts) . $sec('Bunkers ROB as per log book', $brob) .
-        $sec('Tank soundings & quantities (Table 54B)', $tanks, false) . $sec('ROB summary', $sum) . $sec('Remarks', $rem) . $sig .
+        '<div id="ft">' . $e($vessel . ' — ' . $sub) . ' · Generated by YMR Marine YSMS on ' . $e(date('d M Y H:i')) . '</div>' .
+        '<div class="ttl"><h1>' . $e($vessel !== '' ? $vessel : 'BUNKER SURVEY REPORT') . '</h1><div>' . $e($sub) . ($val('imo') !== '' ? ' &nbsp;|&nbsp; <span>IMO No.</span> ' . $e($val('imo')) : '') . '</div></div>' .
+        $head . $drafts . $tanks . $end .
         '</body></html>';
 }
