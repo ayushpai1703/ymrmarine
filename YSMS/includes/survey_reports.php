@@ -305,7 +305,7 @@ function srExtraFieldDefs(): array {
         'brob_started_ulsfo' => ['Survey started ROB — ULSFO (MT)', 'num:3'], 'brob_started_hsmgo' => ['Survey started ROB — HSMGO (MT)', 'num:3'],
     ];
 }
-const SR_ROW_META = ['mode', 'ullage', 'done', 'id', 'copy']; // copy = 1: a copied tank not saved yet
+const SR_ROW_META = ['mode', 'ullage', 'su', 'done', 'id', 'copy']; // su = s / u: printed next to the reading // copy = 1: a copied tank not saved yet
 
 /** Grades offered for a template: its own sections plus the ones a copied section can take. */
 function srGradeList(array $eff): array {
@@ -343,6 +343,7 @@ function srCleanExtra(array $eff, array $in, array &$store, array &$errors): voi
             $o = [];
             foreach (array_merge(array_keys(RT_TANK_COLS), SR_ROW_META) as $c) $o[$c] = is_scalar($row[$c] ?? '') ? mb_substr(trim((string)($row[$c] ?? '')), 0, 60) : '';
             $o['mode'] = $o['mode'] === 'ullage' ? 'ullage' : 'sounding';
+            $o['su'] = $o['mode'] === 'ullage' ? 'u' : ($o['su'] === 's' ? 's' : '');
             $o['done'] = $o['done'] ? '1' : '';
             $o['copy'] = $o['copy'] && !$o['done'] ? '1' : '';
             $o['id'] = preg_replace('/[^A-Za-z0-9_-]/', '', $o['id']);
@@ -425,7 +426,11 @@ function srTankRows(array $data, string $g): array {
         $r = [];
         foreach (array_keys(RT_TANK_COLS) as $c) $r[$c] = trim((string)($row[$c] ?? ''));
         $r['sounding'] = srSounding($row);
-        if (implode('', $r) !== '') $out[] = $r;
+        if (implode('', $r) === '') continue;
+        $r['su'] = ($row['mode'] ?? '') === 'ullage' ? 'u' : (($row['su'] ?? '') === 's' ? 's' : '');
+        if ($r['su'] === 's' && !is_numeric(str_replace(',', '', $r['sounding']))) $r['su'] = ''; // GAUGE / empty: no S
+        $r['ullage'] = trim((string)($row['ullage'] ?? ''));
+        $out[] = $r;
     }
     return $out;
 }

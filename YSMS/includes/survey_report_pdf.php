@@ -106,12 +106,18 @@ function srOwnPdfHtml(array $eff, array $report, array $tpl, array $results, flo
     $tanks = '';
     foreach ($grades as $g) {
         $res = $results['tanks'][$g] ?? []; $tot = $results['grades'][$g] ?? [];
+        $rows = srTankRows($data, $g);
+        $anyU = (bool)array_filter($rows, fn($r) => $r['su'] === 'u');
         $h = '<div class="grade"><h3>' . $e(SR_GRADES[$g][1]) . '</h3><table class="tk"><thead><tr>' .
-            '<th class="tn">Tank<br>Name:</th><th>Ref. Height<br>(m)</th><th>Sdg. Corr\'d<br>(m)</th><th>Volume<br>Cubic Metres</th><th>Density<br>@15°C</th><th>Temp<br>Deg(C)</th><th>V.C.F.<br>T(54B)</th><th>G.S.V<br>m³ @ 15°C</th><th>Metric<br>Tons</th></tr></thead><tbody>';
-        foreach (srTankRows($data, $g) as $i => $r) {
+            '<th class="tn">Tank<br>Name:</th><th>Ref. Height<br>(m)</th><th>' . ($anyU ? 'Sdg. / Ullage' : 'Sdg. Corr\'d') . '<br>(m)</th><th>Volume<br>Cubic Metres</th><th>Density<br>@15°C</th><th>Temp<br>Deg(C)</th><th>V.C.F.<br>T(54B)</th><th>G.S.V<br>m³ @ 15°C</th><th>Metric<br>Tons</th></tr></thead><tbody>';
+        foreach ($rows as $i => $r) {
             $x = $res[$i] ?? [];
             $h .= '<tr><td class="tn">' . $e(strtoupper($r['name'])) . '</td>';
-            foreach (['ref_height', 'sounding', 'volume', 'density', 'temp'] as $c) $h .= '<td>' . $e(srPdfReading($c, $r[$c])) . '</td>';
+            foreach (['ref_height', 'sounding', 'volume', 'density', 'temp'] as $c) {
+                // the reading as chosen on the computer: "0.012 S" (sounding) / "1.250 U" (the ullage typed); none chosen, the plain value
+                if ($c === 'sounding' && $r['su'] === 'u') { $h .= '<td>' . $e(srPdfReading($c, $r['ullage'])) . ' U</td>'; continue; }
+                $h .= '<td>' . $e(srPdfReading($c, $r[$c])) . ($c === 'sounding' && $r['su'] === 's' ? ' S' : '') . '</td>';
+            }
             $h .= '<td>' . srPdfNum($x['vcf'] ?? null, 4) . '</td><td>' . srPdfNum($x['gsv'] ?? null) . '</td><td>' . srPdfNum($x['mt'] ?? null) . '</td></tr>';
         }
         $h .= '</tbody></table><table class="tt"><tr><td class="sp"></td><td class="lb r">TOTAL Metric Tons</td><td class="v">' . srPdfNum($tot['completed'] ?? null) . '</td></tr></table></div>';

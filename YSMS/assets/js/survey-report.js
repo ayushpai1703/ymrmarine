@@ -149,7 +149,7 @@
         start(res, false);
       });
   }
-  var ROW_KEYS = ['name', 'ref_height', 'sounding', 'volume', 'density', 'temp', 'mode', 'ullage', 'done', 'id', 'copy'];
+  var ROW_KEYS = ['name', 'ref_height', 'sounding', 'volume', 'density', 'temp', 'mode', 'ullage', 'su', 'done', 'id', 'copy'];
   function normalise(d) {
     d = d || {}; d.fields = d.fields || {}; d.tanks = d.tanks || {}; d.extra = d.extra || {};
     d.grades = Array.isArray(d.grades) ? d.grades : [];
@@ -158,6 +158,7 @@
       d.tanks[g.key] = (d.tanks[g.key] || []).map(function (r) {
         var o = {}; ROW_KEYS.forEach(function (k) { o[k] = r[k] == null ? '' : String(r[k]); });
         o.mode = o.mode === 'ullage' ? 'ullage' : 'sounding'; if (!o.id) o.id = uid();
+        o.su = o.mode === 'ullage' ? 'u' : o.su === 's' ? 's' : ''; // S / U chosen on the computer: printed next to the reading
         return o;
       });
     });
@@ -532,11 +533,11 @@
     return S.canEdit ? S.spare[g] : 0;
   }
   function xCell(g, i, col, r) {
-    var key = g + ':' + i, ul = col === 'sounding' && r && r.mode === 'ullage', pre = '';
+    var key = g + ':' + i, ul = col === 'sounding' && r && r.mode === 'ullage', so = !!(r && r.su === 's'), pre = '';
     if (col === 'sounding') {
       if (ul) col = 'ullage';
       pre = '<span class="sr-su" role="radiogroup" aria-label="Sounding or ullage">' +
-        '<button type="button" tabindex="-1" role="radio" class="s' + (ul ? '' : ' on') + '" aria-checked="' + !ul + '" data-su="' + key + ':s" title="Sounding" data-testid="sr-su-' + g + '-' + i + '-s"' + (S.canEdit ? '' : ' disabled') + '>S</button>' +
+        '<button type="button" tabindex="-1" role="radio" class="s' + (so ? ' on' : '') + '" aria-checked="' + so + '" data-su="' + key + ':s" title="Sounding" data-testid="sr-su-' + g + '-' + i + '-s"' + (S.canEdit ? '' : ' disabled') + '>S</button>' +
         '<button type="button" tabindex="-1" role="radio" class="u' + (ul ? ' on' : '') + '" aria-checked="' + ul + '" data-su="' + key + ':u" title="Ullage" data-testid="sr-su-' + g + '-' + i + '-u"' + (S.canEdit ? '' : ' disabled') + '>U</button></span>';
     }
     if (col === 'name' && r && S.canEdit) {
@@ -546,7 +547,8 @@
         '<button type="button" tabindex="-1" data-mv="' + key + ':1" title="Move down" aria-label="Move down" data-testid="sr-down-' + g + '-' + i + '"' + (i === n - 1 ? ' disabled' : '') + '><i class="fa-solid fa-chevron-down"></i></button></span>';
     }
     var v = r ? shown(r, col) : '', dec = col === 'volume' || col === 'density' || col === 'temp';
-    return '<td class="xi x-' + (col === 'ullage' ? 'sounding' : col) + (pre ? ' has-pre' : '') + '">' + pre + '<label class="sr-f sr-cellf" data-tw="' + key + ':' + col + '"><input data-t="' + key + ':' + col + '" data-testid="sr-t-' + g + '-' + i + '-' + col + '" value="' + esc(v) + '"' +
+    var suOff = (col === 'sounding' || col === 'ullage') && num(v) === null; // S / U only next to a number (not GAUGE, not empty)
+    return '<td class="xi x-' + (col === 'ullage' ? 'sounding' : col) + (pre ? ' has-pre' : '') + (suOff ? ' su-off' : '') + '">' + pre + '<label class="sr-f sr-cellf" data-tw="' + key + ':' + col + '"><input data-t="' + key + ':' + col + '" data-testid="sr-t-' + g + '-' + i + '-' + col + '" value="' + esc(v) + '"' +
       (dec ? ' inputmode="decimal"' : '') + (S.canEdit ? '' : ' disabled') + ' autocomplete="off" spellcheck="false"' + (/^GAUGE$/i.test(v) ? ' class="gauge"' : '') + '><em data-terr="' + key + ':' + col + '"></em></label></td>';
   }
   function rowHtml(g, r, i) {
@@ -893,6 +895,10 @@
       else if (p[2] === 'ullage') { r.mode = 'ullage'; r.ullage = el.value; r.sounding = sounding(r); }
       else { r[p[2]] = el.value; if (p[2] === 'ref_height' && r.mode === 'ullage') r.sounding = sounding(r); }
       if (p[2] === 'ref_height' || p[2] === 'sounding') el.classList.toggle('gauge', /^GAUGE$/i.test(el.value.trim()));
+      if (p[2] === 'sounding' || p[2] === 'ullage') { // S / U shown only while the reading is a number; GAUGE / empty: no S
+        var nOk = num(el.value) !== null, std = el.closest('td'); if (std) std.classList.toggle('su-off', !nOk);
+        if (!nOk && r.mode !== 'ullage' && r.su) { r.su = ''; var sb = std && $('[data-su$=":s"]', std); if (sb) { sb.classList.remove('on'); sb.setAttribute('aria-checked', 'false'); } }
+      }
       if (p[2] === 'name') { var tn = $('[data-tc-name="' + p[0] + ':' + p[1] + '"]'); if (tn) tn.textContent = el.value || 'New tank'; }
       updateRow(p[0], +p[1]);
       changed(); showErrors();
@@ -920,10 +926,13 @@
     var firstSpare = $('tr.sr-spare', tb); if (firstSpare && firstSpare.compareDocumentPosition(tr) & Node.DOCUMENT_POSITION_FOLLOWING) { tb.insertBefore(tr, firstSpare); el.focus(); }
     return row;
   }
-  /** S / U in the Sounding / Ullage cell: the reading typed is a sounding or an ullage (sounding = reference height − ullage). */
+  /** S / U in the Sounding / Ullage cell: the reading typed is a sounding or an ullage (sounding = reference height − ullage).
+      The choice prints next to the reading in the report ("0.012 S"); none chosen, nothing printed. A second click clears it. */
   function setSU(b) {
-    var q = b.getAttribute('data-su').split(':'), g = q[0], i = +q[1], m = q[2] === 'u' ? 'ullage' : 'sounding', r = S.data.tanks[g][i];
+    var q = b.getAttribute('data-su').split(':'), g = q[0], i = +q[1], r = S.data.tanks[g][i];
     if (!r) { var inp = $('[data-t]', b.closest('tr')); if (!inp) return; r = spareToRow(inp); i = S.data.tanks[g].indexOf(r); }
+    var su = r.su === q[2] ? '' : q[2], m = su === 'u' ? 'ullage' : 'sounding';
+    if (r.su !== su) { r.su = su; if (r.done === '1') r.done = ''; r._editing = true; changed(); }
     if (r.mode !== m) {
       if (m === 'ullage') { r.ullage = ullageOf(r); r.mode = 'ullage'; r.sounding = sounding(r); }
       else { r.sounding = sounding(r); r.mode = 'sounding'; r.ullage = ''; }
@@ -1218,7 +1227,7 @@
   }
   /** A row with nothing typed (the empty rows at the end of a grid): ignored in checks and totals, never saved. */
   function blankRow(r) { return !['name', 'ref_height', 'sounding', 'ullage', 'volume', 'density', 'temp'].some(function (k) { return String(r[k] || '').trim() !== ''; }); }
-  function emptyRow() { return { name: '', ref_height: '', sounding: '', volume: '', density: '', temp: '', mode: 'sounding', ullage: '', done: '', id: uid() }; }
+  function emptyRow() { return { name: '', ref_height: '', sounding: '', volume: '', density: '', temp: '', mode: 'sounding', ullage: '', su: '', done: '', id: uid() }; }
   function saveTank(key) {
     var p = key.split(':'), r = S.data.tanks[p[0]][+p[1]], e = tankErrors(r);
     r._tried = true;

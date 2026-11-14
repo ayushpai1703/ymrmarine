@@ -799,6 +799,8 @@ body[data-sr-step=tanks] .sr-wiz-top { display: none; }
   /* S / U: the reading is a sounding (light blue) or an ullage (green) */
   .sr-xg td.has-pre { position: relative; }
   .sr-xg td.x-sounding.has-pre .sr-cellf { margin-left: 46px; }
+  .sr-xg td.x-sounding.su-off .sr-su { display: none; }
+  .sr-xg td.x-sounding.su-off .sr-cellf { margin-left: 0; }
   .sr-su { position: absolute; left: 5px; top: 50%; transform: translateY(-50%); display: inline-flex; gap: 2px; z-index: 1; }
   .sr-su button { width: 19px; height: 19px; padding: 0; border-radius: 50%; border: 1px solid #cbd5e1; background: #fff; color: #94a3b8; font-size: 10.5px; font-weight: 800; line-height: 17px; cursor: pointer; }
   .sr-su button.s.on { background: #bae6fd; border-color: #38bdf8; color: #075985; }
