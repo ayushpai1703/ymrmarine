@@ -532,8 +532,21 @@
     return S.canEdit ? S.spare[g] : 0;
   }
   function xCell(g, i, col, r) {
-    var key = g + ':' + i, v = r ? shown(r, col) : '', dec = col === 'volume' || col === 'density' || col === 'temp';
-    return '<td class="xi x-' + col + '"><label class="sr-f sr-cellf" data-tw="' + key + ':' + col + '"><input data-t="' + key + ':' + col + '" data-testid="sr-t-' + g + '-' + i + '-' + col + '" value="' + esc(v) + '"' +
+    var key = g + ':' + i, ul = col === 'sounding' && r && r.mode === 'ullage', pre = '';
+    if (col === 'sounding') {
+      if (ul) col = 'ullage';
+      pre = '<span class="sr-su" role="radiogroup" aria-label="Sounding or ullage">' +
+        '<button type="button" tabindex="-1" role="radio" class="s' + (ul ? '' : ' on') + '" aria-checked="' + !ul + '" data-su="' + key + ':s" title="Sounding" data-testid="sr-su-' + g + '-' + i + '-s"' + (S.canEdit ? '' : ' disabled') + '>S</button>' +
+        '<button type="button" tabindex="-1" role="radio" class="u' + (ul ? ' on' : '') + '" aria-checked="' + ul + '" data-su="' + key + ':u" title="Ullage" data-testid="sr-su-' + g + '-' + i + '-u"' + (S.canEdit ? '' : ' disabled') + '>U</button></span>';
+    }
+    if (col === 'name' && r && S.canEdit) {
+      var n = S.data.tanks[g].length;
+      pre = '<span class="sr-grip" draggable="true" data-grip="' + key + '" title="Drag to move the tank (or Alt + ↑ / ↓)" data-testid="sr-grip-' + g + '-' + i + '"><i class="fa-solid fa-grip-vertical"></i></span>' +
+        '<span class="sr-mv"><button type="button" tabindex="-1" data-mv="' + key + ':-1" title="Move up" aria-label="Move up" data-testid="sr-up-' + g + '-' + i + '"' + (i === 0 ? ' disabled' : '') + '><i class="fa-solid fa-chevron-up"></i></button>' +
+        '<button type="button" tabindex="-1" data-mv="' + key + ':1" title="Move down" aria-label="Move down" data-testid="sr-down-' + g + '-' + i + '"' + (i === n - 1 ? ' disabled' : '') + '><i class="fa-solid fa-chevron-down"></i></button></span>';
+    }
+    var v = r ? shown(r, col) : '', dec = col === 'volume' || col === 'density' || col === 'temp';
+    return '<td class="xi x-' + (col === 'ullage' ? 'sounding' : col) + (pre ? ' has-pre' : '') + '">' + pre + '<label class="sr-f sr-cellf" data-tw="' + key + ':' + col + '"><input data-t="' + key + ':' + col + '" data-testid="sr-t-' + g + '-' + i + '-' + col + '" value="' + esc(v) + '"' +
       (dec ? ' inputmode="decimal"' : '') + (S.canEdit ? '' : ' disabled') + ' autocomplete="off" spellcheck="false"' + (/^GAUGE$/i.test(v) ? ' class="gauge"' : '') + '><em data-terr="' + key + ':' + col + '"></em></label></td>';
   }
   function rowHtml(g, r, i) {
@@ -839,6 +852,8 @@
     if ((b = t.closest('[data-copy]'))) { copyTank(b.getAttribute('data-copy')); return; }
     if ((b = t.closest('[data-edit]'))) { var ek = b.getAttribute('data-edit'); var x = $('[data-t="' + ek + ':name"]'); if (x) { x.focus(); x.select(); } return; }
     if ((b = t.closest('[data-expand]'))) { var q = b.getAttribute('data-expand').split(':'), rr = S.data.tanks[q[0]][+q[1]]; S.expand[rr.id] = !S.expand[rr.id]; render(); return; }
+    if ((b = t.closest('[data-su]'))) { setSU(b); return; }
+    if ((b = t.closest('[data-mv]'))) { var mv = b.getAttribute('data-mv').split(':'); reorderTank(mv[0], +mv[1], +mv[1] + +mv[2], 'name'); return; }
     if ((b = t.closest('[data-del]'))) { delTank(b.getAttribute('data-del')); return; }
     if ((b = t.closest('[data-mode]'))) { var m = b.getAttribute('data-mode').split(':'), tr = S.data.tanks[m[0]][+m[1]]; tr.mode = m[2]; tr.sounding = m[2] === 'ullage' ? sounding(tr) : tr.sounding; changed(); render(); return; }
     if ((b = t.closest('[data-gen]'))) { generate(b.getAttribute('data-gen')); return; }
@@ -905,6 +920,26 @@
     var firstSpare = $('tr.sr-spare', tb); if (firstSpare && firstSpare.compareDocumentPosition(tr) & Node.DOCUMENT_POSITION_FOLLOWING) { tb.insertBefore(tr, firstSpare); el.focus(); }
     return row;
   }
+  /** S / U in the Sounding / Ullage cell: the reading typed is a sounding or an ullage (sounding = reference height − ullage). */
+  function setSU(b) {
+    var q = b.getAttribute('data-su').split(':'), g = q[0], i = +q[1], m = q[2] === 'u' ? 'ullage' : 'sounding', r = S.data.tanks[g][i];
+    if (!r) { var inp = $('[data-t]', b.closest('tr')); if (!inp) return; r = spareToRow(inp); i = S.data.tanks[g].indexOf(r); }
+    if (r.mode !== m) {
+      if (m === 'ullage') { r.ullage = ullageOf(r); r.mode = 'ullage'; r.sounding = sounding(r); }
+      else { r.sounding = sounding(r); r.mode = 'sounding'; r.ullage = ''; }
+      if (r.done === '1') r.done = '';
+      r._editing = true; changed();
+    }
+    render(); var x = $('[data-t="' + g + ':' + i + ':' + m + '"]'); if (x) x.focus();
+  }
+  /** A tank to another place in its grade's list (the report keeps this order). */
+  function reorderTank(g, from, to, col) {
+    var a = S.data.tanks[g]; if (!a || !a[from] || to < 0 || to >= a.length || to === from) return false;
+    var r = a.splice(from, 1)[0]; a.splice(to, 0, r); changed(true); render();
+    var c = col === 'sounding' || col === 'ullage' ? (r.mode === 'ullage' ? 'ullage' : 'sounding') : col || 'name';
+    var x = $('[data-t="' + g + ':' + to + ':' + c + '"]'); if (x) x.focus();
+    return true;
+  }
   function moreRows(g) {
     xSpare(g); S.spare[g]++; render();
     var all = $$('table[data-g="' + g + '"] tbody tr'), x = all.length && $('[data-t$=":name"]', all[all.length - 1]); if (x) { x.focus(); x.scrollIntoView({ block: 'center' }); }
@@ -928,7 +963,7 @@
   function gridPaste(el, text) {
     var lines = text.replace(/\r/g, '').split('\n'); while (lines.length && lines[lines.length - 1] === '') lines.pop();
     if (!lines.length || (lines.length === 1 && lines[0].indexOf('\t') < 0)) return false;
-    var p = el.getAttribute('data-t').split(':'), g = p[0], i0 = +p[1], cols = XCOLS.map(function (c) { return c[0]; }), c0 = cols.indexOf(p[2]);
+    var p = el.getAttribute('data-t').split(':'), g = p[0], i0 = +p[1], cols = XCOLS.map(function (c) { return c[0]; }), c0 = cols.indexOf(p[2] === 'ullage' ? 'sounding' : p[2]);
     if (c0 < 0) return false;
     var before = S.data.tanks[g].length;
     lines.forEach(function (ln, k) {
@@ -937,8 +972,11 @@
       var r = S.data.tanks[g][i];
       vals.forEach(function (v, j) {
         var col = cols[c0 + j]; if (!col) return;
-        v = v.trim(); if (col === 'sounding') { r.mode = 'sounding'; r.ullage = ''; }
+        v = v.trim();
+        if (col === 'sounding' && r.mode === 'ullage') { r.ullage = v; r.sounding = sounding(r); return; }
+        if (col === 'sounding') { r.mode = 'sounding'; r.ullage = ''; }
         r[col] = v;
+        if (col === 'ref_height' && r.mode === 'ullage') r.sounding = sounding(r);
       });
       r.done = ''; r._editing = false;
       if (!blankRow(r) && !Object.keys(tankErrors(r)).length) { fmtRow(r); r.done = '1'; }
@@ -949,8 +987,31 @@
   }
   // like an Excel cell: taking a cell (click, tap, Tab, arrows) selects its value, so typing replaces it; a double click edits inside it
   document.addEventListener('focusin', function (ev) { var el = ev.target; if (el.matches && el.matches('.sr-xg [data-t], .sr-tc [data-t]')) el.select(); });
-  document.addEventListener('focusout', function (ev) { var el = ev.target; if (el.matches && el.matches('.sr-xg [data-t]')) el.setAttribute('data-edit', '0'); });
-  document.addEventListener('dblclick', function (ev) { var el = ev.target; if (el.matches && el.matches('.sr-xg [data-t]')) el.setAttribute('data-edit', '1'); });
+  var drag = null;
+  document.addEventListener('dragstart', function (ev) {
+    var gp = ev.target.closest && ev.target.closest('[data-grip]'); if (!gp) return;
+    var q = gp.getAttribute('data-grip').split(':'); drag = { g: q[0], i: +q[1] };
+    ev.dataTransfer.effectAllowed = 'move'; try { ev.dataTransfer.setData('text/plain', ''); ev.dataTransfer.setDragImage(gp.closest('tr'), 12, 15); } catch (e) {}
+    gp.closest('tr').classList.add('sr-dragging');
+  });
+  function dropRow(ev) {
+    var tr = drag && ev.target.closest && ev.target.closest('tr.sr-row'); if (!tr) return null;
+    var q = tr.getAttribute('data-tank').split(':'); if (q[0] !== drag.g) return null;
+    var rc = tr.getBoundingClientRect(), after = ev.clientY > rc.top + rc.height / 2;
+    return { tr: tr, i: +q[1], after: after };
+  }
+  document.addEventListener('dragover', function (ev) {
+    var d = dropRow(ev); $$('.sr-drop-b,.sr-drop-a').forEach(function (e) { e.classList.remove('sr-drop-b', 'sr-drop-a'); });
+    if (!d) return; ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; d.tr.classList.add(d.after ? 'sr-drop-a' : 'sr-drop-b');
+  });
+  document.addEventListener('drop', function (ev) {
+    var d = dropRow(ev); if (!d) return; ev.preventDefault();
+    var to = d.i + (d.after ? 1 : 0); if (to > drag.i) to--;
+    var from = drag.i; drag = null; reorderTank(d.tr.getAttribute('data-tank').split(':')[0], from, to, 'name');
+  });
+  document.addEventListener('dragend', function () { drag = null; $$('.sr-dragging,.sr-drop-b,.sr-drop-a').forEach(function (e) { e.classList.remove('sr-dragging', 'sr-drop-b', 'sr-drop-a'); }); });
+  document.addEventListener('focusout', function (ev) { var el = ev.target; if (el.matches && el.matches('.sr-xg [data-t]')) el.removeAttribute('data-xedit'); });
+  document.addEventListener('dblclick', function (ev) { var el = ev.target; if (el.matches && el.matches('.sr-xg [data-t]')) el.setAttribute('data-xedit', '1'); });
   document.addEventListener('mousedown', function (ev) {
     var el = ev.target; if (!el.matches || !el.matches('.sr-xg [data-t]') || el.disabled || document.activeElement === el || ev.detail > 1) return;
     ev.preventDefault(); el.focus();
@@ -974,10 +1035,13 @@
   window.addEventListener('resize', function () { var w = window.matchMedia('(min-width: 992px)').matches; if (S.data && lastWide !== null && w !== lastWide && S.data.step === 'tanks') render(); lastWide = w; });
   document.addEventListener('keydown', function (ev) { // Enter: lookup from the IMO box, otherwise the next box
     var gt = ev.target;
+    if (gt.matches && gt.matches('.sr-xg [data-t]') && ev.altKey && (ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) {
+      ev.preventDefault(); var mq = gt.getAttribute('data-t').split(':'); reorderTank(mq[0], +mq[1], +mq[1] + (ev.key === 'ArrowUp' ? -1 : 1), mq[2]); return;
+    }
     if (gt.matches && gt.matches('.sr-xg [data-t]') && !ev.altKey && !ev.ctrlKey && !ev.metaKey) {
       // like Excel: arrow keys go to the next cell; after a double click (or F2) left / right move inside the value until the cell is left
-      var edit = gt.getAttribute('data-edit') === '1';
-      if (ev.key === 'F2') { ev.preventDefault(); gt.setAttribute('data-edit', '1'); var n = gt.value.length; gt.setSelectionRange(n, n); return; }
+      var edit = gt.getAttribute('data-xedit') === '1';
+      if (ev.key === 'F2') { ev.preventDefault(); gt.setAttribute('data-xedit', '1'); var n = gt.value.length; gt.setSelectionRange(n, n); return; }
       if (ev.key === 'Enter' || ev.key === 'ArrowDown') { ev.preventDefault(); gridMove(gt, ev.shiftKey && ev.key === 'Enter' ? -1 : 1, 0); return; }
       if (ev.key === 'ArrowUp') { ev.preventDefault(); gridMove(gt, -1, 0); return; }
       if ((ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && !edit && !ev.shiftKey) { ev.preventDefault(); gridMove(gt, 0, ev.key === 'ArrowLeft' ? -1 : 1); return; }

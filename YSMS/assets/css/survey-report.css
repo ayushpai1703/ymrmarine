@@ -796,4 +796,25 @@ body[data-sr-step=tanks] .sr-wiz-top { display: none; }
   .sr-xtot span { font-size: 13.5px; padding: 8px 12px; }
   .sr-xtot b { min-width: 11%; background: #e5e9ef; font-size: 15px; padding: 8px 12px; }
   .sr-xg th .req { color: #dc2626; font-style: normal; }
+  /* S / U: the reading is a sounding (light blue) or an ullage (green) */
+  .sr-xg td.has-pre { position: relative; }
+  .sr-xg td.x-sounding.has-pre .sr-cellf { margin-left: 46px; }
+  .sr-su { position: absolute; left: 5px; top: 50%; transform: translateY(-50%); display: inline-flex; gap: 2px; z-index: 1; }
+  .sr-su button { width: 19px; height: 19px; padding: 0; border-radius: 50%; border: 1px solid #cbd5e1; background: #fff; color: #94a3b8; font-size: 10.5px; font-weight: 800; line-height: 17px; cursor: pointer; }
+  .sr-su button.s.on { background: #bae6fd; border-color: #38bdf8; color: #075985; }
+  .sr-su button.u.on { background: #bbf7d0; border-color: #22c55e; color: #166534; }
+  .sr-su button:not(.on):hover { border-color: #64748b; color: #334155; }
+  .sr-su button:disabled { cursor: default; }
+  /* moving a tank: grip to drag, up / down on the row's hover */
+  .sr-step .sr-xg td.x-name.has-pre .sr-f input { padding-left: 22px; padding-right: 26px; }
+  .sr-grip { position: absolute; left: 0; top: 0; bottom: 0; width: 20px; display: flex; align-items: center; justify-content: center; color: #cbd5e1; cursor: grab; z-index: 1; font-size: 12px; }
+  .sr-xg tr:hover .sr-grip { color: #64748b; }
+  .sr-mv { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); display: none; flex-direction: column; z-index: 1; }
+  .sr-xg tr:hover .sr-mv, .sr-xg td.x-name:focus-within .sr-mv { display: flex; }
+  .sr-mv button { border: 0; background: none; padding: 0; width: 20px; height: 13px; line-height: 13px; font-size: 10px; color: #64748b; cursor: pointer; }
+  .sr-mv button:hover:not(:disabled) { color: #0b63e5; }
+  .sr-mv button:disabled { color: #e2e8f0; cursor: default; }
+  .sr-xg tr.sr-dragging td { opacity: .45; }
+  .sr-xg tr.sr-drop-b td { box-shadow: inset 0 2px 0 #0b63e5; }
+  .sr-xg tr.sr-drop-a td { box-shadow: inset 0 -2px 0 #0b63e5; }
 }
