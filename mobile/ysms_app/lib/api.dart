@@ -374,6 +374,17 @@ class Api {
     return pageResult(text(r));
   }
 
+  /// POST a form to a JSON page of the website ({success, message}); not success → [ApiError] with its message.
+  Future<Map<String, dynamic>> postJson(String path, Map<String, String> fields) async {
+    final r = await post(path, (csrf) => {...fields, 'csrf_token': csrf}, csrfHeader: true);
+    final d = json(r);
+    if (r.statusCode == 403 && d == null) throw ApiError(403, 'Your session expired. Please sign in again.');
+    if (d == null || d['success'] != true) {
+      throw ApiError(r.statusCode ?? 500, s0(d?['message']).isEmpty ? 'Could not save.' : s0(d?['message']));
+    }
+    return d;
+  }
+
   Map<String, dynamic>? json(Response<dynamic> r) {
     final d = _json(r);
     return d is Map ? Map<String, dynamic>.from(d) : null;
@@ -418,3 +429,5 @@ PageResult pageResult(String html) {
   if (toast != null) return PageResult(toast.group(1) == 'success', _plain(toast.group(2)!));
   return const PageResult(false, '');
 }
+
+String s0(dynamic v) => v == null ? '' : '$v';

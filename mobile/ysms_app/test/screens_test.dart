@@ -9,6 +9,7 @@ import 'package:ysms_app/api.dart';
 import 'package:ysms_app/bio.dart';
 import 'package:ysms_app/main.dart' show nativeScreen;
 import 'package:ysms_app/screens/activity.dart';
+import 'package:ysms_app/screens/admin.dart';
 import 'package:ysms_app/screens/duplicates.dart';
 import 'package:ysms_app/screens/forgot.dart';
 import 'package:ysms_app/screens/formats.dart';
@@ -615,7 +616,108 @@ void main() {
     expect(server.calls, contains('POST add_surveyor.php'));
   });
 
+  final modules = {
+    'modules': [
+      {
+        'key': 'ports',
+        'label': 'Ports',
+        'singular': 'Port',
+        'name_field': 'port_name',
+        'fields': [
+          {'name': 'port_name', 'label': 'Port name', 'type': 'text', 'required': true},
+          {'name': 'country', 'label': 'Country', 'type': 'text'},
+          {
+            'name': 'status',
+            'label': 'Status',
+            'type': 'select',
+            'required': true,
+            'options': ['Active', 'Inactive'],
+          },
+        ],
+      },
+    ],
+  };
+
+  testWidgets('Admin controls: master data tiles and the tools', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1600));
+    server.api['admin_modules'] = modules;
+    await t.pumpWidget(app(const AdminScreen()));
+    await settle(t);
+    expect(find.text('Admin controls'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mod-ports')), findsOneWidget);
+    expect(find.text('Add surveyor'), findsOneWidget);
+    expect(find.text('Possible duplicates'), findsOneWidget);
+    expect(find.text('Add admin'), findsNothing);
+  });
+
+  testWidgets('Master data: list, edit saved to admin_master.php, delete asks twice', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1600));
+    server.api['admin_modules'] = modules;
+    server.pages['admin_master.php'] = jsonEncode({
+      'success': true,
+      'message': 'Saved',
+      'rows': [
+        {'id': 4, 'port_name': 'Kakinada', 'country': 'India', 'status': 'Active'},
+      ],
+    });
+    await t.pumpWidget(app(const ModuleScreen(moduleKey: 'ports')));
+    await settle(t);
+    expect(find.text('Kakinada'), findsOneWidget);
+    expect(find.text('India · Active'), findsOneWidget);
+    expect(find.text('1 entry'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('row-4')));
+    await settle(t);
+    await t.enterText(find.byKey(const ValueKey('f-country')), 'IN');
+    await t.tap(find.byKey(const ValueKey('sheet-save')));
+    await settle(t);
+    final p = server.posts.last;
+    expect(p['path'], 'admin_master.php');
+    expect(p['action'], 'edit');
+    expect(p['id'], '4');
+    expect(p['module'], 'ports');
+    expect(p['country'], 'IN');
+    expect(p['port_name'], 'Kakinada');
+    await t.tap(find.byKey(const ValueKey('row-4')));
+    await settle(t);
+    final n = server.posts.length;
+    await t.tap(find.byKey(const ValueKey('sheet-delete')));
+    await settle(t);
+    expect(server.posts.length, n);
+    expect(find.text('Tap again to delete'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('sheet-delete')));
+    await settle(t);
+    expect(server.posts.last['action'], 'delete');
+  });
+
+  testWidgets('Data cleanup: the word must be typed exactly', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1600));
+    server.api['sa_controls'] = {
+      'counts': {'pending_vessel': 3, 'pending_report': 0, 'cancelled': 1, 'completed': 0},
+      'groups': [],
+    };
+    server.pages['super_admin_controls.php'] =
+        '<html><div class="alert alert-success">Deleted 1 record(s).</div></html>';
+    await t.pumpWidget(app(const DataCleanupScreen()));
+    await settle(t);
+    expect(find.text('No duplicate client companies found.'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('wipe-cancelled')));
+    await settle(t);
+    await t.enterText(find.byKey(const ValueKey('typed')), 'delete');
+    await settle(t);
+    expect(t.widget<FilledButton>(find.byKey(const ValueKey('typed-yes'))).onPressed, isNull);
+    await t.enterText(find.byKey(const ValueKey('typed')), 'DELETE');
+    await settle(t);
+    await t.tap(find.byKey(const ValueKey('typed-yes')));
+    await settle(t);
+    expect(server.posts.single['path'], 'super_admin_controls.php');
+    expect(server.posts.single['delete_target'], 'cancelled');
+    expect(server.posts.single['confirm_text'], 'DELETE');
+  });
+
   test('routes with a Flutter screen', () {
+    expect(nativeScreen('/admin'), isA<AdminScreen>());
+    expect(nativeScreen('/m/ports'), isA<ModuleScreen>());
+    expect(nativeScreen('/sacontrols'), isA<DataCleanupScreen>());
     expect(nativeScreen('/addclient'), isA<CreateUserScreen>());
     expect(nativeScreen('/addadmin'), isA<CreateUserScreen>());
     expect(nativeScreen('/surveyor'), isA<SurveyorFormScreen>());

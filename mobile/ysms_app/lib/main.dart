@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'api.dart';
 import 'bio.dart';
 import 'screens/activity.dart';
+import 'screens/admin.dart';
 import 'screens/duplicates.dart';
 import 'screens/forgot.dart';
 import 'screens/formats.dart';
@@ -57,6 +58,8 @@ Widget? nativeScreen(String route) {
       _ => HistoryScreen(id: id),
     };
   }
+  final mm = RegExp(r'^/m/([a-z_]+)$').firstMatch(route);
+  if (mm != null) return ModuleScreen(moduleKey: mm.group(1)!);
   return switch (route) {
     '/formats' => const FormatsScreen(),
     '/duplicates' => const DuplicatesScreen(),
@@ -69,6 +72,8 @@ Widget? nativeScreen(String route) {
     '/addclient' => CreateUserScreen.client(),
     '/addadmin' => CreateUserScreen.admin(),
     '/surveyor' => const SurveyorFormScreen(),
+    '/admin' => const AdminScreen(),
+    '/sacontrols' => const DataCleanupScreen(),
     _ => null,
   };
 }

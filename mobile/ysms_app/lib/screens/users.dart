@@ -11,10 +11,29 @@ import '../ui.dart';
 
 /// One field of a form: text, password, email, tel, date (YYYY-MM-DD), select or checkbox.
 class FieldDef {
-  const FieldDef(this.name, this.label, {this.type = 'text', this.required = false, this.options = const []});
-  final String name, label, type;
-  final bool required;
+  const FieldDef(
+    this.name,
+    this.label, {
+    this.type = 'text',
+    this.required = false,
+    this.options = const [],
+    this.hint = '',
+    this.readonly = false,
+  });
+  final String name, label, type, hint;
+  final bool required, readonly;
   final List<String> options;
+
+  /// A field as config/admin_modules.php describes it (app_api.php?a=admin_modules).
+  factory FieldDef.fromMap(Map<String, dynamic> m) => FieldDef(
+    s(m['name']),
+    s(m['label']),
+    type: s(m['type']).isEmpty ? 'text' : s(m['type']),
+    required: m['required'] == true,
+    options: ((m['options'] as List?) ?? const []).map((e) => '$e').toList(),
+    hint: s(m['hint']),
+    readonly: m['readonly'] == true,
+  );
 }
 
 /// The fields of a form, each with its own controller (or value for selects and checkboxes).
@@ -73,12 +92,16 @@ class _FormFieldsState extends State<FormFields> {
               _ => TextField(
                 key: ValueKey('f-${f.name}'),
                 controller: _c.putIfAbsent(f.name, () => TextEditingController(text: v[f.name] ?? '')),
-                keyboardType: _kb(f.type),
+                keyboardType: f.type == 'textarea' ? TextInputType.multiline : _kb(f.type),
+                minLines: f.type == 'textarea' ? 3 : 1,
+                maxLines: f.type == 'textarea' ? 6 : 1,
+                readOnly: f.readonly,
                 obscureText: f.type == 'password',
                 autocorrect: f.name != 'username',
                 decoration: InputDecoration(
                   labelText: '${f.label}${f.required ? ' *' : ''}',
-                  helperText: f.type == 'date' ? 'YYYY-MM-DD' : null,
+                  helperText: f.hint.isNotEmpty ? f.hint : (f.type == 'date' ? 'YYYY-MM-DD' : null),
+                  helperMaxLines: 3,
                 ),
                 onChanged: (x) => v[f.name] = f.type == 'password' ? x : x.trim(),
               ),
@@ -92,7 +115,7 @@ class _FormFieldsState extends State<FormFields> {
 /// The first required field left empty, as a message; or the passwords not matching.
 String missing(List<FieldDef> defs, Map<String, String> v, {bool passwords = true}) {
   for (final f in defs) {
-    if (f.required && (v[f.name] ?? '').trim().isEmpty) return '${f.label} is required.';
+    if (f.required && !f.readonly && (v[f.name] ?? '').trim().isEmpty) return '${f.label} is required.';
   }
   if (passwords && v.containsKey('password') && v['password'] != (v['confirm_password'] ?? '')) {
     return 'Passwords do not match.';
