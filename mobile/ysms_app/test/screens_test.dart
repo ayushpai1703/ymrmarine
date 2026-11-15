@@ -10,6 +10,7 @@ import 'package:ysms_app/bio.dart';
 import 'package:ysms_app/main.dart' show nativeScreen;
 import 'package:ysms_app/screens/activity.dart';
 import 'package:ysms_app/screens/admin.dart';
+import 'package:ysms_app/screens/assign.dart';
 import 'package:ysms_app/screens/duplicates.dart';
 import 'package:ysms_app/screens/forgot.dart';
 import 'package:ysms_app/screens/formats.dart';
@@ -714,7 +715,91 @@ void main() {
     expect(server.posts.single['confirm_text'], 'DELETE');
   });
 
+  Map<String, Object> assignForm({Map<String, Object>? edit}) => {
+    'role': 'Admin',
+    'edit': ?edit,
+    'clients': [
+      {'id': 1, 'name': 'Oceanus Maritime'},
+      {'id': 2, 'name': 'Blue Sea'},
+    ],
+    'surveyors': [
+      {'id': 7, 'name': 'John Doe'},
+      {'id': 8, 'name': 'Ravi'},
+    ],
+    'ports': [
+      {'id': 3, 'name': 'Kakinada', 'country': 'India'},
+    ],
+    'types': [
+      {'id': 4, 'name': 'Bunker Survey'},
+      {'id': 5, 'name': 'Offhire'},
+    ],
+  };
+
+  testWidgets('Edit vessel: prefilled, saved to assign_vessel.php?edit_id=', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1600));
+    server.api['assign_form'] = assignForm(
+      edit: {
+        'id': 12,
+        'vessel': 'MV OCEAN STAR',
+        'report_no': 'R-1',
+        'client_id': 1,
+        'agent': 'AG',
+        'port_id': 3,
+        'type_ids': [4, 5],
+        'surveyor_ids': [7],
+        'appointment': '2026-11-10',
+        'remarks': 'note',
+      },
+    );
+    server.pages['assign_vessel.php'] = '<html><div class="alert alert-success">Vessel updated.</div></html>';
+    await t.pumpWidget(app(const AssignScreen(editId: 12)));
+    await settle(t);
+    expect(find.text('Edit vessel'), findsOneWidget);
+    expect(find.text('Kakinada · India'), findsOneWidget);
+    expect(find.text('Bunker Survey, Offhire'), findsOneWidget);
+    await t.enterText(find.byKey(const ValueKey('as-agent')), 'NEW AGENT');
+    await t.tap(find.byKey(const ValueKey('as-save')));
+    await settle(t);
+    final p = server.posts.single;
+    expect(p['path'], 'assign_vessel.php');
+    expect(p['edit_id'], '12');
+    expect(p['agent_name'], 'NEW AGENT');
+    expect(p['survey_type_ids'], '4,5');
+    expect(p['surveyor_ids'], '7');
+    expect(p['appointment_date'], '2026-11-10');
+    expect(p['client_id'], '1');
+    expect(server.calls, isNot(contains('GET check_pending_vessel_duplicate.php')));
+  });
+
+  testWidgets('Assign vessel: checks, pickers (Outsourcing alone), report number, duplicate question', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1600));
+    server.api['assign_form'] = assignForm();
+    server.pages['preview_report_number.php'] = jsonEncode({'success': true, 'report_number': 'YMR/OM/101'});
+    await t.pumpWidget(app(const AssignScreen()));
+    await settle(t);
+    await t.tap(find.byKey(const ValueKey('as-save')));
+    await settle(t);
+    expect(find.text('Vessel name is required.'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('as-client')));
+    await settle(t);
+    await t.tap(find.byKey(const ValueKey('pick-2')));
+    await settle(t);
+    expect(find.text('Blue Sea'), findsOneWidget);
+    expect(find.text('YMR/OM/101'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('as-surveyors')));
+    await settle(t);
+    await t.tap(find.byKey(const ValueKey('pick-7')));
+    await t.tap(find.byKey(const ValueKey('pick-outsourcing')));
+    await settle(t);
+    await t.tap(find.byKey(const ValueKey('pick-done')));
+    await settle(t);
+    expect(find.text('Outsourcing'), findsOneWidget);
+    expect(find.text('John Doe'), findsNothing);
+  });
+
   test('routes with a Flutter screen', () {
+    expect(nativeScreen('/assign'), isA<AssignScreen>());
+    expect(nativeScreen('/e/12'), isA<AssignScreen>());
     expect(nativeScreen('/admin'), isA<AdminScreen>());
     expect(nativeScreen('/m/ports'), isA<ModuleScreen>());
     expect(nativeScreen('/sacontrols'), isA<DataCleanupScreen>());

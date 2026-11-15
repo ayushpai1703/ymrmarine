@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'api.dart';
 import 'bio.dart';
 import 'screens/activity.dart';
+import 'screens/assign.dart';
 import 'screens/admin.dart';
 import 'screens/duplicates.dart';
 import 'screens/forgot.dart';
@@ -48,13 +49,14 @@ ThemeMode themeFromName(String? t) => switch (t) {
 
 /// The Flutter screen of a web app route ('/v/12', '/formats' …), null when it has none yet.
 Widget? nativeScreen(String route) {
-  final m = RegExp(r'^/(v|up|h|sv)/(\d+)$').firstMatch(route);
+  final m = RegExp(r'^/(v|up|h|sv|e)/(\d+)$').firstMatch(route);
   if (m != null) {
     final id = int.parse(m.group(2)!);
     return switch (m.group(1)) {
       'v' => VesselScreen(id: id),
       'up' => UploadScreen(id: id),
       'sv' => SurveyorFormScreen(id: id),
+      'e' => AssignScreen(editId: id),
       _ => HistoryScreen(id: id),
     };
   }
@@ -73,6 +75,7 @@ Widget? nativeScreen(String route) {
     '/addadmin' => CreateUserScreen.admin(),
     '/surveyor' => const SurveyorFormScreen(),
     '/admin' => const AdminScreen(),
+    '/assign' => const AssignScreen(),
     '/sacontrols' => const DataCleanupScreen(),
     _ => null,
   };
