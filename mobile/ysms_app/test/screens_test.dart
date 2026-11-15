@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ysms_app/api.dart';
 import 'package:ysms_app/bio.dart';
-import 'package:ysms_app/main.dart' show nativeScreen;
+import 'package:ysms_app/main.dart' show nativePage, nativeScreen;
 import 'package:ysms_app/screens/activity.dart';
 import 'package:ysms_app/screens/admin.dart';
 import 'package:ysms_app/screens/assign.dart';
@@ -20,6 +20,7 @@ import 'package:ysms_app/screens/formats.dart';
 import 'package:ysms_app/screens/history.dart';
 import 'package:ysms_app/screens/inbox.dart';
 import 'package:ysms_app/screens/me.dart';
+import 'package:ysms_app/screens/pages.dart';
 import 'package:ysms_app/screens/recovery.dart';
 import 'package:ysms_app/screens/templates.dart';
 import 'package:ysms_app/screens/users.dart';
@@ -1019,6 +1020,181 @@ void main() {
     expect(p['path'], 'document_replace.php');
     expect(p['document_id'], '3');
     expect(find.text('Document replaced successfully.'), findsOneWidget);
+  });
+
+  testWidgets('Surveyor cards: list, upload and remove (asks twice) post admin_surveyor_cards.php', (t) async {
+    server.api['surveyor_cards'] = {
+      'items': [
+        {'id': 2, 'name': 'John Doe', 'username': 'surveyor', 'business_card': 'uploads/cards/b.pdf', 'id_card': ''},
+      ],
+    };
+    server.pages['admin_surveyor_cards.php'] = '<div class="alert alert-success">File removed successfully.</div>';
+    await t.pumpWidget(app(SurveyorCardsScreen(pick: () async => _MemFile('card.png', Uint8List.fromList([1, 2])))));
+    await settle(t);
+    expect(find.text('John Doe'), findsOneWidget);
+    expect(find.text('Uploaded'), findsOneWidget);
+    expect(find.text('Not uploaded yet'), findsOneWidget);
+    expect(find.byKey(const ValueKey('card-rm-id_card-2')), findsNothing);
+    await t.tap(find.byKey(const ValueKey('card-rm-business_card-2')));
+    await settle(t);
+    expect(server.posts, isEmpty);
+    await t.tap(find.byKey(const ValueKey('card-rm-business_card-2')));
+    await settle(t);
+    expect(server.posts.single['remove_card'], '1');
+    expect(server.posts.single['card_type'], 'business_card');
+    expect(server.posts.single['user_id'], '2');
+    expect(find.text('File removed successfully.'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('card-up-id_card-2')));
+    await settle(t);
+    final up = server.posts.last;
+    expect(up['upload_card'], '1');
+    expect(up['card_type'], 'id_card');
+  });
+
+  testWidgets('Daily emails: settings saved to admin_daily_emails.php, Send now asks twice', (t) async {
+    t.view.physicalSize = const Size(800, 4000);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    Map<String, Object?> job(String k, String label, {bool on = true, bool weekly = false}) => {
+      'job': k,
+      'label': label,
+      'enabled': on,
+      'time': '17:00',
+      'send_empty': false,
+      'from': k == 'surveyor_pending' ? 'ops@ymr.test' : '',
+      'weekly': weekly,
+      'due_today': !weekly,
+      'last_scheduler_call': '',
+      'route': 'Fixed route',
+      'today': null,
+    };
+    server.api['daily_emails'] = {
+      'jobs': [
+        job('surveyor_pending', 'Pending Vessels by Surveyor'),
+        job('all_reports', 'Pending Reports — full list', on: false, weekly: true),
+      ],
+      'runs': [
+        {
+          'when': '14 Nov 2026 17:00',
+          'label': 'Pending Vessels by Surveyor',
+          'how': 'Scheduled',
+          'status': 'sent',
+          'attempts': 1,
+          'detail': '2 sent',
+        },
+      ],
+      'today': '15 Nov 2026',
+      'mail_on': true,
+      'scheduler': false,
+      'surveyors_with_email': 1,
+      'surveyors': 2,
+      'counts': {'appointments': 0, 'all_pending': 3, 'all_reports': 4},
+    };
+    server.pages['admin_daily_emails.php'] = '<div class="alert alert-success">Daily email settings saved.</div>';
+    await t.pumpWidget(app(const DailyEmailsScreen()));
+    await settle(t);
+    expect(find.text('Send every Friday'), findsOneWidget);
+    expect(find.textContaining('Not due today'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('de-on-all_reports')));
+    await t.tap(find.byKey(const ValueKey('de-empty-surveyor_pending')));
+    await settle(t);
+    await t.tap(find.byKey(const ValueKey('de-save')));
+    await settle(t);
+    final p = server.posts.single;
+    expect(p['action'], 'save');
+    expect(p['surveyor_pending_from'], 'ops@ymr.test');
+    expect(p['surveyor_pending_enabled'], '1');
+    expect(p['surveyor_pending_send_empty'], '1');
+    expect(p['all_reports_enabled'], '1');
+    expect(p.containsKey('all_reports_send_empty'), isFalse);
+    expect(p['all_reports_time'], '17:00');
+    await t.ensureVisible(find.byKey(const ValueKey('de-now-all_reports')));
+    await settle(t);
+    await t.tap(find.byKey(const ValueKey('de-now-all_reports')));
+    await settle(t);
+    expect(server.posts.length, 1);
+    expect(find.text('Tap to confirm'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('de-now-all_reports')));
+    await settle(t);
+    expect(server.posts.last['action'], 'send_now');
+    expect(server.posts.last['job'], 'all_reports');
+    await t.scrollUntilVisible(find.text('2 sent'), 300, scrollable: find.byType(Scrollable).first);
+    expect(find.text('2 sent'), findsOneWidget);
+  });
+
+  testWidgets('Permission copy: required fields checked, then the form posted with the surveyors', (t) async {
+    t.view.physicalSize = const Size(800, 3000);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    server.api['permission_copy'] = {
+      'template': 'permission_copy_template_1.docx',
+      'can_upload': true,
+      'max_surveyors': 4,
+      'survey_types': ['Bunker Survey', 'Draft Survey'],
+      'surveyors': ['John Doe', 'Ramesh Kumar'],
+      'today': '2026-11-15',
+    };
+    server.pages['generate_permission_copy.php'] =
+        '<div class="alert alert-danger">Could not generate the Word document: test</div>';
+    await t.pumpWidget(app(const PermissionCopyScreen()));
+    await settle(t);
+    expect(find.textContaining('permission_copy_template_1.docx'), findsOneWidget);
+    expect(find.text('2026-11-15'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('pc-generate')));
+    await settle(t);
+    expect(find.textContaining('Please fill: Port'), findsOneWidget);
+    expect(server.posts, isEmpty);
+    const vals = {
+      'permission_port': 'Vizag',
+      'recipient_designation': 'The Superintendent',
+      'recipient_company': 'AGPL',
+      'recipient_location': 'Gangavaram',
+      'vessel_name': 'MV Blue',
+      'berth_no': 'B-6',
+    };
+    for (final e in vals.entries) {
+      await t.enterText(find.byKey(ValueKey('pc-${e.key}')), e.value);
+    }
+    await t.tap(find.byKey(const ValueKey('pc-type')));
+    await settle(t);
+    await t.tap(find.text('Draft Survey').last);
+    await settle(t);
+    await t.tap(find.byKey(const ValueKey('pc-sv-0')));
+    await settle(t);
+    await t.tap(find.text('Ramesh Kumar').last);
+    await settle(t);
+    await t.enterText(find.byKey(const ValueKey('pc-age-0')), '34');
+    await t.tap(find.byKey(const ValueKey('pc-generate')));
+    await settle(t);
+    final p = server.posts.single;
+    expect(p['path'], 'generate_permission_copy.php');
+    expect(p['generate_copy'], '1');
+    expect(p['permission_date'], '2026-11-15');
+    expect(p['survey_type'], 'Draft Survey');
+    expect(p['vessel_name'], 'MV Blue');
+    expect(p['surveyor_name[0]'], 'Ramesh Kumar');
+    expect(p['surveyor_age[0]'], '34');
+    expect(p['csrf_token'], 'tok');
+    expect(find.text('Could not generate the Word document: test'), findsOneWidget);
+  });
+
+  testWidgets('Coming soon: the feature name, Return Home', (t) async {
+    await t.pumpWidget(
+      app(ComingSoonScreen(feature: ComingSoonScreen.featureOf('coming_soon.php?feature=Vessel+Lineups'))),
+    );
+    await settle(t);
+    expect(find.text('Vessel Lineups'), findsWidgets);
+    expect(find.text('Coming Soon'), findsOneWidget);
+    expect(ComingSoonScreen.featureOf('coming_soon.php?feature=<b>x</b>'), 'bx/b');
+    expect(ComingSoonScreen.featureOf('coming_soon.php'), 'This feature');
+  });
+
+  test('website pages with a Flutter screen', () {
+    expect(nativePage('admin_surveyor_cards.php'), isA<SurveyorCardsScreen>());
+    expect(nativePage('admin_daily_emails.php'), isA<DailyEmailsScreen>());
+    expect(nativePage('generate_permission_copy.php'), isA<PermissionCopyScreen>());
+    expect(nativePage('coming_soon.php?feature=Support'), isA<ComingSoonScreen>());
+    expect(nativePage('report_generator.php?id=3'), isNull);
   });
 
   test('routes with a Flutter screen', () {

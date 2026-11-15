@@ -1,5 +1,6 @@
 // Shared look: colours, tags, vessel cards and pictures, loading / empty states, helpers.
 import 'dart:async';
+import 'dart:convert' show utf8;
 import 'dart:io' show File;
 
 import 'package:dio/dio.dart';
@@ -127,14 +128,16 @@ void toast(BuildContext context, String msg, {bool ok = false, bool bad = false}
   if (bad) HapticFeedback.heavyImpact();
 }
 
-/// A web page of the app inside this app (screens not made in Flutter yet), e.g. 'app.php#/chat'.
+/// A website page inside this app, e.g. 'report_generator.php?id=12' — or its Flutter screen when it
+/// has one ([nativePageFor]).
 Future<void> openWeb(BuildContext context, String path, {String? title}) async {
-  await Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => WebScreen(path: path, title: title),
-    ),
-  );
+  final w = nativePageFor?.call(path);
+  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => w ?? WebScreen(path: path, title: title)));
 }
+
+/// Flutter screens for website pages (set in main.dart), e.g. 'generate_permission_copy.php'; null: the
+/// page itself opens inside the app.
+Widget? Function(String page)? nativePageFor;
 
 /// Flutter screens for routes of the web app (set in main.dart), e.g. '/formats'; null: no Flutter screen yet.
 Widget? Function(String route)? nativeScreenFor;
@@ -156,9 +159,11 @@ Future<void> openExternal(String url) async {
   await launchUrl(u, mode: LaunchMode.externalApplication);
 }
 
-/// Download a file of the server with the sign-in (documents, Excel exports) and open it.
-Future<void> downloadAndOpen(BuildContext context, String path, {String? name}) async {
-  if (kIsWeb) {
+/// Download a file of the server with the sign-in (documents, Excel exports) and open it. With [form],
+/// the file is the answer to that form posted to [path] (e.g. a generated Word file); when the page
+/// answers with HTML instead, its own message is shown.
+Future<void> downloadAndOpen(BuildContext context, String path, {String? name, Map<String, String>? form}) async {
+  if (kIsWeb && form == null) {
     await launchUrl(Uri.parse(Cfg.url(path)), webOnlyWindowName: '_blank');
     return;
   }
@@ -177,9 +182,19 @@ Future<void> downloadAndOpen(BuildContext context, String path, {String? name}) 
     ),
   );
   try {
-    final r = await Api.i.dio.get<List<int>>(path, options: Options(responseType: ResponseType.bytes));
+    final r = form == null
+        ? await Api.i.dio.get<List<int>>(path, options: Options(responseType: ResponseType.bytes))
+        : await Api.i.dio.post<List<int>>(
+            path,
+            data: {...form, 'csrf_token': Api.i.csrf},
+            options: Options(responseType: ResponseType.bytes, contentType: Headers.formUrlEncodedContentType),
+          );
     final code = r.statusCode ?? 0;
     final type = r.headers.value('content-type') ?? '';
+    if (form != null && type.contains('text/html') && code < 400 && r.data != null) {
+      final msg = pageResult(utf8.decode(r.data!, allowMalformed: true)).message;
+      throw ApiError(code, msg.isNotEmpty ? msg : 'Could not generate the file.');
+    }
     if (code == 401 || code == 403 || code >= 400 || r.data == null) {
       throw ApiError(code, code == 404 ? 'This file was not found on the server.' : 'Could not download this file.');
     }

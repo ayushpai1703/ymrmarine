@@ -22,6 +22,7 @@ import 'screens/inbox.dart';
 import 'screens/lists.dart';
 import 'screens/login.dart';
 import 'screens/me.dart';
+import 'screens/pages.dart';
 import 'screens/profile.dart';
 import 'screens/recovery.dart';
 import 'screens/templates.dart';
@@ -39,6 +40,7 @@ void main() {
   Api.i = Api();
   WebScreen.nativeRoute = nativeRoute;
   nativeScreenFor = nativeScreen;
+  nativePageFor = nativePage;
   Prefs.read('theme').then((t) => themeMode.value = themeFromName(t));
   runApp(const YsmsApp());
 }
@@ -81,6 +83,18 @@ Widget? nativeScreen(String route) {
     '/assign' => const AssignScreen(),
     '/sacontrols' => const DataCleanupScreen(),
     '/chat' => const ChatScreen(),
+    _ => null,
+  };
+}
+
+/// The Flutter screen of a website page ('generate_permission_copy.php' …), null when it opens as a page.
+Widget? nativePage(String page) {
+  final name = page.split('?').first.split('#').first;
+  return switch (name) {
+    'admin_surveyor_cards.php' => const SurveyorCardsScreen(),
+    'admin_daily_emails.php' => const DailyEmailsScreen(),
+    'generate_permission_copy.php' => const PermissionCopyScreen(),
+    'coming_soon.php' => ComingSoonScreen(feature: ComingSoonScreen.featureOf(page)),
     _ => null,
   };
 }
