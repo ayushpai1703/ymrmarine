@@ -359,10 +359,62 @@ class Api {
     return r;
   }
 
+  /// POST a form of the website and read its own message: the inline alert, or the flash toast after a
+  /// save-and-redirect (the redirect is followed once). As the web app's postPage().
+  Future<PageResult> postPage(String path, Object Function(String csrf) body) async {
+    var r = await post(path, body);
+    final code = r.statusCode ?? 0;
+    if (code == 403) throw ApiError(403, 'Your session expired. Please sign in again.');
+    if (code == 301 || code == 302 || code == 303) {
+      final loc = r.headers.value('location') ?? '';
+      if (loc.isEmpty) return const PageResult(true, '');
+      r = await _send(() => dio.get(loc.startsWith('http') ? loc : loc.replaceFirst(RegExp(r'^/'), '')));
+    }
+    if ((r.statusCode ?? 500) >= 500) throw ApiError(r.statusCode ?? 500, 'The server could not save this. Please try again.');
+    return pageResult(text(r));
+  }
+
   Map<String, dynamic>? json(Response<dynamic> r) {
     final d = _json(r);
     return d is Map ? Map<String, dynamic>.from(d) : null;
   }
 
   String text(Response<dynamic> r) => r.data is String ? r.data as String : (r.data == null ? '' : '${r.data}');
+}
+
+/// A website page's own answer to a form: ok (green alert / success toast) or not, with its text.
+class PageResult {
+  const PageResult(this.ok, this.message);
+  final bool ok;
+  final String message;
+}
+
+String _plain(String h) => h
+    .replaceAll(RegExp(r'<[^>]+>'), ' ')
+    .replaceAll('&times;', '')
+    .replaceAll('&amp;', '&')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#039;', "'")
+    .replaceAll('&#39;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
+/// The message a page shows after a form: .alert-success / .alert-danger (also the vessel-page and
+/// remarks variants) or the flash toast (.ysms-toast-success / -error).
+PageResult pageResult(String html) {
+  RegExpMatch? box(String cls) => RegExp(
+    '<(div|span)[^>]*class="[^"]*\\b(?:$cls)\\b[^"]*"[^>]*>([\\s\\S]*?)</\\1>',
+    caseSensitive: false,
+  ).firstMatch(html);
+  final toast = RegExp(
+    r'class="[^"]*ysms-toast-(success|error|warning)[^"]*"[\s\S]*?class="ysms-toast-text">([\s\S]*?)</span>',
+  ).firstMatch(html);
+  final bad = box('alert-danger|vdd-alert-danger|remarks-alert');
+  if (bad != null) return PageResult(false, _plain(bad.group(2)!));
+  final ok = box('alert-success|vdd-alert-success');
+  if (ok != null) return PageResult(true, _plain(ok.group(2)!));
+  if (toast != null) return PageResult(toast.group(1) == 'success', _plain(toast.group(2)!));
+  return const PageResult(false, '');
 }

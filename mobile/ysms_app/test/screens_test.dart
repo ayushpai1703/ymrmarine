@@ -13,6 +13,7 @@ import 'package:ysms_app/screens/duplicates.dart';
 import 'package:ysms_app/screens/formats.dart';
 import 'package:ysms_app/screens/history.dart';
 import 'package:ysms_app/screens/inbox.dart';
+import 'package:ysms_app/screens/me.dart';
 import 'package:ysms_app/screens/recovery.dart';
 import 'package:ysms_app/ui.dart';
 
@@ -398,7 +399,80 @@ void main() {
     expect(server.calls.where((c) => c == 'GET app_api.php?a=inbox').length, greaterThanOrEqualTo(3));
   });
 
+  testWidgets('My profile: details saved with profile.php, its message shown; password checks', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1400));
+    server.api['profile'] = {
+      'username': 'ravi',
+      'full_name': 'Ravi Kumar',
+      'first_name': 'Ravi',
+      'last_name': 'Kumar',
+      'dob': '',
+      'email': 'ravi@example.com',
+      'phone': '99999',
+      'avatar': '',
+      'surveyor_form': false,
+    };
+    server.api['me'] = Api.i.me!;
+    server.pages['profile.php'] = '<html><div class="alert alert-success mx-3"><i class="fa-solid fa-circle-check"></i> Changes saved successfully!</div></html>';
+    await t.pumpWidget(app(const MyProfileScreen()));
+    await settle(t);
+    expect(find.text('@ravi'), findsOneWidget);
+    expect(find.byKey(const ValueKey('me-full_name')), findsOneWidget);
+    expect(find.byKey(const ValueKey('me-first_name')), findsNothing);
+    await t.enterText(find.byKey(const ValueKey('me-phone')), '12345');
+    await t.tap(find.byKey(const ValueKey('me-save')));
+    await settle(t);
+    final p = server.posts.last;
+    expect(p['path'], 'profile.php');
+    expect(p['update_profile'], '1');
+    expect(p['phone'], '12345');
+    expect(p['full_name'], 'Ravi Kumar');
+    expect(p['csrf_token'], 'tok');
+    expect(find.text('Changes saved successfully!'), findsOneWidget);
+    // password: checked before sending
+    final n = server.posts.length;
+    await t.enterText(find.byKey(const ValueKey('me-current_password')), 'old');
+    await t.enterText(find.byKey(const ValueKey('me-new_password')), 'abc');
+    await t.enterText(find.byKey(const ValueKey('me-confirm_password')), 'abc');
+    await t.tap(find.byKey(const ValueKey('me-pass')));
+    await settle(t);
+    expect(server.posts.length, n);
+    expect(find.text('The new password needs at least 6 characters.'), findsOneWidget);
+  });
+
+  testWidgets('My profile: a Surveyor edits first / last name and date of birth', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1400));
+    server.api['profile'] = {
+      'username': 'sv',
+      'full_name': 'John Doe',
+      'first_name': 'John',
+      'last_name': 'Doe',
+      'dob': '1990-01-02',
+      'email': '',
+      'phone': '',
+      'avatar': '',
+      'surveyor_form': true,
+    };
+    await t.pumpWidget(app(const MyProfileScreen()));
+    await settle(t);
+    expect(find.byKey(const ValueKey('me-first_name')), findsOneWidget);
+    expect(find.byKey(const ValueKey('me-dob')), findsOneWidget);
+    expect(find.byKey(const ValueKey('me-email')), findsNothing);
+  });
+
+  test('page messages: alert, flash toast, error', () {
+    expect(pageResult('<div class="alert alert-danger x"><i></i> Wrong &amp; bad</div>').ok, isFalse);
+    expect(pageResult('<div class="alert alert-danger x"><i></i> Wrong &amp; bad</div>').message, 'Wrong & bad');
+    final toastOk = pageResult(
+      '<div id="nativeAppToast" class="ysms-toast ysms-toast-success"><i></i><span class="ysms-toast-text">Saved</span></div>',
+    );
+    expect(toastOk.ok, isTrue);
+    expect(toastOk.message, 'Saved');
+    expect(pageResult('<html>nothing</html>').ok, isFalse);
+  });
+
   test('routes with a Flutter screen', () {
+    expect(nativeScreen('/me'), isA<MyProfileScreen>());
     expect(nativeScreen('/inbox'), isA<InboxScreen>());
     expect(nativeScreen('/recovery'), isA<RecoveryScreen>());
     expect(nativeScreen('/duplicates'), isA<DuplicatesScreen>());

@@ -16,6 +16,7 @@ import 'screens/home.dart';
 import 'screens/inbox.dart';
 import 'screens/lists.dart';
 import 'screens/login.dart';
+import 'screens/me.dart';
 import 'screens/profile.dart';
 import 'screens/recovery.dart';
 import 'screens/upload.dart';
@@ -58,6 +59,7 @@ Widget? nativeScreen(String route) {
     '/activity' => const ActivityScreen(),
     '/recovery' => const RecoveryScreen(),
     '/inbox' => const InboxScreen(),
+    '/me' => const MyProfileScreen(),
     _ => null,
   };
 }
