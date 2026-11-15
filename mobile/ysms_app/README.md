@@ -11,12 +11,14 @@ The server address is in `lib/config.dart`; `--dart-define=YSMS_SERVER=https://â
 
 ## Screens
 
-Made in Flutter: login (fingerprint login too), home dashboard, Pending Vessels / Pending Reports /
-Completed / Cancelled lists, search, vessel details (latest update, documents, share), upload, profile.
+Made in Flutter: login (fingerprint login too), forgot password, home dashboard, Pending Vessels /
+Pending Reports / Completed / Cancelled lists, search, vessel details (latest update, documents and
+replace, recovery edit, remarks, agent email, share, history), upload, profile and My profile, team chat,
+inbox, recovery, formats, assign / edit vessel, manage templates, add client / admin / surveyor, admin
+controls (master data, duplicates, login activity, data cleanup).
 
-The other screens (team chat, inbox, recovery, assign vessel, admin tools, generators â€¦) open the web
-app's own screen inside the app (`lib/screens/web.dart`), signed in with the same cookies. They move to
-Flutter screen by screen.
+The report generators (Word, photo, invoice, survey reports) open the website's own pages inside the
+app (`lib/screens/web.dart`), signed in with the same cookies.
 
 ## How it talks to the server
 

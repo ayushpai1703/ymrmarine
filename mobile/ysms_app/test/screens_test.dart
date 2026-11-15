@@ -2,7 +2,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:cross_file/cross_file.dart';
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ysms_app/api.dart';
@@ -21,6 +23,8 @@ import 'package:ysms_app/screens/me.dart';
 import 'package:ysms_app/screens/recovery.dart';
 import 'package:ysms_app/screens/templates.dart';
 import 'package:ysms_app/screens/users.dart';
+import 'package:ysms_app/screens/vessel.dart';
+import 'package:ysms_app/screens/vessel_tools.dart';
 import 'package:ysms_app/ui.dart';
 
 /// app_api.php?a=… → JSON; other pages → [pages] (POSTs are recorded with their fields).
@@ -78,6 +82,26 @@ class Fake implements HttpClientAdapter {
 
   @override
   void close({bool force = false}) {}
+}
+
+/// A picked file in memory (tests only).
+final class _MemFile extends PlatformFile {
+  _MemFile(this.name, this.bytes);
+  @override
+  final String name;
+  final Uint8List bytes;
+  @override
+  Uri get uri => Uri.parse('memory:$name');
+  @override
+  XFile get xFile => XFile.fromData(bytes, name: name, length: bytes.length);
+  @override
+  int? lengthSync() => bytes.length;
+  @override
+  Future<int?> length() async => bytes.length;
+  @override
+  Future<Uint8List> readAsBytes() async => bytes;
+  @override
+  Stream<Uint8List> readAsByteStream() => Stream.value(bytes);
 }
 
 Future<void> settle(WidgetTester t) async {
@@ -900,6 +924,101 @@ void main() {
     expect(find.textContaining('not a member'), findsOneWidget);
     expect(find.byKey(const ValueKey('composer')), findsNothing);
     expect(server.calls, isNot(contains('chat messages')));
+  });
+
+  testWidgets('Vessel tools: recovery total summed and saved, remark delete asks twice, agent email', (t) async {
+    t.view.physicalSize = const Size(800, 3000);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    server.api['survey'] = {
+      'id': 12,
+      'vessel': 'MV Blue',
+      'status': 'Completed',
+      'web': 'completed_detail.php?id=12',
+      'docs': [
+        {'id': 3, 'name': 'Report.pdf', 'type': 'Final report', 'when': '01 Nov 2026'},
+      ],
+      'can_replace': true,
+      'recovery': {'can_edit': true, 'total': '1.000', 'vlsfo': '', 'lsmgo': '', 'hsfo': ''},
+      'agent_email': {'sent': ''},
+      'remarks_list': {
+        'can_add': true,
+        'can_delete': true,
+        'items': [
+          {'id': 44, 'text': 'Checked', 'by': 'Ravi', 'when': '02 Nov 2026', 'files': []},
+        ],
+      },
+    };
+    server.pages['completed_detail.php'] = '<div class="alert alert-success">Saved.</div>';
+    server.pages['send_agent_update.php'] = jsonEncode({
+      'success': true,
+      'agent_name': 'ABC Shipping',
+      'has_emails': true,
+      'emails': ['ops@abc.test'],
+      'message': 'Email sent.',
+    });
+    await t.pumpWidget(app(const VesselScreen(id: 12)));
+    await settle(t);
+    expect(find.text('All tools of this vessel'), findsNothing);
+    expect(find.byKey(const ValueKey('replace-3')), findsOneWidget);
+
+    await t.tap(find.byKey(const ValueKey('rec-edit')));
+    await settle(t);
+    await t.enterText(find.byKey(const ValueKey('rec-vlsfo')), '1.5');
+    await t.enterText(find.byKey(const ValueKey('rec-lsmgo')), '0.25');
+    await settle(t);
+    expect(find.text('1.750'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('rec-save')));
+    await settle(t);
+    final rp = server.posts.firstWhere((x) => x['update_recovery'] == '1');
+    expect(rp['path'], 'completed_detail.php');
+    expect(rp['recovery_amount'], '1.750');
+    expect(rp['vlsfo_recovery'], '1.5');
+    expect(rp['hsfo_recovery'], '');
+
+    await t.tap(find.byKey(const ValueKey('rm-del-44')));
+    await settle(t);
+    expect(server.posts.where((x) => x.containsKey('delete_remark_id')), isEmpty);
+    expect(find.text('Tap to confirm'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('rm-del-44')));
+    await settle(t);
+    expect(server.posts.lastWhere((x) => x.containsKey('delete_remark_id'))['delete_remark_id'], '44');
+
+    await t.tap(find.byKey(const ValueKey('agent-mail')));
+    await settle(t);
+    expect(find.textContaining('ops@abc.test'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('ag-send')));
+    await settle(t);
+    final ap = server.posts.lastWhere((x) => x['path'] == 'send_agent_update.php');
+    expect(ap['action'], 'send');
+    expect(ap['survey_id'], '12');
+    expect(ap.containsKey('email_primary'), isFalse);
+  });
+
+  testWidgets('Replace document posts the file to document_replace.php', (t) async {
+    server.pages['document_replace.php'] = jsonEncode({'success': true, 'message': 'Document replaced successfully.'});
+    late BuildContext ctx;
+    await t.pumpWidget(
+      app(
+        Scaffold(
+          body: Builder(
+            builder: (c) {
+              ctx = c;
+              return const SizedBox();
+            },
+          ),
+        ),
+      ),
+    );
+    final ok = await t.runAsync(
+      () => replaceDocument(ctx, 3, pick: () async => _MemFile('new.pdf', Uint8List.fromList([1, 2, 3]))),
+    );
+    await settle(t);
+    expect(ok, isTrue);
+    final p = server.posts.single;
+    expect(p['path'], 'document_replace.php');
+    expect(p['document_id'], '3');
+    expect(find.text('Document replaced successfully.'), findsOneWidget);
   });
 
   test('routes with a Flutter screen', () {
