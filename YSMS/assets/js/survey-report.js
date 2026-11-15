@@ -10,6 +10,9 @@
 (function () {
   'use strict';
   var P = window.SR_PAGE || {};
+  // a report started without internet (?draft=<x>): kept on this device until it is made on the server
+  if (P.draft) { var dq = /[?&]draft=([a-z0-9]{4,24})\b/.exec(location.search); if (dq) P.draft = dq[1]; P.id = 'draft-' + P.draft; }
+  var DRAFT = P.draft ? 'ysms_srp_draft_' + P.draft : '';
   var LS = 'ysms_sr_' + P.id, CACHE = 'ysms_sr_get_' + P.id, TPL_CACHE = 'ysms-sr-templates';
   var S = { cfg: null, report: null, data: null, version: 0, canEdit: false, errors: {}, files: [], dirty: false, saving: false, timer: null, offlineMode: false,
     ai: {}, lookup: null, lookupMsg: '', manual: false, showErr: {}, open: {}, expand: {}, server: null, serverIssues: null, verifying: false };
@@ -75,13 +78,26 @@
     el.innerHTML = online() ? '<i class="fa-solid fa-wifi"></i> Online' : '<i class="fa-solid fa-plane"></i> Offline — saved on this device';
     $$('[data-online-only]').forEach(function (b) { b.disabled = !online() || !S.canEdit || b.hasAttribute('data-blocked'); });
   }
-  window.addEventListener('online', function () { netState(); if (S.dirty) saveNow(); });
+  window.addEventListener('online', function () {
+    netState();
+    if (P.draft) { draftSync(); return; }
+    // opened from the copy on this device: save what was typed, then the report as the server has it now
+    if (S.offlineMode && S.data) { flush().then(function () { if (online() && !S.dirty) load(); }); return; }
+    if (S.dirty) saveNow();
+  });
   window.addEventListener('offline', netState);
   function saveState(text, cls) { var el = $('[data-save-state]'); el.className = 'sr-save ' + (cls || ''); el.textContent = text; }
 
   // ---------- load ----------
   function load() {
     netState();
+    if (P.draft) { // started without internet: everything is on this device
+      var d = read(DRAFT);
+      if (!d || !d.res) { $('[data-form]').innerHTML = '<div class="sr-note err"><i class="fa-solid fa-plane"></i> This report is not on this device any more (it may have been sent already). <a href="survey_report_public.php">Start a report</a></div>'; return Promise.resolve(); }
+      start(d.res, true);
+      if (online()) draftSync();
+      return Promise.resolve();
+    }
     return fetch(P.api + '?a=get&id=' + P.id, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (res) {
       if (!res.ok) { $('[data-form]').innerHTML = '<div class="sr-note err">' + esc(res.error || 'Report not found.') + '</div>'; return; }
       store(CACHE, res);
@@ -1349,6 +1365,7 @@
     return JSON.stringify(d, function (k, v) { return k === '_tried' ? undefined : v; });
   }
   function saveNow() {
+    if (P.draft) { if (online()) return draftSync(); saveState('Changes on this device', 'dirty'); return Promise.resolve(false); }
     if (!S.dirty || S.saving || !S.canEdit) return Promise.resolve(true);
     if (!online()) { saveState('Changes on this device', 'dirty'); return Promise.resolve(false); }
     S.saving = true;
@@ -1376,6 +1393,41 @@
       if (res.error) toast('error', res.error);
       return false;
     }).catch(function () { S.saving = false; saveState('Changes on this device', 'dirty'); return false; });
+  }
+  /**
+   * Back online with a report started without internet: the report is made on the server (once —
+   * its link is kept with the draft, so a second try only saves), everything typed is saved into it,
+   * and the page moves to the report's own link. Nothing is lost if the connection drops halfway.
+   */
+  function draftSync() {
+    if (!P.draft || S.drafting || !online() || !S.data) return Promise.resolve(false);
+    S.drafting = true; saveState('Sending the report…', 'dirty');
+    var d = read(DRAFT) || {}, token = d.token || '';
+    return freshToken().then(function () {
+      if (token) return { ok: true, token: token };
+      return post({ a: 'new', kind: S.report.kind });
+    }).then(function (j) {
+      if (!j || !j.ok || !j.token) throw new Error((j && j.error) || 'The report could not be made on the server.');
+      token = j.token; d.token = token; store(DRAFT, d);
+      return fetch(P.api + '?a=get&id=' + encodeURIComponent(token), { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+    }).then(function (g) {
+      if (!g || !g.ok) throw new Error((g && g.error) || 'The report could not be opened on the server.');
+      return post({ a: 'save', id: token, version: g.report.version, data: payload() });
+    }).then(function (res) {
+      if (!res || !res.ok) throw new Error((res && res.error) || 'The report could not be saved.');
+      var to = 'ysms_sr_' + token;
+      store(to + '_step', S.data.step);
+      var op = read(LS + '_offpdf'); if (op) store(to + '_offpdf', op); // a PDF made offline: the final one is made on the report page
+      try { localStorage.setItem('ysms_srp_last', token); } catch (e) {}
+      [DRAFT, LS, LS + '_step', LS + '_seen', LS + '_offpdf', CACHE].forEach(function (k) { store(k, null); });
+      S.dirty = false; saveState('Saved', '');
+      location.replace('survey_report_public.php?t=' + token);
+      return true;
+    }).catch(function (e) {
+      S.drafting = false; saveState('Changes on this device', 'dirty');
+      if (online()) toast('error', (e && e.message) || 'Not sent yet — kept on this device.');
+      return false;
+    });
   }
   function flush() { // wait for the save in flight and save what is left
     clearTimeout(S.timer);
