@@ -10,6 +10,7 @@ import 'api.dart';
 import 'bio.dart';
 import 'screens/activity.dart';
 import 'screens/duplicates.dart';
+import 'screens/forgot.dart';
 import 'screens/formats.dart';
 import 'screens/history.dart';
 import 'screens/home.dart';
@@ -60,6 +61,7 @@ Widget? nativeScreen(String route) {
     '/recovery' => const RecoveryScreen(),
     '/inbox' => const InboxScreen(),
     '/me' => const MyProfileScreen(),
+    '/forgot' => const ForgotScreen(),
     _ => null,
   };
 }

@@ -10,6 +10,7 @@ import 'package:ysms_app/bio.dart';
 import 'package:ysms_app/main.dart' show nativeScreen;
 import 'package:ysms_app/screens/activity.dart';
 import 'package:ysms_app/screens/duplicates.dart';
+import 'package:ysms_app/screens/forgot.dart';
 import 'package:ysms_app/screens/formats.dart';
 import 'package:ysms_app/screens/history.dart';
 import 'package:ysms_app/screens/inbox.dart';
@@ -471,7 +472,25 @@ void main() {
     expect(pageResult('<html>nothing</html>').ok, isFalse);
   });
 
+  testWidgets('Forgot password: checks the email, posts forgot_password.php, shows its message', (t) async {
+    server.pages['forgot_password.php'] = '<html><div class="alert alert-success py-2 mb-3">If this email is registered, a reset link has been sent.</div></html>';
+    await t.pumpWidget(app(const ForgotScreen()));
+    await settle(t);
+    await t.enterText(find.byKey(const ValueKey('fp-email')), 'nope');
+    await t.tap(find.byKey(const ValueKey('fp-send')));
+    await settle(t);
+    expect(find.text('Please enter a valid email address.'), findsOneWidget);
+    expect(server.posts, isEmpty);
+    await t.enterText(find.byKey(const ValueKey('fp-email')), 'ravi@example.com');
+    await t.tap(find.byKey(const ValueKey('fp-send')));
+    await settle(t);
+    expect(server.posts.single['path'], 'forgot_password.php');
+    expect(server.posts.single['email'], 'ravi@example.com');
+    expect(find.text('If this email is registered, a reset link has been sent.'), findsOneWidget);
+  });
+
   test('routes with a Flutter screen', () {
+    expect(nativeScreen('/forgot'), isA<ForgotScreen>());
     expect(nativeScreen('/me'), isA<MyProfileScreen>());
     expect(nativeScreen('/inbox'), isA<InboxScreen>());
     expect(nativeScreen('/recovery'), isA<RecoveryScreen>());
