@@ -9,6 +9,7 @@ import 'package:ysms_app/api.dart';
 import 'package:ysms_app/bio.dart';
 import 'package:ysms_app/main.dart' show nativeScreen;
 import 'package:ysms_app/screens/formats.dart';
+import 'package:ysms_app/screens/history.dart';
 import 'package:ysms_app/ui.dart';
 
 /// app_api.php?a=… → JSON; other pages → [pages] (POSTs are recorded with their fields).
@@ -118,7 +119,49 @@ void main() {
     expect(find.text('No formats uploaded yet'), findsOneWidget);
   });
 
+  testWidgets('Previous surveys: each earlier survey with recovery and documents', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1200));
+    server.api['history'] = {
+      'vessel': 'MV OCEAN STAR',
+      'items': [
+        {
+          'id': 7,
+          'vessel': 'MV OCEAN STAR',
+          'status': 'Completed',
+          'report_no': 'YMR/BB/123',
+          'type': 'Bunker Survey + Offhire',
+          'client': 'Oceanus',
+          'port': 'Kakinada',
+          'surveyors': 'John Doe',
+          'completed_on': '10 Oct 2026',
+          'report_on': '12 Oct 2026',
+          'recovery': {'total': '12.500', 'vlsfo': '10.000', 'lsmgo': '2.500', 'hsfo': '—'},
+          'docs': [
+            {'id': 55, 'name': 'Final Report.pdf', 'type': 'Final Report', 'when': '12 Oct 2026'},
+          ],
+        },
+      ],
+    };
+    await t.pumpWidget(app(const HistoryScreen(id: 3)));
+    await settle(t);
+    expect(find.text('MV OCEAN STAR'), findsWidgets);
+    expect(find.text('Oceanus · Kakinada'), findsOneWidget);
+    expect(find.text('Surveyed 10 Oct 2026'), findsOneWidget);
+    expect(find.text('12.500'), findsOneWidget);
+    expect(find.text('Final Report.pdf'), findsOneWidget);
+    expect(find.text('Completed'), findsOneWidget);
+    expect(server.calls, contains('GET app_api.php?a=history'));
+  });
+
+  testWidgets('Previous surveys: none', (t) async {
+    server.api['history'] = {'vessel': 'MV X', 'items': []};
+    await t.pumpWidget(app(const HistoryScreen(id: 3)));
+    await settle(t);
+    expect(find.text('No earlier surveys of this vessel'), findsOneWidget);
+  });
+
   test('routes with a Flutter screen', () {
+    expect(nativeScreen('/h/12'), isA<HistoryScreen>());
     expect(nativeScreen('/formats'), isA<FormatsScreen>());
     expect(nativeScreen('/chat'), isNull);
   });

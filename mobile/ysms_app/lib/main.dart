@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'api.dart';
 import 'bio.dart';
 import 'screens/formats.dart';
+import 'screens/history.dart';
 import 'screens/home.dart';
 import 'screens/lists.dart';
 import 'screens/login.dart';
@@ -38,10 +39,14 @@ ThemeMode themeFromName(String? t) => switch (t) {
 
 /// The Flutter screen of a web app route ('/v/12', '/formats' …), null when it has none yet.
 Widget? nativeScreen(String route) {
-  final m = RegExp(r'^/(v|up)/(\d+)$').firstMatch(route);
+  final m = RegExp(r'^/(v|up|h)/(\d+)$').firstMatch(route);
   if (m != null) {
     final id = int.parse(m.group(2)!);
-    return m.group(1) == 'v' ? VesselScreen(id: id) : UploadScreen(id: id);
+    return switch (m.group(1)) {
+      'v' => VesselScreen(id: id),
+      'up' => UploadScreen(id: id),
+      _ => HistoryScreen(id: id),
+    };
   }
   return switch (route) {
     '/formats' => const FormatsScreen(),
