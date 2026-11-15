@@ -12,6 +12,7 @@ import 'package:ysms_app/screens/activity.dart';
 import 'package:ysms_app/screens/duplicates.dart';
 import 'package:ysms_app/screens/formats.dart';
 import 'package:ysms_app/screens/history.dart';
+import 'package:ysms_app/screens/inbox.dart';
 import 'package:ysms_app/screens/recovery.dart';
 import 'package:ysms_app/ui.dart';
 
@@ -349,7 +350,56 @@ void main() {
     expect(server.calls.where((c) => c == 'GET app_api.php?a=recovery').length, 2);
   });
 
+  testWidgets('Inbox: unread marked, tap marks read, Mark all read posts the form', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1200));
+    server.api['inbox'] = {
+      'total': 2,
+      'unread': 1,
+      'more': false,
+      'items': [
+        {
+          'id': 1,
+          'type': 'assign',
+          'title': 'New vessel assigned',
+          'message': 'MV OCEAN STAR at Kakinada',
+          'read': false,
+          'ago': '5 min ago',
+          'from': 'Admin',
+          'link': 'about-us.php',
+          'survey_id': 0,
+        },
+        {
+          'id': 2,
+          'type': 'upload',
+          'title': 'Report uploaded',
+          'message': 'MV TWIN',
+          'read': true,
+          'ago': '1 day ago',
+          'from': '',
+          'link': '',
+          'survey_id': 0,
+        },
+      ],
+    };
+    server.pages['inbox.php'] = '<html>ok</html>';
+    await t.pumpWidget(app(const InboxScreen()));
+    await settle(t);
+    expect(find.text('New vessel assigned'), findsOneWidget);
+    expect(find.text('1 unread'), findsOneWidget);
+    expect(find.byKey(const ValueKey('notif-dot-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('notif-dot-2')), findsNothing);
+    await t.tap(find.byKey(const ValueKey('inbox-allread')));
+    await settle(t);
+    expect(server.posts.last['path'], 'inbox.php');
+    expect(server.posts.last['action'], 'mark_all_read');
+    expect(server.posts.last['csrf_token'], 'tok');
+    await t.tap(find.byKey(const ValueKey('inbox-chip-Unread')));
+    await settle(t);
+    expect(server.calls.where((c) => c == 'GET app_api.php?a=inbox').length, greaterThanOrEqualTo(3));
+  });
+
   test('routes with a Flutter screen', () {
+    expect(nativeScreen('/inbox'), isA<InboxScreen>());
     expect(nativeScreen('/recovery'), isA<RecoveryScreen>());
     expect(nativeScreen('/duplicates'), isA<DuplicatesScreen>());
     expect(nativeScreen('/activity'), isA<ActivityScreen>());
