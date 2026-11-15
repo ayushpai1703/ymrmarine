@@ -16,6 +16,7 @@ import 'package:ysms_app/screens/history.dart';
 import 'package:ysms_app/screens/inbox.dart';
 import 'package:ysms_app/screens/me.dart';
 import 'package:ysms_app/screens/recovery.dart';
+import 'package:ysms_app/screens/templates.dart';
 import 'package:ysms_app/ui.dart';
 
 /// app_api.php?a=… → JSON; other pages → [pages] (POSTs are recorded with their fields).
@@ -489,7 +490,42 @@ void main() {
     expect(find.text('If this email is registered, a reset link has been sent.'), findsOneWidget);
   });
 
+  testWidgets('Templates: list, rename via manage_templates.php, delete asks twice', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1200));
+    server.api['templates'] = {
+      'items': [
+        {'id': 3, 'name': 'Bunker Survey Report', 'type': 'Bunker Survey', 'file': 'a.docx', 'when': '01 Nov 2026'},
+      ],
+      'photo': {'name': 'YMR_Photo_Report_Template.docx', 'when': '02 Nov 2026, 10:00 AM'},
+    };
+    server.pages['manage_templates.php'] = '<html><div class="alert alert-success">Template updated.</div></html>';
+    await t.pumpWidget(app(const TemplatesScreen()));
+    await settle(t);
+    expect(find.text('Bunker Survey Report'), findsOneWidget);
+    expect(find.text('YMR_Photo_Report_Template.docx'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('tpl-3')));
+    await settle(t);
+    await t.enterText(find.byKey(const ValueKey('tpl-name')), 'Bunker Report v2');
+    await t.tap(find.byKey(const ValueKey('tpl-save')));
+    await settle(t);
+    expect(server.posts.last['path'], 'manage_templates.php');
+    expect(server.posts.last['rename_template'], '1');
+    expect(server.posts.last['template_id'], '3');
+    expect(server.posts.last['new_template_name'], 'Bunker Report v2');
+    expect(find.text('Template updated.'), findsOneWidget);
+    // the photo template: delete asks twice
+    final n = server.posts.length;
+    await t.tap(find.byKey(const ValueKey('tpl-photo-del')));
+    await settle(t);
+    expect(server.posts.length, n);
+    expect(find.text('Tap to confirm'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('tpl-photo-del')));
+    await settle(t);
+    expect(server.posts.last['delete_photo_report_template'], '1');
+  });
+
   test('routes with a Flutter screen', () {
+    expect(nativeScreen('/templates'), isA<TemplatesScreen>());
     expect(nativeScreen('/forgot'), isA<ForgotScreen>());
     expect(nativeScreen('/me'), isA<MyProfileScreen>());
     expect(nativeScreen('/inbox'), isA<InboxScreen>());
