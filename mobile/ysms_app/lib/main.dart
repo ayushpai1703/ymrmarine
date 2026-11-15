@@ -1,8 +1,9 @@
 // YMR YSMS — the Flutter app (Android and iOS). Two apps are built from it: staging and live (config.dart).
 //
 // Screens made in Flutter: login, home, the vessel lists (Pending Vessels, Pending Reports, Completed,
-// Cancelled), search, vessel details, upload, profile. The other screens (chat, inbox, recovery, admin
-// tools …) open the web app's own screen inside the app (screens/web.dart) until they are made here.
+// Cancelled), search, vessel details, upload, profile, team chat, inbox, recovery, formats, history,
+// templates, users, admin tools, assign / edit vessel (nativeScreen below). The report generators (Word,
+// photo, invoice, survey reports) open the web app's own screen inside the app (screens/web.dart).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,6 +11,7 @@ import 'api.dart';
 import 'bio.dart';
 import 'screens/activity.dart';
 import 'screens/assign.dart';
+import 'screens/chat.dart';
 import 'screens/admin.dart';
 import 'screens/duplicates.dart';
 import 'screens/forgot.dart';
@@ -49,7 +51,7 @@ ThemeMode themeFromName(String? t) => switch (t) {
 
 /// The Flutter screen of a web app route ('/v/12', '/formats' …), null when it has none yet.
 Widget? nativeScreen(String route) {
-  final m = RegExp(r'^/(v|up|h|sv|e)/(\d+)$').firstMatch(route);
+  final m = RegExp(r'^/(v|up|h|sv|e|c)/(\d+)$').firstMatch(route);
   if (m != null) {
     final id = int.parse(m.group(2)!);
     return switch (m.group(1)) {
@@ -57,6 +59,7 @@ Widget? nativeScreen(String route) {
       'up' => UploadScreen(id: id),
       'sv' => SurveyorFormScreen(id: id),
       'e' => AssignScreen(editId: id),
+      'c' => RoomScreen(id: id),
       _ => HistoryScreen(id: id),
     };
   }
@@ -77,6 +80,7 @@ Widget? nativeScreen(String route) {
     '/admin' => const AdminScreen(),
     '/assign' => const AssignScreen(),
     '/sacontrols' => const DataCleanupScreen(),
+    '/chat' => const ChatScreen(),
     _ => null,
   };
 }

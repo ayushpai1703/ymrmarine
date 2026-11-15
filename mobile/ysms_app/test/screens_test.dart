@@ -11,6 +11,7 @@ import 'package:ysms_app/main.dart' show nativeScreen;
 import 'package:ysms_app/screens/activity.dart';
 import 'package:ysms_app/screens/admin.dart';
 import 'package:ysms_app/screens/assign.dart';
+import 'package:ysms_app/screens/chat.dart';
 import 'package:ysms_app/screens/duplicates.dart';
 import 'package:ysms_app/screens/forgot.dart';
 import 'package:ysms_app/screens/formats.dart';
@@ -26,6 +27,7 @@ import 'package:ysms_app/ui.dart';
 class Fake implements HttpClientAdapter {
   final api = <String, Object>{};
   final pages = <String, String>{};
+  final chat = <String, Object>{};
   final calls = <String>[];
   final posts = <Map<String, dynamic>>[];
 
@@ -49,6 +51,12 @@ class Fake implements HttpClientAdapter {
         if (d is Map) ...d.map((k, v) => MapEntry('$k', v)),
         if (d is FormData) ...{for (final f in d.fields) f.key: f.value},
       });
+    }
+    if (path == 'team_chat.php') {
+      final act = o.uri.queryParameters['action'] ?? s(posts.isEmpty ? null : posts.last['action']);
+      calls.add('chat $act');
+      final r = chat[act];
+      return r == null ? _json({'ok': false, 'error': 'Not found.'}, 404) : _json(r);
     }
     if (path == 'app_api.php') {
       final r = api[a];
@@ -797,6 +805,103 @@ void main() {
     expect(find.text('John Doe'), findsNothing);
   });
 
+  testWidgets('Team chat: groups with unread, new group posts its members', (t) async {
+    server.chat['bootstrap'] = {
+      'ok': true,
+      'me': {'id': 1, 'name': 'Admin', 'can_manage': true, 'is_member': true},
+      'groups': [
+        {'id': 4, 'name': 'Vizag team', 'member_count': 3, 'is_member': true, 'unread': 2},
+        {'id': 5, 'name': 'Office', 'member_count': 1, 'is_member': false, 'unread': 0},
+      ],
+    };
+    server.chat['staff'] = {
+      'ok': true,
+      'staff': [
+        {'user_id': 7, 'name': 'Ravi', 'role': 'Surveyor'},
+      ],
+    };
+    server.chat['create_group'] = {
+      'ok': true,
+      'group': {'id': 9},
+    };
+    await t.pumpWidget(app(const ChatScreen()));
+    await settle(t);
+    expect(find.text('Vizag team'), findsOneWidget);
+    expect(find.byKey(const ValueKey('unread-4')), findsOneWidget);
+    expect(find.byKey(const ValueKey('unread-5')), findsNothing);
+    expect(find.textContaining('you are not in this group'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('chat-new')));
+    await settle(t);
+    await t.enterText(find.byKey(const ValueKey('ng-name')), 'Night shift');
+    await t.tap(find.byKey(const ValueKey('ng-7')));
+    await settle(t);
+    await t.tap(find.byKey(const ValueKey('ng-create')));
+    await settle(t);
+    final p = server.posts.firstWhere((x) => x['action'] == 'create_group');
+    expect(p['name'], 'Night shift');
+    expect(p['member_ids[]'], '7');
+  });
+
+  testWidgets('Team chat room: messages by day, mine vs theirs, send posts the text', (t) async {
+    final now = DateTime.now().millisecondsSinceEpoch / 1000;
+    server.chat['bootstrap'] = {
+      'ok': true,
+      'me': {'id': 1, 'name': 'Admin', 'can_manage': false, 'is_member': true},
+      'group': {'id': 4, 'name': 'Vizag team'},
+      'members': [{}, {}],
+      'settings': {
+        'allowed_ext': ['pdf'],
+        'max_upload_bytes': 1000,
+      },
+    };
+    server.chat['messages'] = {
+      'ok': true,
+      'has_more': true,
+      'messages': [
+        {'id': 10, 'sender_id': 7, 'sender_name': 'Ravi', 'text': 'Reached the vessel', 'ts': now},
+        {'id': 11, 'sender_id': 1, 'sender_name': 'Admin', 'text': 'Good', 'ts': now},
+      ],
+    };
+    server.chat['poll'] = {'ok': true, 'messages': [], 'member_count': 2};
+    server.chat['mark_read'] = {'ok': true};
+    server.chat['send'] = {
+      'ok': true,
+      'message': {'id': 12, 'sender_id': 1, 'sender_name': 'Admin', 'text': 'On my way', 'ts': now},
+    };
+    await t.pumpWidget(app(const RoomScreen(id: 4)));
+    await settle(t);
+    expect(find.text('Vizag team'), findsOneWidget);
+    expect(find.text('2 members'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
+    expect(find.text('Reached the vessel'), findsOneWidget);
+    expect(find.text('Ravi'), findsOneWidget);
+    expect(find.byKey(const ValueKey('older')), findsOneWidget);
+    expect(server.calls, contains('chat mark_read'));
+    await t.enterText(find.byKey(const ValueKey('composer')), 'On my way');
+    await t.tap(find.byKey(const ValueKey('send')));
+    await settle(t);
+    final p = server.posts.firstWhere((x) => x['action'] == 'send');
+    expect(p['text'], 'On my way');
+    expect(p['group_id'], '4');
+    expect(find.text('On my way'), findsOneWidget);
+    expect(find.text('Sending…'), findsNothing);
+    await t.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Team chat room: not a member shows the note and no composer', (t) async {
+    server.chat['bootstrap'] = {
+      'ok': true,
+      'me': {'id': 1, 'name': 'X', 'can_manage': false, 'is_member': false},
+      'group': {'id': 5, 'name': 'Office'},
+      'members': [],
+    };
+    await t.pumpWidget(app(const RoomScreen(id: 5)));
+    await settle(t);
+    expect(find.textContaining('not a member'), findsOneWidget);
+    expect(find.byKey(const ValueKey('composer')), findsNothing);
+    expect(server.calls, isNot(contains('chat messages')));
+  });
+
   test('routes with a Flutter screen', () {
     expect(nativeScreen('/assign'), isA<AssignScreen>());
     expect(nativeScreen('/e/12'), isA<AssignScreen>());
@@ -816,6 +921,7 @@ void main() {
     expect(nativeScreen('/activity'), isA<ActivityScreen>());
     expect(nativeScreen('/h/12'), isA<HistoryScreen>());
     expect(nativeScreen('/formats'), isA<FormatsScreen>());
-    expect(nativeScreen('/chat'), isNull);
+    expect(nativeScreen('/chat'), isA<ChatScreen>());
+    expect(nativeScreen('/c/4'), isA<RoomScreen>());
   });
 }
