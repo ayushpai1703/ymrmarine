@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import 'api.dart';
 import 'bio.dart';
+import 'screens/formats.dart';
 import 'screens/home.dart';
 import 'screens/lists.dart';
 import 'screens/login.dart';
@@ -24,6 +25,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   Api.i = Api();
   WebScreen.nativeRoute = nativeRoute;
+  nativeScreenFor = nativeScreen;
   Prefs.read('theme').then((t) => themeMode.value = themeFromName(t));
   runApp(const YsmsApp());
 }
@@ -34,16 +36,24 @@ ThemeMode themeFromName(String? t) => switch (t) {
   _ => ThemeMode.system,
 };
 
-/// Web app routes that have a Flutter screen.
-bool nativeRoute(BuildContext context, String route) {
+/// The Flutter screen of a web app route ('/v/12', '/formats' …), null when it has none yet.
+Widget? nativeScreen(String route) {
   final m = RegExp(r'^/(v|up)/(\d+)$').firstMatch(route);
-  if (m == null) return false;
-  final id = int.parse(m.group(2)!);
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => m.group(1) == 'v' ? VesselScreen(id: id) : UploadScreen(id: id),
-    ),
-  );
+  if (m != null) {
+    final id = int.parse(m.group(2)!);
+    return m.group(1) == 'v' ? VesselScreen(id: id) : UploadScreen(id: id);
+  }
+  return switch (route) {
+    '/formats' => const FormatsScreen(),
+    _ => null,
+  };
+}
+
+/// Web app routes that have a Flutter screen (a link inside a web screen).
+bool nativeRoute(BuildContext context, String route) {
+  final w = nativeScreen(route);
+  if (w == null) return false;
+  Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
   return true;
 }
 

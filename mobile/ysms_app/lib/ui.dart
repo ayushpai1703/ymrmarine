@@ -136,8 +136,20 @@ Future<void> openWeb(BuildContext context, String path, {String? title}) async {
   );
 }
 
-/// The app screen of the web app (assets/app/app.js) for a route, e.g. '/chat', '/v/12'.
-Future<void> openAppRoute(BuildContext context, String route, {String? title}) => openWeb(context, 'app.php#$route', title: title);
+/// Flutter screens for routes of the web app (set in main.dart), e.g. '/formats'; null: no Flutter screen yet.
+Widget? Function(String route)? nativeScreenFor;
+
+/// The screen for a route of the web app, e.g. '/chat', '/v/12': its Flutter screen when there is one,
+/// else the web app's own screen (assets/app/app.js) inside the app.
+Future<void> openAppRoute(BuildContext context, String route, {String? title}) async {
+  final w = nativeScreenFor?.call(route);
+  if (w != null) {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
+    return;
+  }
+  if (!context.mounted) return;
+  await openWeb(context, 'app.php#$route', title: title);
+}
 
 Future<void> openExternal(String url) async {
   final u = Uri.parse(url);
