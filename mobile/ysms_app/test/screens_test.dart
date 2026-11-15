@@ -12,6 +12,7 @@ import 'package:ysms_app/screens/activity.dart';
 import 'package:ysms_app/screens/duplicates.dart';
 import 'package:ysms_app/screens/formats.dart';
 import 'package:ysms_app/screens/history.dart';
+import 'package:ysms_app/screens/recovery.dart';
 import 'package:ysms_app/ui.dart';
 
 /// app_api.php?a=… → JSON; other pages → [pages] (POSTs are recorded with their fields).
@@ -300,7 +301,56 @@ void main() {
     expect(server.calls.where((c) => c == 'GET login_activity_list.php').length, 2);
   });
 
+  testWidgets('Recovery: totals, list, month filter, paging', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1400));
+    server.api['recovery'] = {
+      'count': 2,
+      'vlsfo': 10.5,
+      'lsmgo': 2.25,
+      'hsfo': 0,
+      'total': 12.75,
+      'months': [
+        {'value': '2026-11', 'label': 'Nov 2026'},
+      ],
+      'more': false,
+      'items': [
+        {
+          'id': 5,
+          'vessel': 'MV OCEAN STAR',
+          'client': 'Oceanus',
+          'port': 'Kakinada',
+          'type': 'Bunker Survey',
+          'completed': '10 Nov 2026',
+          'total': 12.75,
+          'na': false,
+          'total_text': '12.750',
+        },
+        {
+          'id': 6,
+          'vessel': 'MV DRAFT ONLY',
+          'client': 'Oceanus',
+          'port': 'Vizag',
+          'type': 'Draft Survey',
+          'completed': '',
+          'total': null,
+          'na': true,
+          'total_text': 'N/A',
+        },
+      ],
+    };
+    await t.pumpWidget(app(const RecoveryScreen()));
+    await settle(t);
+    expect(find.text('MV OCEAN STAR'), findsOneWidget);
+    expect(find.text('N/A'), findsOneWidget);
+    expect(find.text('Nov 2026'), findsOneWidget);
+    expect(find.byKey(const ValueKey('rec-total')), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('rec-month-2026-11')));
+    await settle(t);
+    expect(server.calls.where((c) => c == 'GET app_api.php?a=recovery').length, 2);
+  });
+
   test('routes with a Flutter screen', () {
+    expect(nativeScreen('/recovery'), isA<RecoveryScreen>());
     expect(nativeScreen('/duplicates'), isA<DuplicatesScreen>());
     expect(nativeScreen('/activity'), isA<ActivityScreen>());
     expect(nativeScreen('/h/12'), isA<HistoryScreen>());

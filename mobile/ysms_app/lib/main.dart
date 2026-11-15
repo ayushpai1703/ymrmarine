@@ -16,6 +16,7 @@ import 'screens/home.dart';
 import 'screens/lists.dart';
 import 'screens/login.dart';
 import 'screens/profile.dart';
+import 'screens/recovery.dart';
 import 'screens/upload.dart';
 import 'screens/vessel.dart';
 import 'screens/web.dart';
@@ -54,6 +55,7 @@ Widget? nativeScreen(String route) {
     '/formats' => const FormatsScreen(),
     '/duplicates' => const DuplicatesScreen(),
     '/activity' => const ActivityScreen(),
+    '/recovery' => const RecoveryScreen(),
     _ => null,
   };
 }
