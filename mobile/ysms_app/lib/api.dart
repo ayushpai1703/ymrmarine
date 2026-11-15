@@ -242,6 +242,23 @@ class Api {
     return m;
   }
 
+  /// GET a JSON page of the website (e.g. 'ajax/login_activity_list.php'): its own checks apply.
+  /// {success: false, message} and HTTP errors become an [ApiError] with the server's message.
+  Future<Map<String, dynamic>> getJson(String path, [Map<String, dynamic>? params]) async {
+    final r = await _send(() => dio.get(path, queryParameters: params));
+    final d = _json(r);
+    if (r.statusCode == 401) {
+      _lost();
+      throw ApiError(401, 'Please sign in again.');
+    }
+    if (d is! Map) throw ApiError(r.statusCode ?? 500, 'The server did not answer properly.');
+    final m = Map<String, dynamic>.from(d);
+    if ((r.statusCode ?? 500) >= 400 || m['success'] == false) {
+      throw ApiError(r.statusCode ?? 500, '${m['message'] ?? m['error'] ?? 'Not available.'}');
+    }
+    return m;
+  }
+
   void markLost() => _lost();
 
   void _lost() {

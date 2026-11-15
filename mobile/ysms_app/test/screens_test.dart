@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ysms_app/api.dart';
 import 'package:ysms_app/bio.dart';
 import 'package:ysms_app/main.dart' show nativeScreen;
+import 'package:ysms_app/screens/activity.dart';
+import 'package:ysms_app/screens/duplicates.dart';
 import 'package:ysms_app/screens/formats.dart';
 import 'package:ysms_app/screens/history.dart';
 import 'package:ysms_app/ui.dart';
@@ -160,7 +162,147 @@ void main() {
     expect(find.text('No earlier surveys of this vessel'), findsOneWidget);
   });
 
+  testWidgets('Possible duplicates: clusters, filter, delete asks twice', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1400));
+    server.api['duplicates'] = {
+      'clusters': [
+        {
+          'kind': 'duplicate',
+          'month': 'Oct 2026',
+          'extra_mt': 12.5,
+          'extra_ships': 1,
+          'records': [
+            {
+              'id': 11,
+              'vessel': 'MV TWIN',
+              'report_no': 'R-1',
+              'status': 'Completed',
+              'type': 'Bunker',
+              'surveyor': 'John',
+              'completed_on': '01 Oct 2026',
+              'recovery': '12.500',
+              'files': 2,
+              'source': 'Upload',
+              'list': 'completed_surveys',
+            },
+            {
+              'id': 12,
+              'vessel': 'MV TWIN',
+              'report_no': 'R-2',
+              'status': 'Completed',
+              'type': 'Bunker',
+              'surveyor': 'John',
+              'completed_on': '05 Oct 2026',
+              'recovery': '12.500',
+              'files': 1,
+              'source': 'Import',
+              'list': 'completed_surveys',
+            },
+          ],
+        },
+        {
+          'kind': 'check',
+          'month': 'Sep 2026',
+          'extra_mt': 0,
+          'extra_ships': 0,
+          'records': [
+            {
+              'id': 21,
+              'vessel': 'MV CHECK ME',
+              'report_no': '',
+              'status': 'Pending Report',
+              'type': 'Draft',
+              'surveyor': '',
+              'completed_on': '',
+              'recovery': '—',
+              'files': 0,
+              'source': 'App',
+              'list': 'pending_reports',
+            },
+          ],
+        },
+      ],
+    };
+    server.pages['admin_surveys.php'] = '{"success":true,"message":"Deleted"}';
+    await t.pumpWidget(app(const DuplicatesScreen()));
+    await settle(t);
+    expect(find.text('MV TWIN'), findsOneWidget);
+    expect(find.text('MV CHECK ME'), findsOneWidget);
+    expect(find.text('12.500 MT counted 2 times'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('dup-chip-check')));
+    await settle(t);
+    expect(find.text('MV TWIN'), findsNothing);
+    expect(find.text('MV CHECK ME'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('dup-chip-')));
+    await settle(t);
+    await t.tap(find.byKey(const ValueKey('dup-del-12')));
+    await settle(t);
+    expect(find.text('Tap to confirm'), findsOneWidget);
+    expect(server.posts, isEmpty);
+    await t.tap(find.byKey(const ValueKey('dup-del-12')));
+    await settle(t);
+    expect(server.posts.single['path'], 'admin_surveys.php');
+    expect(server.posts.single['action'], 'delete');
+    expect(server.posts.single['id'], '12');
+    expect(server.posts.single['type'], 'completed_surveys');
+  });
+
+  testWidgets('Login activity: summary, rows, filter', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1400));
+    server.pages['login_activity_summary.php'] = jsonEncode({
+      'success': true,
+      'summary': {'total_users': 9, 'logged_in_today': 3, 'active_sessions': 2, 'failed_today': 1},
+    });
+    server.pages['login_activity_list.php'] = jsonEncode({
+      'success': true,
+      'total': 2,
+      'page': 1,
+      'per_page': 30,
+      'rows': [
+        {
+          'id': 1,
+          'user_id': 4,
+          'user_name': 'Ravi Kumar',
+          'username': 'ravi',
+          'role': 'Admin',
+          'device_type': 'Mobile',
+          'browser': 'Chrome',
+          'login_time': '2026-11-14 09:05:00',
+          'ip_address': '1.2.3.4',
+          'country': 'India',
+          'login_status': 'SUCCESS',
+        },
+        {
+          'id': 2,
+          'user_id': 0,
+          'user_name': '',
+          'username': 'ghost',
+          'role': '',
+          'device_type': 'Desktop',
+          'browser': 'Edge',
+          'login_time': '2026-11-14 10:00:00',
+          'ip_address': '5.6.7.8',
+          'country': 'Unknown',
+          'login_status': 'FAILED',
+          'failure_reason': 'Wrong password',
+        },
+      ],
+    });
+    await t.pumpWidget(app(const ActivityScreen()));
+    await settle(t);
+    expect(find.text('Ravi Kumar'), findsOneWidget);
+    expect(find.text('ghost'), findsOneWidget);
+    expect(find.text('14 Nov, 10:00 · 5.6.7.8 · Wrong password'), findsOneWidget);
+    expect(find.text('2 logins'), findsOneWidget);
+    expect(find.text('Logged in today'), findsOneWidget);
+    await t.tap(find.byKey(const ValueKey('act-chip-Failed')));
+    await settle(t);
+    expect(server.calls.where((c) => c == 'GET login_activity_list.php').length, 2);
+  });
+
   test('routes with a Flutter screen', () {
+    expect(nativeScreen('/duplicates'), isA<DuplicatesScreen>());
+    expect(nativeScreen('/activity'), isA<ActivityScreen>());
     expect(nativeScreen('/h/12'), isA<HistoryScreen>());
     expect(nativeScreen('/formats'), isA<FormatsScreen>());
     expect(nativeScreen('/chat'), isNull);

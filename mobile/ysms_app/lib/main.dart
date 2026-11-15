@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 
 import 'api.dart';
 import 'bio.dart';
+import 'screens/activity.dart';
+import 'screens/duplicates.dart';
 import 'screens/formats.dart';
 import 'screens/history.dart';
 import 'screens/home.dart';
@@ -50,6 +52,8 @@ Widget? nativeScreen(String route) {
   }
   return switch (route) {
     '/formats' => const FormatsScreen(),
+    '/duplicates' => const DuplicatesScreen(),
+    '/activity' => const ActivityScreen(),
     _ => null,
   };
 }
