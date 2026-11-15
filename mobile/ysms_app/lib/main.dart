@@ -22,6 +22,7 @@ import 'screens/profile.dart';
 import 'screens/recovery.dart';
 import 'screens/templates.dart';
 import 'screens/upload.dart';
+import 'screens/users.dart';
 import 'screens/vessel.dart';
 import 'screens/web.dart';
 import 'ui.dart';
@@ -46,12 +47,13 @@ ThemeMode themeFromName(String? t) => switch (t) {
 
 /// The Flutter screen of a web app route ('/v/12', '/formats' …), null when it has none yet.
 Widget? nativeScreen(String route) {
-  final m = RegExp(r'^/(v|up|h)/(\d+)$').firstMatch(route);
+  final m = RegExp(r'^/(v|up|h|sv)/(\d+)$').firstMatch(route);
   if (m != null) {
     final id = int.parse(m.group(2)!);
     return switch (m.group(1)) {
       'v' => VesselScreen(id: id),
       'up' => UploadScreen(id: id),
+      'sv' => SurveyorFormScreen(id: id),
       _ => HistoryScreen(id: id),
     };
   }
@@ -64,6 +66,9 @@ Widget? nativeScreen(String route) {
     '/me' => const MyProfileScreen(),
     '/forgot' => const ForgotScreen(),
     '/templates' => const TemplatesScreen(),
+    '/addclient' => CreateUserScreen.client(),
+    '/addadmin' => CreateUserScreen.admin(),
+    '/surveyor' => const SurveyorFormScreen(),
     _ => null,
   };
 }

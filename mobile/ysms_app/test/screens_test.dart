@@ -17,6 +17,7 @@ import 'package:ysms_app/screens/inbox.dart';
 import 'package:ysms_app/screens/me.dart';
 import 'package:ysms_app/screens/recovery.dart';
 import 'package:ysms_app/screens/templates.dart';
+import 'package:ysms_app/screens/users.dart';
 import 'package:ysms_app/ui.dart';
 
 /// app_api.php?a=… → JSON; other pages → [pages] (POSTs are recorded with their fields).
@@ -524,7 +525,101 @@ void main() {
     expect(server.posts.last['delete_photo_report_template'], '1');
   });
 
+  testWidgets('Add client: required fields and passwords checked, then add_client.php', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1400));
+    server.pages['add_client.php'] = '<html><div class="alert alert-danger">Username already exists.</div></html>';
+    await t.pumpWidget(app(CreateUserScreen.client()));
+    await settle(t);
+    await t.tap(find.byKey(const ValueKey('form-save')));
+    await settle(t);
+    expect(find.text('Company name is required.'), findsOneWidget);
+    expect(server.posts, isEmpty);
+    for (final e in {
+      'company_name': 'Oceanus',
+      'contact_person': 'Mr A',
+      'username': 'oceanus',
+      'mobile': '999',
+      'email': 'a@b.co',
+      'password': 'secret1',
+      'confirm_password': 'secret2',
+    }.entries) {
+      await t.enterText(find.byKey(ValueKey('f-${e.key}')), e.value);
+    }
+    await t.tap(find.byKey(const ValueKey('form-save')));
+    await settle(t);
+    expect(find.text('Passwords do not match.'), findsOneWidget);
+    await t.enterText(find.byKey(const ValueKey('f-confirm_password')), 'secret1');
+    await t.tap(find.byKey(const ValueKey('form-save')));
+    await settle(t);
+    expect(server.posts.single['path'], 'add_client.php');
+    expect(server.posts.single['company_name'], 'Oceanus');
+    expect(server.posts.single['csrf_token'], 'tok');
+    expect(find.text('Username already exists.'), findsOneWidget);
+  });
+
+  testWidgets('Add admin: Super Admin checkbox sent', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1400));
+    server.pages['add_admin.php'] = '<html><div class="alert alert-success">Admin created.</div></html>';
+    await t.pumpWidget(
+      app(
+        Scaffold(
+          body: Builder(
+            builder: (c) => TextButton(
+              onPressed: () => Navigator.of(c).push(MaterialPageRoute(builder: (_) => CreateUserScreen.admin())),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await t.tap(find.text('go'));
+    await settle(t);
+    await t.enterText(find.byKey(const ValueKey('f-full_name')), 'New Admin');
+    await t.enterText(find.byKey(const ValueKey('f-username')), 'nadmin');
+    await t.enterText(find.byKey(const ValueKey('f-password')), 'secret1');
+    await t.enterText(find.byKey(const ValueKey('f-confirm_password')), 'secret1');
+    await t.tap(find.byKey(const ValueKey('f-is_super_admin')));
+    await t.tap(find.byKey(const ValueKey('form-save')));
+    await settle(t);
+    expect(server.posts.single['path'], 'add_admin.php');
+    expect(server.posts.single['is_super_admin'], '1');
+    expect(find.text('go'), findsOneWidget); // back after saving
+  });
+
+  testWidgets('Edit surveyor: loads, saves to add_surveyor.php?id=', (t) async {
+    await t.binding.setSurfaceSize(const Size(400, 1400));
+    server.api['surveyor'] = {
+      'id': 9,
+      'username': 'john',
+      'first_name': 'John',
+      'last_name': 'Doe',
+      'dob': '1990-01-02',
+      'date_of_joining': '2024-05-01',
+      'phone': '111',
+      'email': 'j@x.co',
+      'status': 'Active',
+      'avatar': '',
+    };
+    server.pages['add_surveyor.php'] = '<html><div class="alert alert-success">Surveyor updated.</div></html>';
+    await t.pumpWidget(app(const SurveyorFormScreen(id: 9)));
+    await settle(t);
+    expect(find.text('Edit surveyor'), findsOneWidget);
+    expect(find.byKey(const ValueKey('f-password')), findsNothing);
+    await t.enterText(find.byKey(const ValueKey('f-phone')), '222');
+    await t.tap(find.byKey(const ValueKey('form-save')));
+    await settle(t);
+    expect(server.posts.single['path'], 'add_surveyor.php');
+    expect(server.posts.single['save_surveyor'], '1');
+    expect(server.posts.single['phone'], '222');
+    expect(server.posts.single['username'], 'john');
+    expect(server.calls, contains('POST add_surveyor.php'));
+  });
+
   test('routes with a Flutter screen', () {
+    expect(nativeScreen('/addclient'), isA<CreateUserScreen>());
+    expect(nativeScreen('/addadmin'), isA<CreateUserScreen>());
+    expect(nativeScreen('/surveyor'), isA<SurveyorFormScreen>());
+    expect(nativeScreen('/sv/9'), isA<SurveyorFormScreen>());
     expect(nativeScreen('/templates'), isA<TemplatesScreen>());
     expect(nativeScreen('/forgot'), isA<ForgotScreen>());
     expect(nativeScreen('/me'), isA<MyProfileScreen>());
