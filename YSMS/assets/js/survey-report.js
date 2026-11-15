@@ -287,6 +287,10 @@
     var v = val(k), dis = S.canEdit && !opts.ro ? '' : ' disabled', inp;
     var attrs = ' data-f="' + k + '" data-testid="sr-f-' + k + '"' + dis + (S.ai[k] ? ' class="ai" title="Filled by Vessel lookup — please check"' : '');
     if (f.type === 'month') inp = '<select' + attrs + '><option value=""></option>' + MONTHS.map(function (m) { return '<option' + (m === v ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select>';
+    else if (k === 'survey_type') { // the certificate's wording follows it (includes/survey_certificates.php)
+      var ch = (S.cfg.cert || {}).choices || {}, cur = certType();
+      inp = '<select' + attrs + '>' + Object.keys(ch).map(function (c) { return '<option value="' + esc(c) + '"' + (c === cur ? ' selected' : '') + '>' + esc(ch[c]) + '</option>'; }).join('') + '</select>';
+    }
     else {
       var t = f.type === 'date' ? 'date' : f.type === 'time' ? 'time' : 'text';
       var mode = /^(num|int|imo)/.test(f.type) ? ' inputmode="decimal"' : '';
@@ -400,6 +404,7 @@
       (function () { // every other survey detail in one card, as the vessel particulars in step 1
         var keys = ['owners', 'charterers', 'port_name', 'place', 'draft_aft', 'draft_fwd', 'master', 'chief_engineer', 'surveyor_name'];
         return card('Survey particulars', 'fa-clipboard-list',
+          (S.cfg.cert ? inputHtml('survey_type', { label: 'Survey Type' }) : '') +
           inputHtml('owners', { req: true, label: 'Owners' }) + inputHtml('charterers', { req: true, label: 'Charterers' }) +
           inputHtml('port_name', req) + inputHtml('place', { req: true, label: 'Place of Survey' }) + inputHtml('voyage_no', { label: 'Voyage No.' }) +
           inputHtml('draft_aft', { req: true, label: 'Draft Aft (m)' }) + inputHtml('draft_fwd', { req: true, label: 'Draft Fwd (m)' }) +
@@ -741,8 +746,9 @@
     return problemsHtml() +
       '<section class="sr-card"><h3><i class="fa-solid fa-file-export"></i> Preview &amp; Generate</h3><div class="sr-out" data-testid="sr-output">' +
       '<button type="button" class="sr-btn pri big" data-gen="pdf" data-online-only' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-download-pdf"><i class="fa-solid fa-file-pdf"></i> Download PDF Report</button>' +
-      '<button type="button" class="sr-btn big" data-pv="load" data-testid="sr-preview-summary"><i class="fa-solid fa-eye"></i> Preview Report</button></div>' +
-      '<p class="sr-small sr-muted"><i class="fa-solid fa-circle-info"></i> The PDF is made in the YMR report format on the company letterhead; its Excel is kept in the system for the Word report.</p>' +
+      '<button type="button" class="sr-btn big" data-pv="load" data-testid="sr-preview-summary"><i class="fa-solid fa-eye"></i> Preview Report</button>' +
+      '<button type="button" class="sr-btn big" data-print data-online-only' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-print"><i class="fa-solid fa-print"></i> Print</button></div>' +
+      '<p class="sr-small sr-muted"><i class="fa-solid fa-circle-info"></i> The PDF is made in the YMR report format on the company letterhead' + (certType() !== 'none' && S.cfg.cert ? ': page 1 the <b data-testid="sr-cert-name">' + esc(S.cfg.cert.types[certType()].title) + '</b> (' + esc(S.cfg.cert.choices[certType()]) + '), then the tank report' : '') + '; its Excel is kept in the system for the Word report.</p>' +
       '<button type="button" class="sr-link" data-offline-pdf data-testid="sr-offline-pdf"' + (all.length ? ' hidden' : '') + '><i class="fa-solid fa-plane"></i> No internet? Download the PDF made on this device</button></section>';
   }
   /** Admin: the version history of the saved tanks (Sounding, Volume, Density, Temperature). */
@@ -860,6 +866,7 @@
     if ((b = t.closest('[data-mode]'))) { var m = b.getAttribute('data-mode').split(':'), tr = S.data.tanks[m[0]][+m[1]]; tr.mode = m[2]; tr.sounding = m[2] === 'ullage' ? sounding(tr) : tr.sounding; changed(); render(); return; }
     if ((b = t.closest('[data-gen]'))) { generate(b.getAttribute('data-gen')); return; }
     if (t.closest('[data-offline-pdf]')) { offlinePdf(); return; }
+    if ((b = t.closest('[data-print]'))) { if (b.hasAttribute('data-blocked')) { block('generate'); return; } printPdf(b); return; }
     if (t.closest('[data-save-now]')) { saveProgress(); return; }
     if ((b = t.closest('[data-pv]'))) { pvAction(b.getAttribute('data-pv')); return; }
   });
@@ -1494,6 +1501,23 @@
     };
     if (S.dirty || S.saving) flush().then(go2); else go2();
   }
+  /** Print: the report PDF (certificate + tank report) opened in a hidden frame and sent to the printer. */
+  function printPdf(btn) {
+    btn.disabled = true;
+    var done = function () { btn.disabled = false; };
+    (S.dirty || S.saving ? flush() : Promise.resolve()).then(function () {
+      return fetch(P.api + '?a=preview&id=' + encodeURIComponent(P.id), { credentials: 'same-origin' });
+    }).then(function (r) {
+      if (!r.ok || !/pdf/.test(r.headers.get('content-type') || '')) throw new Error();
+      return r.blob();
+    }).then(function (bl) {
+      var u = URL.createObjectURL(bl), fr = document.createElement('iframe');
+      fr.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0'; fr.setAttribute('data-testid', 'sr-print-frame'); fr.src = u;
+      fr.onload = function () { setTimeout(function () { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { window.open(u, '_blank'); } done(); }, 300); };
+      var old = $('[data-testid=sr-print-frame]'); if (old) old.remove();
+      document.body.appendChild(fr);
+    }).catch(function () { done(); toast('error', 'The PDF could not be made for printing. Please try again.'); });
+  }
   function pvAction(a) {
     if (a === 'load') { if (!pvPanelShown()) document.body.classList.add('sr-pv-open'); pvTab('pdf'); PV.ver = null; if (S.dirty || S.saving) flush(); preview(true); return; }
     if (a === 'excel') { if (!pvPanelShown()) document.body.classList.add('sr-pv-open'); pvTab('excel'); excelView(); return; }
@@ -1591,13 +1615,9 @@
     if (r.mode === 'ullage') return pRead('sounding', r.ullage) + ' U';
     var s = sounding(r); return pRead('sounding', s) + (r.su === 's' && num(s) !== null ? ' S' : '');
   }
-  /** The report drawn at print scale k (1 = full size; text and spacing shrink, the letterhead keeps its size). */
-  function ymrPdf(k, logo, banner) {
-    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, L = 10, CW = W - 20, PT = 0.3528, BOT = 286;
-    var f = function (pt) { return pt * k; }, mm = function (pt) { return pt * k * PT; }, lw = Math.max(0.5 * k, 0.3) * PT;
-    var up = function (key) { return val(key).toUpperCase(); }, y = 7;
-    doc.setLineHeightFactor(1.15);
-    // letterhead
+  /** The YMR letterhead at the top of a page (the same on the certificate and the tank report) → the y below it. */
+  function lhDraw(doc, logo, banner, k) {
+    var W = 210, L = 10, CW = 190, PT = 0.3528, y = 7;
     if (logo) {
       var lgw = k >= 0.5 ? 182 : 160, lgh = lgw * logo.h / logo.w;
       doc.addImage(logo.data, 'PNG', (W - lgw) / 2, y, lgw, lgh); y += lgh + 4.6;
@@ -1613,6 +1633,88 @@
       doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(0, 160, 226); doc.text('YMR MARINE SOLUTIONS', W / 2, y + 8, { align: 'center' }); y += 11;
     }
     doc.setDrawColor(61, 139, 214); doc.setLineWidth(0.9 * PT); doc.line(L, y, W - L, y); y += 2.1;
+    return y;
+  }
+  /** Survey type of the report: as chosen in Survey Details, else the one its report type opens with. */
+  function certType() {
+    var C = S.cfg.cert; if (!C) return 'none';
+    var t = val('survey_type'); if (t && C.choices[t]) return t;
+    return C.by_kind[S.cfg.template.kind] || 'none';
+  }
+  /** The certificate as srCertModel() makes it on the server (includes/survey_certificates.php), from the same wording. */
+  function certModel() {
+    var C = S.cfg.cert, cfg = C && C.types[certType()]; if (!cfg) return null;
+    var up = function (k) { return val(k).toUpperCase(); }, parts = [];
+    if (val('flag')) parts.push('under ' + up('flag') + ' Flag');
+    if (val('port_of_registry')) parts.push('Port of Registry ' + up('port_of_registry'));
+    if (val('grt')) parts.push('GRT ' + val('grt'));
+    if (val('nrt')) parts.push('NRT ' + val('nrt'));
+    var rep = { '{vessel}': up('vessel_name'), '{particulars}': parts.length ? ', ' + parts.join(', ') : '', '{owners}': up('owners'), '{charterers}': up('charterers') };
+    var fill = function (t) { return String(t || '').replace(/\{(vessel|particulars|owners|charterers)\}/g, function (m) { return rep[m]; }); };
+    var box = function (fk) { var x = fk ? String((S.data.fields[fk] != null ? S.data.fields[fk] : S.data.extra[fk]) || '').trim() : ''; if (/^\d{4}-\d{2}-\d{2}$/.test(x)) x = pDate(x); return x || C.asper; };
+    var grades = chosen().filter(function (g) { return S.data.tanks[g].some(function (r) { return !blankRow(r); }); });
+    var asper = grades.map(function (g) { return [gradeInfo(g).name || gradeInfo(g).short, C.asper]; });
+    return { title: cfg.title,
+      boxes: [['Place of ' + cfg.event + ':', box(cfg.boxes.place)], ['Date of ' + cfg.event + ':', box(cfg.boxes.date)], ['Time of ' + cfg.event + ':', box(cfg.boxes.time)]],
+      completed: [pDate(val('completed_date')), val('completed_time') ? val('completed_time') + '  Hrs LT' : ''],
+      paras: [fill(cfg.certify), fill(cfg.survey)],
+      qty: grades.map(function (g) { var t = gradeTotals(g).mt; return [gradeInfo(g).name || gradeInfo(g).short, t == null || isNaN(t) ? '—' : (+t).toFixed(3), 'M. Tons']; }),
+      consumption: fill(cfg.consumption), onboard: fill(cfg.onboard), asper: asper, remark: fill(cfg.remark), without_prejudice: fill(cfg.without_prejudice),
+      sign_left: cfg.sign_left.map(fill), sign_right: cfg.sign_right.map(fill), master: 'Capt. ' + up('master'), chief: 'Mr. ' + up('chief_engineer'),
+      surveyor_title: cfg.surveyor_title, surveyor: 'Mr. ' + up('surveyor_name') };
+  }
+  /** The certificate page drawn with jsPDF (as srCertHtml() on the server). */
+  function drawCert(doc, m, logo, banner) {
+    var W = 210, L = 10, CW = 190, PT = 0.3528, FS = 9.4, LH = 1.34, y = lhDraw(doc, logo, banner, 1);
+    var base = { font: 'helvetica', fontSize: FS, textColor: 0, lineColor: 0, lineWidth: 0, valign: 'middle', cellPadding: { top: 0.8, bottom: 0.8, left: 2.2, right: 2.2 } };
+    doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(13.5); y += 2.5 + 13.5 * PT * 0.85;
+    doc.text(m.title, W / 2, y, { align: 'center' }); var tw = doc.getTextWidth(m.title); doc.setDrawColor(0); doc.setLineWidth(0.25); doc.line((W - tw) / 2, y + 0.9, (W + tw) / 2, y + 0.9); y += 5;
+    doc.autoTable({ startY: y, margin: { left: L }, tableWidth: CW * 0.6, theme: 'plain', styles: Object.assign({}, base, { lineWidth: 0.7 * PT, halign: 'center' }), columnStyles: { 0: { cellWidth: CW * 0.6 * 0.45 } }, body: m.boxes });
+    y = doc.lastAutoTable.finalY + 2.5;
+    doc.autoTable({ startY: y, margin: { left: L }, tableWidth: CW, theme: 'plain', styles: Object.assign({}, base, { lineWidth: 0.9 * PT, fontStyle: 'bold', cellPadding: { top: 1.1, bottom: 1.1, left: 2.2, right: 2.2 } }),
+      columnStyles: { 0: { cellWidth: CW * 0.36 }, 1: { cellWidth: CW * 0.32, halign: 'center' } }, body: [['Date / Time of Survey Completed:', m.completed[0], m.completed[1]]] });
+    y = doc.lastAutoTable.finalY + 3.2;
+    var para = function (t, style) {
+      doc.setFont('helvetica', style || 'normal'); doc.setFontSize(FS); doc.setTextColor(style === 'italic' ? 31 : 0, style === 'italic' ? 41 : 0, style === 'italic' ? 55 : 0);
+      var lines = doc.splitTextToSize(t, CW); y += FS * PT * 0.8;
+      if (lines.length > 1) doc.text(t, L, y, { align: 'justify', maxWidth: CW, lineHeightFactor: LH }); else doc.text(t, L, y);
+      y += (lines.length - 1) * FS * PT * LH + 2.6; doc.setTextColor(0);
+    };
+    var list = function (rows, bold) {
+      doc.autoTable({ startY: y - 0.6, margin: { left: L + CW * 0.12 }, tableWidth: 'wrap', theme: 'plain', styles: Object.assign({}, base, { cellPadding: { top: 0.55, bottom: 0.55, left: 2.8, right: 2.8 } }), body: rows,
+        columnStyles: { 0: { halign: 'right', minCellWidth: 52 }, 1: bold ? { halign: 'right', fontStyle: 'bold', minCellWidth: 24 } : {}, 2: { cellPadding: { left: 5, top: 0.55, bottom: 0.55 } } } });
+      y = doc.lastAutoTable.finalY + 2.6;
+    };
+    m.paras.forEach(function (t) { para(t); });
+    list(m.qty, true);
+    para(m.consumption); list(m.asper);
+    para(m.onboard); list(m.asper);
+    // REMARK: bold label, the text after it
+    doc.setFontSize(FS); doc.setFont('helvetica', 'normal'); var rl = doc.splitTextToSize('REMARK: ' + m.remark, CW); y += FS * PT * 0.8;
+    doc.setFont('helvetica', 'bold'); doc.text('REMARK:', L, y); var bw = doc.getTextWidth('REMARK: ');
+    doc.setFont('helvetica', 'normal'); doc.text(rl[0].slice(8), L + bw, y); rl.slice(1).forEach(function (t, i) { doc.text(t, L, y + (i + 1) * FS * PT * LH); });
+    y += (rl.length - 1) * FS * PT * LH + 2.6;
+    if (m.without_prejudice) para(m.without_prejudice, 'italic');
+    // signatures: Owners' side (Master, Chief Engineer) left, the surveyor right
+    y += 2;
+    var colW = CW * 0.46, xs = [L, L + CW * 0.54], sy = [y, y];
+    var head = function (c, lines) { doc.setFont('helvetica', 'normal'); doc.setFontSize(FS); lines.forEach(function (t, i) { doc.text(t, xs[c], sy[c] + FS * PT * (0.8 + i * 1.4)); }); sy[c] += FS * PT * (0.8 + (lines.length - 1) * 1.4) + 1; };
+    var sig = function (c, title, names) {
+      sy[c] += 40 * PT; doc.setDrawColor(0); doc.setLineWidth(0.8 * PT); doc.line(xs[c], sy[c], xs[c] + colW, sy[c]);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(FS); [title].concat(names).forEach(function (t, i) { doc.text(t, xs[c], sy[c] + 1 + FS * PT * (0.85 + i * 1.3)); });
+      sy[c] += 1 + FS * PT * (0.85 + names.length * 1.3) + 1;
+    };
+    head(0, m.sign_left); sig(0, 'The Master', [m.master]); sig(0, 'The Chief Engineer', [m.chief]);
+    head(1, m.sign_right); sig(1, m.surveyor_title, ['For YMR MARINE SOLUTIONS LLP', m.surveyor]);
+  }
+  /** The report drawn at print scale k (1 = full size; text and spacing shrink, the letterhead keeps its size). */
+  function ymrPdf(k, logo, banner, cm) {
+    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, L = 10, CW = W - 20, PT = 0.3528, BOT = 286, pages = cm ? 2 : 1;
+    if (cm) { drawCert(doc, cm, logo, banner); doc.addPage(); } // the certificate of the survey type, then the tank report
+    var f = function (pt) { return pt * k; }, mm = function (pt) { return pt * k * PT; }, lw = Math.max(0.5 * k, 0.3) * PT;
+    var up = function (key) { return val(key).toUpperCase(); }, y = 7;
+    doc.setLineHeightFactor(1.15);
+    y = lhDraw(doc, logo, banner, k);
     // vessel name and IMO
     var vessel = (val('vessel_name') || S.report.vessel || '').toUpperCase() || 'BUNKER SURVEY REPORT';
     doc.setFont('helvetica', 'bold'); doc.setFontSize(f(18.5)); doc.setTextColor(11, 60, 122); y += mm(18.5) * 0.85;
@@ -1703,9 +1805,9 @@
       doc.setPage(pg); doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.18); doc.line(L, 289, W - L, 289);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139);
       doc.text(vessel + ' · Generated by YMR Marine YSMS on ' + stamp + ' (offline)', L, 292);
-      if (doc.getNumberOfPages() > 1) doc.text('Page ' + pg + ' of ' + doc.getNumberOfPages(), W - L, 292, { align: 'right' });
+      if (doc.getNumberOfPages() > pages) doc.text('Page ' + pg + ' of ' + doc.getNumberOfPages(), W - L, 292, { align: 'right' });
     }
-    return { doc: doc, fits: doc.getNumberOfPages() === 1 && y <= BOT };
+    return { doc: doc, fits: doc.getNumberOfPages() === pages && y <= BOT };
   }
   function offlinePdf() {
     if (!window.jspdf || !window.jspdf.jsPDF) { Swal.fire({ icon: 'error', title: 'Not available', text: 'The PDF tools are not on this device yet — open the report once while online.' }); return; }
@@ -1713,7 +1815,8 @@
     if (all.length) { Swal.fire({ icon: 'warning', title: 'Please complete the report first', html: '<ul class="sr-swal-list">' + all.slice(0, 8).map(function (x) { return '<li>' + esc(x.msg) + '</li>'; }).join('') + '</ul>' }); return; }
     Promise.all([imgPng(LOGO, 2800), imgPng(BANNER)]).then(function (im) {
       var out = null;
-      [1, 0.9, 0.8, 0.72, 0.65, 0.58, 0.52, 0.46, 0.41, 0.36, 0.32].some(function (k) { out = ymrPdf(k, im[0], im[1]); return out.fits; }); // the whole report on one page
+      var cm = certModel();
+      [1, 0.9, 0.8, 0.72, 0.65, 0.58, 0.52, 0.46, 0.41, 0.36, 0.32].some(function (k) { out = ymrPdf(k, im[0], im[1], cm); return out.fits; }); // the certificate, then the whole tank report on one page
       var vessel = val('vessel_name') || S.report.vessel || 'SURVEY';
       var name = (vessel + ' - ' + (S.report.kind_label || 'SURVEY') + ' REPORT').toUpperCase().replace(/[^A-Z0-9 .\-]+/g, '').trim() + '.pdf';
       out.doc.save(name);

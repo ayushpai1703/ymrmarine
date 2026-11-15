@@ -10,6 +10,7 @@
  */
 require_once __DIR__ . '/report_templates.php';
 require_once __DIR__ . '/gemini_json.php';
+require_once __DIR__ . '/survey_certificates.php';
 
 function srRole(): string { return (string)($_SESSION['role'] ?? ''); }
 function srCanUse(): bool { return in_array(srRole(), ['Admin', 'Super Admin', 'Surveyor'], true); }
@@ -86,7 +87,9 @@ function srEditorConfig(array $tpl): array {
         'grades' => array_map(fn($g, $d) => ['key' => $g] + $d, array_keys(srGradeList($eff)), srGradeList($eff)),
         'extra_fields' => array_map(fn($k, $d) => ['key' => $k, 'label' => $d[0], 'type' => $d[1]], array_keys(srExtraFieldDefs()), srExtraFieldDefs()),
         'vessel_keys' => array_values(array_filter(SR_VESSEL_KEYS, fn($k) => isset($eff['fields'][$k]))),
-        'survey_required' => SR_SURVEY_REQUIRED];
+        'survey_required' => SR_SURVEY_REQUIRED,
+        // certificate wording of each survey type (the page draws the certificate offline from it)
+        'cert' => ['types' => srCertTypes(), 'choices' => srCertChoices(), 'by_kind' => SR_CERT_BY_KIND, 'asper' => SR_CERT_ASPER]];
 }
 
 /** File name in the company's style: "MV. PROTECTOR - OFFHIRE - FIELD REPORT". */
@@ -301,6 +304,7 @@ const SR_SURVEY_REQUIRED = ['owners', 'charterers', 'fwe_date', 'fwe_time', 'sta
 function srExtraFieldDefs(): array {
     return [
         'port_name' => ['Port Name', 'text'],
+        'survey_type' => ['Survey Type', 'text'], // certificate wording: one of srCertChoices() (includes/survey_certificates.php)
         'brob_fwe_ulsfo' => ['FWE ROB — ULSFO (MT)', 'num:3'], 'brob_fwe_hsmgo' => ['FWE ROB — HSMGO (MT)', 'num:3'],
         'brob_started_ulsfo' => ['Survey started ROB — ULSFO (MT)', 'num:3'], 'brob_started_hsmgo' => ['Survey started ROB — HSMGO (MT)', 'num:3'],
     ];
@@ -335,6 +339,7 @@ function srCleanExtra(array $eff, array $in, array &$store, array &$errors): voi
         $raw = (string)($in['extra'][$k] ?? '');
         [$v, $err] = sfValidate($type, $raw);
         if ($err === '' && $v !== '' && strpos($k, 'brob_') === 0) $err = sfRangeError('brob', $v);
+        if ($k === 'survey_type' && !isset(srCertChoices()[$v])) { $v = ''; $err = ''; } // only a known type is kept
         if ($err !== '') { $errors['f:' . $k] = $err; $v = mb_substr(trim($raw), 0, 200); }
         $store['extra'][$k] = $v;
     }
