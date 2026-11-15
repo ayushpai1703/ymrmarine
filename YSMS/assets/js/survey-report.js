@@ -756,7 +756,8 @@
   function tankLogHtml() {
     if (!S.isAdmin) return '';
     if (S.tankLog === null) { loadTankLog(); return '<section class="sr-card" data-testid="sr-tank-log"><h3><i class="fa-solid fa-clock-rotate-left"></i> Tank history</h3><span class="sr-muted">Loading…</span></section>'; }
-    var T = S.tankLog, edits = 0;
+    // only the tanks changed after their first save (a tank still at v1 is not listed), with every version
+    var T = S.tankLog.filter(function (t) { return t.versions.length > 1; }), edits = 0;
     T.forEach(function (t) { edits += t.versions.length - 1; });
     return '<section class="sr-card" data-testid="sr-tank-log"><h3><i class="fa-solid fa-clock-rotate-left"></i> Tank history <small class="sr-muted">Admin only · ' + edits + ' change' + (edits === 1 ? '' : 's') + ' after the first save</small></h3>' +
       (T.length ? '<div class="sr-cmp-wrap"><table class="sr-t sr-log"><thead><tr><th>Tank</th><th>Version</th>' + HCOLS.map(function (c) { return '<th>' + c[1] + '</th>'; }).join('') + '<th>By</th><th>When</th></tr></thead><tbody>' + T.map(function (t) {
@@ -766,7 +767,7 @@
             HCOLS.map(function (c) { return '<td' + (v.changed.indexOf(c[0]) >= 0 ? ' class="chg"' : '') + '>' + esc(v.values[c[0]] == null ? '—' : v.values[c[0]]) + '</td>'; }).join('') +
             '<td>' + esc(v.by || '') + '</td><td>' + esc(String(v.at).slice(0, 16)) + '</td></tr>';
         }).join('');
-      }).join('') + '</tbody></table></div>' : '<span class="sr-muted">No tank has been saved yet.</span>') + '</section>';
+      }).join('') + '</tbody></table></div>' : '<span class="sr-muted" data-testid="sr-hist-none">No tank has been changed after its first save.</span>') + '</section>';
   }
   function loadTankLog() {
     if (S.tankLogLoading) return; S.tankLogLoading = true;
@@ -1572,6 +1573,12 @@
         document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 4000);
         toast('success', (type === 'pdf' ? 'PDF' : 'Excel') + ' report downloaded');
       }
+      // the Admin also gets the Excel made with it (a user only the PDF)
+      var xid = S.isAdmin && type === 'pdf' && res.new_files && res.new_files.xlsx;
+      if (xid) setTimeout(function () {
+        var x = document.createElement('a'); x.href = fileUrl(xid); x.setAttribute('download', ''); x.setAttribute('data-testid', 'sr-dl-xlsx');
+        document.body.appendChild(x); x.click(); setTimeout(function () { x.remove(); }, 4000);
+      }, 900);
     });
   }
   // ---------- the report made on this device (no internet) ----------
