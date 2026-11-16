@@ -26,13 +26,21 @@ import 'package:ysms_app/screens/templates.dart';
 import 'package:ysms_app/screens/users.dart';
 import 'package:ysms_app/screens/vessel.dart';
 import 'package:ysms_app/screens/vessel_tools.dart';
+import 'package:ysms_app/sr/sr_api.dart';
+import 'package:ysms_app/sr/sr_editor.dart';
+import 'package:ysms_app/sr/sr_home.dart';
+import 'package:ysms_app/sr/sr_store.dart';
 import 'package:ysms_app/ui.dart';
+
+import 'sr_model_test.dart' show starter;
 
 /// app_api.php?a=… → JSON; other pages → [pages] (POSTs are recorded with their fields).
 class Fake implements HttpClientAdapter {
   final api = <String, Object>{};
   final pages = <String, String>{};
   final chat = <String, Object>{};
+  final sr = <String, Object>{};
+  bool offline = false;
   final calls = <String>[];
   final posts = <Map<String, dynamic>>[];
 
@@ -46,6 +54,7 @@ class Fake implements HttpClientAdapter {
 
   @override
   Future<ResponseBody> fetch(RequestOptions o, Stream<Uint8List>? body, Future<void>? cancel) async {
+    if (offline) throw DioException(requestOptions: o, type: DioExceptionType.connectionError);
     final path = o.uri.path.split('/').last;
     final a = o.uri.queryParameters['a'] ?? '';
     calls.add('${o.method} $path${a.isEmpty ? '' : '?a=$a'}');
@@ -56,6 +65,12 @@ class Fake implements HttpClientAdapter {
         if (d is Map) ...d.map((k, v) => MapEntry('$k', v)),
         if (d is FormData) ...{for (final f in d.fields) f.key: f.value},
       });
+    }
+    if (path == 'survey_report_public.php' && o.uri.path.contains('ajax/')) {
+      final act = a.isNotEmpty ? a : s(posts.isEmpty ? null : posts.last['a']);
+      calls.add('sr $act');
+      final r = sr[act];
+      return r == null ? _json({'ok': false, 'error': 'Not found.'}, 404) : _json(r);
     }
     if (path == 'team_chat.php') {
       final act = o.uri.queryParameters['action'] ?? s(posts.isEmpty ? null : posts.last['action']);
@@ -1195,6 +1210,154 @@ void main() {
     expect(nativePage('generate_permission_copy.php'), isA<PermissionCopyScreen>());
     expect(nativePage('coming_soon.php?feature=Support'), isA<ComingSoonScreen>());
     expect(nativePage('report_generator.php?id=3'), isNull);
+  });
+
+  group('Survey report', () {
+    setUp(() {
+      SrStore.memoryOnly = true;
+      SrStore.i.clearMemory();
+      SrApi.i.reset();
+      server.sr['token'] = {'ok': true, 'csrf': 'srtok'};
+    });
+
+    Map<String, dynamic> got(String token) {
+      final s = starter();
+      (s['report'] as Map)['id'] = token;
+      (s['report'] as Map)['version'] = 1;
+      return s;
+    }
+
+    testWidgets('home: report types, a new report opens the editor', (t) async {
+      await t.binding.setSurfaceSize(const Size(400, 2000));
+      server.sr['starter'] = starter();
+      server.sr['new'] = {'ok': true, 'token': 'a' * 64};
+      server.sr['get'] = got('a' * 64);
+      server.sr['version'] = {'ok': true, 'version': 1};
+      await t.pumpWidget(app(const SrHomeScreen()));
+      await settle(t);
+      expect(find.byKey(const ValueKey('srh-new-offhire')), findsOneWidget);
+      expect(find.byKey(const ValueKey('srh-new-onhire3')), findsOneWidget);
+      await t.tap(find.byKey(const ValueKey('srh-new-offhire')));
+      await settle(t);
+      expect(server.posts.where((p) => p['a'] == 'new').single['kind'], 'offhire');
+      expect(server.posts.where((p) => p['a'] == 'new').single['csrf_token'], 'srtok');
+      expect(find.byKey(const ValueKey('sr-step-title')), findsOneWidget);
+      expect(find.text('Vessel Details'), findsWidgets);
+      await t.pageBack();
+      await settle(t);
+      expect(find.byKey(ValueKey('srh-mine-${'a' * 64}')), findsOneWidget);
+      await t.pumpWidget(const SizedBox());
+      await settle(t);
+    });
+
+    testWidgets('home offline: a report starts on this phone (not sent yet)', (t) async {
+      await SrStore.i.write('starter_offhire', starter());
+      server.offline = true;
+      await t.pumpWidget(app(const SrHomeScreen()));
+      await settle(t);
+      expect(find.byKey(const ValueKey('srh-new-offhire')), findsOneWidget);
+      expect(find.byKey(const ValueKey('srh-new-rob')), findsNothing);
+    });
+
+    testWidgets('editor: Next checks the step, tanks calculate as typed, S / U, save', (t) async {
+      await t.binding.setSurfaceSize(const Size(400, 2600));
+      final token = 'b' * 64;
+      server.sr['get'] = got(token);
+      server.sr['save'] = {'ok': true, 'version': 2, 'errors': {}};
+      server.sr['version'] = {'ok': true, 'version': 1};
+      server.sr['verify'] = {
+        'ok': true,
+        'results': {
+          'grades': {
+            'vlsfo': {'completed': 93.865},
+          },
+        },
+      };
+      await t.pumpWidget(app(SrEditorScreen(id: token)));
+      await settle(t);
+      await t.tap(find.byKey(const ValueKey('sr-next')));
+      await settle(t);
+      expect(find.text('Please complete this step'), findsOneWidget);
+      expect(find.textContaining('IMO Number is missing.'), findsOneWidget);
+      await t.tap(find.text('OK'));
+      await settle(t);
+      await t.enterText(find.byKey(const ValueKey('sr-f-imo')), '9074728');
+      await settle(t);
+      expect(find.text('IMO check digit does not match — please re-check the number.'), findsOneWidget);
+      await t.enterText(find.byKey(const ValueKey('sr-f-imo')), '9074729');
+      await t.tap(find.byKey(const ValueKey('sr-manual')));
+      await settle(t);
+      await t.enterText(find.byKey(const ValueKey('sr-f-vessel_name')), 'mv blue');
+      await settle(t);
+      await t.tap(find.byKey(const ValueKey('sr-next')));
+      await settle(t);
+      expect(find.text('Survey Details'), findsWidgets);
+      final saved = server.posts.where((p) => p['a'] == 'save').toList();
+      expect(saved, isNotEmpty);
+      expect(jsonDecode('${saved.last['data']}')['fields']['vessel_name'], 'mv blue');
+      expect(saved.first['version'], '1');
+      // Tank Details from the step bar is closed until Survey Details is complete
+      await t.scrollUntilVisible(
+        find.byKey(const ValueKey('sr-step-tanks')),
+        120,
+        scrollable: find.descendant(of: find.byKey(const ValueKey('sr-steps')), matching: find.byType(Scrollable)),
+      );
+      await t.tap(find.byKey(const ValueKey('sr-step-tanks')));
+      await settle(t);
+      expect(find.text('Survey Details'), findsWidgets);
+      // the step list: back to step 1
+      await t.tap(find.byKey(const ValueKey('sr-back')));
+      await settle(t);
+      expect(find.byKey(const ValueKey('sr-f-imo')), findsOneWidget);
+      await t.pumpWidget(const SizedBox());
+      await settle(t);
+    });
+
+    testWidgets('tanks: the usual tanks, MT as typed, U works out the sounding', (t) async {
+      await t.binding.setSurfaceSize(const Size(400, 3000));
+      final token = 'c' * 64;
+      final g = got(token);
+      (((g['report'] as Map)['data']) as Map)['step'] = 'tanks';
+      server.sr['get'] = g;
+      server.sr['save'] = {'ok': true, 'version': 2, 'errors': {}};
+      server.sr['version'] = {'ok': true, 'version': 1};
+      await t.pumpWidget(app(SrEditorScreen(id: token)));
+      await settle(t);
+      expect(find.text('VLSFO Tanks (11)'), findsOneWidget);
+      // the first tank still to complete is open
+      await t.enterText(find.byKey(const ValueKey('sr-t-vlsfo-0-volume')), '100');
+      await t.enterText(find.byKey(const ValueKey('sr-t-vlsfo-0-density')), '0.95');
+      await t.enterText(find.byKey(const ValueKey('sr-t-vlsfo-0-temp')), '30');
+      await settle(t);
+      expect(find.text('93.865'), findsWidgets); // the website's result for these readings
+      await t.enterText(find.byKey(const ValueKey('sr-t-vlsfo-0-ref_height')), '12');
+      await t.enterText(find.byKey(const ValueKey('sr-t-vlsfo-0-sounding')), '2.5');
+      await settle(t);
+      await t.tap(find.byKey(const ValueKey('sr-su-vlsfo-0-u')));
+      await settle(t);
+      expect(find.byKey(const ValueKey('sr-t-vlsfo-0-ullage')), findsOneWidget);
+      await t.enterText(find.byKey(const ValueKey('sr-t-vlsfo-0-ullage')), '10.000');
+      await settle(t);
+      expect(find.text('Sounding 2.000'), findsOneWidget);
+      await t.tap(find.byKey(const ValueKey('sr-save-tank-vlsfo-0')));
+      await settle(t);
+      expect(find.text('Saved'), findsWidgets);
+      final last = jsonDecode('${server.posts.where((p) => p['a'] == 'save').last['data']}');
+      final row = (last['tanks']['vlsfo'] as List).first as Map;
+      expect(row['mode'], 'ullage');
+      expect(row['su'], 'u');
+      expect(row['sounding'], '2.000');
+      expect(row['temp'], '30.0');
+      expect(row['density'], '0.9500');
+      expect(row['done'], '1');
+      // move the second tank up: the report keeps this order
+      await t.tap(find.byKey(const ValueKey('sr-up-vlsfo-1')));
+      await settle(t);
+      final moved = jsonDecode('${server.posts.where((p) => p['a'] == 'save').last['data']}');
+      expect(((moved['tanks']['vlsfo'] as List).first as Map)['name'], '1S');
+      await t.pumpWidget(const SizedBox());
+      await settle(t);
+    });
   });
 
   test('routes with a Flutter screen', () {

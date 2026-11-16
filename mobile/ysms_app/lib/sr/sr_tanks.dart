@@ -596,12 +596,27 @@ class _SrTanksState extends State<SrTanks> {
                 'Tanks: ${all.n}',
                 style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
               ),
-              const Spacer(),
-              const Text('Total MT  ', style: TextStyle(color: Colors.white70)),
-              Text(
-                '${f3c(all.mt)} MT',
-                key: const ValueKey('sr-tot-mt'),
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text.rich(
+                    key: const ValueKey('sr-tot-mt'),
+                    TextSpan(
+                      children: [
+                        const TextSpan(
+                          text: 'Total MT  ',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                        TextSpan(
+                          text: '${f3c(all.mt)} MT',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ],
           ),

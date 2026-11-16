@@ -898,19 +898,29 @@ class _SrEditorScreenState extends State<SrEditorScreen> {
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
           child: Row(
             children: [
-              OutlinedButton.icon(
+              OutlinedButton(
                 key: const ValueKey('sr-back'),
                 onPressed: i > 0 ? () => _go(srSteps[i - 1].$1) : null,
-                icon: const Icon(Icons.chevron_left_rounded),
-                label: const Text('Previous'),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [Icon(Icons.chevron_left_rounded), Text('Previous')],
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 10),
               if (i < srSteps.length - 1)
-                FilledButton.icon(
-                  key: const ValueKey('sr-next'),
-                  onPressed: _next,
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                  label: Text('Next: ${srSteps[i + 1].$2}'),
+                Expanded(
+                  child: FilledButton(
+                    key: const ValueKey('sr-next'),
+                    onPressed: _next,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(child: Text('Next: ${srSteps[i + 1].$2}', overflow: TextOverflow.ellipsis)),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.arrow_forward_rounded, size: 18),
+                      ],
+                    ),
+                  ),
                 ),
             ],
           ),
