@@ -27,6 +27,8 @@ class _SrEditorScreenState extends State<SrEditorScreen> {
   late final SrSession s = widget.session ?? SrSession(widget.id, onConflict: _askConflict);
   final _boxes = SrBoxes();
   final _scroll = ScrollController();
+  final _stepKeys = [for (final _ in srSteps) GlobalKey()];
+  String _shownStep = '';
   final _showErr = <String>{};
   final _ai = <String>{};
   bool _manual = false, _looking = false, _making = false;
@@ -815,6 +817,16 @@ class _SrEditorScreenState extends State<SrEditorScreen> {
     }
     final i = _stepIndex;
     final st = srSteps[i];
+    if (_shownStep != st.$1) {
+      // the step bar shows the current step
+      _shownStep = st.$1;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final c = _stepKeys[i].currentContext;
+        if (c != null && c.mounted) {
+          Scrollable.ensureVisible(c, alignment: .5, duration: const Duration(milliseconds: 250));
+        }
+      });
+    }
     final saveColor = s.saveState == 'Saved' ? green : (s.saveState.startsWith('Save failed') ? red : orange);
     final body = switch (st.$1) {
       'vessel' => _vessel(),
@@ -861,6 +873,7 @@ class _SrEditorScreenState extends State<SrEditorScreen> {
                 for (var j = 0; j < srSteps.length; j++)
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
+                    key: _stepKeys[j],
                     child: ChoiceChip(
                       key: ValueKey('sr-step-${srSteps[j].$1}'),
                       selected: j == i,
@@ -868,7 +881,11 @@ class _SrEditorScreenState extends State<SrEditorScreen> {
                           ? const Icon(Icons.check_circle_rounded, color: green, size: 18)
                           : null,
                       label: Text('${j + 1}. ${srSteps[j].$2}'),
-                      onSelected: j == i || (!_reachable(j) && j > i) ? null : (_) => _go(srSteps[j].$1),
+                      onSelected: !_reachable(j) && j > i
+                          ? null
+                          : (_) {
+                              if (j != i) _go(srSteps[j].$1);
+                            },
                     ),
                   ),
               ],
