@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import 'api.dart';
 import 'bio.dart';
+import 'config.dart';
 import 'screens/activity.dart';
 import 'screens/assign.dart';
 import 'screens/chat.dart';
@@ -30,6 +31,8 @@ import 'screens/upload.dart';
 import 'screens/users.dart';
 import 'screens/vessel.dart';
 import 'screens/web.dart';
+import 'sr/sr_editor.dart';
+import 'sr/sr_home.dart';
 import 'ui.dart';
 
 final navKey = GlobalKey<NavigatorState>();
@@ -95,8 +98,15 @@ Widget? nativePage(String page) {
     'admin_daily_emails.php' => const DailyEmailsScreen(),
     'generate_permission_copy.php' => const PermissionCopyScreen(),
     'coming_soon.php' => ComingSoonScreen(feature: ComingSoonScreen.featureOf(page)),
+    // the survey report in Flutter: staging app only (the live app keeps the website's page)
+    'survey_report_public.php' when !Cfg.isLive => _srPage(page),
     _ => null,
   };
+}
+
+Widget _srPage(String page) {
+  final t = RegExp(r'[?&]t=([0-9a-f]{64})').firstMatch(page)?.group(1);
+  return t != null ? SrEditorScreen(id: t) : const SrHomeScreen();
 }
 
 /// Web app routes that have a Flutter screen (a link inside a web screen).
