@@ -119,15 +119,23 @@ void main() {
       await SrStart.kinds(); // keeps the empty forms on this phone
       final draft = SrSession.newDraftId();
       await SrStore.i.write('get_$draft', await SrStore.i.read('starter_offhire'));
-      final s = SrSession(draft);
+      Object? finalPdf = 'not called';
+      final s = SrSession(draft, onFinal: (id) => finalPdf = id);
       await s.load();
       fill(s.report!);
+      await s.markOfflinePdf(); // a PDF was made on the phone without internet
       s.changed();
       await s.flush();
       expect(s.isDraft, isFalse);
       expect(s.id, matches(RegExp(r'^[0-9a-f]{64}$')));
       expect(s.report!.val('vessel_name'), 'MV APP TEST');
       expect((await SrStore.i.index()).first['id'], s.id);
+      // back online: the server's final PDF is made by itself
+      for (var i = 0; i < 100 && finalPdf == 'not called'; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      expect(finalPdf, isA<num>());
+      expect(await SrStore.i.read('offpdf_${s.id}'), isNull);
       s.dispose();
     });
 

@@ -6,12 +6,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'dart:io';
+
 import 'package:flutter/services.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../ui.dart';
 import 'sr_calc.dart';
 import 'sr_fields.dart';
 import 'sr_model.dart';
+import 'sr_pdf.dart';
 import 'sr_session.dart';
 import 'sr_tanks.dart';
 
@@ -39,6 +45,7 @@ class _SrEditorScreenState extends State<SrEditorScreen> {
   void initState() {
     super.initState();
     s.addListener(_changed);
+    s.onFinal ??= _finalReady;
     s.load().then((_) {
       final r = s.report;
       if (r != null && r.vesselKeys.any((k) => k != 'vessel_name' && r.val(k).isNotEmpty)) _manual = true;
@@ -74,6 +81,52 @@ class _SrEditorScreenState extends State<SrEditorScreen> {
       ),
     );
     return keep ?? true;
+  }
+
+  /// Synced after a PDF made offline: the final report is ready.
+  Future<void> _finalReady(Object? id) async {
+    if (!mounted) return;
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Synced — final report ready'),
+        content: const Text('Your offline changes are saved and the final PDF was made on the YMR letterhead.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Later')),
+          if (id != null) FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Open final PDF')),
+        ],
+      ),
+    );
+    if (open == true && id != null && mounted) await downloadAndOpen(context, s.fileUrl(id), name: 'Survey report.pdf');
+  }
+
+  /// The report drawn on this phone (no internet needed); the server's final report follows when online.
+  Future<void> _offlinePdf() async {
+    final all = r.issues();
+    if (all.isNotEmpty) {
+      toast(context, 'Please complete the report first: ${all.first.msg}', bad: true);
+      return;
+    }
+    setState(() => _making = true);
+    try {
+      String? logo;
+      try {
+        logo = await rootBundle.loadString('assets/images/ymr-logo-horizontal.svg');
+      } catch (_) {}
+      final pdf = SrPdf(r, logoSvg: logo);
+      final bytes = await pdf.build();
+      final dir = await getTemporaryDirectory();
+      final f = File('${dir.path}/${pdf.fileName}');
+      await f.writeAsBytes(bytes, flush: true);
+      await s.markOfflinePdf();
+      if (!mounted) return;
+      toast(context, 'PDF saved on this phone — the final report is made when you are online', ok: true);
+      await OpenFilex.open(f.path);
+    } catch (e) {
+      if (mounted) toast(context, 'Could not make the PDF: $e', bad: true);
+    } finally {
+      if (mounted) setState(() => _making = false);
+    }
   }
 
   SrReport get r => s.report!;
@@ -767,11 +820,18 @@ class _SrEditorScreenState extends State<SrEditorScreen> {
               '; its Excel is kept in the system for the Word report.',
               style: TextStyle(fontSize: 12.5, color: mutedText(context)),
             ),
-            if (s.isDraft || s.fromCache)
-              _note(
-                'Offline: the report is made on the server — it is sent and made once this phone is online.',
-                orange,
+            if (all.isEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const ValueKey('sr-offline-pdf'),
+                  onPressed: _making ? null : _offlinePdf,
+                  icon: const Icon(Icons.airplanemode_active_rounded),
+                  label: const Text('No internet? Make the PDF on this phone'),
+                ),
               ),
+            if (s.isDraft || s.fromCache)
+              _note('Offline: the final report is made on the server once this phone is online.', orange),
           ],
         ),
         SrCard(

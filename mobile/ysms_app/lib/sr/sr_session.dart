@@ -16,12 +16,17 @@ import 'sr_store.dart';
 /// true = keep the changes made on this phone.
 typedef SrConflict = Future<bool> Function(String message);
 
+/// The final report made by itself after a PDF was made on the phone offline → its file id.
+typedef SrFinal = void Function(Object? pdfId);
+
 class SrSession extends ChangeNotifier {
-  SrSession(this.id, {this.onConflict});
+  SrSession(this.id, {this.onConflict, this.onFinal});
 
   /// The report's secret link (token), or `draft-<x>` for a report started without internet.
   String id;
   final SrConflict? onConflict;
+  SrFinal? onFinal;
+  bool _finalBusy = false;
 
   SrReport? report;
   String error = '';
@@ -120,6 +125,7 @@ class SrSession extends ChangeNotifier {
     notifyListeners();
     if (dirty) unawaited(saveNow());
     if (isDraft) unawaited(saveNow());
+    if (!fromCache && !isDraft) unawaited(finalAfterOffline());
     _live?.cancel();
     _live = Timer.periodic(const Duration(seconds: 8), (_) => _livePoll());
   }
@@ -260,7 +266,9 @@ class SrSession extends ChangeNotifier {
       final step = '${r.data['step']}';
       final old = id;
       await SrStore.i.write('step_$token', step);
-      for (final k in ['drafttoken_$old', 'local_$old', 'get_$old', 'step_$old']) {
+      final off = await SrStore.i.read('offpdf_$old');
+      if (off != null) await SrStore.i.write('offpdf_$token', off);
+      for (final k in ['drafttoken_$old', 'local_$old', 'get_$old', 'step_$old', 'offpdf_$old']) {
         await SrStore.i.write(k, null);
       }
       await SrStore.i.rename(old, token);
@@ -338,6 +346,28 @@ class SrSession extends ChangeNotifier {
       notifyListeners();
     }
     return res;
+  }
+
+  /// A PDF was made on this phone offline: the server's final report is made when the connection is back.
+  Future<void> markOfflinePdf() => SrStore.i.write('offpdf_$id', {'at': DateTime.now().millisecondsSinceEpoch});
+
+  /// Back online after a PDF made offline: save, then make the final PDF (and the Excel kept in the system).
+  Future<void> finalAfterOffline() async {
+    if (_finalBusy || isDraft || closed) return;
+    final f = await SrStore.i.read('offpdf_$id');
+    final r = report;
+    if (f == null || r == null || !r.canEdit) return;
+    _finalBusy = true;
+    try {
+      await flush();
+      if (dirty || isDraft || r.issues().isNotEmpty) return;
+      final res = await generate();
+      if (res['ok'] != true) return;
+      await SrStore.i.write('offpdf_$id', null);
+      onFinal?.call((res['new_files'] as Map?)?['pdf']);
+    } finally {
+      _finalBusy = false;
+    }
   }
 
   /// The vessel particulars of an IMO (the server's lookup).

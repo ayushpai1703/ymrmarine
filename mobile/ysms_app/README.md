@@ -15,7 +15,14 @@ Made in Flutter: login (fingerprint login too), forgot password, home dashboard,
 Pending Reports / Completed / Cancelled lists, search, vessel details (latest update, documents and
 replace, recovery edit, remarks, agent email, share, history), upload, profile and My profile, team chat,
 inbox, recovery, formats, assign / edit vessel, manage templates, add client / admin / surveyor, admin
-controls (master data, duplicates, login activity, data cleanup).
+controls (master data, duplicates, login activity, data cleanup), surveyor cards, daily emails, permission
+copy.
+
+Survey Report (staging app only for now, `lib/sr/`): the website's survey report editor in Flutter — report
+types, vessel lookup by IMO, survey details, tank cards with S / U and the Table 54B results (the same
+numbers as the website), the ROB comparison checked on the server, the PDF made on the server. It works
+without internet: reports are kept on the phone and sent when online, a report can be started offline,
+and a PDF can be made on the phone (the final one is made by the server once the connection is back).
 
 The report generators (Word, photo, invoice, survey reports) open the website's own pages inside the
 app (`lib/screens/web.dart`), signed in with the same cookies.
