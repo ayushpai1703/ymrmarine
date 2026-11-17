@@ -46,13 +46,6 @@ function mdAppointmentCount(PDO $db, string $from, string $to): int {
     return (int)$q->fetchColumn();
 }
 
-/** Completed vessels (Completed page) with their Survey Completed Date in [$from, $to): a count. */
-function mdCompletedVesselCount(PDO $db, string $from, string $to): int {
-    $q = $db->prepare("SELECT COUNT(*) FROM surveys s WHERE s.status = 'Completed' AND " . surveyCompletedDateSql('s') . ' >= ? AND ' . surveyCompletedDateSql('s') . ' < ?');
-    $q->execute([$from, $to]);
-    return (int)$q->fetchColumn();
-}
-
 function mdTab(array $g): string {
     $t = (string)($g['tab'] ?? '');
     return isset(MD_TABS[$t]) ? $t : 'appointments';
