@@ -918,8 +918,6 @@ include 'includes/header.php';
                                 <td style="color:#94a3b8;font-weight:600;" data-row-num><?= $i + 1 ?></td>
                                 <td>
                                     <div class="vd-vessel-cell">
-                                        <?php [$viK, $viSrc, $viSt] = $viImg($vessel_name); ?>
-                                        <div class="vd-vessel-icon vd-vessel-photo<?= $viSt === 'found' ? ' real' : '' ?>"><img src="<?= sanitize($viSrc) ?>" alt="" width="44" height="36" data-vimg="<?= sanitize($viK) ?>" data-vimg-st="<?= sanitize($viSt) ?>" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')" data-testid="pending-vessel-desk-photo-<?= (int)$survey['id'] ?>"></div>
                                         <div style="min-width:0;">
                                             <a class="vd-vessel vd-big" href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><?= sanitize($vessel_name) ?></a>
                                         </div>
@@ -927,7 +925,6 @@ include 'includes/header.php';
                                 </td>
                                 <td>
                                     <div class="vd-port-cell">
-                                        <div class="vd-port-icon"><i class="fa-solid fa-location-dot"></i></div>
                                         <span class="vd-caps"><?= sanitize(mb_strtoupper((string)($survey['port_name'] ?? 'N/A'))) ?></span>
                                     </div>
                                 </td>
