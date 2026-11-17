@@ -161,7 +161,7 @@
   function cell(k, d) {
     switch (k) {
       case 'invoice_no': return (d.invoice_no ? '<span class="inv-no" data-testid="inv-no-' + d.id + '">' + esc(d.invoice_no) + '</span>' : muted('Not generated')) +
-        (d.has_rec ? '<span class="at-kind" title="Recovery invoice ' + esc(d.invoice_no) + 'B">+ Recovery</span>' : '') +
+        (d.has_rec || d.has_rec_entry ? '<span class="at-kind" title="Recovery invoice ' + esc(d.rec_no || '') + '">+ Recovery</span>' : '') +
         (d.recovery_pending ? '<span class="at-pend" data-testid="inv-rec-pending-' + d.id + '">Recovery pending</span>' : '');
       case 'status': return statusCell(d);
       case 'actions': return actionsCell(d);
@@ -508,7 +508,8 @@
       kv('Vessel', d.vessel ? '<b>' + esc(d.vessel) + '</b>' : muted()) + kv('Client', d.client ? esc(d.client) : muted()) + kv('Survey Type', d.type ? '<span class="at-tag">' + esc(d.type) + '</span>' : muted()) +
       kv('Port', d.port ? esc(d.port) : muted()) + kv('Report No', d.report_no ? esc(d.report_no) : muted()) + kv('Survey Completed', d.survey_completed_ymd ? fdate(d.survey_completed_ymd) : muted()) + '</div></div>';
     h += '<div class="at-sec"><div class="at-sec-h">Invoice</div><div class="at-kv">' +
-      kv('Invoice Number', d.invoice_no ? '<b>' + esc(d.invoice_no) + '</b>' + (d.has_rec ? ' <span class="at-kind">+ Recovery ' + esc(d.invoice_no) + 'B</span>' : '') : muted('Assigned on the first download')) +
+      kv('Invoice Number', d.invoice_no ? '<b>' + esc(d.invoice_no) + '</b>' + (d.has_rec || d.has_rec_entry ? ' <span class="at-kind">+ Recovery ' + esc(d.rec_no || '') + '</span>' : '') : muted('Assigned on the first download')) +
+      (d.has_rec_entry ? kv('Recovery Invoice', '<b>' + esc(d.rec_no || '—') + '</b>' + (d.rec_date ? ' · ' + fdate(d.rec_date) : '') + (d.rec_amount !== '' && d.rec_amount != null ? ' · ' + usd(+d.rec_amount) : '')) : '') +
       kv('Invoice Date', d.invoice_date ? fdate(d.invoice_date) : muted()) + kv('Invoice Amount', d.amount === null || d.amount === undefined ? muted() : usd(d.amount)) +
       kv('Notes', d.invoice_notes ? esc(d.invoice_notes) : muted()) +
       kv('Status', S.view === 'completed' ? '<span class="at-pill done">Completed</span>' : statusCell(d).replace('data-testid="inv-status-' + d.id + '"', 'data-testid="inv-p-status"').replace('data-testid="inv-update-' + d.id + '"', 'data-testid="inv-p-update"')) +

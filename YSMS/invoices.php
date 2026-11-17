@@ -218,6 +218,19 @@ include 'includes/header.php';
         <div class="ivf-sec"><div class="ivf-sec-h"><i class="fa-solid fa-paperclip"></i> Invoice document <span style="font-weight:500;text-transform:none;letter-spacing:0;color:#64748b">(optional)</span></div>
             <div class="ivf-fl"><div class="ivf-file-cur" data-ivf-filecur hidden></div><input type="file" id="ivfFile" accept="application/pdf,.pdf" data-testid="ivf-file">
                 <div class="ivf-small">PDF only, up to <?= (int)(invoiceMaxBytes() / 1048576) ?> MB. You can also use Generate Invoice later.</div><div class="ivf-e" data-e="file"></div></div></div>
+
+        <div class="ivf-sec" data-testid="ivf-rec-sec"><div class="ivf-sec-h"><i class="fa-solid fa-droplet"></i> Recovery invoice <span style="font-weight:500;text-transform:none;letter-spacing:0;color:#64748b">(optional)</span></div>
+            <div class="ivf-fl"><label class="ivf-recon"><input type="checkbox" id="ivfRecOn" data-testid="ivf-rec-on"> Add a recovery invoice for this vessel too</label><div class="ivf-e" data-e="rec_on"></div></div>
+            <div class="ivf-grid" data-ivf-rec hidden>
+                <div class="ivf-fl full"><div class="ivf-no-top"><label for="ivfRecNo">Recovery Invoice Number <b>*</b></label>
+                    <button type="button" class="ivf-lnk" data-ivf-recreset data-testid="ivf-rec-reset" hidden><i class="fa-solid fa-rotate"></i> Use invoice number + B</button></div>
+                    <input id="ivfRecNo" maxlength="64" autocomplete="off" spellcheck="false" data-testid="ivf-rec-no">
+                    <div class="ivf-small" data-ivf-rechint></div><div class="ivf-e" data-e="rec_invoice_no"></div></div>
+                <div class="ivf-fl"><label for="ivfRecDate">Recovery Invoice Date <b>*</b></label><input type="date" id="ivfRecDate" data-testid="ivf-rec-date"><div class="ivf-e" data-e="rec_invoice_date"></div></div>
+                <div class="ivf-fl"><label for="ivfRecAmt">Recovery Amount (USD)</label><div class="ivf-money"><span>$</span><input id="ivfRecAmt" inputmode="decimal" placeholder="0.00" autocomplete="off" data-testid="ivf-rec-amount"></div><div class="ivf-e" data-e="rec_invoice_amount"></div></div>
+                <div class="ivf-fl full"><label for="ivfRecFile">Recovery invoice PDF <span style="font-weight:500;color:#64748b">(optional)</span></label><div class="ivf-file-cur" data-ivf-recfilecur hidden></div>
+                    <input type="file" id="ivfRecFile" accept="application/pdf,.pdf" data-testid="ivf-rec-file"><div class="ivf-e" data-e="rec_file"></div></div>
+            </div></div>
     </div>
     <div class="ivf-f"><button type="button" class="ivf-btn" data-ivf-close data-testid="ivf-cancel">Cancel</button>
         <button type="submit" class="ivf-btn pri" data-ivf-save data-testid="ivf-save"><i class="fa-solid fa-floppy-disk"></i> <span>Save Invoice</span></button></div>

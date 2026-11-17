@@ -83,6 +83,8 @@ function invoiceEnsureGenColumns(PDO $db): void {
         'recovery_pending' => 'TINYINT(1) NOT NULL DEFAULT 0',
         'rec_invoice_date' => 'DATE NULL',          // recovery invoice's own date and total
         'rec_invoice_amount' => 'DECIMAL(14,2) NULL', // (Invoice Airtable payment tracking)
+        'rec_invoice_no' => 'VARCHAR(64) NULL',     // recovery invoice number when it is not the usual
+                                                    // invoice number + "B" (NULL = invoice_no + B)
         'deleted_at' => 'DATETIME NULL',            // entry deleted from Invoices (kept, can be restored;
         'deleted_by' => 'INT NULL',                 //  stays so the vessel is not registered again)
         'delete_reason' => 'VARCHAR(255) NULL',
@@ -259,6 +261,12 @@ function invoiceRowJson(PDO $db, array $r): array {
         'status' => (string)$r['invoice_status'],
         'has_file' => invoiceFileAbs($r['file_path'] ?? null) !== null,
         'has_rec' => invoiceFileAbs($r['rec_file_path'] ?? null) !== null,
+        'rec_no' => invoiceRecNo($r),
+        'rec_no_custom' => trim((string)($r['rec_invoice_no'] ?? '')) !== '',
+        'rec_date' => (string)($r['rec_invoice_date'] ?? ''),
+        'rec_amount' => isset($r['rec_invoice_amount']) && $r['rec_invoice_amount'] !== null ? (string)$r['rec_invoice_amount'] : '',
+        // a recovery invoice was added (Add / Edit Invoice) or made (Generate Invoice)
+        'has_rec_entry' => invoiceFileAbs($r['rec_file_path'] ?? null) !== null || !empty($r['rec_invoice_date']) || trim((string)($r['rec_invoice_no'] ?? '')) !== '',
         'rec_file_name' => (string)($r['rec_file_name'] ?? ''),
         'recovery_pending' => !empty($r['recovery_pending']),
         'generated' => !empty($r['gen_data']),
@@ -522,6 +530,45 @@ function invoiceNumberTakenBy(PDO $db, string $no, int $exceptId = 0): ?string {
     $sql = 'SELECT invoice_no FROM invoices WHERE id <> ? AND (invoice_no = ?' . ($n !== null ? ' OR invoice_no LIKE ? OR invoice_no LIKE ?' : '') . ') LIMIT 1';
     $q = $db->prepare($sql);
     $q->execute($n !== null ? [$exceptId, $no, '%-' . $n, '%-' . $n . 'B'] : [$exceptId, $no]);
+    $o = $q->fetchColumn();
+    if ($o !== false) return (string)$o;
+    // another entry's recovery invoice typed with its own number
+    $q = $db->prepare('SELECT rec_invoice_no FROM invoices WHERE id <> ? AND rec_invoice_no = ? LIMIT 1');
+    $q->execute([$exceptId, $no]);
+    $o = $q->fetchColumn();
+    return $o === false ? null : (string)$o;
+}
+
+/** The recovery invoice's number: the one typed for it, else the invoice number + "B" ('' when neither). */
+function invoiceRecNo(array $r): string {
+    $own = trim((string)($r['rec_invoice_no'] ?? ''));
+    if ($own !== '') return $own;
+    $no = trim((string)($r['invoice_no'] ?? ''));
+    return $no !== '' ? $no . 'B' : '';
+}
+
+/**
+ * A typed recovery invoice number, cleaned (upper case, no spaces): [number, null] or [null, error].
+ * Letters, digits, - and / only (e.g. YMR-BB-968B).
+ */
+function invoiceNormalizeRecNumber(string $typed): array {
+    $want = strtoupper(preg_replace('/\s+/', '', $typed));
+    if ($want === '') return [null, 'Enter the recovery invoice number.'];
+    if (!preg_match('/^[A-Z0-9][A-Z0-9\-\/]{0,62}[A-Z0-9]$/', $want)) {
+        return [null, 'Recovery invoice number: letters, digits and - only (e.g. YMR-BB-968B).'];
+    }
+    return [$want, null];
+}
+
+/**
+ * The entry whose invoice or recovery invoice already carries $recNo (deleted entries too), or null.
+ * The entry's own vessel invoice number ($ownNo) is never allowed as its recovery number.
+ */
+function invoiceRecNumberTakenBy(PDO $db, string $recNo, int $exceptId, string $ownNo): ?string {
+    if ($ownNo !== '' && strcasecmp($recNo, $ownNo) === 0) return $ownNo;
+    $q = $db->prepare("SELECT COALESCE(NULLIF(invoice_no, ''), rec_invoice_no) FROM invoices WHERE id <> ?
+        AND (invoice_no = ? OR rec_invoice_no = ? OR (rec_invoice_no IS NULL AND CONCAT(invoice_no, 'B') = ?)) LIMIT 1");
+    $q->execute([$exceptId, $recNo, $recNo, $recNo]);
     $o = $q->fetchColumn();
     return $o === false ? null : (string)$o;
 }
