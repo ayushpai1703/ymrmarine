@@ -68,13 +68,16 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
     $sfrDone = "s.status IN ('Pending Report','Completed')";
     $sfrCd = surveyCompletedDateSql('s');
     $sfrMonth = "$sfrCd >= '$cm_start' AND $sfrCd < '$cm_end'";
+    $sfrApplies = recoveryAppliesSql('s'); // ships whose survey type has recovery (Avg Recovery per ship)
     $surveyor_full_report = $db->query("
         SELECT
             u.id, u.full_name, u.status AS user_status,
             COUNT(DISTINCT CASE WHEN $sfrDone THEN s.id END) AS ships_total,
             COUNT(DISTINCT CASE WHEN $sfrDone AND $sfrMonth THEN s.id END) AS ships_month,
             COALESCE(SUM(CASE WHEN $sfrDone THEN $sfrRec END), 0) AS recovery_total,
-            COALESCE(SUM(CASE WHEN $sfrDone AND $sfrMonth THEN $sfrRec END), 0) AS recovery_month
+            COALESCE(SUM(CASE WHEN $sfrDone AND $sfrMonth THEN $sfrRec END), 0) AS recovery_month,
+            COUNT(DISTINCT CASE WHEN $sfrDone AND $sfrApplies THEN s.id END) AS ships_rec,
+            MIN(CASE WHEN $sfrDone THEN $sfrCd END) AS first_done
         FROM users u
         LEFT JOIN surveys s ON (s.surveyor_id = u.id OR s.id IN (SELECT survey_id FROM survey_surveyors WHERE surveyor_id = u.id))
         WHERE u.role_id = 2
@@ -89,21 +92,24 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
         SELECT COUNT(*) AS ships_total,
                COUNT(CASE WHEN $sfrMonth THEN 1 END) AS ships_month,
                COALESCE(SUM($sfrRec), 0) AS recovery_total,
-               COALESCE(SUM(CASE WHEN $sfrMonth THEN $sfrRec END), 0) AS recovery_month
+               COALESCE(SUM(CASE WHEN $sfrMonth THEN $sfrRec END), 0) AS recovery_month,
+               COUNT(CASE WHEN $sfrApplies THEN 1 END) AS ships_rec, MIN($sfrCd) AS first_done
         FROM surveys s WHERE $sfrDone AND $sfrNoSurveyor
     ")->fetch(PDO::FETCH_ASSOC);
     [$sfrCreditId, $sfrCreditName] = outsourcedCreditSurveyor($db);
     if ($sfrCreditId === -1) {
         // No Surveyor login with that name: still list them, with the outsourced vessels.
         $surveyor_full_report[] = ['id' => -1, 'full_name' => $sfrCreditName, 'user_status' => 'Active',
-            'ships_total' => 0, 'ships_month' => 0, 'recovery_total' => 0, 'recovery_month' => 0];
+            'ships_total' => 0, 'ships_month' => 0, 'recovery_total' => 0, 'recovery_month' => 0, 'ships_rec' => 0, 'first_done' => null];
         usort($surveyor_full_report, fn($x, $y) => strcasecmp($x['full_name'], $y['full_name']));
     }
     foreach ($surveyor_full_report as &$sfrRow) {
         if ((int)$sfrRow['id'] === $sfrCreditId) {
-            foreach (['ships_total', 'ships_month', 'recovery_total', 'recovery_month'] as $k) {
+            foreach (['ships_total', 'ships_month', 'recovery_total', 'recovery_month', 'ships_rec'] as $k) {
                 $sfrRow[$k] += $sfr_unassigned[$k];
             }
+            $fd = array_filter([$sfrRow['first_done'] ?? null, $sfr_unassigned['first_done'] ?? null]);
+            $sfrRow['first_done'] = $fd ? min($fd) : null;
         }
     }
     unset($sfrRow);
@@ -113,9 +119,21 @@ if (in_array($role, ['Admin', 'Super Admin'], true)) {
         SELECT COUNT(*) AS ships_total,
                COUNT(CASE WHEN $sfrMonth THEN 1 END) AS ships_month,
                COALESCE(SUM($sfrRec), 0) AS recovery_total,
-               COALESCE(SUM(CASE WHEN $sfrMonth THEN $sfrRec END), 0) AS recovery_month
+               COALESCE(SUM(CASE WHEN $sfrMonth THEN $sfrRec END), 0) AS recovery_month,
+               COUNT(CASE WHEN $sfrApplies THEN 1 END) AS ships_rec, MIN($sfrCd) AS first_done
         FROM surveys s WHERE $sfrDone
     ")->fetch(PDO::FETCH_ASSOC);
+    // Averages: per ship = total recovery / ships whose survey type has recovery; per month = total
+    // recovery / months from the first Survey Completed month to this month (both ends counted).
+    $sfrAvg = function (array &$r) {
+        $r['avg_ship'] = (int)$r['ships_rec'] > 0 ? (float)$r['recovery_total'] / (int)$r['ships_rec'] : 0.0;
+        $first = substr((string)($r['first_done'] ?? ''), 0, 7);
+        $months = preg_match('/^\d{4}-\d{2}$/', $first) ? max(1, ((int)date('Y') - (int)substr($first, 0, 4)) * 12 + (int)date('n') - (int)substr($first, 5, 2) + 1) : 0;
+        $r['avg_month'] = $months > 0 ? (float)$r['recovery_total'] / $months : 0.0;
+    };
+    foreach ($surveyor_full_report as &$sfrRow) $sfrAvg($sfrRow);
+    unset($sfrRow);
+    if ($sfr_total) $sfrAvg($sfr_total);
 } elseif ($role === 'Client') {
     // క్లయింట్ కి కేవలం తన కంపెనీ వెసెల్స్ మాత్రమే
     $stmt_v = $db->prepare("SELECT COUNT(*) FROM surveys WHERE status = 'Pending Vessel' AND client_id = ?");
@@ -934,26 +952,30 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                     <table class="table table-sm align-middle mb-0">
                         <thead>
                             <tr>
-                                <th>Surveyor</th>
-                                <th class="text-end">Ships Attended<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">As of Now</span></th>
-                                <th class="text-end">Ships Attended<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">This Month</span></th>
-                                <th class="text-end">Total Recovery<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">As of Now</span></th>
-                                <th class="text-end">Total Recovery<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">This Month</span></th>
+                                <th>Surveyor Name</th>
+                                <th class="text-end">Total Ships Attended</th>
+                                <th class="text-end">Ships Attended - This Month</th>
+                                <th class="text-end">Total Recovery</th>
+                                <th class="text-end">Recovery - This Month</th>
+                                <th class="text-end">Avg Recovery per Ship</th>
+                                <th class="text-end">Avg Recovery per Month</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (!empty($surveyor_full_report)): ?>
                                 <?php foreach ($surveyor_full_report as $row): ?>
-                                <tr>
+                                <tr data-testid="sfr-row">
                                     <td class="fw-semibold" style="font-size:13.5px;"><a href="recovery.php?surveyor=<?= (int)$row['id'] ?>" class="text-reset text-decoration-none"><?= sanitize($row['full_name']) ?></a><?php if (($row['user_status'] ?? '') === 'Inactive'): ?> <span class="text-muted" style="font-weight:400;font-size:11px;">(Inactive)</span><?php endif; ?></td>
                                     <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_total'] ?></td>
                                     <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_month'] ?></td>
                                     <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_total'], 3) ?> MT</td>
                                     <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_month'], 3) ?> MT</td>
+                                    <td class="text-end" style="font-size:13.5px;"><?= number_format((float)$row['avg_ship'], 3) ?> MT</td>
+                                    <td class="text-end" style="font-size:13.5px;"><?= number_format((float)$row['avg_month'], 3) ?> MT</td>
                                 </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>
-                                <tr><td colspan="5" class="text-muted text-center py-3" style="font-size:12.5px;">No surveyors found.</td></tr>
+                                <tr><td colspan="7" class="text-muted text-center py-3" style="font-size:12.5px;">No surveyors found.</td></tr>
                             <?php endif; ?>
                         </tbody>
                         <?php if (!empty($sfr_total)): ?>
@@ -964,6 +986,8 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                                 <td class="text-end" style="font-size:13.5px;" data-testid="sfr-month-ships"><?= (int)$sfr_total['ships_month'] ?></td>
                                 <td class="text-end" style="font-size:13.5px;" data-testid="sfr-total-recovery"><?= number_format((float)$sfr_total['recovery_total'], 3) ?> MT</td>
                                 <td class="text-end" style="font-size:13.5px;" data-testid="sfr-month-recovery"><?= number_format((float)$sfr_total['recovery_month'], 3) ?> MT</td>
+                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-avg-ship"><?= number_format((float)$sfr_total['avg_ship'], 3) ?> MT</td>
+                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-avg-month"><?= number_format((float)$sfr_total['avg_month'], 3) ?> MT</td>
                             </tr>
                         </tfoot>
                         <?php endif; ?>
