@@ -2,7 +2,8 @@
 /**
  * Monthly Data (monthly_data.php + its Excel download monthly_data_export.php). Admin / Super Admin.
  * Read only; uses the existing fields and rules:
- *   appointments — surveys.appointment_date in the month (every stage)
+ *   appointments — surveys.appointment_date in the month (every stage); a vessel with no Appointment
+ *                  Date counts by its Survey Assigned date (assign_date) instead
  *   completed    — the dashboard Month Summary vessels: Pending Report + Completed with their own
  *                  Survey Completed Date in the month (dashboardMonthWhere)
  *   recovery     — the same vessels as completed, with their recovery (recovery_list.php rules:
@@ -11,6 +12,9 @@
  */
 require_once __DIR__ . '/dashboard_month.php';
 require_once __DIR__ . '/recovery_list.php';
+
+/** The date an Appointments row counts by: Appointment Date, else the Survey Assigned date. */
+const MD_APPT_DATE_SQL = 'IF(YEAR(s.appointment_date) > 0, s.appointment_date, IF(YEAR(s.assign_date) > 0, DATE(s.assign_date), NULL))';
 
 const MD_TABS = ['appointments' => 'Appointments', 'completed' => 'Survey Completed', 'recovery' => 'Recovery'];
 
@@ -50,7 +54,7 @@ function mdColumns(string $tab): array {
     $base = [['vessel', 'Vessel', 'text'], ['report_no', 'Report No', 'text'], ['client', 'Client', 'text']];
     if ($tab === 'appointments') {
         return array_merge($base, [['port', 'Port', 'text'], ['type', 'Survey Type', 'text'], ['surveyor', 'Surveyor', 'text'],
-            ['appointment', 'Appointment Date', 'date'], ['stage', 'Stage', 'text']]);
+            ['appointment', 'Appointment Date', 'date'], ['date_from', 'Date From', 'text'], ['stage', 'Stage', 'text']]);
     }
     if ($tab === 'completed') {
         return array_merge($base, [['port', 'Port', 'text'], ['type', 'Survey Type', 'text'], ['surveyor', 'Surveyor', 'text'],
@@ -68,9 +72,9 @@ function mdColumns(string $tab): array {
 function mdData(PDO $db, string $tab, int $y, int $m): array {
     [, , $start, $end] = mdMonth(['month' => sprintf('%04d-%02d', $y, $m)]);
     if ($tab === 'appointments') {
-        $where = 'YEAR(s.appointment_date) > 0 AND s.appointment_date >= ? AND s.appointment_date < ?';
+        $where = MD_APPT_DATE_SQL . ' >= ? AND ' . MD_APPT_DATE_SQL . ' < ?';
         $params = [$start, $end];
-        $order = 's.appointment_date ASC, s.id ASC';
+        $order = MD_APPT_DATE_SQL . ' ASC, s.id ASC';
     } else {
         [$where, $params] = dashboardMonthWhere('Admin', 0, 0, $y, $m);
         $order = surveyCompletedDateSql('s') . ' ASC, s.id ASC';
@@ -88,7 +92,9 @@ function mdData(PDO $db, string $tab, int $y, int $m): array {
             'id' => $x['id'], 'url' => mdStageUrl($r), 'na' => $x['na'], 'onhire' => $x['onhire'],
             'vessel' => $x['vessel'], 'report_no' => $x['report_no'], 'client' => $x['client'], 'port' => $x['port'],
             'type' => $x['type'], 'surveyor' => $x['surveyor'], 'stage' => mdStageLabel($x['status']),
-            'appointment' => $ymd($r['appointment_date'] ?? ''), 'completed' => $ymd($r['survey_completed_date'] ?? ''),
+            // Appointment Date, or the Survey Assigned date when the vessel has none
+            'appointment' => $ymd($r['appointment_date'] ?? '') ?: $ymd($r['assign_date'] ?? ''),
+            'date_from' => $ymd($r['appointment_date'] ?? '') !== '' ? 'Appointment' : ($ymd($r['assign_date'] ?? '') !== '' ? 'Survey Assigned' : ''), 'completed' => $ymd($r['survey_completed_date'] ?? ''),
             'vlsfo' => $x['vlsfo'], 'lsmgo' => $x['lsmgo'], 'hsfo' => $x['hsfo'], 'total' => $x['total'],
         ];
     }

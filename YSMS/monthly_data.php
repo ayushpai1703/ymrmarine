@@ -140,7 +140,7 @@ include 'includes/header.php';
             <?php endif; ?>
         </div>
         <div class="lp-meta" style="margin-top:8px;font-size:11.5px;color:#94a3b8">
-            <?php if ($tab === 'appointments'): ?>Vessels whose Appointment Date (given when the vessel is assigned) is in the month, in every stage. Click a vessel to open it at its current stage.
+            <?php if ($tab === 'appointments'): ?>Vessels whose Appointment Date is in the month, in every stage; a vessel without an Appointment Date counts by its Survey Assigned date (Date From shows which). Click a vessel to open it at its current stage.
             <?php elseif ($tab === 'completed'): ?>Vessels in Pending Reports and Completed with their Survey Completed Date in the month (same as the dashboard Month Summary).
             <?php else: ?>The same vessels as Survey Completed, with their recovery (same rules as the Recovery page). N/A = survey type without recovery (<?= RECOVERY_NA_LABEL ?>), counted as 0; Onhire is shown with a minus and counted as positive in the totals.<?php endif; ?>
         </div>
