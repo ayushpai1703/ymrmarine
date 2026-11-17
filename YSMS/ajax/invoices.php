@@ -31,6 +31,9 @@
  *   invoice number + "B" = the usual number, kept as NULL so it follows the invoice number),
  *   rec_invoice_date, rec_invoice_amount.
  *   POST a=upload_rec id, rec_pdf        → stores the recovery invoice PDF (first or replacement)
+ *   POST a=recovery id, rec_on=1, rec_invoice_no, rec_invoice_date, rec_invoice_amount, rec_pdf
+ *                  (optional)           → Upload / Edit PDF dialog: the recovery invoice's details
+ *                                          and PDF in one go
  *   Every number written goes through the invoice_number_seq row lock and must be free (same
  *   number, or the same running number under another client code); a higher number moves the
  *   series on so the next automatic number follows it.
@@ -547,6 +550,66 @@ switch ($action) {
         }
         if ($old && $old !== $rel) invoiceRemoveFileIfUnused($db, $old);
         invJson(200, ['ok' => true, 'replaced' => (bool)$old, 'row' => invoiceGridRow($db, $load($id))]);
+    }
+
+    case 'recovery': {
+        // Upload / Edit PDF dialog: recovery invoice number, date, amount and (optionally) its PDF.
+        invoiceEnsureSequence($db);
+        $no = trim((string)($row['invoice_no'] ?? ''));
+        [$rv, $err] = $recForm($no !== '' ? $no : null);
+        if ($rv === null) invJson(422, ['ok' => false, 'error' => 'Tick "Recovery invoice" to save it.']);
+        $hasPdf = isset($_FILES['rec_pdf']) && ($_FILES['rec_pdf']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+        $perr = null;
+        if ($hasPdf && !invoiceValidatePdf($_FILES['rec_pdf'], $perr)) $err['rec_file'] = $perr;
+        if ($err) invJson(422, ['ok' => false, 'error' => reset($err), 'errors' => $err]);
+        $rel = null;
+        if ($hasPdf) {
+            $dir = invoiceStorageDir();
+            $rel = INVOICE_DIR . '/rec' . $id . '_' . bin2hex(random_bytes(12)) . '.pdf';
+            if (!is_dir($dir) || !move_uploaded_file($_FILES['rec_pdf']['tmp_name'], dirname(__DIR__) . '/' . $rel)) {
+                invJson(500, ['ok' => false, 'error' => 'The recovery PDF could not be stored. Please try again.']);
+            }
+        }
+        $old = $row['rec_file_path'] ?? null;
+        try {
+            $db->beginTransaction();
+            $cur = $db->prepare('SELECT invoice_no, file_path, recovery_pending, deleted_at FROM invoices WHERE id = ? FOR UPDATE');
+            $cur->execute([$id]);
+            $cur = $cur->fetch(PDO::FETCH_ASSOC) ?: [];
+            if (!$cur || !empty($cur['deleted_at']) || trim((string)$cur['invoice_no']) !== $no) {
+                $db->rollBack();
+                if ($rel) @unlink(dirname(__DIR__) . '/' . $rel);
+                invJson(409, ['ok' => false, 'error' => 'This invoice changed meanwhile — reload the page and try again.']);
+            }
+            invoiceLockSequence($db);
+            if ($rc = $recClash($rv, $no !== '' ? $no : null, $id)) {
+                $db->rollBack();
+                if ($rel) @unlink(dirname(__DIR__) . '/' . $rel);
+                invJson(409, ['ok' => false, 'errors' => ['rec_invoice_no' => $rc], 'error' => $rc]);
+            }
+            $set = 'rec_invoice_no = ?, rec_invoice_date = ?, rec_invoice_amount = ?';
+            $p = [$rv['rec_invoice_no'], $rv['rec_invoice_date'], $rv['rec_invoice_amount']];
+            if ($rel) {
+                $set .= ', rec_file_name = ?, rec_file_path = ?, rec_generated_at = NOW(), recovery_pending = 0';
+                array_push($p, mb_substr(basename((string)$_FILES['rec_pdf']['name']), 0, 255), $rel);
+            }
+            $p[] = $id;
+            $db->prepare("UPDATE invoices SET $set WHERE id = ?")->execute($p);
+            // Generate Invoice was waiting for this recovery invoice: the invoice is now complete.
+            if ($rel && !empty($cur['recovery_pending']) && invoiceFileAbs($cur['file_path'] ?? null) !== null) {
+                $db->prepare("UPDATE invoices SET status_updated_by = IF(invoice_status = 'Completed', status_updated_by, ?),
+                        status_updated_at = IF(invoice_status = 'Completed', status_updated_at, NOW()), invoice_status = 'Completed' WHERE id = ?")
+                   ->execute([$uid, $id]);
+            }
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            if ($rel) @unlink(dirname(__DIR__) . '/' . $rel);
+            error_log('invoices recovery: ' . $e->getMessage());
+            invJson(500, ['ok' => false, 'error' => 'The recovery invoice could not be saved. Please try again.']);
+        }
+        if ($rel && $old && $old !== $rel) invoiceRemoveFileIfUnused($db, $old);
+        invJson(200, ['ok' => true, 'replaced' => $rel && $old, 'row' => invoiceGridRow($db, $load($id))]);
     }
 
     case 'delete':
