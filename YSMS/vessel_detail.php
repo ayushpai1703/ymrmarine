@@ -56,25 +56,31 @@ $vdWriteAccess = function () use ($db, $id, $is_admin, $has_full_access, $role, 
     return '';
 };
 
-// ETA / ETB / ETC / Expected Supply Date: one date set or cleared at a time.
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_vessel_date'])) {
-    $key = (string)($_POST['vessel_date_field'] ?? '');
-    $val = trim((string)($_POST['vessel_date_value'] ?? ''));
-    $clear = isset($_POST['clear_vessel_date']);
+// ETA / ETB / ETC / Expected Supply Date: the four fields saved together (an empty field = no date).
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_vessel_dates'])) {
+    $in = is_array($_POST['vessel_date'] ?? null) ? $_POST['vessel_date'] : [];
+    $vals = [];
+    $bad = [];
+    foreach (VESSEL_DATE_FIELDS as $k => [$col, $label]) {
+        $v = trim((string)($in[$k] ?? ''));
+        if ($v === '') { $vals[$col] = null; continue; }
+        $dt = DateTime::createFromFormat('!Y-m-d', $v);
+        if (!$dt || $dt->format('Y-m-d') !== $v || (int)$dt->format('Y') < 2000 || (int)$dt->format('Y') > 2100) $bad[] = $label;
+        else $vals[$col] = $v;
+    }
     if ($vdWriteAccess() !== 'dates') {
         $error = 'You cannot change the dates of this vessel.';
-    } elseif (!isset(VESSEL_DATE_FIELDS[$key])) {
-        $error = 'Choose ETA, ETB, ETC or Expected Supply Date.';
-    } elseif (!$clear && ($val === '' || !($dt = DateTime::createFromFormat('!Y-m-d', $val)) || $dt->format('Y-m-d') !== $val || (int)$dt->format('Y') < 2000 || (int)$dt->format('Y') > 2100)) {
-        $error = 'Choose a valid date for ' . VESSEL_DATE_FIELDS[$key][1] . '.';
+    } elseif ($bad) {
+        $error = 'Not a valid date: ' . implode(', ', $bad) . '.';
     } else {
         try {
-            $col = VESSEL_DATE_FIELDS[$key][0]; // from the fixed list above
-            $db->prepare("UPDATE surveys SET `$col` = ? WHERE id = ?")->execute([$clear ? null : $val, $id]);
-            $success = VESSEL_DATE_FIELDS[$key][1] . ($clear ? ' removed.' : ' saved: ' . vesselDateFmt($val));
+            // column names come from the fixed list in includes/vessel_dates.php
+            $set = implode(', ', array_map(fn($c) => "`$c` = ?", array_keys($vals)));
+            $db->prepare("UPDATE surveys SET $set WHERE id = ?")->execute([...array_values($vals), $id]);
+            $success = 'Vessel dates saved.';
         } catch (Throwable $e) {
-            error_log('vessel date update: ' . $e->getMessage());
-            $error = 'The date could not be saved. Please try again.';
+            error_log('vessel dates update: ' . $e->getMessage());
+            $error = 'The dates could not be saved. Please try again.';
         }
     }
 }
@@ -673,29 +679,26 @@ $vdDatesHtml = function (string $ui) use ($vdCanDates, $vdDates, $survey): strin
     ob_start(); ?>
     <div class="vdates vdates-<?= $ui ?>" data-testid="vd-dates-<?= $ui ?>">
         <div class="vdates-h"><i class="fa-regular fa-calendar"></i> Vessel dates</div>
-        <?php if ($vdDates): ?>
+        <?php if ($vdCanDates): ?>
+        <form method="POST" action="vessel_detail.php?id=<?= $id ?>" class="vdates-form">
+            <?= csrf_field() ?>
+            <div class="vdates-grid">
+                <?php foreach (VESSEL_DATE_FIELDS as $k => [$col, $label]): $ymd = $vdDates[$k]['ymd'] ?? ''; ?>
+                <label class="vdates-f"><span><?= sanitize($label) ?></span>
+                    <span class="vdates-in"><input type="date" name="vessel_date[<?= $k ?>]" value="<?= sanitize($ymd) ?>" data-testid="vd-date-<?= $k ?>-<?= $ui ?>">
+                    <button type="button" class="vdates-x" title="Clear <?= sanitize($label) ?>" aria-label="Clear <?= sanitize($label) ?>" onclick="this.previousElementSibling.value=''" data-testid="vd-date-clear-<?= $k ?>-<?= $ui ?>">&times;</button></span>
+                    <small><?= $ymd !== '' ? sanitize($vdDates[$k]['text']) : 'Not set' ?></small>
+                </label>
+                <?php endforeach; ?>
+            </div>
+            <button type="submit" name="update_vessel_dates" value="1" class="vdates-save" data-testid="vd-dates-save-<?= $ui ?>">Save dates</button>
+        </form>
+        <?php else: ?>
         <div class="vdates-list">
             <?php foreach ($vdDates as $k => $d): ?>
-            <form method="POST" action="vessel_detail.php?id=<?= $id ?>" class="vdates-chip" data-testid="vd-date-<?= $k ?>">
-                <?= csrf_field() ?><input type="hidden" name="vessel_date_field" value="<?= $k ?>"><input type="hidden" name="update_vessel_date" value="1">
-                <span><?= sanitize($d['label']) ?>:</span> <b><?= sanitize($d['text']) ?></b>
-                <?php if ($vdCanDates): ?><button type="submit" name="clear_vessel_date" value="1" title="Remove <?= sanitize($d['label']) ?>" aria-label="Remove <?= sanitize($d['label']) ?>" onclick="return confirm('Remove <?= sanitize($d['label']) ?>?')" data-testid="vd-date-clear-<?= $k ?>">&times;</button><?php endif; ?>
-            </form>
+            <div class="vdates-chip" data-testid="vd-date-<?= $k ?>"><span><?= sanitize($d['label']) ?>:</span> <b><?= sanitize($d['text']) ?></b></div>
             <?php endforeach; ?>
         </div>
-        <?php endif; ?>
-        <?php if ($vdCanDates): ?>
-        <form method="POST" action="vessel_detail.php?id=<?= $id ?>" class="vdates-add" data-vdates-form>
-            <?= csrf_field() ?>
-            <select name="vessel_date_field" required data-vdates-field data-testid="vd-date-field-<?= $ui ?>">
-                <option value="">Choose…</option>
-                <?php foreach (VESSEL_DATE_FIELDS as $k => [$col, $label]): ?>
-                <option value="<?= $k ?>" data-ymd="<?= sanitize($vdDates[$k]['ymd'] ?? '') ?>"><?= sanitize($label) ?></option>
-                <?php endforeach; ?>
-            </select>
-            <input type="date" name="vessel_date_value" required data-vdates-date data-testid="vd-date-value-<?= $ui ?>">
-            <button type="submit" name="update_vessel_date" value="1" data-testid="vd-date-save-<?= $ui ?>">Save</button>
-        </form>
         <?php endif; ?>
     </div>
     <?php return (string)ob_get_clean();
@@ -704,27 +707,22 @@ $vdDatesHtml = function (string $ui) use ($vdCanDates, $vdDates, $survey): strin
 <style>
 .vdates { border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; background: #fff; }
 .vdates-dapp { margin: 0 0 12px; }
-.vdates-h { font-size: 12px; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; display: flex; align-items: center; gap: 7px; }
+.vdates-h { font-size: 12px; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
 .vdates-h i { color: #5B2DEE; }
-.vdates-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.vdates-chip { display: inline-flex; align-items: center; gap: 4px; margin: 0; background: #F3EEFE; border: 1px solid #ddd0fb; color: #3b1d9a; border-radius: 999px; padding: 4px 6px 4px 11px; font-size: 12.5px; }
-.vdates-chip span { font-weight: 600; }
-.vdates-chip b { font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
-.vdates-chip span { white-space: nowrap; }
-.vdates-chip button { border: 0; background: #fff; color: #b91c1c; width: 20px; height: 20px; border-radius: 50%; line-height: 18px; font-size: 15px; padding: 0; margin-left: 2px; cursor: pointer; }
-.vdates-add { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; }
-.vdates-add select, .vdates-add input { border: 1.5px solid #d6e0ee; border-radius: 10px; padding: 7px 10px; font-size: 13px; min-height: 40px; background: #fff; }
-.vdates-add select { flex: 1 1 150px; } .vdates-add input { flex: 1 1 140px; min-width: 0; }
-.vdates-add button { border: 0; border-radius: 10px; background: linear-gradient(135deg, #5B2DEE, #7c3aed); color: #fff; font-weight: 700; padding: 0 18px; min-height: 40px; cursor: pointer; }
+.vdates-form { margin: 0; }
+.vdates-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.vdates-f { display: flex; flex-direction: column; gap: 4px; margin: 0; min-width: 0; }
+.vdates-f > span:first-child { font-size: 12px; font-weight: 700; color: #475569; }
+.vdates-in { display: flex; align-items: center; gap: 4px; }
+.vdates-in input { flex: 1; min-width: 0; border: 1.5px solid #d6e0ee; border-radius: 10px; padding: 7px 8px; font-size: 13px; min-height: 40px; background: #fff; }
+.vdates-x { border: 0; background: #f1f5f9; color: #b91c1c; width: 28px; height: 28px; border-radius: 50%; font-size: 16px; line-height: 26px; padding: 0; flex: none; cursor: pointer; }
+.vdates-f small { font-size: 11px; color: #5B2DEE; font-weight: 700; letter-spacing: .02em; }
+.vdates-save { margin-top: 12px; width: 100%; border: 0; border-radius: 10px; background: linear-gradient(135deg, #5B2DEE, #7c3aed); color: #fff; font-weight: 700; min-height: 42px; cursor: pointer; }
+.vdates-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.vdates-chip { display: inline-flex; align-items: center; gap: 4px; background: #F3EEFE; border: 1px solid #ddd0fb; color: #3b1d9a; border-radius: 999px; padding: 4px 11px; font-size: 12.5px; white-space: nowrap; }
+.vdates-chip span { font-weight: 600; } .vdates-chip b { font-weight: 800; letter-spacing: .02em; }
+@media (max-width: 480px) { .vdates-grid { grid-template-columns: 1fr; } }
 </style>
-<script>
-document.addEventListener('change', function (e) {
-  var sel = e.target.closest && e.target.closest('[data-vdates-field]');
-  if (!sel) return;
-  var o = sel.options[sel.selectedIndex], d = sel.form.querySelector('[data-vdates-date]');
-  if (d) d.value = (o && o.getAttribute('data-ymd')) || ''; // a date already set opens for changing
-});
-</script>
 <div class="scroll-content">
     <?php $page_title = 'Vessel Survey Details'; $back_url = 'vessels.php'; $page_testid = 'vessel-detail'; include 'includes/top_app_bar.php'; ?>
     <?php $overdueAlertKind = 'survey'; include 'includes/overdue_alert.php'; // Survey Pending (7+ days since appointment) ?>
