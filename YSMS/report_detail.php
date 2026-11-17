@@ -626,6 +626,7 @@ include 'includes/header.php';
                     <input type="email" placeholder="To — Master's email" data-redelivery-to aria-label="To — Master's email" data-testid="redelivery-to-input" style="flex:1;min-width:0;box-sizing:border-box;border:1.5px solid #d6e0ee;border-radius:14px;padding:10px 12px;font-size:13px">
                     <button type="button" data-redelivery-fetch data-testid="redelivery-fetch-button" style="border:0;border-radius:14px;background:linear-gradient(135deg,#4B2FD6,#7C3AED);color:#fff;font-weight:700;font-size:12.5px;padding:0 12px;white-space:nowrap;cursor:pointer"><i class="fa-solid fa-magnifying-glass"></i> Fetch Master Email</button>
                 </div>
+                <label style="display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:4px 10px;border:1px dashed #a78bfa;border-radius:999px;background:#F5F3FF;color:#5B2DEE;font-size:11.5px;font-weight:700;cursor:pointer" data-testid="redelivery-upload-button"><i class="fa-solid fa-upload"></i> Upload Ships Particulars<input type="file" accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.jpg,.jpeg,.png,.webp,.zip" data-redelivery-upload hidden></label>
                 <div style="font-size:11px;color:#64748b;margin-top:3px" data-redelivery-note></div>
             </div>
             <div class="dapp-mail">
@@ -901,6 +902,7 @@ include 'includes/header.php';
                                     <input type="email" placeholder="master@…" data-redelivery-to data-testid="redelivery-to-input-desktop" style="flex:1;min-width:0">
                                     <button type="button" data-redelivery-fetch data-testid="redelivery-fetch-button-desktop" style="border:0;border-radius:14px;background:linear-gradient(135deg,#4B2FD6,#7C3AED);color:#fff;font-weight:700;font-size:12.5px;padding:0 12px;white-space:nowrap;cursor:pointer;border-radius:10px"><i class="fa-solid fa-magnifying-glass"></i> Fetch Master Email</button>
                                 </div>
+                                <label style="display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:4px 10px;border:1px dashed #a78bfa;border-radius:999px;background:#F5F3FF;color:#5B2DEE;font-size:11.5px;font-weight:700;cursor:pointer" data-testid="redelivery-upload-button-desktop"><i class="fa-solid fa-upload"></i> Upload Ships Particulars<input type="file" accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.jpg,.jpeg,.png,.webp,.zip" data-redelivery-upload hidden></label>
                                 <div style="font-size:11px;color:#64748b;margin-top:3px" data-redelivery-note></div>
                             </div>
                             <div class="vdd-field" style="margin-bottom:10px;">
@@ -1065,28 +1067,52 @@ include 'includes/header.php';
 function rdNote(text, color) {
     Array.prototype.forEach.call(document.querySelectorAll('[data-redelivery-note]'), function (n) { n.textContent = text; n.style.color = color || '#64748b'; });
 }
+var RD_API = 'ajax/master_email.php?id=<?= (int)$survey['id'] ?>', RD_CSRF = <?= json_encode(csrf_token()) ?>;
+function rdBusy(on, label) {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-redelivery-fetch]'), function (b) {
+        b.dataset.label = b.dataset.label || b.innerHTML;
+        b.disabled = on; b.innerHTML = on ? '<i class="fa-solid fa-spinner fa-spin"></i> ' + label : b.dataset.label;
+    });
+}
+// the answer of a Fetch or an Upload: To filled, or "enter it manually"
+function rdApply(j) {
+    var email = (j && j.email) || '';
+    if (email) {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-redelivery-to]'), function (i) { i.value = email; });
+        rdNote((j.by === 'ai' ? '⚠ ' : '✓ ') + (j.note || ''), j.by === 'ai' ? '#b45309' : '#047857');
+        return;
+    }
+    rdNote('Master email could not be fetched — please enter it manually.' + (j && (j.error || j.note) ? ' (' + (j.error || j.note) + ')' : ''), '#b91c1c');
+    var vis = Array.prototype.filter.call(document.querySelectorAll('[data-redelivery-to]'), function (i) { return i.offsetParent !== null; })[0];
+    if (vis) vis.focus();
+}
 document.addEventListener('click', function (ev) {
     var fb = ev.target.closest && ev.target.closest('[data-redelivery-fetch]');
     if (!fb || fb.disabled) return;
     ev.preventDefault();
-    var btns = document.querySelectorAll('[data-redelivery-fetch]');
-    Array.prototype.forEach.call(btns, function (b) { b.disabled = true; b.dataset.label = b.dataset.label || b.innerHTML; b.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching…'; });
+    rdBusy(true, 'Fetching…');
     rdNote('Looking for the Master\'s email in the uploaded documents…');
-    fetch('ajax/master_email.php?id=<?= (int)$survey['id'] ?>', { credentials: 'same-origin' })
+    fetch(RD_API, { credentials: 'same-origin' })
         .then(function (r) { return r.json(); })
         .catch(function () { return { ok: false, email: '' }; })
-        .then(function (j) {
-            var email = (j && j.email) || '';
-            if (email) {
-                Array.prototype.forEach.call(document.querySelectorAll('[data-redelivery-to]'), function (i) { i.value = email; });
-                rdNote((j.by === 'ai' ? '⚠ ' : '✓ ') + (j.note || ''), j.by === 'ai' ? '#b45309' : '#047857');
-            } else {
-                rdNote('Master email could not be fetched — please enter it manually.' + (j && j.note ? ' (' + j.note + ')' : ''), '#b91c1c');
-                var vis = Array.prototype.filter.call(document.querySelectorAll('[data-redelivery-to]'), function (i) { return i.offsetParent !== null; })[0];
-                if (vis) vis.focus();
-            }
-        })
-        .then(function () { Array.prototype.forEach.call(btns, function (b) { b.disabled = false; b.innerHTML = b.dataset.label; }); });
+        .then(rdApply)
+        .then(function () { rdBusy(false); });
+});
+// "Upload Ships Particulars": the chosen file is read once for the Master's email (not stored);
+// in a ZIP only its Ships Particulars files are read.
+document.addEventListener('change', function (ev) {
+    var inp = ev.target;
+    if (!inp.matches || !inp.matches('[data-redelivery-upload]') || !inp.files || !inp.files[0]) return;
+    var fd = new FormData();
+    fd.append('particulars', inp.files[0]);
+    fd.append('csrf_token', RD_CSRF);
+    rdBusy(true, 'Reading…');
+    rdNote('Reading ' + inp.files[0].name + ' for the Master\'s email…');
+    fetch(RD_API, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF-Token': RD_CSRF } })
+        .then(function (r) { return r.json(); })
+        .catch(function () { return { ok: false, email: '', error: 'The file could not be sent.' }; })
+        .then(rdApply)
+        .then(function () { rdBusy(false); inp.value = ''; });
 });
 // the two To fields (phone / computer layout) stay the same
 document.addEventListener('input', function (ev) {

@@ -2,7 +2,11 @@
 /**
  * GET ?id=<survey id> → { ok, email, file, by: 'text'|'ai'|'', note } — the Master's email from the
  * vessel's Ships Particulars document (includes/master_email.php), for "Email to Master for
- * Redelivery" on report_detail.php. Read only. Same people as the button: not Clients; Admin /
+ * Redelivery" on report_detail.php ("Fetch Master Email").
+ * POST ?id=<survey id> + file `particulars` → the same, read from the uploaded file only ("Upload
+ * Ships Particulars"; a ZIP: only its Ships Particulars files). The file is not stored. CSRF checked
+ * by checkAuth() for every POST.
+ * Read only. Same people as the button: not Clients; Admin /
  * Super Admin any vessel, a Surveyor only a vessel assigned to them.
  */
 require_once __DIR__ . '/../config/config.php';
@@ -22,7 +26,12 @@ $allowed = in_array($role, ['Admin', 'Super Admin'], true) || ($role === 'Survey
 if (!$allowed) { http_response_code(403); echo json_encode(['ok' => false, 'error' => 'Not allowed.']); exit; }
 try {
     @set_time_limit(90);
-    $r = meMasterEmail($db, $id);
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        [$r, $err] = meEmailFromUpload($_FILES['particulars'] ?? []);
+        if ($err !== null) { http_response_code(422); echo json_encode(['ok' => false, 'email' => '', 'error' => $err, 'note' => $err]); exit; }
+    } else {
+        $r = meMasterEmail($db, $id);
+    }
     echo json_encode(['ok' => true] + $r);
 } catch (Throwable $e) {
     error_log('master_email: ' . $e->getMessage());
