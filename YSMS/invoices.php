@@ -81,6 +81,12 @@ include 'includes/header.php';
 .swal2-popup .inv-form input, .swal2-popup .inv-form textarea { width: 100%; font-size: 13.5px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 10px; }
 .swal2-popup .inv-form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .swal2-popup .inv-form small { display: block; text-align: left; color: #64748b; font-size: 11px; margin-top: 4px; }
+.swal2-popup .inv-form .inv-rec { margin-top: 14px; padding-top: 10px; border-top: 1px dashed #cbd5e1; }
+.swal2-popup .inv-form label.chk { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: #334155; cursor: pointer; margin: 0; }
+.swal2-popup .inv-form label.chk input { width: 17px; height: 17px; padding: 0; accent-color: #6C4CF1; }
+.swal2-popup .inv-form label.chk span { font-weight: 500; color: #64748b; }
+.swal2-popup .inv-form #invRecBox[hidden] { display: none; }
+.swal2-popup .inv-form .lnk { border: 0; background: none; color: #0284c7; font-weight: 700; font-size: 11.5px; padding: 0 0 0 8px; cursor: pointer; }
 @media (max-width: 1399.98px) { .at-sum.five { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 991.98px) { .at-sum.five { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
