@@ -473,6 +473,94 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
     </script>
     <?php endif; ?>
 
+    <?php if (in_array($role, ['Admin', 'Super Admin'], true)):
+        // 🌟 Need Attention: vessels whose ETA / ETB / ETC (set on the vessel page) is today, tomorrow or the
+        //    day after — a 3 x 3 table, red strongest for today. Cancelled / Missed / Completed vessels are left out.
+        require_once 'includes/vessel_dates.php';
+        vesselDatesEnsure($db);
+        $naDays = [];
+        for ($d = 0; $d < 3; $d++) $naDays[] = date('Y-m-d', strtotime("+$d day"));
+        $naCols = ['eta' => 'eta_date', 'etb' => 'etb_date', 'etc' => 'etc_date'];
+        $naGrid = [];
+        foreach ($naDays as $d) foreach ($naCols as $k => $c) $naGrid[$d][$k] = [];
+        try {
+            $q = $db->prepare("SELECT s.id, s.vessel_name, s.status, s.survey_type_ids, s.eta_date, s.etb_date, s.etc_date, st.type_name, p.port_name
+                FROM surveys s LEFT JOIN survey_types st ON st.id = s.survey_type_id LEFT JOIN ports p ON p.id = s.port_id
+                WHERE s.status NOT IN ('Cancelled','Missed','Completed') AND (s.eta_date BETWEEN ? AND ? OR s.etb_date BETWEEN ? AND ? OR s.etc_date BETWEEN ? AND ?)
+                ORDER BY s.vessel_name ASC, s.id ASC");
+            $q->execute([$naDays[0], $naDays[2], $naDays[0], $naDays[2], $naDays[0], $naDays[2]]);
+            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                foreach ($naCols as $k => $c) {
+                    $v = substr((string)($r[$c] ?? ''), 0, 10);
+                    if (!isset($naGrid[$v][$k])) continue;
+                    $naGrid[$v][$k][] = [
+                        'id' => (int)$r['id'], 'name' => (string)$r['vessel_name'],
+                        'type' => getCombinedSurveyTypeNames($db, $r['survey_type_ids'] ?? '', $r['type_name'] ?? ''),
+                        'port' => (string)($r['port_name'] ?? ''),
+                        'url' => ($r['status'] === 'Pending Report' ? 'report_detail.php' : 'vessel_detail.php') . '?id=' . (int)$r['id'],
+                    ];
+                }
+            }
+        } catch (Throwable $e) { error_log('dashboard need attention: ' . $e->getMessage()); }
+        $naLabels = ['TODAY', 'TOMORROW', 'DAY AFTER'];
+        $naTotal = 0; foreach ($naGrid as $row) foreach ($row as $cell) $naTotal += count($cell);
+    ?>
+    <style>
+    .na-card { background: #fff; border: 1px solid var(--border-color, #e2e8f0); border-radius: 18px; box-shadow: 0 4px 16px rgba(15,23,42,.05); overflow: hidden; margin-top: 10px; }
+    .na-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .na-table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 560px; table-layout: fixed; }
+    .na-table th, .na-table td { text-transform: uppercase; font-weight: 800; }
+    .na-table thead th { background: #0f172a; color: #fff; font-size: 13px; letter-spacing: .08em; padding: 11px 12px; text-align: center; }
+    .na-table thead th:first-child { width: 128px; text-align: left; background: #1e293b; }
+    .na-table tbody th { text-align: left; padding: 12px; font-size: 12.5px; letter-spacing: .04em; border-top: 1px solid rgba(255,255,255,.6); vertical-align: top; }
+    .na-table tbody th small { display: block; font-size: 11px; font-weight: 700; opacity: .8; margin-top: 2px; letter-spacing: .02em; }
+    .na-table td { vertical-align: top; padding: 8px; border-top: 1px solid #fff; border-left: 1px solid #fff; }
+    .na-d0 th { background: #b91c1c; color: #fff; } .na-d0 td.has { background: #fca5a5; }
+    .na-d1 th { background: #ef4444; color: #fff; } .na-d1 td.has { background: #fecaca; }
+    .na-d2 th { background: #f87171; color: #fff; } .na-d2 td.has { background: #fee2e2; }
+    .na-table td:not(.has) { background: #fff; }
+    .na-v { display: block; text-decoration: none; color: #450a0a; padding: 7px 9px; border-radius: 10px; background: rgba(255,255,255,.55); margin-bottom: 6px; }
+    .na-v:last-child { margin-bottom: 0; }
+    .na-v:hover { background: #fff; color: #7f1d1d; }
+    .na-v b { display: block; font-size: 14.5px; line-height: 1.2; font-weight: 800; overflow-wrap: anywhere; }
+    .na-v small { display: block; font-size: 10.5px; font-weight: 700; color: #7f1d1d; margin-top: 2px; line-height: 1.3; }
+    .na-empty { padding: 12px 16px; font-size: 12.5px; color: #64748b; font-weight: 600; }
+    @media (max-width: 575.98px) {
+        .na-table { min-width: 480px; }
+        .na-table thead th:first-child { width: 94px; }
+        .na-table tbody th { letter-spacing: 0; }
+        .na-table thead th, .na-table tbody th { padding: 9px 8px; font-size: 11px; }
+        .na-table td { padding: 6px; }
+        .na-v { padding: 6px 7px; } .na-v b { font-size: 12.5px; } .na-v small { font-size: 9.5px; }
+    }
+    </style>
+    <div class="overview-section mt-4" data-testid="dash-need-attention">
+        <div class="section-title-row"><span class="section-title"><i class="fa-solid fa-triangle-exclamation me-1" style="color:#dc2626"></i> Need Attention</span></div>
+        <div class="na-card">
+            <div class="na-wrap">
+                <table class="na-table" data-testid="dash-na-table">
+                    <thead><tr><th>Day</th><th>ETA</th><th>ETB</th><th>ETC</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($naDays as $i => $d): ?>
+                        <tr class="na-d<?= $i ?>">
+                            <th scope="row"><?= $naLabels[$i] ?><small><?= strtoupper(date('d-M-y', strtotime($d))) ?></small></th>
+                            <?php foreach (array_keys($naCols) as $k): $cell = $naGrid[$d][$k]; ?>
+                            <td class="<?= $cell ? 'has' : '' ?>" data-testid="dash-na-<?= $i ?>-<?= $k ?>">
+                                <?php foreach ($cell as $v): ?>
+                                <a class="na-v" href="<?= sanitize($v['url']) ?>"><b><?= sanitize(mb_strtoupper($v['name'])) ?></b><small><?= sanitize(mb_strtoupper(trim($v['type'] . ($v['port'] !== '' ? ' · ' . $v['port'] : ''), ' ·'))) ?></small></a>
+                                <?php endforeach; ?>
+                            </td>
+                            <?php endforeach; ?>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php if (!$naTotal): ?><div class="na-empty" data-testid="dash-na-empty">No ETA, ETB or ETC today, tomorrow or the day after.</div><?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div class="overview-section mt-4">
         <div class="section-title-row">
             <span class="section-title">Statistics</span>
