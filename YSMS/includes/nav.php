@@ -136,6 +136,13 @@ $sidebar_has_logo = is_file(__DIR__ . '/../' . $sidebar_logo_path);
             <i class="fa-solid fa-gas-pump"></i>
             <span>Recovery</span>
         </a>
+        <?php if (in_array($user_role, ['Admin', 'Super Admin'], true)): ?>
+        <!-- Monthly Data (Appointments / Survey Completed / Recovery of a month): sidebar + drawer only -->
+        <a href="monthly_data.php" class="nav-item-btn desktop-only-nav drawer-reveal <?= ($current_page == 'monthly_data.php') ? 'active' : '' ?>" data-testid="navigation-monthly-data-link">
+            <i class="fa-solid fa-calendar-days"></i>
+            <span>Monthly Data</span>
+        </a>
+        <?php endif; ?>
 
         <?php if ($user_role === 'Admin'): ?>
         <!-- Desktop sidebar + mobile drawer. Sales Team, Word / Photo Templates, Possible Duplicates,
