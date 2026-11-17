@@ -946,53 +946,84 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             <span class="section-title">Surveyor Performance — Full Report</span>
             <a href="recovery.php" class="sfr-link" data-testid="sfr-recovery-link">Recovery details <i class="fa-solid fa-chevron-right"></i></a>
         </div>
-        <div class="recovery-row-grid" data-testid="surveyor-full-report-grid">
-            <div class="recovery-row-card" data-testid="surveyor-full-report-card">
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>Surveyor Name</th>
-                                <th class="text-end">Total Ships Attended</th>
-                                <th class="text-end">Ships Attended - This Month</th>
-                                <th class="text-end">Total Recovery</th>
-                                <th class="text-end">Recovery - This Month</th>
-                                <th class="text-end">Avg Recovery per Ship</th>
-                                <th class="text-end">Avg Recovery per Month</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!empty($surveyor_full_report)): ?>
-                                <?php foreach ($surveyor_full_report as $row): ?>
-                                <tr data-testid="sfr-row">
-                                    <td class="fw-semibold" style="font-size:13.5px;"><a href="recovery.php?surveyor=<?= (int)$row['id'] ?>" class="text-reset text-decoration-none"><?= sanitize($row['full_name']) ?></a><?php if (($row['user_status'] ?? '') === 'Inactive'): ?> <span class="text-muted" style="font-weight:400;font-size:11px;">(Inactive)</span><?php endif; ?></td>
-                                    <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_total'] ?></td>
-                                    <td class="text-end" style="font-size:13.5px;"><?= (int)$row['ships_month'] ?></td>
-                                    <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_total'], 3) ?> MT</td>
-                                    <td class="text-end fw-bold text-primary" style="font-size:13.5px;"><?= number_format((float)$row['recovery_month'], 3) ?> MT</td>
-                                    <td class="text-end" style="font-size:13.5px;"><?= number_format((float)$row['avg_ship'], 3) ?> MT</td>
-                                    <td class="text-end" style="font-size:13.5px;"><?= number_format((float)$row['avg_month'], 3) ?> MT</td>
-                                </tr>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr><td colspan="7" class="text-muted text-center py-3" style="font-size:12.5px;">No surveyors found.</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                        <?php if (!empty($sfr_total)): ?>
-                        <tfoot>
-                            <tr class="sfr-total" data-testid="sfr-total-row">
-                                <td style="font-size:13.5px;">All vessels<br><span class="text-muted" style="font-weight:400;font-size:10.5px;">each vessel once</span></td>
-                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-total-ships"><?= (int)$sfr_total['ships_total'] ?></td>
-                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-month-ships"><?= (int)$sfr_total['ships_month'] ?></td>
-                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-total-recovery"><?= number_format((float)$sfr_total['recovery_total'], 3) ?> MT</td>
-                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-month-recovery"><?= number_format((float)$sfr_total['recovery_month'], 3) ?> MT</td>
-                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-avg-ship"><?= number_format((float)$sfr_total['avg_ship'], 3) ?> MT</td>
-                                <td class="text-end" style="font-size:13.5px;" data-testid="sfr-avg-month"><?= number_format((float)$sfr_total['avg_month'], 3) ?> MT</td>
-                            </tr>
-                        </tfoot>
-                        <?php endif; ?>
-                    </table>
-                </div>
+        <?php
+            $spInitials = function (string $n): string { $w = preg_split('/\s+/', trim($n)); return strtoupper(mb_substr($w[0] ?? '', 0, 1) . mb_substr($w[count($w) - 1] ?? '', 0, 1)); };
+            $spGrad = ['#4B2FD6,#7C3AED', '#0f4cc0,#1d6fe0', '#047857,#10b981', '#c2410c,#f59e0b', '#be185d,#ec4899', '#0e7490,#06b6d4'];
+            $spMt = fn($v) => number_format((float)$v, 3);
+        ?>
+        <style>
+        .sp-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; box-shadow: 0 4px 20px rgba(15,23,42,.05); overflow: hidden; margin-top: 10px; }
+        .sp-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .sp-table { width: 100%; border-collapse: collapse; min-width: 860px; font-size: 13px; }
+        .sp-table thead th { background: #F8FAFC; color: #64748b; font-weight: 700; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; padding: 13px 12px; text-align: right; border-bottom: 1px solid #e2e8f0; line-height: 1.35; vertical-align: bottom; }
+        .sp-table thead th:first-child { text-align: left; }
+        .sp-table thead th.grp-rec { color: #5B2DEE; }
+        .sp-table tbody td { padding: 12px; border-bottom: 1px solid #f1f5f9; text-align: right; color: #334155; white-space: nowrap; vertical-align: middle; }
+        .sp-table tbody tr:hover td { background: #FAF8FF; }
+        .sp-table tbody tr:last-child td { border-bottom: none; }
+        .sp-table td:first-child, .sp-table th:first-child { position: sticky; left: 0; z-index: 1; }
+        .sp-table tbody td:first-child { text-align: left; background: #fff; }
+        .sp-table thead th:first-child { background: #F8FAFC; }
+        .sp-name { display: flex; align-items: center; gap: 10px; text-decoration: none; color: #0f172a; font-weight: 700; font-size: 13.5px; }
+        .sp-name:hover { color: #5B2DEE; }
+        .sp-av { width: 32px; height: 32px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none; }
+        .sp-inactive { font-size: 10px; font-weight: 700; color: #94a3b8; background: #F1F5F9; border-radius: 999px; padding: 1px 7px; margin-left: 4px; }
+        .sp-n { font-weight: 800; color: #0f172a; font-size: 14px; }
+        .sp-pill { display: inline-block; min-width: 28px; text-align: center; padding: 3px 10px; border-radius: 999px; font-weight: 800; font-size: 12.5px; background: #EFF6FF; color: #1D4ED8; }
+        .sp-pill.zero { background: #F1F5F9; color: #94a3b8; }
+        .sp-rec { font-weight: 800; color: #4B2FD6; }
+        .sp-rec-m { font-weight: 800; color: #047857; }
+        .sp-avg { color: #475569; font-weight: 600; }
+        .sp-u { font-size: 10.5px; font-weight: 700; color: #94a3b8; margin-left: 2px; }
+        .sp-table tfoot td { padding: 13px 12px; text-align: right; white-space: nowrap; font-weight: 800; color: #fff; background: #1E1B6B; }
+        .sp-table tfoot td:first-child { text-align: left; position: sticky; left: 0; background: #0f172a; }
+        .sp-table tfoot small { display: block; font-size: 10px; font-weight: 600; opacity: .65; }
+        .sp-table tfoot .sp-u { color: rgba(255,255,255,.6); }
+        .sp-empty { padding: 28px; text-align: center; color: #94a3b8; }
+        </style>
+        <div class="sp-card" data-testid="surveyor-full-report-card">
+            <div class="sp-wrap">
+                <table class="sp-table" data-testid="surveyor-full-report-grid">
+                    <thead>
+                        <tr>
+                            <th>Surveyor Name</th>
+                            <th>Total Ships<br>Attended</th>
+                            <th>Ships Attended -<br>This Month</th>
+                            <th class="grp-rec">Total<br>Recovery</th>
+                            <th class="grp-rec">Recovery -<br>This Month</th>
+                            <th>Avg Recovery<br>per Ship</th>
+                            <th>Avg Recovery<br>per Month</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (!empty($surveyor_full_report)): foreach ($surveyor_full_report as $i => $row): ?>
+                        <tr data-testid="sfr-row">
+                            <td><a class="sp-name" href="recovery.php?surveyor=<?= (int)$row['id'] ?>"><span class="sp-av" style="background:linear-gradient(135deg,<?= $spGrad[abs(crc32((string)$row['full_name'])) % count($spGrad)] ?>)"><?= sanitize($spInitials((string)$row['full_name'])) ?></span><span><?= sanitize($row['full_name']) ?><?php if (($row['user_status'] ?? '') === 'Inactive'): ?><span class="sp-inactive">INACTIVE</span><?php endif; ?></span></a></td>
+                            <td><span class="sp-n"><?= (int)$row['ships_total'] ?></span></td>
+                            <td><span class="sp-pill<?= (int)$row['ships_month'] ? '' : ' zero' ?>"><?= (int)$row['ships_month'] ?></span></td>
+                            <td><span class="sp-rec"><?= $spMt($row['recovery_total']) ?></span><span class="sp-u">MT</span></td>
+                            <td><span class="sp-rec-m"><?= $spMt($row['recovery_month']) ?></span><span class="sp-u">MT</span></td>
+                            <td><span class="sp-avg"><?= $spMt($row['avg_ship']) ?></span><span class="sp-u">MT</span></td>
+                            <td><span class="sp-avg"><?= $spMt($row['avg_month']) ?></span><span class="sp-u">MT</span></td>
+                        </tr>
+                    <?php endforeach; else: ?>
+                        <tr><td colspan="7" class="sp-empty">No surveyors found.</td></tr>
+                    <?php endif; ?>
+                    </tbody>
+                    <?php if (!empty($sfr_total)): ?>
+                    <tfoot>
+                        <tr class="sfr-total" data-testid="sfr-total-row">
+                            <td>All vessels<small>each vessel once</small></td>
+                            <td data-testid="sfr-total-ships"><?= (int)$sfr_total['ships_total'] ?></td>
+                            <td data-testid="sfr-month-ships"><?= (int)$sfr_total['ships_month'] ?></td>
+                            <td data-testid="sfr-total-recovery"><?= $spMt($sfr_total['recovery_total']) ?><span class="sp-u">MT</span></td>
+                            <td data-testid="sfr-month-recovery"><?= $spMt($sfr_total['recovery_month']) ?><span class="sp-u">MT</span></td>
+                            <td data-testid="sfr-avg-ship"><?= $spMt($sfr_total['avg_ship']) ?><span class="sp-u">MT</span></td>
+                            <td data-testid="sfr-avg-month"><?= $spMt($sfr_total['avg_month']) ?><span class="sp-u">MT</span></td>
+                        </tr>
+                    </tfoot>
+                    <?php endif; ?>
+                </table>
             </div>
         </div>
     </div>
