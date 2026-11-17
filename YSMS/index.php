@@ -289,23 +289,44 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         </div>
     </div>
 
+    <style>
+    /* Dashboard highlight cards: Pending Vessels / Reports / Completed and Appointments & Surveys Completed */
+    .dash-hl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+    .dash-hl a { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 4px; padding: 16px 16px 14px; border-radius: 18px; color: #fff; text-decoration: none; box-shadow: 0 10px 24px rgba(15,23,42,.14); transition: transform .15s ease, box-shadow .15s ease; min-width: 0; }
+    .dash-hl a:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(15,23,42,.2); color: #fff; }
+    .dash-hl .pv { background: linear-gradient(120deg, #1e3a8a 0%, #3b82f6 100%); }
+    .dash-hl .pr { background: linear-gradient(120deg, #c2410c 0%, #f59e0b 100%); }
+    .dash-hl .cv { background: linear-gradient(120deg, #047857 0%, #10b981 100%); }
+    .dash-hl .t { background: linear-gradient(120deg, #4B2FD6 0%, #7C3AED 100%); }
+    .dash-hl .m { background: linear-gradient(120deg, #0f4cc0 0%, #1d6fe0 100%); }
+    .dash-hl .c { background: linear-gradient(120deg, #047857 0%, #10b981 100%); }
+    .dash-hl .ic { position: absolute; right: -6px; top: -8px; font-size: 64px; opacity: .14; }
+    .dash-hl .n { font-size: 30px; font-weight: 800; line-height: 1.05; }
+    .dash-hl .l { font-size: 13px; font-weight: 700; line-height: 1.25; }
+    .dash-hl .s { font-size: 11px; opacity: .8; font-weight: 500; }
+    .dash-hl .go { font-size: 11.5px; font-weight: 700; opacity: .9; margin-top: 4px; }
+    @media (max-width: 991.98px) { .ha-page .ha-band { height: 200px; } } /* the blue band ends behind the first row of cards (no Today's Overview heading) */
+    @media (max-width: 575.98px) {
+        .dash-hl { gap: 8px; }
+        .dash-hl a { padding: 12px 10px; border-radius: 14px; }
+        .dash-hl .n { font-size: 24px; }
+ .dash-hl .l { font-size: 11.5px; } .dash-hl .s, .dash-hl .go { display: none; } .dash-hl .ic { font-size: 44px; }
+    }
+    </style>
     <div class="overview-section ha-ov">
-        <div class="overview-grid">
-            <div class="ov-card pending-vessel" onclick="location.href='vessels.php'">
-                <div class="ov-icon"><i class="fa-solid fa-ship"></i></div>
-                <div class="ov-count"><?= $pending_vessels ?></div>
-                <div class="ov-label">Pending<br>Vessels</div>
-            </div>
-            <div class="ov-card pending-report" onclick="location.href='reports.php'">
-                <div class="ov-icon"><i class="fa-solid fa-file-lines"></i></div>
-                <div class="ov-count"><?= $pending_reports ?></div>
-                <div class="ov-label">Pending<br>Reports</div>
-            </div>
-            <div class="ov-card completed" onclick="location.href='completed.php'">
-                <div class="ov-icon"><i class="fa-solid fa-check"></i></div>
-                <div class="ov-count"><?= $completed_vessels ?></div>
-                <div class="ov-label">Completed<br>Vessels</div>
-            </div>
+        <div class="dash-hl ov-hl" style="margin-top:0" data-testid="dash-overview">
+            <a class="pv" href="vessels.php" data-testid="dash-ov-pending-vessels">
+                <i class="fa-solid fa-ship ic" aria-hidden="true"></i>
+                <span class="n"><?= (int)$pending_vessels ?></span><span class="l">Pending Vessels</span><span class="s">Waiting for survey</span><span class="go">Open Pending Vessels <i class="fa-solid fa-chevron-right"></i></span>
+            </a>
+            <a class="pr" href="reports.php" data-testid="dash-ov-pending-reports">
+                <i class="fa-solid fa-file-lines ic" aria-hidden="true"></i>
+                <span class="n"><?= (int)$pending_reports ?></span><span class="l">Pending Reports</span><span class="s">Survey done, report to upload</span><span class="go">Open Pending Reports <i class="fa-solid fa-chevron-right"></i></span>
+            </a>
+            <a class="cv" href="completed.php" data-testid="dash-ov-completed">
+                <i class="fa-solid fa-circle-check ic" aria-hidden="true"></i>
+                <span class="n"><?= (int)$completed_vessels ?></span><span class="l">Completed Vessels</span><span class="s">Report uploaded</span><span class="go">Open Completed <i class="fa-solid fa-chevron-right"></i></span>
+            </a>
         </div>
     </div>
 
@@ -324,24 +345,6 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         } catch (Throwable $e) { error_log('dashboard highlights: ' . $e->getMessage()); }
         $hlMonth = date('Y-m');
     ?>
-    <style>
-    .dash-hl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
-    .dash-hl a { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 4px; padding: 16px 16px 14px; border-radius: 18px; color: #fff; text-decoration: none; box-shadow: 0 10px 24px rgba(15,23,42,.14); transition: transform .15s ease, box-shadow .15s ease; min-width: 0; }
-    .dash-hl a:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(15,23,42,.2); color: #fff; }
-    .dash-hl .t { background: linear-gradient(120deg, #4B2FD6 0%, #7C3AED 100%); }
-    .dash-hl .m { background: linear-gradient(120deg, #0f4cc0 0%, #1d6fe0 100%); }
-    .dash-hl .c { background: linear-gradient(120deg, #047857 0%, #10b981 100%); }
-    .dash-hl .ic { position: absolute; right: -6px; top: -8px; font-size: 64px; opacity: .14; }
-    .dash-hl .n { font-size: 30px; font-weight: 800; line-height: 1.05; }
-    .dash-hl .l { font-size: 13px; font-weight: 700; line-height: 1.25; }
-    .dash-hl .s { font-size: 11px; opacity: .8; font-weight: 500; }
-    .dash-hl .go { font-size: 11.5px; font-weight: 700; opacity: .9; margin-top: 4px; }
-    @media (max-width: 575.98px) {
-        .dash-hl { gap: 8px; }
-        .dash-hl a { padding: 12px 10px; border-radius: 14px; }
-        .dash-hl .n { font-size: 24px; } .dash-hl .l { font-size: 11.5px; } .dash-hl .s, .dash-hl .go { display: none; } .dash-hl .ic { font-size: 44px; }
-    }
-    </style>
     <div class="overview-section mt-4" data-testid="dash-highlights">
         <div class="section-title-row"><span class="section-title"><i class="fa-solid fa-calendar-days me-1" style="color:#5B2DEE"></i> Appointments &amp; Surveys Completed</span></div>
         <div class="dash-hl">
