@@ -884,9 +884,9 @@ include 'includes/header.php';
                             <tr>
                                 <th>#</th>
                                 <th>Vessel</th>
-                                <th><?= $is_full_access ? 'Client' : 'Client / Agent' ?></th>
-                                <th>Survey type</th>
                                 <th>Port</th>
+                                <th>Survey type</th>
+                                <th><?= $is_full_access ? 'Client' : 'Client / Agent' ?></th>
                                 <th>Latest Update</th>
                                 <th>Appointment Date</th>
                                 <th>Actions</th>
@@ -926,6 +926,15 @@ include 'includes/header.php';
                                     </div>
                                 </td>
                                 <td>
+                                    <div class="vd-port-cell">
+                                        <div class="vd-port-icon"><i class="fa-solid fa-location-dot"></i></div>
+                                        <span class="vd-caps"><?= sanitize(mb_strtoupper((string)($survey['port_name'] ?? 'N/A'))) ?></span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="vd-type-big" data-testid="pending-vessel-type-<?= (int)$survey['id'] ?>"><?= sanitize(mb_strtoupper($typeLabel)) ?></span>
+                                </td>
+                                <td>
                                     <div class="vd-caps"><?= sanitize(mb_strtoupper((string)($survey['company_name'] ?? ''))) ?></div>
                                     <?php if (!$is_full_access): /* the agent is shown to the surveyor only */ ?>
                                     <div class="vd-sub">Agent: <?= sanitize($survey['agent_name'] ?? '—') ?></div>
@@ -933,15 +942,6 @@ include 'includes/header.php';
                                     <?php if ($needsSurveyor): ?>
                                         <span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> Assign a surveyor</span>
                                     <?php endif; ?>
-                                </td>
-                                <td>
-                                    <span class="vd-type-big" data-testid="pending-vessel-type-<?= (int)$survey['id'] ?>"><?= sanitize(mb_strtoupper($typeLabel)) ?></span>
-                                </td>
-                                <td>
-                                    <div class="vd-port-cell">
-                                        <div class="vd-port-icon"><i class="fa-solid fa-location-dot"></i></div>
-                                        <span class="vd-caps"><?= sanitize(mb_strtoupper((string)($survey['port_name'] ?? 'N/A'))) ?></span>
-                                    </div>
                                 </td>
                                 <td class="vd-dates-cell" data-testid="pending-vessel-dates-<?= (int)$survey['id'] ?>">
                                     <?php if ($rowDates): foreach ($rowDates as $k => $d): ?>
