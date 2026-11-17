@@ -7,6 +7,7 @@
  */
 require_once 'config/config.php';
 require_once 'includes/list_filters.php';
+require_once 'includes/vessel_dates.php';
 checkAuth();
 
 $db = getDB();
@@ -22,6 +23,7 @@ if ($is_client_role) {
     $client_row_id = getClientIdForUser($db, (int)$user_id);
 }
 
+vesselDatesEnsure($db); // ETA / ETB / ETC / Expected Supply Date (Latest Update column)
 // Safety net: ensure live-status columns exist (export + filters use s.custom_live_status)
 try {
     $cols = $db->query("SHOW COLUMNS FROM surveys LIKE 'custom_live_status'")->fetchAll();
@@ -603,6 +605,13 @@ include 'includes/header.php';
         .vd-vessel { font-weight: 700; color: #0f172a; text-decoration: none; font-size: 13.5px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
         .vd-vessel:hover { color: #5B2DEE; }
         .vd-sub { font-size: 11px; color: #94a3b8; margin-top: 1px; font-weight: 500; }
+        .vd-vessel.vd-big { font-size: 16px; font-weight: 800; max-width: 260px; }
+        .vd-caps { font-weight: 700; color: #1e293b; font-size: 14px; letter-spacing: .02em; }
+        .vd-type-big { display: inline-block; font-weight: 800; color: #1d4ed8; font-size: 14.5px; letter-spacing: .02em; }
+        .vd-dates-cell { white-space: nowrap; }
+        .vd-date-line { font-size: 13px; color: #334155; line-height: 1.6; }
+        .vd-date-line span { font-weight: 600; color: #64748b; }
+        .vd-date-line b { font-weight: 800; color: #0f172a; letter-spacing: .02em; }
 
         .vd-badge {
             display: inline-flex; align-items: center; gap: 5px;
@@ -875,12 +884,11 @@ include 'includes/header.php';
                             <tr>
                                 <th>#</th>
                                 <th>Vessel</th>
-                                <th>Client / Agent</th>
+                                <th><?= $is_full_access ? 'Client' : 'Client / Agent' ?></th>
                                 <th>Survey type</th>
                                 <th>Port</th>
-                                <?php if ($is_full_access): ?><th>Surveyor</th><?php endif; ?>
-                                <th>Appointment Date</th>
-                                <th>Date</th>
+                                <th>Latest Update</th>
+                                <th>Remarks</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -895,7 +903,7 @@ include 'includes/header.php';
                                     ? date('d M Y H:i', strtotime($date_src)) : '—';
                                 $ts = strtotime($date_src ?: '1970-01-01') ?: 0;
                                 $appt_src = $survey['appointment_date'] ?? '';
-                                $appt_disp = (!empty($appt_src) && $appt_src !== '0000-00-00') ? date('d M Y', strtotime($appt_src)) : '—';
+                                $rowDates = vesselDatesOf($survey);
                             ?>
                             <tr class="vd-row"
                                 data-search="<?= sanitize(strtolower(implode(' ', [$vessel_name, $survey['company_name'] ?? '', $survey['agent_name'] ?? '', $typeLabel, $survey['port_name'] ?? '', $surveyorNames, $survey['report_number'] ?? '']))) ?>"
@@ -912,27 +920,41 @@ include 'includes/header.php';
                                         <?php [$viK, $viSrc, $viSt] = $viImg($vessel_name); ?>
                                         <div class="vd-vessel-icon vd-vessel-photo<?= $viSt === 'found' ? ' real' : '' ?>"><img src="<?= sanitize($viSrc) ?>" alt="" width="44" height="36" data-vimg="<?= sanitize($viK) ?>" data-vimg-st="<?= sanitize($viSt) ?>" onerror="this.onerror=null;this.src='<?= VI_DEFAULT ?>';this.parentNode.classList.remove('real')" data-testid="pending-vessel-desk-photo-<?= (int)$survey['id'] ?>"></div>
                                         <div style="min-width:0;">
-                                            <a class="vd-vessel" href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><?= sanitize($vessel_name) ?></a>
-                                            <?php if (!empty($survey['report_number'])): ?>
-                                                <div class="vd-sub">Report: <?= sanitize($survey['report_number']) ?></div>
-                                            <?php endif; ?>
+                                            <a class="vd-vessel vd-big" href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><?= sanitize($vessel_name) ?></a>
                                         </div>
                                     </div>
                                 </td>
                                 <td>
-                                    <div style="font-weight:600;color:#334155;"><?= sanitize($survey['company_name'] ?? '') ?></div>
+                                    <div class="vd-caps"><?= sanitize(mb_strtoupper((string)($survey['company_name'] ?? ''))) ?></div>
+                                    <?php if (!$is_full_access): /* the agent is shown to the surveyor only */ ?>
                                     <div class="vd-sub">Agent: <?= sanitize($survey['agent_name'] ?? '—') ?></div>
+                                    <?php endif; ?>
                                     <?php if ($needsSurveyor): ?>
                                         <span class="badge-needs-surveyor" data-testid="needs-surveyor-badge-<?= (int)$survey['id'] ?>"><i class="fa-solid fa-circle-info"></i> Assign a surveyor</span>
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <span class="vd-badge"><span class="dot"></span><?= sanitize($typeLabel) ?></span>
+                                    <span class="vd-type-big" data-testid="pending-vessel-type-<?= (int)$survey['id'] ?>"><?= sanitize(mb_strtoupper($typeLabel)) ?></span>
+                                </td>
+                                <td>
+                                    <div class="vd-port-cell">
+                                        <div class="vd-port-icon"><i class="fa-solid fa-location-dot"></i></div>
+                                        <span class="vd-caps"><?= sanitize(mb_strtoupper((string)($survey['port_name'] ?? 'N/A'))) ?></span>
+                                    </div>
+                                </td>
+                                <td class="vd-dates-cell" data-testid="pending-vessel-dates-<?= (int)$survey['id'] ?>">
+                                    <?php if ($rowDates): foreach ($rowDates as $k => $d): ?>
+                                        <div class="vd-date-line"><span><?= sanitize($d['label']) ?>:</span> <b><?= sanitize($d['text']) ?></b></div>
+                                    <?php endforeach; else: ?>
+                                        <span class="vd-sub">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-testid="pending-vessel-remarks-<?= (int)$survey['id'] ?>">
                                     <?php /* 🌟 Desktop mirrors the mobile card's Latest Update block exactly —
                                              same wording/hierarchy/fallback, same data source
                                              (custom_live_status / status_updated_at / modifier_name), just
                                              laid out for a table cell instead of a card. */ ?>
-                                    <div class="vd-latest-update" style="max-width:240px;white-space:normal;margin-top:6px;">
+                                    <div class="vd-latest-update" style="max-width:260px;white-space:normal;">
                                         <?php if (!empty($survey['custom_live_status'])): ?>
                                             <div class="vd-status-ok text-dark fw-semibold">
                                                 <i class="fa-solid fa-comment-dots text-primary me-1"></i>Latest Update : <?= sanitize($survey['custom_live_status']) ?>
@@ -946,22 +968,6 @@ include 'includes/header.php';
                                         <?php endif; ?>
                                     </div>
                                 </td>
-                                <td>
-                                    <div class="vd-port-cell">
-                                        <div class="vd-port-icon"><i class="fa-solid fa-location-dot"></i></div>
-                                        <span><?= sanitize($survey['port_name'] ?? 'N/A') ?></span>
-                                    </div>
-                                </td>
-                                <?php if ($is_full_access): ?>
-                                <td>
-                                    <div class="vd-avatar-cell">
-                                        <div class="vd-avatar" style="background: <?= pvAvatarGradient($surveyorNames) ?>;"><?= sanitize(pvInitials($surveyorNames)) ?></div>
-                                        <span><?= sanitize($surveyorNames) ?></span>
-                                    </div>
-                                </td>
-                                <?php endif; ?>
-                                <td style="white-space:nowrap;color:#64748b;font-size:12.5px;"><?= sanitize($appt_disp) ?></td>
-                                <td style="white-space:nowrap;color:#64748b;font-size:12.5px;"><?= sanitize($date_disp) ?></td>
                                 <td>
                                     <div class="vd-actions">
                                         <a href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-eye"></i> View</a>
