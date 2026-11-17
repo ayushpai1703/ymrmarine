@@ -290,13 +290,6 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
     </div>
 
     <div class="overview-section ha-ov">
-        <div class="section-title-row">
-            <span class="section-title">Today's Overview</span>
-            <div class="date-select-badge">
-                <?= date('d M Y') ?> <i class="fa-solid fa-chevron-down ms-1" style="font-size: 10px;"></i>
-            </div>
-        </div>
-        
         <div class="overview-grid">
             <div class="ov-card pending-vessel" onclick="location.href='vessels.php'">
                 <div class="ov-icon"><i class="fa-solid fa-ship"></i></div>
@@ -350,7 +343,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
     }
     </style>
     <div class="overview-section mt-4" data-testid="dash-highlights">
-        <div class="section-title-row"><span class="section-title"><i class="fa-solid fa-calendar-days me-1" style="color:#5B2DEE"></i> Appointments &amp; Surveys</span></div>
+        <div class="section-title-row"><span class="section-title"><i class="fa-solid fa-calendar-days me-1" style="color:#5B2DEE"></i> Appointments &amp; Surveys Completed</span></div>
         <div class="dash-hl">
             <a class="t" href="monthly_data.php?tab=appointments&amp;month=<?= $hlMonth ?>&amp;day=<?= $hlToday ?>" data-testid="dash-hl-today">
                 <i class="fa-solid fa-calendar-day ic" aria-hidden="true"></i>
@@ -366,6 +359,114 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             </a>
         </div>
     </div>
+    <?php endif; ?>
+
+    <?php if (in_array($role, ['Admin', 'Super Admin'], true)):
+        // 🌟 Month-wise Appointments (Monthly Data rule) and Recovery (Pending Report + Completed by Survey
+        //    Completed Date, NOT APPLICABLE types count 0 — same as Monthly Data / Recovery), Jan–Dec, from 2026.
+        require_once 'includes/monthly_data.php';
+        $mcFirst = 2026;
+        $mcLast = max($mcFirst, (int)date('Y'));
+        $mcData = [];
+        for ($y = $mcFirst; $y <= $mcLast; $y++) $mcData[$y] = ['appt' => array_fill(0, 12, 0), 'rec' => array_fill(0, 12, 0.0)];
+        try {
+            $from = $mcFirst . '-01-01'; $to = ($mcLast + 1) . '-01-01';
+            $q = $db->prepare('SELECT YEAR(d) AS y, MONTH(d) AS m, COUNT(*) AS n FROM (SELECT ' . MD_APPT_DATE_SQL . ' AS d FROM surveys s) x WHERE d >= ? AND d < ? GROUP BY y, m');
+            $q->execute([$from, $to]);
+            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) $mcData[(int)$r['y']]['appt'][(int)$r['m'] - 1] = (int)$r['n'];
+            $cd = surveyCompletedDateSql('s');
+            $q = $db->prepare("SELECT YEAR($cd) AS y, MONTH($cd) AS m, COALESCE(SUM(" . recoveryCountedSql('s') . "), 0) AS t FROM surveys s
+                WHERE s.status IN ('Pending Report','Completed') AND $cd >= ? AND $cd < ? GROUP BY y, m");
+            $q->execute([$from, $to]);
+            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) $mcData[(int)$r['y']]['rec'][(int)$r['m'] - 1] = round((float)$r['t'], 3);
+        } catch (Throwable $e) { error_log('dashboard month charts: ' . $e->getMessage()); }
+    ?>
+    <style>
+    .mc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .mc-year { border: 1px solid var(--border-color, #e2e8f0); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 700; color: #0f172a; background: #fff; }
+    .mc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+    @media (max-width: 767.98px) { .mc-grid { grid-template-columns: 1fr; } }
+    .mc-card { background: #fff; border: 1px solid var(--border-color, #e2e8f0); border-radius: 18px; padding: 14px 16px 10px; box-shadow: 0 4px 16px rgba(15,23,42,.05); position: relative; min-width: 0; }
+    .mc-t { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .mc-t b { font-size: 14px; font-weight: 800; color: #0f172a; display: inline-flex; align-items: center; gap: 7px; }
+    .mc-t b i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+    .mc-t span { font-size: 12px; color: #64748b; font-weight: 600; }
+    .mc-t span strong { color: #0f172a; font-size: 14px; }
+    .mc-svg { display: block; width: 100%; height: auto; margin-top: 6px; overflow: visible; }
+    .mc-svg text { font-family: inherit; }
+    .mc-bar { cursor: pointer; }
+    .mc-hit { fill: transparent; cursor: pointer; }
+    .mc-tip { position: absolute; pointer-events: none; background: #0f172a; color: #fff; font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 8px; white-space: nowrap; transform: translate(-50%, -100%); opacity: 0; transition: opacity .1s; z-index: 5; }
+    .mc-tip.on { opacity: 1; }
+    .mc-tip small { display: block; font-weight: 500; opacity: .75; }
+    </style>
+    <div class="overview-section mt-4" data-testid="dash-month-charts">
+        <div class="section-title-row mc-head">
+            <span class="section-title"><i class="fa-solid fa-chart-column me-1" style="color:#1d6fe0"></i> Month-wise Appointments &amp; Recovery</span>
+            <select class="mc-year" data-mc-year aria-label="Year" data-testid="dash-mc-year">
+                <?php for ($y = $mcLast; $y >= $mcFirst; $y--): ?><option value="<?= $y ?>"<?= $y === (int)date('Y') ? ' selected' : '' ?>><?= $y ?></option><?php endfor; ?>
+            </select>
+        </div>
+        <div class="mc-grid">
+            <div class="mc-card" data-mc="appt" data-testid="dash-mc-appt">
+                <div class="mc-t"><b><i style="background:#1d6fe0"></i>Appointments</b><span>Total <strong data-mc-total>0</strong></span></div>
+                <svg class="mc-svg" viewBox="0 0 600 230" role="img" aria-label="Appointments per month"></svg>
+                <div class="mc-tip"></div>
+            </div>
+            <div class="mc-card" data-mc="rec" data-testid="dash-mc-rec">
+                <div class="mc-t"><b><i style="background:#059669"></i>Recovery (MT)</b><span>Total <strong data-mc-total>0</strong></span></div>
+                <svg class="mc-svg" viewBox="0 0 600 230" role="img" aria-label="Recovery per month"></svg>
+                <div class="mc-tip"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+    (function () {
+      var DATA = <?= json_encode($mcData) ?>, MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var CFG = { appt: { color: '#1d6fe0', tab: 'appointments', fmt: function (v) { return String(v); }, unit: function (v) { return v === 1 ? 'appointment' : 'appointments'; } },
+                  rec: { color: '#059669', tab: 'recovery', fmt: function (v) { return v.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }, unit: function () { return 'MT recovery'; } } };
+      var sel = document.querySelector('[data-mc-year]'), NS = 'http://www.w3.org/2000/svg';
+      function el(n, a, t) { var e = document.createElementNS(NS, n); for (var k in a) e.setAttribute(k, a[k]); if (t != null) e.textContent = t; return e; }
+      function nice(max) { if (max <= 0) return 1; var p = Math.pow(10, Math.floor(Math.log10(max))), f = max / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; }
+      function draw(card, key, year) {
+        var c = CFG[key], vals = (DATA[year] || {})[key] || [], svg = card.querySelector('svg'), tip = card.querySelector('.mc-tip');
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+        var L = 44, R = 8, T = 18, B = 26, W = 600, H = 230, pw = W - L - R, ph = H - T - B, top = nice(Math.max.apply(null, vals.concat([0])));
+        if (key === 'appt') top = Math.max(4, Math.ceil(top / 4) * 4); // whole numbers on the count axis
+        var total = vals.reduce(function (a, b) { return a + b; }, 0);
+        card.querySelector('[data-mc-total]').textContent = c.fmt(key === 'rec' ? Math.round(total * 1000) / 1000 : total) + (key === 'rec' ? ' MT' : '');
+        for (var g = 0; g <= 4; g++) { // recessive grid + y labels
+          var v = top * g / 4, y = T + ph - ph * g / 4;
+          svg.appendChild(el('line', { x1: L, x2: W - R, y1: y, y2: y, stroke: g ? '#eef2f7' : '#cbd5e1', 'stroke-width': 1 }));
+          svg.appendChild(el('text', { x: L - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#94a3b8' }, String(Math.round(v * 10) / 10)));
+        }
+        var slot = pw / 12, bw = Math.min(30, slot * 0.6), maxI = vals.indexOf(Math.max.apply(null, vals));
+        vals.forEach(function (v, i) {
+          var x = L + slot * i + (slot - bw) / 2, h = top ? ph * v / top : 0, y = T + ph - h;
+          if (h > 0) {
+            var r = Math.min(4, h, bw / 2); // 4px rounded top, square on the baseline
+            svg.appendChild(el('path', { class: 'mc-bar', fill: c.color, d: 'M' + x + ',' + (T + ph) + 'V' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y + 'H' + (x + bw - r) + 'Q' + (x + bw) + ',' + y + ' ' + (x + bw) + ',' + (y + r) + 'V' + (T + ph) + 'Z' }));
+          }
+          if (i === maxI && v > 0) svg.appendChild(el('text', { x: x + bw / 2, y: y - 6, 'text-anchor': 'middle', 'font-size': 11.5, 'font-weight': 700, fill: '#334155' }, c.fmt(v))); // the highest month only
+          svg.appendChild(el('text', { x: L + slot * i + slot / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: '#64748b' }, MON[i]));
+          var hit = el('rect', { class: 'mc-hit', x: L + slot * i, y: T, width: slot, height: ph + B, 'data-testid': 'dash-mc-' + key + '-' + (i + 1) });
+          var mm = year + '-' + ('0' + (i + 1)).slice(-2);
+          hit.addEventListener('mouseenter', function () {
+            var box = svg.getBoundingClientRect(), cb = card.getBoundingClientRect(), k = box.width / W; // SVG has no offsetLeft: place from the card's box
+            tip.innerHTML = '<span></span><small></small>'; tip.firstChild.textContent = c.fmt(v) + ' ' + c.unit(v); tip.lastChild.textContent = MON[i] + ' ' + year + ' · click to open';
+            tip.style.left = (box.left - cb.left + (L + slot * i + slot / 2) * k) + 'px'; tip.style.top = (box.top - cb.top + Math.max(y, T + 10) * k - 6) + 'px'; tip.classList.add('on');
+          });
+          hit.addEventListener('mouseleave', function () { tip.classList.remove('on'); });
+          hit.addEventListener('click', function () { location.href = 'monthly_data.php?tab=' + c.tab + '&month=' + mm; });
+          var tt = el('title', {}, MON[i] + ' ' + year + ': ' + c.fmt(v)); hit.appendChild(tt);
+          svg.appendChild(hit);
+        });
+      }
+      function all() { var y = sel.value; ['appt', 'rec'].forEach(function (k) { draw(document.querySelector('[data-mc="' + k + '"]'), k, y); }); }
+      sel.addEventListener('change', all);
+      all();
+    })();
+    </script>
     <?php endif; ?>
 
     <div class="overview-section mt-4">
