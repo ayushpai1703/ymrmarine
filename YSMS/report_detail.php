@@ -122,8 +122,8 @@ $can_replace_docs = canReplaceDocument($db, $role, (int)$current_user_id, (int)$
 // compose window (mail.google.com), not mailto:, since mailto: opens
 // whatever the OS/browser has set as its default mail handler (Outlook,
 // in practice, for this deployment) rather than Gmail specifically. To/Cc
-// are left out of these URLs; To is added when Send is clicked from the To field, which is
-// filled with the Master's email from the vessel's Ships Particulars document (editable;
+// are left out of these URLs; To is added when Send is clicked from the To field (typed, or
+// filled by "Fetch Master Email" from the vessel's Ships Particulars document —
 // includes/master_email.php). Nothing is sent automatically.
 $redelivery_type = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
 $redelivery_surveyor = getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A');
@@ -622,8 +622,11 @@ include 'includes/header.php';
             <div class="dapp-sec-h"><span class="si" style="background:#e6fbf7;color:#0f766e"><i class="fa-solid fa-envelope-open-text"></i></span><b>Email to Master</b></div>
             <div style="padding:0 16px 4px;font-size:11.5px;color:#64748b">For redelivery · your Gmail address (optional) picks which account composes.</div>
             <div style="padding:0 16px 6px">
-                <input type="email" placeholder="To — Master's email" data-redelivery-to aria-label="To — Master's email" data-testid="redelivery-to-input" style="width:100%;box-sizing:border-box;border:1.5px solid #d6e0ee;border-radius:14px;padding:10px 12px;font-size:13px">
-                <div style="font-size:11px;color:#64748b;margin-top:3px" data-redelivery-note>Looking for the Master's email in Ships Particulars…</div>
+                <div style="display:flex;gap:8px">
+                    <input type="email" placeholder="To — Master's email" data-redelivery-to aria-label="To — Master's email" data-testid="redelivery-to-input" style="flex:1;min-width:0;box-sizing:border-box;border:1.5px solid #d6e0ee;border-radius:14px;padding:10px 12px;font-size:13px">
+                    <button type="button" data-redelivery-fetch data-testid="redelivery-fetch-button" style="border:0;border-radius:14px;background:linear-gradient(135deg,#4B2FD6,#7C3AED);color:#fff;font-weight:700;font-size:12.5px;padding:0 12px;white-space:nowrap;cursor:pointer"><i class="fa-solid fa-magnifying-glass"></i> Fetch Master Email</button>
+                </div>
+                <div style="font-size:11px;color:#64748b;margin-top:3px" data-redelivery-note></div>
             </div>
             <div class="dapp-mail">
                 <input type="email" placeholder="Your Gmail address" value="<?= sanitize($my_email) ?>" data-redelivery-from data-testid="redelivery-from-input">
@@ -893,9 +896,12 @@ include 'includes/header.php';
                     <div class="vdd-card redelivery-block" data-testid="redelivery-block-desktop">
                         <div class="vdd-card-body">
                             <div class="vdd-field" style="margin-bottom:10px;">
-                                <label>To — Master's email (from Ships Particulars)</label>
-                                <input type="email" placeholder="master@…" data-redelivery-to data-testid="redelivery-to-input-desktop">
-                                <div style="font-size:11px;color:#64748b;margin-top:3px" data-redelivery-note>Looking for the Master's email in Ships Particulars…</div>
+                                <label>To — Master's email</label>
+                                <div style="display:flex;gap:8px;align-items:stretch">
+                                    <input type="email" placeholder="master@…" data-redelivery-to data-testid="redelivery-to-input-desktop" style="flex:1;min-width:0">
+                                    <button type="button" data-redelivery-fetch data-testid="redelivery-fetch-button-desktop" style="border:0;border-radius:14px;background:linear-gradient(135deg,#4B2FD6,#7C3AED);color:#fff;font-weight:700;font-size:12.5px;padding:0 12px;white-space:nowrap;cursor:pointer;border-radius:10px"><i class="fa-solid fa-magnifying-glass"></i> Fetch Master Email</button>
+                                </div>
+                                <div style="font-size:11px;color:#64748b;margin-top:3px" data-redelivery-note></div>
                             </div>
                             <div class="vdd-field" style="margin-bottom:10px;">
                                 <label>Your Gmail address (optional — picks which account composes)</label>
@@ -1054,25 +1060,34 @@ include 'includes/header.php';
 // On phones this opens the Gmail app directly (already signed in) instead
 // of a browser tab that would ask the user to log in again; desktop keeps
 // opening the Gmail web compose tab as before.
-// To: the Master's email from the vessel's Ships Particulars document (ajax/master_email.php),
-// looked up once when the page opens; the field stays editable. Clicking Send waits for it.
-var rdMaster = null;
-function rdLookup() {
-    if (rdMaster) return rdMaster;
-    var inputs = document.querySelectorAll('[data-redelivery-to]'), notes = document.querySelectorAll('[data-redelivery-note]');
-    if (!inputs.length) return (rdMaster = Promise.resolve(''));
-    rdMaster = fetch('ajax/master_email.php?id=<?= (int)$survey['id'] ?>', { credentials: 'same-origin' })
+// To: "Fetch Master Email" reads the Master's email from the vessel's uploaded Ships Particulars
+// document (ajax/master_email.php) and puts it in To; when it can't, the user types it.
+function rdNote(text, color) {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-redelivery-note]'), function (n) { n.textContent = text; n.style.color = color || '#64748b'; });
+}
+document.addEventListener('click', function (ev) {
+    var fb = ev.target.closest && ev.target.closest('[data-redelivery-fetch]');
+    if (!fb || fb.disabled) return;
+    ev.preventDefault();
+    var btns = document.querySelectorAll('[data-redelivery-fetch]');
+    Array.prototype.forEach.call(btns, function (b) { b.disabled = true; b.dataset.label = b.dataset.label || b.innerHTML; b.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching…'; });
+    rdNote('Looking for the Master\'s email in the uploaded documents…');
+    fetch('ajax/master_email.php?id=<?= (int)$survey['id'] ?>', { credentials: 'same-origin' })
         .then(function (r) { return r.json(); })
-        .catch(function () { return { ok: false, email: '', note: 'Could not look up the Master\'s email — type it in To.' }; })
+        .catch(function () { return { ok: false, email: '' }; })
         .then(function (j) {
             var email = (j && j.email) || '';
-            Array.prototype.forEach.call(inputs, function (i) { if (email && !i.value.trim()) i.value = email; });
-            Array.prototype.forEach.call(notes, function (n) { n.textContent = (j && j.note) || ''; n.style.color = j && j.by === 'ai' ? '#b45309' : '#64748b'; });
-            return email;
-        });
-    return rdMaster;
-}
-rdLookup();
+            if (email) {
+                Array.prototype.forEach.call(document.querySelectorAll('[data-redelivery-to]'), function (i) { i.value = email; });
+                rdNote((j.by === 'ai' ? '⚠ ' : '✓ ') + (j.note || ''), j.by === 'ai' ? '#b45309' : '#047857');
+            } else {
+                rdNote('Master email could not be fetched — please enter it manually.' + (j && j.note ? ' (' + j.note + ')' : ''), '#b91c1c');
+                var vis = Array.prototype.filter.call(document.querySelectorAll('[data-redelivery-to]'), function (i) { return i.offsetParent !== null; })[0];
+                if (vis) vis.focus();
+            }
+        })
+        .then(function () { Array.prototype.forEach.call(btns, function (b) { b.disabled = false; b.innerHTML = b.dataset.label; }); });
+});
 // the two To fields (phone / computer layout) stay the same
 document.addEventListener('input', function (ev) {
     if (!ev.target.matches || !ev.target.matches('[data-redelivery-to]')) return;
@@ -1086,9 +1101,7 @@ document.addEventListener('click', function (ev) {
     var input = block ? block.querySelector('[data-redelivery-from]') : null;
     var email = input ? input.value.trim() : '';
     var ua = navigator.userAgent || '';
-    var mobile = /Android|iPhone|iPad|iPod/i.test(ua);
-    var win = mobile ? null : window.open('about:blank', '_blank'); // opened inside the click so it is not blocked
-    rdLookup().then(function () {
+    (function () {
         var toEl = block ? block.querySelector('[data-redelivery-to]') : null;
         var to = toEl ? toEl.value.trim() : '';
         if (!/^[^\s@,;]+@[^\s@,;]+\.[A-Za-z]{2,24}$/.test(to)) to = ''; // only a single, valid address
@@ -1109,9 +1122,8 @@ document.addEventListener('click', function (ev) {
             }, 1500);
             return;
         }
-        if (win) { try { win.opener = null; } catch (e) {} win.location.href = webUrl; }
-        else window.open(webUrl, '_blank', 'noopener');
-    });
+        window.open(webUrl, '_blank', 'noopener');
+    })();
 });
 </script>
 
