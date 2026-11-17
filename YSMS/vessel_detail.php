@@ -4,6 +4,7 @@ require_once 'includes/notifications.php';
 require_once 'includes/agents_mail.php';
 require_once 'includes/mailer.php';
 require_once 'includes/document_replace_helpers.php';
+require_once 'includes/vessel_dates.php';
 checkAuth();
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -36,11 +37,55 @@ try {
 } catch (Exception $e) {
     error_log('vessel_detail.php live-status column check: ' . $e->getMessage());
 }
+vesselDatesEnsure($db);
+
+// Who may change this vessel's live status / dates (checked on the server for every POST):
+//   'dates'  — Admin, or a surveyor assigned to this vessel (live status and ETA / ETB / ETC / Expected Supply Date)
+//   'status' — the others who can open this page (Super Admin, the vessel's own client): live status only, as before
+//   ''       — anyone else (another surveyor's vessel, another client's): nothing
+$vdWriteAccess = function () use ($db, $id, $is_admin, $has_full_access, $role, $current_user_id): string {
+    if ($is_admin) return 'dates';
+    if ($role === 'Surveyor' && isSurveyorAssignedToSurvey($db, $id, $current_user_id)) return 'dates';
+    if ($has_full_access) return 'status';
+    if ($role === 'Client') {
+        $q = $db->prepare('SELECT client_id FROM surveys WHERE id = ?');
+        $q->execute([$id]);
+        $cid = (int)$q->fetchColumn();
+        if ($cid > 0 && $cid === getClientIdForUser($db, $current_user_id)) return 'status';
+    }
+    return '';
+};
+
+// ETA / ETB / ETC / Expected Supply Date: one date set or cleared at a time.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_vessel_date'])) {
+    $key = (string)($_POST['vessel_date_field'] ?? '');
+    $val = trim((string)($_POST['vessel_date_value'] ?? ''));
+    $clear = isset($_POST['clear_vessel_date']);
+    if ($vdWriteAccess() !== 'dates') {
+        $error = 'You cannot change the dates of this vessel.';
+    } elseif (!isset(VESSEL_DATE_FIELDS[$key])) {
+        $error = 'Choose ETA, ETB, ETC or Expected Supply Date.';
+    } elseif (!$clear && ($val === '' || !($dt = DateTime::createFromFormat('!Y-m-d', $val)) || $dt->format('Y-m-d') !== $val || (int)$dt->format('Y') < 2000 || (int)$dt->format('Y') > 2100)) {
+        $error = 'Choose a valid date for ' . VESSEL_DATE_FIELDS[$key][1] . '.';
+    } else {
+        try {
+            $col = VESSEL_DATE_FIELDS[$key][0]; // from the fixed list above
+            $db->prepare("UPDATE surveys SET `$col` = ? WHERE id = ?")->execute([$clear ? null : $val, $id]);
+            $success = VESSEL_DATE_FIELDS[$key][1] . ($clear ? ' removed.' : ' saved: ' . vesselDateFmt($val));
+        } catch (Throwable $e) {
+            error_log('vessel date update: ' . $e->getMessage());
+            $error = 'The date could not be saved. Please try again.';
+        }
+    }
+}
 
 // 🌟 సర్వేయర్ సబ్మిట్ చేసినప్పుడు custom_live_status అప్‌డేట్ చేసే పక్కా లాజిక్
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_latest_status'])) {
-    $latest_status = trim($_POST['latest_status']);
-    
+    $latest_status = trim((string)($_POST['latest_status'] ?? ''));
+    if ($vdWriteAccess() === '') {
+        // not this user's vessel: nothing is changed (the page below then shows Access Denied)
+        $error = 'You cannot update the status of this vessel.';
+    } else
     try {
         $update_status = $db->prepare("
             UPDATE surveys 
@@ -618,6 +663,68 @@ if ($mvCanMark || $mvBlock !== '') echo missedAssets();
     }
 </style>
 
+<?php
+// ETA / ETB / ETC / Expected Supply Date — shown above Latest Update / Live Status (mobile and desktop).
+$vdCanDates = $vdWriteAccess() === 'dates';
+$vdDates = vesselDatesOf($survey);
+$vdDatesHtml = function (string $ui) use ($vdCanDates, $vdDates, $survey): string {
+    if (!$vdCanDates && !$vdDates) return '';
+    $id = (int)$survey['id'];
+    ob_start(); ?>
+    <div class="vdates vdates-<?= $ui ?>" data-testid="vd-dates-<?= $ui ?>">
+        <div class="vdates-h"><i class="fa-regular fa-calendar"></i> Vessel dates</div>
+        <?php if ($vdDates): ?>
+        <div class="vdates-list">
+            <?php foreach ($vdDates as $k => $d): ?>
+            <form method="POST" action="vessel_detail.php?id=<?= $id ?>" class="vdates-chip" data-testid="vd-date-<?= $k ?>">
+                <?= csrf_field() ?><input type="hidden" name="vessel_date_field" value="<?= $k ?>"><input type="hidden" name="update_vessel_date" value="1">
+                <span><?= sanitize($d['label']) ?>:</span> <b><?= sanitize($d['text']) ?></b>
+                <?php if ($vdCanDates): ?><button type="submit" name="clear_vessel_date" value="1" title="Remove <?= sanitize($d['label']) ?>" aria-label="Remove <?= sanitize($d['label']) ?>" onclick="return confirm('Remove <?= sanitize($d['label']) ?>?')" data-testid="vd-date-clear-<?= $k ?>">&times;</button><?php endif; ?>
+            </form>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+        <?php if ($vdCanDates): ?>
+        <form method="POST" action="vessel_detail.php?id=<?= $id ?>" class="vdates-add" data-vdates-form>
+            <?= csrf_field() ?>
+            <select name="vessel_date_field" required data-vdates-field data-testid="vd-date-field-<?= $ui ?>">
+                <option value="">Choose…</option>
+                <?php foreach (VESSEL_DATE_FIELDS as $k => [$col, $label]): ?>
+                <option value="<?= $k ?>" data-ymd="<?= sanitize($vdDates[$k]['ymd'] ?? '') ?>"><?= sanitize($label) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <input type="date" name="vessel_date_value" required data-vdates-date data-testid="vd-date-value-<?= $ui ?>">
+            <button type="submit" name="update_vessel_date" value="1" data-testid="vd-date-save-<?= $ui ?>">Save</button>
+        </form>
+        <?php endif; ?>
+    </div>
+    <?php return (string)ob_get_clean();
+};
+?>
+<style>
+.vdates { border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; background: #fff; }
+.vdates-dapp { margin: 0 0 12px; }
+.vdates-h { font-size: 12px; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; display: flex; align-items: center; gap: 7px; }
+.vdates-h i { color: #5B2DEE; }
+.vdates-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.vdates-chip { display: inline-flex; align-items: center; gap: 4px; margin: 0; background: #F3EEFE; border: 1px solid #ddd0fb; color: #3b1d9a; border-radius: 999px; padding: 4px 6px 4px 11px; font-size: 12.5px; }
+.vdates-chip span { font-weight: 600; }
+.vdates-chip b { font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
+.vdates-chip span { white-space: nowrap; }
+.vdates-chip button { border: 0; background: #fff; color: #b91c1c; width: 20px; height: 20px; border-radius: 50%; line-height: 18px; font-size: 15px; padding: 0; margin-left: 2px; cursor: pointer; }
+.vdates-add { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; }
+.vdates-add select, .vdates-add input { border: 1.5px solid #d6e0ee; border-radius: 10px; padding: 7px 10px; font-size: 13px; min-height: 40px; background: #fff; }
+.vdates-add select { flex: 1 1 150px; } .vdates-add input { flex: 1 1 140px; min-width: 0; }
+.vdates-add button { border: 0; border-radius: 10px; background: linear-gradient(135deg, #5B2DEE, #7c3aed); color: #fff; font-weight: 700; padding: 0 18px; min-height: 40px; cursor: pointer; }
+</style>
+<script>
+document.addEventListener('change', function (e) {
+  var sel = e.target.closest && e.target.closest('[data-vdates-field]');
+  if (!sel) return;
+  var o = sel.options[sel.selectedIndex], d = sel.form.querySelector('[data-vdates-date]');
+  if (d) d.value = (o && o.getAttribute('data-ymd')) || ''; // a date already set opens for changing
+});
+</script>
 <div class="scroll-content">
     <?php $page_title = 'Vessel Survey Details'; $back_url = 'vessels.php'; $page_testid = 'vessel-detail'; include 'includes/top_app_bar.php'; ?>
     <?php $overdueAlertKind = 'survey'; include 'includes/overdue_alert.php'; // Survey Pending (7+ days since appointment) ?>
@@ -691,6 +798,7 @@ if ($mvCanMark || $mvBlock !== '') echo missedAssets();
             <?php endif; ?>
         </div>
 
+        <?= $vdDatesHtml('dapp') ?>
         <div class="dapp-card status-update-card" data-testid="vd-live-status">
             <div class="dapp-sec-h"><span class="si" style="background:#e7f8ee;color:#16a34a"><i class="fa-solid fa-tower-broadcast"></i></span><b>Live Status</b></div>
             <form action="vessel_detail.php?id=<?= $survey['id'] ?>" method="POST" class="dapp-upd">
@@ -1019,6 +1127,7 @@ if ($mvCanMark || $mvBlock !== '') echo missedAssets();
                     </div>
                     <?php endif; ?>
 
+                    <?= $vdDatesHtml('vdd') ?>
                     <div class="vdd-card">
                         <div class="vdd-card-head">
                             <div class="vdd-card-head-icon" style="background:#F3EEFE;color:#5B2DEE;"><i class="fa-solid fa-pen-fancy"></i></div>
