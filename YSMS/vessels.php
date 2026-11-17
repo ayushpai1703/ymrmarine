@@ -888,7 +888,7 @@ include 'includes/header.php';
                                 <th>Survey type</th>
                                 <th>Port</th>
                                 <th>Latest Update</th>
-                                <th>Remarks</th>
+                                <th>Appointment Date</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -903,6 +903,7 @@ include 'includes/header.php';
                                     ? date('d M Y H:i', strtotime($date_src)) : '—';
                                 $ts = strtotime($date_src ?: '1970-01-01') ?: 0;
                                 $appt_src = $survey['appointment_date'] ?? '';
+                                $appt_disp = (!empty($appt_src) && strpos((string)$appt_src, '0000') !== 0) ? date('d M Y', strtotime($appt_src)) : '—';
                                 $rowDates = vesselDatesOf($survey);
                             ?>
                             <tr class="vd-row"
@@ -949,25 +950,7 @@ include 'includes/header.php';
                                         <span class="vd-sub">—</span>
                                     <?php endif; ?>
                                 </td>
-                                <td data-testid="pending-vessel-remarks-<?= (int)$survey['id'] ?>">
-                                    <?php /* 🌟 Desktop mirrors the mobile card's Latest Update block exactly —
-                                             same wording/hierarchy/fallback, same data source
-                                             (custom_live_status / status_updated_at / modifier_name), just
-                                             laid out for a table cell instead of a card. */ ?>
-                                    <div class="vd-latest-update" style="max-width:260px;white-space:normal;">
-                                        <?php if (!empty($survey['custom_live_status'])): ?>
-                                            <div class="vd-status-ok text-dark fw-semibold">
-                                                <i class="fa-solid fa-comment-dots text-primary me-1"></i>Latest Update : <?= sanitize($survey['custom_live_status']) ?>
-                                            </div>
-                                            <div class="text-muted" style="font-size:10px;">
-                                                <span class="fw-bold"><?= !empty($survey['status_updated_at']) ? formatLatestUpdateWhen($survey['status_updated_at']) : '—' ?></span>
-                                                By <span class="text-primary fw-bold"><?= !empty($survey['modifier_name']) ? sanitize($survey['modifier_name']) : 'User' ?></span>
-                                            </div>
-                                        <?php else: ?>
-                                            <div class="vd-status-none"><i class="fa-solid fa-clock"></i> No updates yet</div>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
+                                <td style="white-space:nowrap;color:#334155;font-size:13px;font-weight:600;" data-testid="pending-vessel-appointment-<?= (int)$survey['id'] ?>"><?= sanitize($appt_disp) ?></td>
                                 <td>
                                     <div class="vd-actions">
                                         <a href="vessel_detail.php?id=<?= (int)$survey['id'] ?>"><i class="fa-solid fa-eye"></i> View</a>
