@@ -122,8 +122,9 @@ $can_replace_docs = canReplaceDocument($db, $role, (int)$current_user_id, (int)$
 // compose window (mail.google.com), not mailto:, since mailto: opens
 // whatever the OS/browser has set as its default mail handler (Outlook,
 // in practice, for this deployment) rather than Gmail specifically. To/Cc
-// are left out of the URL so they stay blank for the user to fill in
-// themselves — no auto-sending, no recipient automation.
+// are left out of these URLs; To is added when Send is clicked from the To field, which is
+// filled with the Master's email from the vessel's Ships Particulars document (editable;
+// includes/master_email.php). Nothing is sent automatically.
 $redelivery_type = getCombinedSurveyTypeNames($db, $survey['survey_type_ids'] ?? '', $survey['type_name'] ?? 'N/A');
 $redelivery_surveyor = getCombinedSurveyorNames($db, $survey['id'] ?? 0, $survey['surveyor_name'] ?? 'N/A');
 $redelivery_date = !empty($survey['survey_completed_date']) ? date('d M Y', strtotime($survey['survey_completed_date'])) : '';
@@ -616,6 +617,10 @@ include 'includes/header.php';
         <div class="dapp-card redelivery-block" data-testid="redelivery-block-mobile">
             <div class="dapp-sec-h"><span class="si" style="background:#e6fbf7;color:#0f766e"><i class="fa-solid fa-envelope-open-text"></i></span><b>Email to Master</b></div>
             <div style="padding:0 16px 4px;font-size:11.5px;color:#64748b">For redelivery · your Gmail address (optional) picks which account composes.</div>
+            <div style="padding:0 16px 6px">
+                <input type="email" placeholder="To — Master's email" data-redelivery-to aria-label="To — Master's email" data-testid="redelivery-to-input" style="width:100%;box-sizing:border-box;border:1.5px solid #d6e0ee;border-radius:14px;padding:10px 12px;font-size:13px">
+                <div style="font-size:11px;color:#64748b;margin-top:3px" data-redelivery-note>Looking for the Master's email in Ships Particulars…</div>
+            </div>
             <div class="dapp-mail">
                 <input type="email" placeholder="Your Gmail address" value="<?= sanitize($my_email) ?>" data-redelivery-from data-testid="redelivery-from-input">
                 <a href="#" data-redelivery-open data-base-url="<?= sanitize($redelivery_gmail_url) ?>" data-ios-url="<?= sanitize($redelivery_gmail_ios_url) ?>" data-android-url="<?= sanitize($redelivery_gmail_android_url) ?>" class="dapp-btn" data-testid="redelivery-email-button"><i class="fa-solid fa-paper-plane"></i> Send</a>
@@ -884,6 +889,11 @@ include 'includes/header.php';
                     <div class="vdd-card redelivery-block" data-testid="redelivery-block-desktop">
                         <div class="vdd-card-body">
                             <div class="vdd-field" style="margin-bottom:10px;">
+                                <label>To — Master's email (from Ships Particulars)</label>
+                                <input type="email" placeholder="master@…" data-redelivery-to data-testid="redelivery-to-input-desktop">
+                                <div style="font-size:11px;color:#64748b;margin-top:3px" data-redelivery-note>Looking for the Master's email in Ships Particulars…</div>
+                            </div>
+                            <div class="vdd-field" style="margin-bottom:10px;">
                                 <label>Your Gmail address (optional — picks which account composes)</label>
                                 <input type="email" placeholder="you@gmail.com" value="<?= sanitize($my_email) ?>" data-redelivery-from data-testid="redelivery-from-input-desktop">
                             </div>
@@ -1040,6 +1050,30 @@ include 'includes/header.php';
 // On phones this opens the Gmail app directly (already signed in) instead
 // of a browser tab that would ask the user to log in again; desktop keeps
 // opening the Gmail web compose tab as before.
+// To: the Master's email from the vessel's Ships Particulars document (ajax/master_email.php),
+// looked up once when the page opens; the field stays editable. Clicking Send waits for it.
+var rdMaster = null;
+function rdLookup() {
+    if (rdMaster) return rdMaster;
+    var inputs = document.querySelectorAll('[data-redelivery-to]'), notes = document.querySelectorAll('[data-redelivery-note]');
+    if (!inputs.length) return (rdMaster = Promise.resolve(''));
+    rdMaster = fetch('ajax/master_email.php?id=<?= (int)$survey['id'] ?>', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .catch(function () { return { ok: false, email: '', note: 'Could not look up the Master\'s email — type it in To.' }; })
+        .then(function (j) {
+            var email = (j && j.email) || '';
+            Array.prototype.forEach.call(inputs, function (i) { if (email && !i.value.trim()) i.value = email; });
+            Array.prototype.forEach.call(notes, function (n) { n.textContent = (j && j.note) || ''; n.style.color = j && j.by === 'ai' ? '#b45309' : '#64748b'; });
+            return email;
+        });
+    return rdMaster;
+}
+rdLookup();
+// the two To fields (phone / computer layout) stay the same
+document.addEventListener('input', function (ev) {
+    if (!ev.target.matches || !ev.target.matches('[data-redelivery-to]')) return;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-redelivery-to]'), function (i) { if (i !== ev.target) i.value = ev.target.value; });
+});
 document.addEventListener('click', function (ev) {
     var btn = ev.target.closest('[data-redelivery-open]');
     if (!btn) return;
@@ -1047,25 +1081,33 @@ document.addEventListener('click', function (ev) {
     var block = btn.closest('.redelivery-block');
     var input = block ? block.querySelector('[data-redelivery-from]') : null;
     var email = input ? input.value.trim() : '';
-    var webUrl = btn.getAttribute('data-base-url') + (email ? '&authuser=' + encodeURIComponent(email) : '');
     var ua = navigator.userAgent || '';
-
-    if (/Android/i.test(ua)) {
-        window.location.href = btn.getAttribute('data-android-url');
-        return;
-    }
-    if (/iPhone|iPad|iPod/i.test(ua)) {
-        var appOpened = false;
-        var onBlur = function () { appOpened = true; window.removeEventListener('blur', onBlur); };
-        window.addEventListener('blur', onBlur);
-        window.location.href = btn.getAttribute('data-ios-url');
-        setTimeout(function () {
-            window.removeEventListener('blur', onBlur);
-            if (!appOpened) window.location.href = webUrl;
-        }, 1500);
-        return;
-    }
-    window.open(webUrl, '_blank', 'noopener');
+    var mobile = /Android|iPhone|iPad|iPod/i.test(ua);
+    var win = mobile ? null : window.open('about:blank', '_blank'); // opened inside the click so it is not blocked
+    rdLookup().then(function () {
+        var toEl = block ? block.querySelector('[data-redelivery-to]') : null;
+        var to = toEl ? toEl.value.trim() : '';
+        if (!/^[^\s@,;]+@[^\s@,;]+\.[A-Za-z]{2,24}$/.test(to)) to = ''; // only a single, valid address
+        var webUrl = btn.getAttribute('data-base-url') + (to ? '&to=' + encodeURIComponent(to) : '') + (email ? '&authuser=' + encodeURIComponent(email) : '');
+        if (/Android/i.test(ua)) {
+            var a = btn.getAttribute('data-android-url');
+            window.location.href = to ? a.replace('intent://send?', 'intent://' + encodeURIComponent(to).replace('%40', '@') + '?') : a;
+            return;
+        }
+        if (/iPhone|iPad|iPod/i.test(ua)) {
+            var appOpened = false;
+            var onBlur = function () { appOpened = true; window.removeEventListener('blur', onBlur); };
+            window.addEventListener('blur', onBlur);
+            window.location.href = btn.getAttribute('data-ios-url') + (to ? '&to=' + encodeURIComponent(to) : '');
+            setTimeout(function () {
+                window.removeEventListener('blur', onBlur);
+                if (!appOpened) window.location.href = webUrl;
+            }, 1500);
+            return;
+        }
+        if (win) { try { win.opener = null; } catch (e) {} win.location.href = webUrl; }
+        else window.open(webUrl, '_blank', 'noopener');
+    });
 });
 </script>
 
