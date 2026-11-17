@@ -561,6 +561,67 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
     </div>
     <?php endif; ?>
 
+    <?php if (in_array($role, ['Admin', 'Super Admin'], true)):
+        // 🌟 Overdue lists: Pending Vessels more than 30 days after their Appointment Date, and Pending Reports
+        //    more than 15 days after their Survey Completed Date — oldest first, days counted as on the vessel
+        //    pages' overdue alert (calendar days since that date). Vessels without that date are not listed.
+        $odLists = ['pv' => [], 'pr' => []];
+        try {
+            $odSql = function (string $status, string $col, int $days) use ($db): array {
+                $today = date('Y-m-d'); // the app's day (Asia/Kolkata), as the vessel pages' overdue alert
+                $q = $db->prepare("SELECT s.id, s.vessel_name, DATEDIFF(?, DATE(s.$col)) AS days FROM surveys s
+                    WHERE s.status = ? AND YEAR(s.$col) > 0 AND DATEDIFF(?, DATE(s.$col)) > ? ORDER BY days DESC, s.id ASC");
+                $q->execute([$today, $status, $today, $days]);
+                return $q->fetchAll(PDO::FETCH_ASSOC);
+            };
+            $odLists['pv'] = $odSql('Pending Vessel', 'appointment_date', 30);
+            $odLists['pr'] = $odSql('Pending Report', 'survey_completed_date', 15);
+        } catch (Throwable $e) { error_log('dashboard overdue lists: ' . $e->getMessage()); }
+        $odBoxes = [
+            'pv' => ['title' => 'Pending Vessels Overdue', 'sub' => 'More than 30 days since the Appointment Date', 'icon' => 'fa-ship', 'page' => 'vessel_detail.php', 'col' => 'Days since appointment'],
+            'pr' => ['title' => 'Pending Reports Overdue', 'sub' => 'More than 15 days since the Survey Completed Date', 'icon' => 'fa-file-lines', 'page' => 'report_detail.php', 'col' => 'Days since survey'],
+        ];
+    ?>
+    <style>
+    .od-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+    @media (max-width: 767.98px) { .od-grid { grid-template-columns: 1fr; } }
+    .od-box { background: #fff; border: 1px solid var(--border-color, #e2e8f0); border-radius: 18px; box-shadow: 0 4px 16px rgba(15,23,42,.05); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+    .od-h { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: linear-gradient(120deg, #7f1d1d 0%, #dc2626 100%); color: #fff; }
+    .od-h.pr { background: linear-gradient(120deg, #9a3412 0%, #f97316 100%); }
+    .od-h i { font-size: 18px; opacity: .9; }
+    .od-h b { display: block; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+    .od-h small { display: block; font-size: 11px; opacity: .85; }
+    .od-h .n { margin-left: auto; font-size: 22px; font-weight: 800; }
+    .od-list { max-height: 330px; overflow-y: auto; }
+    .od-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #f1f5f9; text-decoration: none; color: #0f172a; }
+    .od-row:hover { background: #FEF2F2; color: #0f172a; }
+    .od-row .v { flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 800; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .od-row .d { flex: none; font-size: 12px; font-weight: 800; color: #b91c1c; background: #FEE2E2; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+    .od-row.pr .d { color: #9a3412; background: #FFEDD5; }
+    .od-colh { display: flex; justify-content: space-between; padding: 8px 14px; background: #F8FAFC; border-bottom: 1px solid #e2e8f0; font-size: 10.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .06em; }
+    .od-empty { padding: 18px 14px; font-size: 13px; color: #16a34a; font-weight: 600; }
+    </style>
+    <div class="overview-section mt-4" data-testid="dash-overdue">
+        <div class="od-grid">
+            <?php foreach ($odBoxes as $k => $bx): $list = $odLists[$k]; ?>
+            <div class="od-box" data-testid="dash-od-<?= $k ?>">
+                <div class="od-h <?= $k ?>"><i class="fa-solid <?= $bx['icon'] ?>" aria-hidden="true"></i><div><b><?= $bx['title'] ?></b><small><?= $bx['sub'] ?></small></div><span class="n" data-testid="dash-od-<?= $k ?>-count"><?= count($list) ?></span></div>
+                <?php if ($list): ?>
+                <div class="od-colh"><span>Vessel</span><span><?= $bx['col'] ?></span></div>
+                <div class="od-list">
+                    <?php foreach ($list as $r): ?>
+                    <a class="od-row <?= $k ?>" href="<?= $bx['page'] ?>?id=<?= (int)$r['id'] ?>" data-testid="dash-od-<?= $k ?>-row"><span class="v"><?= sanitize($r['vessel_name']) ?></span><span class="d"><?= (int)$r['days'] ?> days</span></a>
+                    <?php endforeach; ?>
+                </div>
+                <?php else: ?>
+                <div class="od-empty"><i class="fa-solid fa-circle-check me-1"></i> Nothing overdue.</div>
+                <?php endif; ?>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div class="overview-section mt-4">
         <div class="section-title-row">
             <span class="section-title">Statistics</span>
