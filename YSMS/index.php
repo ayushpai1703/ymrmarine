@@ -316,41 +316,54 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         </div>
     </div>
 
-    <?php if ($role === 'Admin'):
-        // 🌟 Live Survey Reports: surveys being filled on the survey report link, by the time since they were started
-        //    (under 1 h in progress, 1–3 h might be completed, then completed). The live ones are listed.
-        $lsrRows = []; $lsrCount = ['progress' => 0, 'check' => 0, 'done' => 0];
+    <?php if (in_array($role, ['Admin', 'Super Admin'], true)):
+        // 🌟 Today's appointments, this month's appointments (Monthly Data rule: Appointment Date, else the
+        //    Survey Assigned date) and this month's surveys completed (Completed vessels by Survey Completed Date).
+        require_once 'includes/monthly_data.php';
+        $hlToday = date('Y-m-d');
+        $hlMonthStart = date('Y-m-01');
+        $hlMonthEnd = date('Y-m-d', strtotime($hlMonthStart . ' +1 month'));
+        $hl = ['today' => 0, 'month' => 0, 'done' => 0];
         try {
-            require_once 'includes/live_survey_reports.php';
-            $lsrAll = array_values(array_filter(lsrList($db, 24, 300), fn($r) => $r['vessel'] !== '' || $r['imo'] !== '' || $r['surveyor'] !== ''));
-            foreach ($lsrAll as $r) $lsrCount[$r['status']['key']]++;
-            $lsrRows = array_slice(array_values(array_filter($lsrAll, fn($r) => $r['status']['key'] !== 'done')), 0, 8);
-            usort($lsrRows, fn($x, $y) => [$x['status']['key'] !== 'progress', $x['status']['hours']] <=> [$y['status']['key'] !== 'progress', $y['status']['hours']]);
-            echo lsrCss();
-        } catch (Throwable $e) { error_log('dashboard live survey reports: ' . $e->getMessage()); }
+            $hl['today'] = mdAppointmentCount($db, $hlToday, date('Y-m-d', strtotime($hlToday . ' +1 day')));
+            $hl['month'] = mdAppointmentCount($db, $hlMonthStart, $hlMonthEnd);
+            $hl['done'] = mdCompletedVesselCount($db, $hlMonthStart, $hlMonthEnd);
+        } catch (Throwable $e) { error_log('dashboard highlights: ' . $e->getMessage()); }
+        $hlMonth = date('Y-m');
     ?>
-    <div class="overview-section mt-4" data-testid="dash-live-survey-reports">
-        <div class="section-title-row d-flex justify-content-between align-items-center">
-            <span class="section-title"><i class="fa-solid fa-tower-broadcast text-success me-1"></i> Live Surveys</span>
-            <a href="live_survey_reports.php" class="text-decoration-none fw-semibold" style="font-size:13px" data-testid="dash-lsr-all">Open Live Survey Reports <i class="fa-solid fa-chevron-right" style="font-size:11px"></i></a>
-        </div>
-        <div class="bg-white rounded-4 shadow-sm mt-2" style="border:1px solid var(--border-color);overflow:hidden">
-            <div class="lsr-dash">
-                <a class="lsr-dt p" href="live_survey_reports.php?f=progress" data-testid="dash-lsr-c-progress"><i class="fa-solid fa-tower-broadcast"></i><span><b><?= $lsrCount['progress'] ?></b>In progress</span></a>
-                <a class="lsr-dt c" href="live_survey_reports.php?f=check" data-testid="dash-lsr-c-check"><i class="fa-solid fa-bell"></i><span><b><?= $lsrCount['check'] ?></b>Might be completed</span></a>
-                <a class="lsr-dt d" href="live_survey_reports.php?f=done" data-testid="dash-lsr-c-done"><i class="fa-solid fa-circle-check"></i><span><b><?= $lsrCount['done'] ?></b>Completed (24 h)</span></a>
-            </div>
-            <?php if (!$lsrRows): ?>
-                <div class="px-3 pb-3 text-muted" style="font-size:13px" data-testid="dash-lsr-none">No survey in progress right now.</div>
-            <?php endif; ?>
-            <?php foreach ($lsrRows as $i => $r): ?>
-                <a class="lsr-row" href="live_survey_reports.php?id=<?= (int)$r['id'] ?>" data-testid="dash-lsr-row-<?= (int)$r['id'] ?>">
-                    <span><b><?= $r['vessel'] !== '' ? sanitize($r['vessel']) : '<span class="lsr-empty">Vessel not entered yet</span>' ?></b><small>IMO <?= $r['imo'] !== '' ? sanitize($r['imo']) : '—' ?></small></span>
-                    <span><?= $r['surveyor'] !== '' ? sanitize($r['surveyor']) : '<span class="lsr-empty">Surveyor not entered</span>' ?></span>
-                    <span class="lsr-hide-sm"><small>started <?= sanitize(lsrAgo($r['status']['hours'])) ?></small></span>
-                    <span><?= lsrPill($r['status']) ?></span>
-                </a>
-            <?php endforeach; ?>
+    <style>
+    .dash-hl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+    .dash-hl a { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 4px; padding: 16px 16px 14px; border-radius: 18px; color: #fff; text-decoration: none; box-shadow: 0 10px 24px rgba(15,23,42,.14); transition: transform .15s ease, box-shadow .15s ease; min-width: 0; }
+    .dash-hl a:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(15,23,42,.2); color: #fff; }
+    .dash-hl .t { background: linear-gradient(120deg, #4B2FD6 0%, #7C3AED 100%); }
+    .dash-hl .m { background: linear-gradient(120deg, #0f4cc0 0%, #1d6fe0 100%); }
+    .dash-hl .c { background: linear-gradient(120deg, #047857 0%, #10b981 100%); }
+    .dash-hl .ic { position: absolute; right: -6px; top: -8px; font-size: 64px; opacity: .14; }
+    .dash-hl .n { font-size: 30px; font-weight: 800; line-height: 1.05; }
+    .dash-hl .l { font-size: 13px; font-weight: 700; line-height: 1.25; }
+    .dash-hl .s { font-size: 11px; opacity: .8; font-weight: 500; }
+    .dash-hl .go { font-size: 11.5px; font-weight: 700; opacity: .9; margin-top: 4px; }
+    @media (max-width: 575.98px) {
+        .dash-hl { gap: 8px; }
+        .dash-hl a { padding: 12px 10px; border-radius: 14px; }
+        .dash-hl .n { font-size: 24px; } .dash-hl .l { font-size: 11.5px; } .dash-hl .s, .dash-hl .go { display: none; } .dash-hl .ic { font-size: 44px; }
+    }
+    </style>
+    <div class="overview-section mt-4" data-testid="dash-highlights">
+        <div class="section-title-row"><span class="section-title"><i class="fa-solid fa-calendar-days me-1" style="color:#5B2DEE"></i> Appointments &amp; Surveys</span></div>
+        <div class="dash-hl">
+            <a class="t" href="monthly_data.php?tab=appointments&amp;month=<?= $hlMonth ?>&amp;day=<?= $hlToday ?>" data-testid="dash-hl-today">
+                <i class="fa-solid fa-calendar-day ic" aria-hidden="true"></i>
+                <span class="n"><?= (int)$hl['today'] ?></span><span class="l">Today's Appointments</span><span class="s"><?= strtoupper(date('d-M-Y')) ?></span><span class="go">Open in Monthly Data <i class="fa-solid fa-chevron-right"></i></span>
+            </a>
+            <a class="m" href="monthly_data.php?tab=appointments&amp;month=<?= $hlMonth ?>" data-testid="dash-hl-month">
+                <i class="fa-solid fa-calendar-week ic" aria-hidden="true"></i>
+                <span class="n"><?= (int)$hl['month'] ?></span><span class="l">This Month's Appointments</span><span class="s"><?= date('F Y') ?></span><span class="go">Open in Monthly Data <i class="fa-solid fa-chevron-right"></i></span>
+            </a>
+            <a class="c" href="completed.php?date=survey&amp;ym=<?= $hlMonth ?>&amp;sort=date&amp;dir=desc" data-testid="dash-hl-completed">
+                <i class="fa-solid fa-circle-check ic" aria-hidden="true"></i>
+                <span class="n"><?= (int)$hl['done'] ?></span><span class="l">Surveys Completed This Month</span><span class="s">By Survey Completed Date · <?= date('F Y') ?></span><span class="go">Open Completed Vessels <i class="fa-solid fa-chevron-right"></i></span>
+            </a>
         </div>
     </div>
     <?php endif; ?>

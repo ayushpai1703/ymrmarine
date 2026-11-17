@@ -32,6 +32,27 @@ function mdMonth(array $g): array {
     return [(int)$m[1], (int)$m[2], $start, date('Y-m-d', strtotime($start . ' +1 month'))];
 }
 
+/** ?day=YYYY-MM-DD (Appointments of one day, e.g. today from the dashboard) or ''. */
+function mdDay(array $g): string {
+    $d = (string)($g['day'] ?? '');
+    $dt = DateTime::createFromFormat('!Y-m-d', $d);
+    return ($dt && $dt->format('Y-m-d') === $d && (int)$dt->format('Y') >= 2000 && (int)$dt->format('Y') <= 2100) ? $d : '';
+}
+
+/** Appointments (same rule as the Appointments tab) with their date in [$from, $to): a count. */
+function mdAppointmentCount(PDO $db, string $from, string $to): int {
+    $q = $db->prepare('SELECT COUNT(*) FROM surveys s WHERE ' . MD_APPT_DATE_SQL . ' >= ? AND ' . MD_APPT_DATE_SQL . ' < ?');
+    $q->execute([$from, $to]);
+    return (int)$q->fetchColumn();
+}
+
+/** Completed vessels (Completed page) with their Survey Completed Date in [$from, $to): a count. */
+function mdCompletedVesselCount(PDO $db, string $from, string $to): int {
+    $q = $db->prepare("SELECT COUNT(*) FROM surveys s WHERE s.status = 'Completed' AND " . surveyCompletedDateSql('s') . ' >= ? AND ' . surveyCompletedDateSql('s') . ' < ?');
+    $q->execute([$from, $to]);
+    return (int)$q->fetchColumn();
+}
+
 function mdTab(array $g): string {
     $t = (string)($g['tab'] ?? '');
     return isset(MD_TABS[$t]) ? $t : 'appointments';
@@ -69,8 +90,9 @@ function mdColumns(string $tab): array {
  * column values (dates as Y-m-d, recovery as positive floats or null). totals: count, and for
  * recovery vlsfo / lsmgo / hsfo / total (DB sums, NOT APPLICABLE types count 0).
  */
-function mdData(PDO $db, string $tab, int $y, int $m): array {
+function mdData(PDO $db, string $tab, int $y, int $m, string $day = ''): array {
     [, , $start, $end] = mdMonth(['month' => sprintf('%04d-%02d', $y, $m)]);
+    if ($tab === 'appointments' && $day !== '') { $start = $day; $end = date('Y-m-d', strtotime($day . ' +1 day')); } // one day only
     if ($tab === 'appointments') {
         $where = MD_APPT_DATE_SQL . ' >= ? AND ' . MD_APPT_DATE_SQL . ' < ?';
         $params = [$start, $end];

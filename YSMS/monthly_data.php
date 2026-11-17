@@ -9,10 +9,14 @@ if (!mdCanView()) { header('Location: index.php'); exit; }
 
 $db = getDB();
 $tab = mdTab($_GET);
-[$y, $m, $start] = mdMonth($_GET);
+// ?day=YYYY-MM-DD: Appointments of that day only (dashboard "Today's Appointments"); the month is the day's month
+$day = $tab === 'appointments' ? mdDay($_GET) : '';
+[$y, $m, $start] = mdMonth($day !== '' ? ['month' => substr($day, 0, 7)] : $_GET);
 $monthVal = sprintf('%04d-%02d', $y, $m);
 $monthLabel = date('F Y', strtotime($start));
-[$rows, $tot] = mdData($db, $tab, $y, $m);
+$dayLabel = $day !== '' ? ($day === date('Y-m-d') ? 'Today, ' : '') . strtoupper(date('d-M-Y', strtotime($day))) : '';
+$periodLabel = $day !== '' ? $dayLabel : $monthLabel;
+[$rows, $tot] = mdData($db, $tab, $y, $m, $day);
 $cols = mdColumns($tab);
 $mt = fn($v) => number_format((float)$v, 3);
 
@@ -21,6 +25,9 @@ include 'includes/header.php';
 <link rel="stylesheet" href="assets/css/list-page.css?v=<?= @filemtime(__DIR__ . '/assets/css/list-page.css') ?>">
 <style>
 /* sortable headings + month picker (rest: assets/css/list-page.css) */
+.lp .md-daychip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; background: #F5F3FF; border: 1px solid #DDD6FE; color: #4c1d95; border-radius: 14px; padding: 9px 14px; margin-bottom: 10px; font-size: 13px; }
+.lp .md-daychip a { margin-left: auto; color: #5B2DEE; font-weight: 700; text-decoration: none; }
+.lp .md-daychip a:hover { text-decoration: underline; }
 .lp .md-sort { all: unset; display: flex; align-items: center; gap: 5px; cursor: pointer; width: 100%; box-sizing: border-box; }
 .lp th.num .md-sort { justify-content: flex-end; }
 .lp .md-sort:hover { color: #5B2DEE; }
@@ -51,7 +58,7 @@ include 'includes/header.php';
             <i class="fa-solid fa-calendar-days lp-hero-icon-bg" aria-hidden="true"></i>
             <div>
                 <div class="lp-hero-title">Monthly Data</div>
-                <div class="lp-hero-sub"><?= sanitize(MD_TABS[$tab]) ?> · <?= sanitize($monthLabel) ?></div>
+                <div class="lp-hero-sub"><?= sanitize(MD_TABS[$tab]) ?> · <?= sanitize($periodLabel) ?></div>
             </div>
             <div class="lp-hero-stats">
                 <div class="lp-hero-stat"><div class="n" data-testid="md-count"><?= (int)$tot['count'] ?></div><div class="l"><?= $tab === 'appointments' ? 'Appointments' : 'Surveys completed' ?></div></div>
@@ -82,23 +89,27 @@ include 'includes/header.php';
             </select>
             <form method="post" action="monthly_data_export.php" data-md-dl-form data-no-loading style="display:contents">
                 <?= csrf_field() ?>
-                <input type="hidden" name="tab" value="<?= $tab ?>"><input type="hidden" name="month" value="<?= $monthVal ?>">
+                <input type="hidden" name="tab" value="<?= $tab ?>"><input type="hidden" name="month" value="<?= $monthVal ?>"><input type="hidden" name="day" value="<?= sanitize($day) ?>">
                 <input type="hidden" name="ids" value="all" data-md-ids>
                 <button type="submit" class="lp-btn-dl" data-testid="md-download"><i class="fa-solid fa-file-excel"></i> Download Excel</button>
             </form>
             <?php endif; ?>
         </div>
 
+        <?php if ($day !== ''): ?>
+        <div class="md-daychip" data-testid="md-day-chip"><i class="fa-solid fa-calendar-day"></i> Showing appointments of <b><?= sanitize($dayLabel) ?></b> only
+            <a href="monthly_data.php?tab=appointments&amp;month=<?= $monthVal ?>" data-testid="md-day-clear">Show all of <?= sanitize($monthLabel) ?> <i class="fa-solid fa-xmark"></i></a></div>
+        <?php endif; ?>
         <div class="lp-strip" data-testid="md-strip">
             <span><?= $tab === 'appointments' ? 'Appointments' : 'Surveys completed' ?> <b><?= (int)$tot['count'] ?></b></span>
             <?php if ($tab === 'recovery'): ?><span>Total Recovery <b><?= $mt($tot['total']) ?> MT</b></span><?php endif; ?>
-            <span class="r"><?= sanitize($monthLabel) ?></span>
+            <span class="r"><?= sanitize($periodLabel) ?></span>
         </div>
         <?php if ($rows): ?><div class="lp-meta" data-md-shown data-testid="md-shown"></div><?php endif; ?>
 
         <div class="lp-table-card">
             <?php if (!$rows): ?>
-                <div class="lp-empty" data-testid="md-empty"><i class="fa-solid fa-calendar-xmark"></i>No <?= $tab === 'appointments' ? 'appointments' : 'surveys completed' ?> in <?= sanitize($monthLabel) ?>.</div>
+                <div class="lp-empty" data-testid="md-empty"><i class="fa-solid fa-calendar-xmark"></i>No <?= $tab === 'appointments' ? 'appointments' : 'surveys completed' ?> <?= $day !== '' ? 'on' : 'in' ?> <?= sanitize($periodLabel) ?>.</div>
             <?php else: ?>
             <div class="lp-table-wrap">
             <table class="lp-table" data-md-table data-testid="md-table">
