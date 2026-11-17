@@ -31,20 +31,8 @@ Make the uploads folder writable:
 
 ```bash
 chmod -R 755 assets/uploads
-```
 
-### 5. Admin Login
-- URL: `https://yourdomain.com/admin/`
-- Username: `admin`
-- Password: `admin123`
 
-**Change the password immediately after first login!**
-
-To change password, run this SQL (generate a new hash with PHP `password_hash('newpass', PASSWORD_DEFAULT)`):
-
-```sql
-UPDATE admins SET password = '$2y$10$...' WHERE username = 'admin';
-```
 
 ## What the Admin Panel Controls
 
