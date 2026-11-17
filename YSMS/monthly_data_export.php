@@ -21,8 +21,9 @@ try {
     @set_time_limit(120);
     $db = getDB();
     $tab = mdTab($_POST);
-    [$y, $m, $start] = mdMonth($_POST);
-    [$all, $tot] = mdData($db, $tab, $y, $m);
+    $day = $tab === 'appointments' ? mdDay($_POST) : ''; // one day (Today's Appointments)
+    [$y, $m, $start] = mdMonth($day !== '' ? ['month' => substr($day, 0, 7)] : $_POST);
+    [$all, $tot] = mdData($db, $tab, $y, $m, $day);
     $cols = mdColumns($tab);
 
     // Only rows of this month (ids the page sent that are not in the month are ignored), in the page's order.
@@ -39,7 +40,7 @@ try {
     }
     $filtered = count($rows) !== count($all);
 
-    $label = date('F Y', strtotime($start));
+    $label = $day !== '' ? date('d F Y', strtotime($day)) : date('F Y', strtotime($start));
     $ss = new Spreadsheet();
     $sheet = $ss->getActiveSheet();
     $sheet->setTitle(substr(MD_TABS[$tab] . ' ' . date('M Y', strtotime($start)), 0, 31));

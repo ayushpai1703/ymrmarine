@@ -316,6 +316,58 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         </div>
     </div>
 
+    <?php if (in_array($role, ['Admin', 'Super Admin'], true)):
+        // 🌟 Today's appointments, this month's appointments (Monthly Data rule: Appointment Date, else the
+        //    Survey Assigned date) and this month's surveys completed (Completed vessels by Survey Completed Date).
+        require_once 'includes/monthly_data.php';
+        $hlToday = date('Y-m-d');
+        $hlMonthStart = date('Y-m-01');
+        $hlMonthEnd = date('Y-m-d', strtotime($hlMonthStart . ' +1 month'));
+        $hl = ['today' => 0, 'month' => 0, 'done' => 0];
+        try {
+            $hl['today'] = mdAppointmentCount($db, $hlToday, date('Y-m-d', strtotime($hlToday . ' +1 day')));
+            $hl['month'] = mdAppointmentCount($db, $hlMonthStart, $hlMonthEnd);
+            $hl['done'] = mdCompletedVesselCount($db, $hlMonthStart, $hlMonthEnd);
+        } catch (Throwable $e) { error_log('dashboard highlights: ' . $e->getMessage()); }
+        $hlMonth = date('Y-m');
+    ?>
+    <style>
+    .dash-hl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+    .dash-hl a { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 4px; padding: 16px 16px 14px; border-radius: 18px; color: #fff; text-decoration: none; box-shadow: 0 10px 24px rgba(15,23,42,.14); transition: transform .15s ease, box-shadow .15s ease; min-width: 0; }
+    .dash-hl a:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(15,23,42,.2); color: #fff; }
+    .dash-hl .t { background: linear-gradient(120deg, #4B2FD6 0%, #7C3AED 100%); }
+    .dash-hl .m { background: linear-gradient(120deg, #0f4cc0 0%, #1d6fe0 100%); }
+    .dash-hl .c { background: linear-gradient(120deg, #047857 0%, #10b981 100%); }
+    .dash-hl .ic { position: absolute; right: -6px; top: -8px; font-size: 64px; opacity: .14; }
+    .dash-hl .n { font-size: 30px; font-weight: 800; line-height: 1.05; }
+    .dash-hl .l { font-size: 13px; font-weight: 700; line-height: 1.25; }
+    .dash-hl .s { font-size: 11px; opacity: .8; font-weight: 500; }
+    .dash-hl .go { font-size: 11.5px; font-weight: 700; opacity: .9; margin-top: 4px; }
+    @media (max-width: 575.98px) {
+        .dash-hl { gap: 8px; }
+        .dash-hl a { padding: 12px 10px; border-radius: 14px; }
+        .dash-hl .n { font-size: 24px; } .dash-hl .l { font-size: 11.5px; } .dash-hl .s, .dash-hl .go { display: none; } .dash-hl .ic { font-size: 44px; }
+    }
+    </style>
+    <div class="overview-section mt-4" data-testid="dash-highlights">
+        <div class="section-title-row"><span class="section-title"><i class="fa-solid fa-calendar-days me-1" style="color:#5B2DEE"></i> Appointments &amp; Surveys</span></div>
+        <div class="dash-hl">
+            <a class="t" href="monthly_data.php?tab=appointments&amp;month=<?= $hlMonth ?>&amp;day=<?= $hlToday ?>" data-testid="dash-hl-today">
+                <i class="fa-solid fa-calendar-day ic" aria-hidden="true"></i>
+                <span class="n"><?= (int)$hl['today'] ?></span><span class="l">Today's Appointments</span><span class="s"><?= strtoupper(date('d-M-Y')) ?></span><span class="go">Open in Monthly Data <i class="fa-solid fa-chevron-right"></i></span>
+            </a>
+            <a class="m" href="monthly_data.php?tab=appointments&amp;month=<?= $hlMonth ?>" data-testid="dash-hl-month">
+                <i class="fa-solid fa-calendar-week ic" aria-hidden="true"></i>
+                <span class="n"><?= (int)$hl['month'] ?></span><span class="l">This Month's Appointments</span><span class="s"><?= date('F Y') ?></span><span class="go">Open in Monthly Data <i class="fa-solid fa-chevron-right"></i></span>
+            </a>
+            <a class="c" href="completed.php?date=survey&amp;ym=<?= $hlMonth ?>&amp;sort=date&amp;dir=desc" data-testid="dash-hl-completed">
+                <i class="fa-solid fa-circle-check ic" aria-hidden="true"></i>
+                <span class="n"><?= (int)$hl['done'] ?></span><span class="l">Surveys Completed This Month</span><span class="s">By Survey Completed Date · <?= date('F Y') ?></span><span class="go">Open Completed Vessels <i class="fa-solid fa-chevron-right"></i></span>
+            </a>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div class="overview-section mt-4">
         <div class="section-title-row">
             <span class="section-title">Statistics</span>
