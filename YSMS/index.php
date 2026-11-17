@@ -332,7 +332,7 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
 
     <?php if (in_array($role, ['Admin', 'Super Admin'], true)):
         // 🌟 Today's appointments, this month's appointments (Monthly Data rule: Appointment Date, else the
-        //    Survey Assigned date) and this month's surveys completed (Completed vessels by Survey Completed Date).
+        //    Survey Assigned date) and this month's surveys completed (Monthly Data > Survey Completed).
         require_once 'includes/monthly_data.php';
         $hlToday = date('Y-m-d');
         $hlMonthStart = date('Y-m-01');
@@ -341,7 +341,8 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         try {
             $hl['today'] = mdAppointmentCount($db, $hlToday, date('Y-m-d', strtotime($hlToday . ' +1 day')));
             $hl['month'] = mdAppointmentCount($db, $hlMonthStart, $hlMonthEnd);
-            $hl['done'] = mdCompletedVesselCount($db, $hlMonthStart, $hlMonthEnd);
+            // Monthly Data > Survey Completed: Pending Report + Completed by their Survey Completed Date
+            $hl['done'] = (int)dashboardMonthStats($db, 'Admin', 0, 0, (int)date('Y'), (int)date('n'))['ships'];
         } catch (Throwable $e) { error_log('dashboard highlights: ' . $e->getMessage()); }
         $hlMonth = date('Y-m');
     ?>
@@ -356,9 +357,9 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
                 <i class="fa-solid fa-calendar-week ic" aria-hidden="true"></i>
                 <span class="n"><?= (int)$hl['month'] ?></span><span class="l">This Month's Appointments</span><span class="s"><?= date('F Y') ?></span><span class="go">Open in Monthly Data <i class="fa-solid fa-chevron-right"></i></span>
             </a>
-            <a class="c" href="completed.php?date=survey&amp;ym=<?= $hlMonth ?>&amp;sort=date&amp;dir=desc" data-testid="dash-hl-completed">
+            <a class="c" href="monthly_data.php?tab=completed&amp;month=<?= $hlMonth ?>" data-testid="dash-hl-completed">
                 <i class="fa-solid fa-circle-check ic" aria-hidden="true"></i>
-                <span class="n"><?= (int)$hl['done'] ?></span><span class="l">Surveys Completed This Month</span><span class="s">By Survey Completed Date · <?= date('F Y') ?></span><span class="go">Open Completed Vessels <i class="fa-solid fa-chevron-right"></i></span>
+                <span class="n"><?= (int)$hl['done'] ?></span><span class="l">Surveys Completed This Month</span><span class="s">By Survey Completed Date · <?= date('F Y') ?></span><span class="go">Open in Monthly Data <i class="fa-solid fa-chevron-right"></i></span>
             </a>
         </div>
     </div>
