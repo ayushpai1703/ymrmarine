@@ -69,7 +69,7 @@ $defaults = [
 $serviceDesc = trim($type . ' of ' . $vessel . ($inv['port_name'] ? ' at ' . $inv['port_name'] : '') . ($completed ? ' on ' . $completed : ''));
 $serviceRate = (string)($inv['invoice_amount'] ?? '');
 $noFixed = trim((string)($inv['invoice_no'] ?? '')) !== '';
-$invoiceNo = $noFixed ? (string)$inv['invoice_no'] . ($isRecovery ? 'B' : '') : ''; // typed by hand (no automatic series)
+$invoiceNo = $isRecovery ? invoiceRecNo($inv) : ($noFixed ? (string)$inv['invoice_no'] : ''); // typed by hand (no automatic series); recovery: its own number or + B
 $hasVesselFile = invoiceFileAbs($inv['file_path'] ?? null) !== null;
 $hasRecFile = invoiceFileAbs($inv['rec_file_path'] ?? null) !== null;
 // The form as last downloaded (Modify); the recovery form borrows the vessel invoice's header
@@ -180,7 +180,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 else $fixNo = $want;
             }
         }
-    } elseif (!$noFixed && $download) {
+    } elseif (!$noFixed && invoiceRecNo($inv) === '' && $download) {
         $errors[] = 'Invoice No. — make the Vessel Invoice first: its number is typed there (the Recovery Invoice uses it with B)';
     }
     if ($errors) {
@@ -189,7 +189,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         exit('<div style="font-family:sans-serif;padding:24px;color:#991b1b"><b>Please fill in:</b><ul><li>' . implode('</li><li>', array_map('sanitize', $errors)) . '</li></ul></div>');
     }
     // Number: as typed (saved with the PDF below); the recovery invoice: the vessel's + B
-    $d['invoice_no'] = $fixNo ?? ($noFixed ? (string)$inv['invoice_no'] . ($isRecovery ? 'B' : '') : '');
+    $d['invoice_no'] = $fixNo ?? ($isRecovery ? invoiceRecNo($inv) : ($noFixed ? (string)$inv['invoice_no'] : ''));
     $d['items'] = $items;
     @include_once __DIR__ . '/vendor/autoload.php';
     if (!class_exists(\Dompdf\Dompdf::class)) {
@@ -327,7 +327,7 @@ include 'includes/header.php';
                 <div class="ig-hint">Type the invoice number (only digits: the client code is added). The Recovery Invoice uses it with B.</div></div>
 <?php else: ?>
             <div><label>Invoice No.</label><input class="form-control" value="<?= sanitize($invoiceNo) ?>" readonly placeholder="Typed on the Vessel Invoice" data-testid="ig-invoice-no">
-                <div class="ig-hint"><?= $noFixed ? 'The vessel invoice\'s number + B' : 'Make the Vessel Invoice first — its number is typed there' ?></div></div>
+                <div class="ig-hint"><?= trim((string)($inv['rec_invoice_no'] ?? '')) !== '' ? 'Recovery invoice number set with Edit Invoice' : ($noFixed ? 'The vessel invoice\'s number + B (change it with Edit Invoice)' : 'Make the Vessel Invoice first — its number is typed there') ?></div></div>
 <?php endif; ?>
             <div><label>Invoice Date</label><input class="form-control" type="date" name="invoice_date" value="<?= sanitize($defaults['invoice_date']) ?>"></div>
         </div>
