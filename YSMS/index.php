@@ -469,7 +469,12 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
             var r = Math.min(4, h, bw / 2); // 4px rounded top, square on the baseline
             svg.appendChild(el('path', { class: 'mc-bar', fill: c.color, d: 'M' + x + ',' + (T + ph) + 'V' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y + 'H' + (x + bw - r) + 'Q' + (x + bw) + ',' + y + ' ' + (x + bw) + ',' + (y + r) + 'V' + (T + ph) + 'Z' }));
           }
-          if (i === maxI && v > 0) svg.appendChild(el('text', { x: x + bw / 2, y: y - 6, 'text-anchor': 'middle', 'font-size': 11.5, 'font-weight': 700, fill: '#334155' }, c.fmt(v))); // the highest month only
+          if (v > 0) { // every month's value; the highest one bold in the chart's colour
+            var top1 = i === maxI;
+            svg.appendChild(el('text', { x: x + bw / 2, y: y - 6, 'text-anchor': 'middle', 'font-size': top1 ? 12.5 : 10.5, 'font-weight': top1 ? 800 : 600, fill: top1 ? c.color : '#64748b' },
+              // big recovery figures are shortened to one decimal so neighbours don't touch (the tooltip has the exact value)
+              !top1 && key === 'rec' && v >= 1000 ? v.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : c.fmt(v)));
+          }
           svg.appendChild(el('text', { x: L + slot * i + slot / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: '#64748b' }, MON[i]));
           var hit = el('rect', { class: 'mc-hit', x: L + slot * i, y: T, width: slot, height: ph + B, 'data-testid': 'dash-mc-' + key + '-' + (i + 1) });
           var mm = year + '-' + ('0' + (i + 1)).slice(-2);
@@ -639,84 +644,6 @@ document.getElementById('formatPopupClose').addEventListener('click', function()
         </div>
     </div>
     <?php endif; ?>
-
-    <div class="overview-section mt-4">
-        <div class="section-title-row">
-            <span class="section-title">Statistics</span>
-        </div>
-    </div>
-
-    <div class="stat-grid">
-        <?php $dm = dashboardMonthStats($db, $role, (int)$user_id, (int)$client_row_id, (int)date('Y'), (int)date('n')); ?>
-        <div class="stat-card ha-rec" role="button" style="cursor:pointer;" onclick="openRecoveryModal('total')" data-testid="total-recovery-card">
-            <span class="ha-rec-ic" aria-hidden="true"><i class="fa-solid fa-droplet"></i></span>
-            <span class="stat-title"><i class="fa-solid fa-arrow-trend-up stat-title-icon"></i>Total Recovery</span>
-            <!-- 🌟 $ సింబల్ తీసివేసి కేవలం వాల్యూ (MT తో కలిపి) డిస్‌ప్లే అవుతుంది -->
-            <div class="stat-val"><?= $total_recovery ?></div>
-            <div class="mt-2 ha-spark-old" style="height: 30px; overflow: hidden;">
-                <svg viewBox="0 0 100 30" width="100%" height="100%" preserveAspectRatio="none">
-                    <path d="M0,25 Q15,5 30,20 T60,10 T90,15 T100,5" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-            </div>
-            <svg class="ha-spark" viewBox="0 0 320 54" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="haSparkFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
-                <path d="M0 44 C30 40 40 30 70 32 S120 46 150 30 S200 8 230 20 S280 40 320 10 L320 54 L0 54 Z" fill="url(#haSparkFill)"/><path d="M0 44 C30 40 40 30 70 32 S120 46 150 30 S200 8 230 20 S280 40 320 10" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>
-            <div class="ha-rec-bot">
-                <button type="button" onclick="event.stopPropagation(); openRecoveryModal('month')" data-testid="ha-month-recovery"><span>This Month</span><b><?= $month_recovery ?></b></button>
-                <div><span>Ships this month</span><b data-testid="ha-month-ships"><?= (int)$dm['ships'] ?></b></div>
-            </div>
-        </div>
-        <div class="stat-card ha-month" role="button" style="cursor:pointer;" onclick="openRecoveryModal('month')" data-testid="month-recovery-card">
-            <span class="stat-title stat-title--blue"><i class="fa-solid fa-chart-column stat-title-icon"></i>This Month Recovery</span>
-            <!-- 🌟 $ సింబల్ తీసివేసి కేవలం వాల్యూ (MT తో కలిపి) డిస్‌ప్లే అవుతుంది -->
-            <div class="stat-val"><?= $month_recovery ?></div>
-            <div class="mt-2" style="height: 30px; overflow: hidden;">
-                <svg viewBox="0 0 100 30" width="100%" height="100%" preserveAspectRatio="none">
-                    <path d="M0,20 Q20,25 40,10 T70,18 T100,8" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-            </div>
-        </div>
-        <!-- Month Summary: pick a year + month → ships surveyed and recovery by Survey Completed Date (replaces the VLSFO / LSMGO / HSFO cards). -->
-        <div class="stat-card dm-card" data-testid="month-summary-card">
-            <div class="dm-head">
-                <span class="stat-title stat-title--purple"><i class="fa-solid fa-calendar-check stat-title-icon"></i>Month Summary</span>
-                <div class="dm-selects">
-                    <select class="dm-select" data-dm-month aria-label="Month" data-testid="dm-month">
-                        <?php for ($mi = 1; $mi <= 12; $mi++): ?><option value="<?= $mi ?>"<?= $mi === (int)date('n') ? ' selected' : '' ?>><?= date('M', mktime(0, 0, 0, $mi, 1)) ?></option><?php endfor; ?>
-                    </select>
-                    <select class="dm-select" data-dm-year aria-label="Year" data-testid="dm-year">
-                        <?php foreach (dashboardMonthYears($db) as $yy): ?><option value="<?= $yy ?>"<?= $yy === (int)date('Y') ? ' selected' : '' ?>><?= $yy ?></option><?php endforeach; ?>
-                    </select>
-                </div>
-            </div>
-            <div class="dm-stats">
-                <div><div class="stat-val" data-dm-ships data-testid="dm-ships"><?= (int)$dm['ships'] ?></div><div class="dm-l">Ships surveyed</div></div>
-                <div><div class="stat-val" data-dm-recovery data-testid="dm-recovery"><?= number_format($dm['recovery'], 3) ?> MT</div><div class="dm-l">Recovery</div></div>
-            </div>
-            <div class="dm-foot">
-                <div class="dm-note" data-dm-label>By Survey Completed Date · <?= sanitize($dm['label']) ?></div>
-                <a class="dm-dl" data-dm-download href="export_month_summary.php?y=<?= (int)date('Y') ?>&amp;m=<?= (int)date('n') ?>" data-testid="dm-download"><i class="fa-solid fa-file-excel"></i> Download</a>
-            </div>
-        </div>
-        <div class="stat-card" data-testid="recent-survey-recovery-card">
-            <span class="stat-title stat-title--purple"><i class="fa-solid fa-ship stat-title-icon"></i>Recent Survey Recovery</span>
-            <div class="stat-val" style="font-size:14px;"><?= sanitize($recent_vessel_name) ?></div>
-            <div class="text-muted mt-1" style="font-size:11px;">VLSFO: <?= $recent_vlsfo ?> · LSMGO: <?= $recent_lsmgo ?> · HSFO: <?= $recent_hsfo ?></div>
-        </div>
-        <div class="stat-card" data-testid="avg-ships-per-month-card">
-            <span class="stat-title stat-title--blue"><i class="fa-solid fa-calendar-days stat-title-icon"></i>Average Ships Per Month</span>
-            <div class="stat-val"><?= $avg_ships_per_month_disp ?></div>
-        </div>
-        <?php if (in_array($role, ['Admin', 'Super Admin'], true)): ?>
-        <div class="stat-card" data-testid="avg-recovery-per-ship-card">
-            <span class="stat-title"><i class="fa-solid fa-anchor stat-title-icon"></i>Average Recovery Per Ship</span>
-            <div class="stat-val"><?= $avg_recovery_per_ship_disp ?></div>
-        </div>
-        <div class="stat-card" data-testid="avg-recovery-per-surveyor-card">
-            <span class="stat-title stat-title--purple"><i class="fa-solid fa-user-tie stat-title-icon"></i>Average Recovery Per Surveyor</span>
-            <div class="stat-val"><?= $avg_recovery_per_surveyor_disp ?></div>
-        </div>
-        <?php endif; ?>
-    </div>
 
     <?php if ($role === 'Super Admin'):
         // 🌟 Super Admin analytics — Recovery by Surveyor (Top 10), Recovery by
