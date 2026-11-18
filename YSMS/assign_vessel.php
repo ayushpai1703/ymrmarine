@@ -890,14 +890,15 @@ include 'includes/header.php';
     .searchable-select.open .ss-panel { display: block; }
     .searchable-select .ss-search-wrap {
         position: relative;
-        padding: 8px 10px;
+        padding: 8px 15px;
         border-bottom: 1px solid var(--border-color);
     }
     .ss-country-wrap select.ss-country-filter {
         width: 100%;
         border: 1px solid var(--border-color);
         border-radius: 8px;
-        padding: 8px 10px 8px 32px;
+        margin-right: 6px;
+        padding: 8px 10px 8px 42px;
         font-size: 12.5px;
         background: #f8fafc;
         color: var(--text-dark);
@@ -911,7 +912,7 @@ include 'includes/header.php';
     }
     .searchable-select .ss-search-wrap i {
         position: absolute;
-        left: 18px;
+        left: 27px;
         top: 50%;
         transform: translateY(-50%);
         color: #94a3b8;
@@ -921,7 +922,7 @@ include 'includes/header.php';
         width: 100%;
         border: 1px solid var(--border-color);
         border-radius: 8px;
-        padding: 8px 10px 8px 30px;
+        padding: 20xpx;
         font-size: 13px;
         background: #f8fafc;
         outline: none;
@@ -1118,10 +1119,16 @@ include 'includes/header.php';
         .ss-multi .ss-option.ss-selected { background: #F3EEFE !important; color: #5B2DEE !important; }
         .ss-multi .ss-option-checkbox { accent-color: #5B2DEE !important; }
         .searchable-select .ss-search-input, .ss-country-wrap select.ss-country-filter {
-            border: 1.5px solid #e2e8f0 !important; border-radius: 10px !important; background: #F8FAFC !important;
+            border: 1.5px solid #e2e8f0 !important; border-radius: 10px !important ;background: #F8FAFC !important;
+        }
+        #assignVesselForm .searchable-select .ss-country-wrap select.ss-country-filter {
+            padding-left: 27px !important;
         }
         .searchable-select .ss-search-input:focus {
             outline: none !important; border-color: #A78BFA !important; background: #fff !important;
+        }
+        #assignVesselForm .searchable-select .ss-search-input {
+            padding:10px 230px 10px 32px !important;
         }
 
         .blue-action-btn {
