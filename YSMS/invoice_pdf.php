@@ -823,8 +823,6 @@ priceModes.forEach(function (radio) {
 });
 
 updatePriceMode();
-  document.querySelectorAll('[data-ig-cp]').forEach(function (c) { c.addEventListener('input', function () { cpUnits(c.getAttribute('data-ig-cp')); }); });
-  var pctIn = document.querySelector('[data-ig-pct]'); if (pctIn) pctIn.addEventListener('input', function () { cpUnits(null); });
   var add = document.querySelector('[data-ig-add]');
   if (add) add.addEventListener('click', function () {
     var r = document.createElement('div');
