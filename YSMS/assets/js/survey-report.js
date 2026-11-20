@@ -77,9 +77,12 @@
     el.className = 'sr-net ' + (online() ? 'on' : 'off');
     el.innerHTML = online() ? '<i class="fa-solid fa-wifi"></i> Online' : '<i class="fa-solid fa-plane"></i> Offline — saved on this device';
     $$('[data-online-only]').forEach(function (b) { b.disabled = !online() || !S.canEdit || b.hasAttribute('data-blocked'); });
+    $$('[data-gate]').forEach(function (b) { b.disabled = !S.canEdit || b.hasAttribute('data-blocked'); }); // work offline too (PDF made on this device)
+    $$('[data-off-note]').forEach(function (e) { e.hidden = online(); });
   }
   window.addEventListener('online', function () {
     netState();
+    setTimeout(pendingImo, 2500); // an IMO typed while offline
     if (P.draft) { draftSync(); return; }
     // opened from the copy on this device: save what was typed, then the report as the server has it now
     if (S.offlineMode && S.data) { flush().then(function () { if (online() && !S.dirty) load(); }); return; }
@@ -131,7 +134,7 @@
     render();
     saveState(S.dirty ? (online() ? 'Saving…' : 'Changes on this device') : 'Saved', S.dirty ? 'dirty' : '');
     if (S.dirty && online() && !fromCache) saveNow();
-    if (online() && !fromCache) { precache(); loadPrevious(); setTimeout(finalAfterOffline, 1500); }
+    if (online() && !fromCache) { precache(); loadPrevious(); setTimeout(finalAfterOffline, 1500); setTimeout(pendingImo, 1200); }
   }
   /** Keep this page and everything it loaded (scripts incl. ExcelJS, styles, fonts, CDN files) for offline use. */
   function headChips() {
@@ -145,6 +148,7 @@
     var urls = [location.href];
     $$('script[src]').forEach(function (x) { urls.push(x.src); });
     urls.push(new URL(LOGO, location.href).href, new URL(BANNER, location.href).href); // the letterhead of the PDF made offline
+    if (P.pdfjs) urls.push(P.pdfjs, P.pdfjsWorker); // the preview viewer (offline preview of the PDF made on this device)
     $$('link[rel=stylesheet][href]').forEach(function (x) { urls.push(x.href); });
     try { performance.getEntriesByType('resource').forEach(function (e) { if (/\.(woff2?|ttf|otf|png|jpe?g|svg|webp|css|js)(\?|$)/i.test(e.name)) urls.push(e.name); }); } catch (e) {}
     caches.open('ysms-sr-v1').then(function (c) {
@@ -761,10 +765,11 @@
     var all = issues();
     return problemsHtml() +
       '<section class="sr-card"><h3><i class="fa-solid fa-file-export"></i> Preview &amp; Generate</h3><div class="sr-out" data-testid="sr-output">' +
-      '<button type="button" class="sr-btn pri big" data-gen="pdf" data-online-only' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-download-pdf"><i class="fa-solid fa-file-pdf"></i> Download PDF Report</button>' +
+      '<button type="button" class="sr-btn pri big" data-gen="pdf" data-gate' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-download-pdf"><i class="fa-solid fa-file-pdf"></i> Download PDF Report</button>' +
       '<button type="button" class="sr-btn big" data-pv="load" data-testid="sr-preview-summary"><i class="fa-solid fa-eye"></i> Preview Report</button>' +
-      '<button type="button" class="sr-btn big" data-print data-online-only' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-print"><i class="fa-solid fa-print"></i> Print</button></div>' +
+      '<button type="button" class="sr-btn big" data-print data-gate' + (all.length ? ' data-blocked' : '') + ' data-testid="sr-print"><i class="fa-solid fa-print"></i> Print</button></div>' +
       '<p class="sr-small sr-muted"><i class="fa-solid fa-circle-info"></i> The PDF is made in the YMR report format on the company letterhead' + (certType() !== 'none' && S.cfg.cert ? ': page 1 the <b data-testid="sr-cert-name">' + esc(S.cfg.cert.types[certType()].title) + '</b> (' + esc(S.cfg.cert.choices[certType()]) + '), then the tank report' : '') + '; its Excel is kept in the system for the Word report.</p>' +
+      '<p class="sr-small sr-off-note" data-off-note data-testid="sr-off-note"' + (online() ? ' hidden' : '') + '><i class="fa-solid fa-plane"></i> Offline: the PDF is made on this device. When the connection is back the report is saved and the final PDF on the YMR letterhead is made automatically.</p>' +
       '<button type="button" class="sr-link" data-offline-pdf data-testid="sr-offline-pdf"' + (all.length ? ' hidden' : '') + '><i class="fa-solid fa-plane"></i> No internet? Download the PDF made on this device</button></section>';
   }
   /** Admin: the version history of the saved tanks (Sounding, Volume, Density, Temperature). */
@@ -881,7 +886,7 @@
     if ((b = t.closest('[data-mv]'))) { var mv = b.getAttribute('data-mv').split(':'); reorderTank(mv[0], +mv[1], +mv[1] + +mv[2], 'name'); return; }
     if ((b = t.closest('[data-del]'))) { delTank(b.getAttribute('data-del')); return; }
     if ((b = t.closest('[data-mode]'))) { var m = b.getAttribute('data-mode').split(':'), tr = S.data.tanks[m[0]][+m[1]]; tr.mode = m[2]; tr.sounding = m[2] === 'ullage' ? sounding(tr) : tr.sounding; changed(); render(); return; }
-    if ((b = t.closest('[data-gen]'))) { generate(b.getAttribute('data-gen')); return; }
+    if ((b = t.closest('[data-gen]'))) { if (!online()) { offlinePdf(); return; } generate(b.getAttribute('data-gen')); return; }
     if (t.closest('[data-offline-pdf]')) { offlinePdf(); return; }
     if ((b = t.closest('[data-print]'))) { if (b.hasAttribute('data-blocked')) { block('generate'); return; } printPdf(b); return; }
     if (t.closest('[data-save-now]')) { saveProgress(); return; }
@@ -1226,6 +1231,7 @@
   }
   /** "Import from Excel": tank rows from a workbook (company format or a plain table), added to the grid. */
   function importTanks(file) {
+    if (!online()) { Swal.fire({ icon: 'info', title: 'Import needs internet', text: 'Reading an Excel file is done by the server. Offline, copy the rows in Excel and paste them into the tank table — that works without internet.' }); return; }
     var f = new FormData(); f.append('csrf_token', P.csrf); f.append('a', 'import_tanks'); f.append('id', P.id); f.append('file', file);
     Swal.fire({ title: 'Reading the Excel…', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
     fetch(P.api, { method: 'POST', body: f, credentials: 'same-origin', headers: { 'X-CSRF-Token': P.csrf } }).then(function (r) { return r.json(); }).then(function (res) {
@@ -1315,10 +1321,18 @@
 
   // ---------- vessel lookup by IMO (AI + web search on the server) ----------
   // A whole, valid IMO starts the lookup by itself (no button needed); each IMO once.
+  /** An IMO typed while offline: look it up now (on the report itself — a draft first becomes a report on the server). */
+  function pendingImo() {
+    var v = read(LS + '_imo');
+    if (!v || P.draft || !online()) return;
+    if (S.data && v === val('imo')) autoLookup(v); else store(LS + '_imo', null);
+  }
   function autoLookup(v) {
     clearTimeout(S.autoT);
     v = String(v || '').replace(/\D/g, '');
-    if (!S.canEdit || v.length !== 7 || S.autoImo === v || typeError(FIELD('imo'), v) || !online()) return;
+    if (!S.canEdit || v.length !== 7 || S.autoImo === v || typeError(FIELD('imo'), v)) return;
+    if (!online()) { store(LS + '_imo', v); return; } // looked up as soon as the connection is back
+    store(LS + '_imo', null);
     S.autoT = setTimeout(function () { if (val('imo') === v && !S.looking) { S.autoImo = v; lookup(); } }, 400);
   }
   function lookup() {
@@ -1331,6 +1345,7 @@
     var info = $('[data-lookup-info]'); if (info) info.innerHTML = lookupInfoHtml();
     post({ a: 'lookup', id: P.id, imo: imo }).then(function (res) {
       S.looking = false; res = res || { ok: false };
+      setTimeout(finalAfterOffline, 2500); // a PDF made offline: the final one now has the looked-up particulars
       S.manual = true;
       if (!res.ok) { S.lookupMsg = res.error || 'Nothing found for this IMO.'; S.lookup = null; render(); return; }
       var prev = {};
@@ -1418,8 +1433,9 @@
       var to = 'ysms_sr_' + token;
       store(to + '_step', S.data.step);
       var op = read(LS + '_offpdf'); if (op) store(to + '_offpdf', op); // a PDF made offline: the final one is made on the report page
+      var im = read(LS + '_imo'); if (im) store(to + '_imo', im); // an IMO typed offline: looked up on the report page
       try { localStorage.setItem('ysms_srp_last', token); } catch (e) {}
-      [DRAFT, LS, LS + '_step', LS + '_seen', LS + '_offpdf', CACHE].forEach(function (k) { store(k, null); });
+      [DRAFT, LS, LS + '_step', LS + '_seen', LS + '_offpdf', LS + '_imo', CACHE].forEach(function (k) { store(k, null); });
       S.dirty = false; saveState('Saved', '');
       location.replace('survey_report_public.php?t=' + token);
       return true;
@@ -1493,7 +1509,7 @@
     PV.timer = setTimeout(pvLoad, now ? 0 : 900);
   }
   function pvLoad() {
-    if (!online()) { pvStatus('Offline — preview when back online', 'warn'); return; }
+    if (!online()) { pvDevice(); return; }
     if (S.dirty || S.saving) { PV.timer = setTimeout(pvLoad, 700); return; } // preview what is saved, never a half-saved state
     if (PV.ver === S.version && PV.doc) return;
     var seq = ++PV.seq, ver = S.version;
@@ -1511,6 +1527,24 @@
         return pvDraw();
       });
     }).catch(function (e) { if (seq === PV.seq) pvStatus(e.message || 'Preview not available.', 'err'); });
+  }
+  /** Offline: preview the PDF made on this device (the server makes the final one when online). */
+  function pvDevice() {
+    var seq = ++PV.seq;
+    pvStatus('Offline — making the preview on this device…', 'busy');
+    Promise.all([pvLib(), devicePdf()]).then(function (x) {
+      if (seq !== PV.seq) return;
+      return x[0].getDocument({ data: new Uint8Array(x[1].doc.output('arraybuffer')) }).promise.then(function (doc) {
+        if (seq !== PV.seq) return;
+        if (PV.doc) PV.doc.destroy();
+        PV.doc = doc; PV.ver = null; PV.page = Math.min(PV.page, doc.numPages) || 1;
+        pvStatus('Offline preview — made on this device', 'warn');
+        return pvDraw();
+      });
+    }).catch(function (e) {
+      if (seq !== PV.seq) return;
+      pvStatus(e && e.title === 'Please complete the report first' ? 'Complete the report to see the preview' : (e && (e.text || e.message)) || 'Preview not available offline', 'err');
+    });
   }
   function pvDraw() {
     if (!PV.doc) return;
@@ -1555,21 +1589,25 @@
     if (S.dirty || S.saving) flush().then(go2); else go2();
   }
   /** Print: the report PDF (certificate + tank report) opened in a hidden frame and sent to the printer. */
+  function printBlob(bl, done) {
+    var u = URL.createObjectURL(bl), fr = document.createElement('iframe');
+    fr.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0'; fr.setAttribute('data-testid', 'sr-print-frame'); fr.src = u;
+    fr.onload = function () { setTimeout(function () { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { window.open(u, '_blank'); } done(); }, 300); };
+    var old = $('[data-testid=sr-print-frame]'); if (old) old.parentNode.removeChild(old);
+    document.body.appendChild(fr);
+  }
+  /** Print: the report PDF (certificate + tank report) opened in a hidden frame and sent to the printer — offline, the one made on this device. */
   function printPdf(btn) {
     btn.disabled = true;
     var done = function () { btn.disabled = false; };
+    if (!online()) { devicePdf().then(function (x) { printBlob(x.doc.output('blob'), done); }, function (e) { done(); devicePdfFail(e); }); return; }
     (S.dirty || S.saving ? flush() : Promise.resolve()).then(function () {
       return fetch(P.api + '?a=preview&id=' + encodeURIComponent(P.id), { credentials: 'same-origin' });
     }).then(function (r) {
       if (!r.ok || !/pdf/.test(r.headers.get('content-type') || '')) throw new Error();
       return r.blob();
-    }).then(function (bl) {
-      var u = URL.createObjectURL(bl), fr = document.createElement('iframe');
-      fr.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0'; fr.setAttribute('data-testid', 'sr-print-frame'); fr.src = u;
-      fr.onload = function () { setTimeout(function () { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { window.open(u, '_blank'); } done(); }, 300); };
-      var old = $('[data-testid=sr-print-frame]'); if (old) old.remove();
-      document.body.appendChild(fr);
-    }).catch(function () { done(); toast('error', 'The PDF could not be made for printing. Please try again.'); });
+    }).then(function (bl) { printBlob(bl, done); })
+      .catch(function () { done(); toast('error', 'The PDF could not be made for printing. Please try again.'); });
   }
   function pvAction(a) {
     if (a === 'load') { if (!pvPanelShown()) document.body.classList.add('sr-pv-open'); pvTab('pdf'); PV.ver = null; if (S.dirty || S.saving) flush(); preview(true); return; }
@@ -1868,24 +1906,31 @@
     }
     return { doc: doc, fits: doc.getNumberOfPages() === pages && y <= BOT };
   }
-  function offlinePdf() {
-    if (!window.jspdf || !window.jspdf.jsPDF) { Swal.fire({ icon: 'error', title: 'Not available', text: 'The PDF tools are not on this device yet — open the report once while online.' }); return; }
+  /** The report PDF made on this device (no server): resolves { doc, name }, or rejects with what to tell the user. */
+  function devicePdf() {
+    if (!window.jspdf || !window.jspdf.jsPDF) return Promise.reject({ title: 'Not available', text: 'The PDF tools are not on this device yet — open the report once while online.' });
     var all = issues();
-    if (all.length) { Swal.fire({ icon: 'warning', title: 'Please complete the report first', html: '<ul class="sr-swal-list">' + all.slice(0, 8).map(function (x) { return '<li>' + esc(x.msg) + '</li>'; }).join('') + '</ul>' }); return; }
-    Promise.all([imgPng(LOGO, 2800), imgPng(BANNER)]).then(function (im) {
+    if (all.length) return Promise.reject({ icon: 'warning', title: 'Please complete the report first', html: '<ul class="sr-swal-list">' + all.slice(0, 8).map(function (x) { return '<li>' + esc(x.msg) + '</li>'; }).join('') + '</ul>' });
+    return Promise.all([imgPng(LOGO, 2800), imgPng(BANNER)]).then(function (im) {
       var out = null;
       var cm = certModel();
       [1, 0.9, 0.8, 0.72, 0.65, 0.58, 0.52, 0.46, 0.41, 0.36, 0.32].some(function (k) { out = ymrPdf(k, im[0], im[1], cm); return out.fits; }); // the certificate, then the whole tank report on one page
       var vessel = val('vessel_name') || S.report.vessel || 'SURVEY';
-      var name = (vessel + ' - ' + (S.report.kind_label || 'SURVEY') + ' REPORT').toUpperCase().replace(/[^A-Z0-9 .\-]+/g, '').trim() + '.pdf';
-      out.doc.save(name);
+      return { doc: out.doc, name: (vessel + ' - ' + (S.report.kind_label || 'SURVEY') + ' REPORT').toUpperCase().replace(/[^A-Z0-9 .\-]+/g, '').trim() + '.pdf' };
+    });
+  }
+  function devicePdfFail(e) { Swal.fire({ icon: (e && e.icon) || 'error', title: (e && e.title) || 'PDF not made', text: e && e.text, html: e && e.html }); }
+  function offlinePdf() {
+    devicePdf().then(function (x) {
+      x.doc.save(x.name);
       store(LS + '_offpdf', { at: Date.now(), version: S.version }); // make the server's report as soon as the connection is back
       toast('success', 'PDF saved on this device');
-    });
+    }, devicePdfFail);
   }
   /** Back online after a draft PDF was made offline: save, then make the final PDF (and the Excel kept in the system). */
   function finalAfterOffline() {
     var f = read(LS + '_offpdf'); if (!f || !online() || !S.canEdit || S.finalBusy) return;
+    if (read(LS + '_imo')) return; // an IMO typed offline is looked up first; the final PDF follows that
     S.finalBusy = true;
     flush().then(function () {
       if (S.dirty || issues().length) { S.finalBusy = false; return; }
