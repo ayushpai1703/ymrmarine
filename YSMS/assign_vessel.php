@@ -922,7 +922,7 @@ include 'includes/header.php';
         width: 100%;
         border: 1px solid var(--border-color);
         border-radius: 8px;
-        padding: 20xpx;
+        padding: 8px 10px 8px 34px;
         font-size: 13px;
         background: #f8fafc;
         outline: none;
@@ -1379,6 +1379,9 @@ include 'includes/header.php';
     #assignVesselForm .searchable-select .ss-option.ss-selected { background: #F3EEFE !important; color: #5B2DEE !important; }
     #assignVesselForm .ss-multi .ss-option-checkbox { accent-color: #7C3AED !important; }
     #assignVesselForm .searchable-select .ss-search-input { border-radius: 12px !important; }
+    /* keep the search / country text clear of its icon (the desktop .form-group-custom input rule sets 14px !important) */
+    .searchable-select .ss-search-wrap .ss-search-input,
+    .searchable-select .ss-search-wrap select.ss-country-filter { padding-left: 34px !important; }
 
     /* file input as a drop zone */
     #assignVesselForm input[type="file"][name="assignment_attachment[]"] {
