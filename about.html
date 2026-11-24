@@ -278,7 +278,7 @@
 }
 
 .survey-form-panel {
-    background: #EAF6FC;
+    background: #F7F7F2;
     padding: 45px;
     color: #082B4A;
     min-width: 0;
@@ -2130,6 +2130,42 @@ footer .wrap {
     margin-left: auto;
     margin-right: auto;
 }
+
+/* =========================================
+   SHARED FOOTER ALIGNMENT
+========================================= */
+
+footer {
+    width: 100%;
+    padding-left: 5%;
+    padding-right: 5%;
+    box-sizing: border-box;
+}
+
+footer .wrap,
+footer .footer-container {
+    width: 100%;
+    max-width: 1600px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 0;
+    padding-right: 0;
+    box-sizing: border-box;
+}
+
+@media (max-width: 1000px) {
+    footer {
+        padding-left: 6%;
+        padding-right: 6%;
+    }
+}
+
+@media (max-width: 700px) {
+    footer {
+        padding-left: 24px;
+        padding-right: 24px;
+    }
+}
 </style></head><body><nav aria-label="Main navigation" id="navbar">
 <!-- COMPANY BRAND -->
 <a class="nav-logo" href="ymr7.html">
@@ -2186,9 +2222,7 @@ footer .wrap {
         Testimonials
     </a>
 
-    <a href="#contact">
-        Contact
-    </a>
+
 
 </div>
 <!-- UTILITY NAVIGATION -->
@@ -2223,15 +2257,15 @@ footer .wrap {
 
 <div id="mobile-menu">
 
-    <a href="#company" onclick="toggleMenu()">
+    <a href="about.html#company" onclick="toggleMenu()">
         About Us
     </a>
 
-    <a href="#team" onclick="toggleMenu()">
+    <a href="about.html#team" onclick="toggleMenu()">
         Our Team
     </a>
 
-    <a href="#why-ymr" onclick="toggleMenu()">
+    <a href="about.html#why-ymr" onclick="toggleMenu()">
         Why YMR
     </a>
 
@@ -2251,9 +2285,7 @@ footer .wrap {
         Testimonials
     </a>
 
-    <a href="#contact" onclick="toggleMenu()">
-        Contact
-    </a>
+    
 
 
     <div class="mobile-actions">
@@ -2947,6 +2979,9 @@ footer .wrap {
 
 </section>
 
+<!-- =========================================
+     YMR MARINE — SHARED FOOTER
+========================================= -->
 
 <footer id="footer">
 
@@ -2954,12 +2989,16 @@ footer .wrap {
 
         <div class="footer-layout">
 
+            <!-- COLUMN 1 — COMPANY BRAND -->
+
             <div class="footer-brand">
 
                 <a href="ymr7.html#hero" class="footer-brand-logo">
+
                     <img
                         src="./ymr_logo.png"
                         alt="YMR Marine Solutions LLP">
+
                 </a>
 
                 <p class="footer-brand-desc">
@@ -2969,16 +3008,84 @@ footer .wrap {
                     confidence across the maritime industry.
                 </p>
 
-                <div class="footer-location">
-                    YMR Marine Solutions LLP<br>
-                    Mumbai, Maharashtra, India
-                </div>
+            </div>
+
+
+            <!-- COLUMN 2 — COMPANY -->
+
+            <div class="footer-column">
+
+                <h3 class="footer-column-title">
+                    Company
+                </h3>
+
+                <ul class="footer-nav-links">
+
+                    <li>
+                        <a href="about.html#company">About Us</a>
+                    </li>
+
+                    <li>
+                        <a href="about.html#team">Our Team</a>
+                    </li>
+
+                    <li>
+                        <a href="about.html#why-ymr">Why YMR</a>
+                    </li>
+
+                    <li>
+                        <a href="ymr7.html#services">Our Services</a>
+                    </li>
+
+                    <li>
+                        <a href="ymr7.html#testimonials">Our Clients</a>
+                    </li>
+
+                </ul>
+
+            </div>
+
+
+            <!-- COLUMN 3 — QUICK ACCESS -->
+
+            <div class="footer-column">
+
+                <h3 class="footer-column-title">
+                    Quick Access
+                </h3>
+
+                <ul class="footer-nav-links">
+
+                    <li>
+                        <a href="ymr7.html#contact">Request a Survey</a>
+                    </li>
+
+                    <li>
+                        <a href="ymr7.html#global-coverage">Find a Port</a>
+                    </li>
+
+                    <li>
+                        <a href="ymr7.html#attendance-process">Our Survey Process</a>
+                    </li>
+
+                    <li>
+                        <a href="ymr7.html#contact">Contact Us</a>
+                    </li>
+
+                </ul>
+
+            </div>
+
+
+            <!-- COLUMN 4 — CONTACT -->
+
+            <div class="footer-column footer-contact-column">
+
+                <h3 class="footer-column-title">
+                    Get in Touch
+                </h3>
 
                 <div class="footer-contact-block">
-
-                    <div class="footer-contact-label">
-                        Get in Touch
-                    </div>
 
                     <a href="mailto:ops@ymrmarine.com">
                         ops@ymrmarine.com
@@ -2990,74 +3097,42 @@ footer .wrap {
 
                 </div>
 
-            </div>
+                <div class="footer-location">
 
+                    YMR Marine Solutions LLP<br>
+                    Mumbai, Maharashtra, India
 
-            <div class="footer-column">
+                </div>
 
-                <h3 class="footer-column-title">
-                    Company
-                </h3>
+                <div class="footer-availability">
 
-                <ul class="footer-nav-links">
-                    <li><a href="#company">About Us</a></li>
-                    <li><a href="#why-ymr">Why YMR</a></li>
-                    <li><a href="#team">Our Team</a></li>
-                    <li><a href="ymr7.html#global-coverage">Port Coverage</a></li>
-                    <li><a href="ymr7.html#testimonials">Clients</a></li>
-                    <li><a href="#contact">Contact</a></li>
-                </ul>
+                    <span class="footer-status-dot"></span>
+                    Available 24/7
 
-            </div>
-
-
-            <div class="footer-column">
-
-                <h3 class="footer-column-title">
-                    Our Expertise
-                </h3>
-
-                <ul class="footer-nav-links">
-                    <li><a href="ymr7.html#services">Bunker Quantity Surveys</a></li>
-                    <li><a href="ymr7.html#services">Draft Surveys</a></li>
-                    <li><a href="ymr7.html#services">Cargo Surveys &amp; Inspections</a></li>
-                    <li><a href="ymr7.html#services">Pre-Purchase Surveys</a></li>
-                    <li><a href="ymr7.html#services">Vessel Condition Surveys</a></li>
-                    <li><a href="ymr7.html#services">On-Hire / Off-Hire Surveys</a></li>
-                    <li><a href="ymr7.html#services">Maritime Consultancy</a></li>
-                    <li><a href="ymr7.html#services">Port Captain Services</a></li>
-                </ul>
-
-            </div>
-
-
-            <div class="footer-column">
-
-                <h3 class="footer-column-title">
-                    Quick Access
-                </h3>
-
-                <ul class="footer-nav-links">
-                    <li><a href="#contact">Request a Survey</a></li>
-                    <li><a href="ymr7.html#global-coverage">Find a Port</a></li>
-                </ul>
+                </div>
 
             </div>
 
         </div>
 
+
+        <!-- FADING BRAND WATERMARK -->
 
         <div class="footer-watermark" aria-hidden="true">
             YMR MARINE
         </div>
 
 
+        <!-- BOTTOM BAR -->
+
         <div class="footer-bottom-bar">
 
             <div class="footer-copyright">
+
                 &copy; <span id="footerYear">2026</span>
-                YMR Marine Solutions LLP.<br>
+                YMR Marine Solutions LLP.
                 All rights reserved.
+
             </div>
 
             <div class="footer-legal-links">
@@ -3073,7 +3148,8 @@ footer .wrap {
 
     </div>
 
-</footer><script> 
+</footer>
+<script> 
     
     function toggleMenu(){
       const menu=document.getElementById('mobile-menu');

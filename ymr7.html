@@ -556,11 +556,47 @@
         gap: 5px;
     }
 
+    /* ANIMATED SURVEY PROGRESS BARS */
+
     .demo-progress-segment {
+        position: relative;
         height: 4px;
-        background: rgba(255,255,255,0.25);
+        background: rgba(255,255,255,0.20);
         border-radius: 3px;
         cursor: pointer;
+        overflow: hidden;
+    }
+
+    /* Loading fill */
+
+    .demo-progress-segment::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: var(--demo-fill, 0%);
+        height: 100%;
+        background: #009BD3;
+        border-radius: 3px;
+    }
+
+    /* Completed stages */
+
+    .demo-progress-segment.completed::before {
+        width: 100%;
+    }
+
+    /* Current stage */
+
+    .demo-progress-segment.active::before {
+        background: #65D8FF;
+        box-shadow: 0 0 8px rgba(101,216,255,0.5);
+    }
+
+    /* Hover effect */
+
+    .demo-progress-segment:hover {
+        background: rgba(255,255,255,0.40);
     }
 
     .demo-progress-segment.active {
@@ -4513,6 +4549,71 @@ footer {
     box-sizing: border-box;
 }
 
+/* =========================================
+   SHARED FOOTER ALIGNMENT
+========================================= */
+
+footer {
+    width: 100%;
+    padding-left: 5%;
+    padding-right: 5%;
+    box-sizing: border-box;
+}
+
+footer .wrap,
+footer .footer-container {
+    width: 100%;
+    max-width: 1600px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 0;
+    padding-right: 0;
+    box-sizing: border-box;
+}
+
+@media (max-width: 1000px) {
+    footer {
+        padding-left: 6%;
+        padding-right: 6%;
+    }
+}
+
+@media (max-width: 700px) {
+    footer {
+        padding-left: 24px;
+        padding-right: 24px;
+    }
+}
+
+/* PROGRESS BAR — BACKGROUND FIX */
+
+.demo-progress-segment,
+.demo-progress-segment.active,
+.demo-progress-segment.completed {
+    background: rgba(255, 255, 255, 0.15) !important;
+    box-shadow: none;
+    overflow: hidden;
+}
+
+/* Loading portion */
+
+.demo-progress-segment::before {
+    background: #009BD3;
+    width: var(--demo-fill, 0%);
+}
+
+/* Currently loading bar */
+
+.demo-progress-segment.active::before {
+    background: #65D8FF;
+}
+
+/* Completed bar */
+
+.demo-progress-segment.completed::before {
+    width: 100%;
+    background: #009BD3;
+}
 
     </style>
     </head>
@@ -4568,8 +4669,8 @@ footer {
 
                 <div class="nav-dropdown-menu">
                     <a href="about.html">Our Company</a>
-                    <a href="#why-us">Why YMR</a>
-                    <a href="#contact">Get in Touch</a>
+                    <a href="about.html#team">Why YMR</a>
+                    <a href="about.html#why-ymr">Get in Touch</a>
                 </div>
 
             </div>
@@ -4589,9 +4690,7 @@ footer {
                 Testimonials
             </a>
 
-            <a href="#contact">
-                Contact
-            </a>
+            
 
             
 
@@ -4686,9 +4785,6 @@ footer {
             Testimonials
         </a>
 
-        <a href="#contact" onclick="toggleMenu()">
-            Contact
-        </a>
 
         <div class="mobile-actions">
 
@@ -5751,136 +5847,135 @@ footer {
         </div>
 
     </section>
-    <!-- FOOTER -->
+    <!-- =========================================
+     YMR MARINE — SHARED FOOTER
+========================================= -->
 
-    <footer id="footer">
+<footer id="footer">
 
-        <div class="footer-container">
+    <div class="footer-container">
 
-            <div class="footer-layout">
+        <div class="footer-layout">
 
-                <!-- COMPANY BRAND -->
+            <!-- COLUMN 1 — COMPANY BRAND -->
 
-                <div class="footer-brand">
+            <div class="footer-brand">
 
-                    <a href="#hero" class="footer-brand-logo">
+                <a href="ymr7.html#hero" class="footer-brand-logo">
 
-                        <img
-                            src="./ymr_logo.png"
-                            alt="YMR Marine Solutions LLP">
+                    <img
+                        src="./ymr_logo.png"
+                        alt="YMR Marine Solutions LLP">
 
-                    </a>
+                </a>
 
-                    <p class="footer-brand-desc">
-                        Independent marine surveys, inspections
-                        and maritime consultancy services.
-                        Delivering expertise, integrity and
-                        confidence across the maritime industry.
-                    </p>
-
-                    <div class="footer-location">
-                        YMR Marine Solutions LLP<br>
-                        Mumbai, Maharashtra, India
-                    </div>
-
-                    <div class="footer-contact-block">
-
-                        <div class="footer-contact-label">
-                            Get in Touch
-                        </div>
-
-                        <a href="mailto:ops@ymrmarine.com">
-                            ops@ymrmarine.com
-                        </a>
-
-                        <a href="tel:+919820482713">
-                            +91 98204 82713
-                        </a>
-
-                    </div>
-
-                </div>
-
-
-                <!-- COMPANY LINKS -->
-
-                <div class="footer-column">
-
-                    <h3 class="footer-column-title">
-                        Company
-                    </h3>
-
-                    <ul class="footer-nav-links">
-
-                        <li><a href="#about">About Us</a></li>
-
-                        <li><a href="#industries">Industries We Serve</a></li>
-
-                        <li><a href="#why-us">The YMR Difference</a></li>
-
-                        <li><a href="#coverage">Port Coverage</a></li>
-
-                        <li><a href="#process">Our Survey Process</a></li>
-
-                        <li><a href="#contact">Contact Us</a></li>
-
-                    </ul>
-
-                </div>
-
-
-                
-
-
-                <!-- QUICK ACCESS -->
-
-                <div class="footer-column">
-
-                    <h3 class="footer-column-title">
-                        Quick Access
-                    </h3>
-
-                    <ul class="footer-nav-links">
-
-                        <li><a href="#contact">Request a Survey</a></li>
-
-                        <li><a href="#coverage">Find a Port</a></li>
-
-                        <!-- Add employee portal URL when ready -->
-
-                    </ul>
-
-                </div>
+                <p class="footer-brand-desc">
+                    Independent marine surveys, inspections
+                    and maritime consultancy services.
+                    Delivering expertise, integrity and
+                    confidence across the maritime industry.
+                </p>
 
             </div>
-            <div class="footer-watermark" aria-hidden="true">
-                YMR MARINE
+
+
+            <!-- COLUMN 2 — COMPANY -->
+
+            <div class="footer-column">
+
+                <h3 class="footer-column-title">
+                    Company
+                </h3>
+
+                <ul class="footer-nav-links">
+
+                    <li>
+                        <a href="about.html#company">About Us</a>
+                    </li>
+
+                    <li>
+                        <a href="about.html#team">Our Team</a>
+                    </li>
+
+                    <li>
+                        <a href="about.html#why-ymr">Why YMR</a>
+                    </li>
+
+                    <li>
+                        <a href="ymr7.html#services">Our Services</a>
+                    </li>
+
+                    <li>
+                        <a href="ymr7.html#testimonials">Our Clients</a>
+                    </li>
+
+                </ul>
+
             </div>
 
-            <!-- FOOTER BOTTOM -->
 
-            <div class="footer-bottom-bar">
+            <!-- COLUMN 3 — QUICK ACCESS -->
 
-                <div class="footer-copyright">
+            <div class="footer-column">
 
-                    &copy; <span id="footerYear">2026</span>
-                    YMR Marine Solutions LLP.<br>
+                <h3 class="footer-column-title">
+                    Quick Access
+                </h3>
 
-                    All rights reserved.
+                <ul class="footer-nav-links">
+
+                    <li>
+                        <a href="ymr7.html#contact">Request a Survey</a>
+                    </li>
+
+                    <li>
+                        <a href="ymr7.html#global-coverage">Find a Port</a>
+                    </li>
+
+                    <li>
+                        <a href="ymr7.html#attendance-process">Our Survey Process</a>
+                    </li>
+
+                    <li>
+                        <a href="ymr7.html#contact">Contact Us</a>
+                    </li>
+
+                </ul>
+
+            </div>
+
+
+            <!-- COLUMN 4 — CONTACT -->
+
+            <div class="footer-column footer-contact-column">
+
+                <h3 class="footer-column-title">
+                    Get in Touch
+                </h3>
+
+                <div class="footer-contact-block">
+
+                    <a href="mailto:ops@ymrmarine.com">
+                        ops@ymrmarine.com
+                    </a>
+
+                    <a href="tel:+919820482713">
+                        +91 98204 82713
+                    </a>
 
                 </div>
 
-                <div class="footer-legal-links">
+                <div class="footer-location">
 
-                    <!-- Add Privacy Policy and legal links when ready -->
+                    YMR Marine Solutions LLP<br>
+                    Mumbai, Maharashtra, India
 
-                    <a href="#hero" class="footer-back-top">
+                </div>
 
-                        Back to Top
+                <div class="footer-availability">
 
-                        <span>↑</span>
-
-                    </a>
+                    <span class="footer-status-dot"></span>
+                    Available 24/7
 
                 </div>
 
@@ -5888,7 +5983,40 @@ footer {
 
         </div>
 
-    </footer>
+
+        <!-- FADING BRAND WATERMARK -->
+
+        <div class="footer-watermark" aria-hidden="true">
+            YMR MARINE
+        </div>
+
+
+        <!-- BOTTOM BAR -->
+
+        <div class="footer-bottom-bar">
+
+            <div class="footer-copyright">
+
+                &copy; <span id="footerYear">2026</span>
+                YMR Marine Solutions LLP.
+                All rights reserved.
+
+            </div>
+
+            <div class="footer-legal-links">
+
+                <a href="ymr7.html#hero">
+                    Back to Home
+                    <span>↑</span>
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</footer>
     <!-- WHATSAPP FLOAT -->
     <a href="https://wa.me/+919820482713" class="float-wa" title="Chat on WhatsApp">➤</a>
 
@@ -6192,6 +6320,11 @@ footer {
     let demoPlaying = true;
     let demoInterval;
 
+    const demoDuration = 3000;
+
+    let demoElapsed = 0;
+    let demoLastTime = null;
+
     const demoStage = document.getElementById('demoStage');
     const demoStepLabel = document.getElementById('demoStepLabel');
     const demoPlay = document.getElementById('demoPlay');
@@ -6243,25 +6376,90 @@ footer {
 
         demoStepLabel.textContent = stage.label;
 
+        demoElapsed = 0;
+        demoLastTime = null;
+
         demoSegments.forEach((segment, i) => {
-            segment.classList.toggle('active', i <= index);
+
+            segment.classList.toggle('completed', i < index);
+            segment.classList.toggle('active', i === index);
+
+            segment.style.setProperty(
+                '--demo-fill',
+                i < index ? '100%' : '0%'
+            );
+
         });
 
     }
 
     function nextDemoStage() {
+
         demoIndex = (demoIndex + 1) % demoStages.length;
+
         renderDemoStage(demoIndex);
+
     }
+
+
+    /* UPDATE LOADING BAR */
+
+    function updateDemoProgress(timestamp) {
+
+        if (!demoPlaying) return;
+
+        if (demoLastTime === null) {
+            demoLastTime = timestamp;
+        }
+
+        demoElapsed += timestamp - demoLastTime;
+        demoLastTime = timestamp;
+
+        const progress = Math.min(
+            demoElapsed / demoDuration,
+            1
+        );
+
+        demoSegments[demoIndex].style.setProperty(
+            '--demo-fill',
+            `${progress * 100}%`
+        );
+
+        if (progress >= 1) {
+            nextDemoStage();
+        }
+
+        demoInterval = requestAnimationFrame(
+            updateDemoProgress
+        );
+
+    }
+
+
+    /* START OR RESUME ANIMATION */
 
     function startDemo() {
-        clearInterval(demoInterval);
-        demoInterval = setInterval(nextDemoStage, 3000);
+
+        cancelAnimationFrame(demoInterval);
+
+        demoLastTime = null;
+
+        demoInterval = requestAnimationFrame(
+            updateDemoProgress
+        );
+
     }
 
+
+    /* PAUSE ANIMATION */
+
     function stopDemo() {
-        clearInterval(demoInterval);
-    }
+
+        cancelAnimationFrame(demoInterval);
+
+        demoLastTime = null;
+
+}
 
     demoPlay.addEventListener('click', () => {
 
