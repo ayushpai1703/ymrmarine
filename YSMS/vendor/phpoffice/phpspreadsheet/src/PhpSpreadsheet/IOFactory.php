@@ -139,6 +139,8 @@ abstract class IOFactory
      *                          Values in this list can be any of the constant values defined in the set
      *                                 IOFactory::READER_*.
      * @param array<string, class-string<IReader>> $mergeArray
+     *
+     * @psalm-taint-sink file $filename
      */
     public static function load(string $filename, int $flags = 0, ?array $readers = null, array $mergeArray = []): Spreadsheet
     {
@@ -152,6 +154,8 @@ abstract class IOFactory
      *
      * @param string[] $readers
      * @param array<string, class-string<IReader>> $mergeArray
+     *
+     * @psalm-taint-sink file $filename
      */
     public static function identify(string $filename, ?array $readers = null, bool $fullClassName = false, array $mergeArray = []): string
     {
@@ -177,6 +181,8 @@ abstract class IOFactory
      *        default readers, allowing specification of a partial list.
      *
      * @throws Reader\Exception
+     *
+     * @psalm-taint-sink file $filename
      */
     public static function createReaderForFile(string $filename, ?array $readers = null, array $mergeArray = []): IReader
     {
@@ -265,8 +271,7 @@ abstract class IOFactory
      */
     public static function registerWriter(string $writerType, string $writerClass): void
     {
-        // We want phpstan to validate caller, but still need this test
-        if (!is_a($writerClass, IWriter::class, true)) { //* @phpstan-ignore-line
+        if (!is_a($writerClass, IWriter::class, true)) {
             throw new Writer\Exception('Registered writers must implement ' . IWriter::class);
         }
 
@@ -280,8 +285,7 @@ abstract class IOFactory
      */
     public static function registerReader(string $readerType, string $readerClass): void
     {
-        // We want phpstan to validate caller, but still need this test
-        if (!is_a($readerClass, IReader::class, true)) { //* @phpstan-ignore-line
+        if (!is_a($readerClass, IReader::class, true)) {
             throw new Reader\Exception('Registered readers must implement ' . IReader::class);
         }
 
